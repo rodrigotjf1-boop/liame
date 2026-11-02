@@ -83,3 +83,38 @@
 @container pagina (max-width: 479px) {
   .view-cab h1 { font-size: var(--text-xl); }
 }
+
+/* ===== A propriedade da conta (P34 aprovado; A7, W8, parte 3) ===== */
+.prop-card { display: grid; gap: var(--sp-3); min-width: 0; }
+.prop-dono { display: flex; align-items: center; gap: var(--sp-3); min-width: 0; }
+.prop-dono .pessoa-av { flex: none; background: var(--ai-soft); color: var(--ai); }
+.prop-dono > span { display: grid; min-width: 0; font-size: var(--text-sm); }
+.prop-dono b { overflow-wrap: anywhere; }
+.prop-dono small { color: var(--text-muted); font-size: var(--text-xs); overflow-wrap: anywhere; }
+.prop-acoes { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-2); }
+.prop-acoes .confirma-linha { flex: 1 1 100%; min-width: 0; justify-content: flex-start; }
+.prop-pedido { display: grid; gap: var(--sp-2); padding: var(--sp-3); border: 1px solid color-mix(in srgb, var(--warning) 40%, var(--border)); border-radius: var(--radius); background: var(--warning-soft); font-size: var(--text-sm); }
+.prop-pedido .st { white-space: normal; max-width: 100%; justify-self: start; }
+.pedido-prop { margin-bottom: var(--sp-4); border-color: color-mix(in srgb, var(--warning) 45%, var(--border)); display: grid; gap: var(--sp-3); }
+.pedido-prop-cab { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-2) var(--sp-3); }
+.pedido-prop h2 { font-size: var(--text-lg); text-wrap: balance; overflow-wrap: anywhere; }
+.pedido-prop .st { white-space: normal; max-width: 100%; }
+.pedido-prop-dados { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr)); gap: var(--sp-3) var(--sp-4); margin: 0; }
+.pedido-prop-dados dt { font-size: var(--text-xs); color: var(--text-muted); }
+.pedido-prop-dados dd { margin: 2px 0 0; font-size: var(--text-sm); font-weight: 500; overflow-wrap: anywhere; }
+.pedido-prop-acoes { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-2); }
+.pedido-prop-acoes .confirma-linha { flex: 1 1 100%; min-width: 0; justify-content: flex-start; }
+.prop-passos { display: flex; flex-wrap: wrap; gap: var(--sp-2) var(--sp-3); margin: 0; padding: 0; list-style: none; font-size: var(--text-xs); color: var(--text-muted); }
+.prop-passos li { display: inline-flex; align-items: center; gap: 6px; }
+.prop-passos li[aria-current="step"] { color: var(--text); font-weight: 600; }
+.prop-passos .n { width: 20px; height: 20px; display: grid; place-items: center; border-radius: 50%; background: var(--bg-subtle); font-family: var(--font-mono); font-size: 10px; }
+.prop-passos li[aria-current="step"] .n { background: var(--primary); color: var(--primary-fg); }
+.opcao--nao { cursor: not-allowed; opacity: .78; }
+.opcao--nao .opcao-txt b { color: var(--text-muted); }
+.opcao-motivo { display: block; margin-top: 2px; font-weight: 500; color: var(--text) !important; }
+.prop-muda-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr)); gap: var(--sp-3); }
+.prop-muda { padding: var(--sp-3); border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface-2); min-width: 0; }
+.prop-muda h3 { font-size: var(--text-sm); font-weight: 600; margin-bottom: var(--sp-2); }
+.prop-muda ul { display: grid; gap: 4px; margin: 0; padding: 0; list-style: none; font-size: var(--text-sm); color: var(--text-muted); }
+.prop-muda li { display: flex; gap: var(--sp-2); }
+.prop-muda li .ic { flex: none; margin-top: 3px; color: var(--link); }

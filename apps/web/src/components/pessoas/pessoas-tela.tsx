@@ -1,6 +1,16 @@
 'use client';
 
-import type { InvitationResponse, MemberResponse, PartnerRequestResponse, PartnerResponse, PartnersResponse, PeopleResponse } from '@liame/contracts';
+import type {
+  InvitationResponse,
+  MemberResponse,
+  OwnershipResponse,
+  OwnershipTransfer,
+  PartnerRequestResponse,
+  PartnerResponse,
+  PartnersResponse,
+  PeopleResponse,
+} from '@liame/contracts';
+import Link from 'next/link';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useAvisar } from '@/components/ui/avisos';
 import { Estado } from '@/components/ui/estado';
@@ -11,14 +21,19 @@ import { NIVEIS } from '@/lib/niveis';
 import { useSessao } from '@/lib/sessao';
 import { CartaoAgencia, CartaoProtecao, TabelaNiveis } from './cartoes-informativos';
 import { CartaoPedido } from './cartao-pedido';
+import { CartaoPropriedade } from './cartao-propriedade';
 import { DialogoAcesso, type ModoDialogo } from './dialogo-acesso';
 import { DialogoDesfazer } from './dialogo-desfazer';
+import { GavetaAceitarPropriedade } from './gaveta-aceitar-propriedade';
 import { GavetaDecidir } from './gaveta-decidir';
 import { GavetaLimites } from './gaveta-limites';
+import { GavetaTransferir } from './gaveta-transferir';
 import { ItemAgencia } from './item-agencia';
 import { ItemConvite } from './item-convite';
 import { ItemPessoa } from './item-pessoa';
 import { contagemComAgencias, separarPorAgencia } from './parceiros';
+import { PedidoDePropriedade } from './pedido-de-propriedade';
+import { primeiroNome } from './propriedade-textos';
 import { contagem } from './textos';
 import { disparar } from '@/lib/disparar';
 
@@ -31,24 +46,34 @@ type Agencias = { tipo: 'ok'; dados: PartnersResponse } | { tipo: 'erro'; proble
 type Painel =
   | { tipo: 'decidir'; pedido: PartnerRequestResponse }
   | { tipo: 'limites'; parceiro: PartnerResponse }
-  | { tipo: 'desfazer'; parceiro: PartnerResponse };
+  | { tipo: 'desfazer'; parceiro: PartnerResponse }
+  // A propriedade da conta (P34; A7, W8, parte 3).
+  | { tipo: 'transferir' }
+  | { tipo: 'aceitar-propriedade'; pedido: OwnershipTransfer };
 /** A faixa do que acabou de acontecer com uma agência (P27). */
-type Resultado = { tipo?: 'acao'; titulo: string; texto: string } | null;
+type Resultado = { tipo?: 'acao'; titulo: string; texto: string; verCobranca?: boolean } | null;
 
 export function PessoasTela() {
-  const { me, empresa, pode } = useSessao();
+  const { me, empresa, pode, trocarEmpresa } = useSessao();
   const avisar = useAvisar();
   const [estado, setEstado] = useState<Estado>({ tipo: 'carregando' });
   const [dialogo, setDialogo] = useState<ModoDialogo | null>(null);
   const [agencias, setAgencias] = useState<Agencias>(null);
   const [painel, setPainel] = useState<Painel | null>(null);
   const [resultado, setResultado] = useState<Resultado>(null);
+  // A propriedade da conta: lida junto; a falha dela não esconde a lista (o cartão só não aparece).
+  const [propriedade, setPropriedade] = useState<OwnershipResponse | null>(null);
   const titulo = useRef<HTMLHeadingElement>(null);
 
   const carregar = useCallback(async () => {
-    const [r, a] = await Promise.all([chamar(() => api.GET('/v1/people')), chamar(() => api.GET('/v1/partners'))]);
+    const [r, a, d] = await Promise.all([
+      chamar(() => api.GET('/v1/people')),
+      chamar(() => api.GET('/v1/partners')),
+      chamar(() => api.GET('/v1/ownership')),
+    ]);
     setEstado(r.ok ? { tipo: 'ok', dados: r.data } : { tipo: 'erro', problema: r.problema });
     setAgencias(a.ok ? { tipo: 'ok', dados: a.data } : { tipo: 'erro', problema: a.problema });
+    setPropriedade(d.ok ? d.data : null);
   }, []);
 
   useEffect(() => {
@@ -167,7 +192,21 @@ export function PessoasTela() {
         )}
       </div>
 
-      {resultado && <Faixa tipo={resultado.tipo} icone={<Icone nome={resultado.tipo ? 'check-circle' : 'info'} />} titulo={resultado.titulo} texto={resultado.texto} />}
+      {resultado && (
+        <Faixa
+          tipo={resultado.tipo}
+          icone={<Icone nome={resultado.tipo ? 'check-circle' : 'info'} />}
+          titulo={resultado.titulo}
+          texto={resultado.texto}
+          acao={
+            resultado.verCobranca ? (
+              <Link className="btn btn--sm" href="/cobranca">
+                Ver a cobrança
+              </Link>
+            ) : undefined
+          }
+        />
+      )}
       {agencias?.tipo === 'erro' && (
         <Faixa
           tipo="atencao"
@@ -179,6 +218,20 @@ export function PessoasTela() {
               Tentar de novo
             </button>
           }
+        />
+      )}
+      {propriedade?.addressed_to_me && propriedade.pending && (
+        <PedidoDePropriedade
+          pedido={propriedade.pending}
+          empresa={nomeEmpresa}
+          aoVerEAceitar={() => propriedade.pending && setPainel({ tipo: 'aceitar-propriedade', pedido: propriedade.pending })}
+          aoRecusado={() => {
+            const de = primeiroNome(propriedade.pending?.from.name ?? '');
+            avisar(`Você recusou. ${de} recebeu um e-mail.`);
+            setResultado({ titulo: 'Você recusou a propriedade', texto: `${de} recebeu um e-mail dizendo que você não aceitou. A conta continua com ele, e o seu acesso não mudou.` });
+            disparar(carregar());
+            titulo.current?.focus({ preventScroll: true });
+          }}
         />
       )}
       {souDono &&
@@ -269,12 +322,58 @@ export function PessoasTela() {
           )}
         </article>
         <div className="acessos-lado">
+          {propriedade && (
+            <CartaoPropriedade
+              propriedade={propriedade}
+              souDono={propriedade.owner.user_id === me.user.id}
+              empresa={nomeEmpresa}
+              aoTransferir={() => setPainel({ tipo: 'transferir' })}
+              aoMudar={(aviso) => {
+                avisar(aviso);
+                disparar(carregar());
+              }}
+            />
+          )}
           <CartaoProtecao comAgencias={comAgencias} />
           <CartaoAgencia comAgencias={comAgencias} />
         </div>
       </div>
       <TabelaNiveis comAgencias={comAgencias} />
 
+      {painel?.tipo === 'transferir' && propriedade && dados && (
+        <GavetaTransferir
+          membros={dados.members}
+          propriedade={propriedade}
+          empresa={nomeEmpresa}
+          reserva={titulo}
+          aoPedir={(r) => {
+            setPropriedade(r);
+            avisar(`Pedido enviado. ${primeiroNome(r.pending?.to.name ?? '')} recebeu um e-mail; até o aceite, nada muda.`);
+          }}
+          aoConvidar={() => setDialogo({ tipo: 'convidar' })}
+          aoFechar={() => setPainel(null)}
+        />
+      )}
+      {painel?.tipo === 'aceitar-propriedade' && (
+        <GavetaAceitarPropriedade
+          pedido={painel.pedido}
+          empresa={nomeEmpresa}
+          reserva={titulo}
+          aoAceitar={(r) => {
+            const de = primeiroNome(painel.pedido.from.name);
+            setPropriedade(r);
+            setResultado({
+              tipo: 'acao',
+              titulo: `Agora você é a dona da ${nomeEmpresa}`,
+              texto: `${de} passou a propriedade${painel.pedido.old_owner_stays ? ' e ficou como Administrador, sem a cobrança' : ' e saiu da empresa'}. Confira: a próxima fatura vai para o seu e-mail, e as contas conectadas continuam ligadas.`,
+              verCobranca: true,
+            });
+            // As permissões mudaram (agora com a cobrança e quem tem acesso): a sessão lê de novo.
+            if (empresa) disparar(trocarEmpresa(empresa.id).then(() => carregar()));
+          }}
+          aoFechar={() => setPainel(null)}
+        />
+      )}
       {painel?.tipo === 'decidir' && (
         <GavetaDecidir
           pedido={painel.pedido}
