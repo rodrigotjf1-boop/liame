@@ -28,7 +28,7 @@ export const DATA_CLASSES: Record<string, TableClassification> = {
   // (nada da biometria); até a pessoa tirar, ou com a pessoa. O desafio de cada cerimônia vence em 5 minutos e sai no
   // próximo pedido da pessoa.
   passkey: { class: 'PERSONAL', retention: 'até a pessoa tirar; com a pessoa' },
-  webauthn_challenge: { class: 'INTERNAL', retention: '5 minutos (sai no próximo pedido da pessoa)' },
+  webauthn_challenge: { class: 'INTERNAL', retention: '5 minutos (sai no próximo pedido da pessoa; o da entrada sem senha, no próximo pedido de entrada)' },
   invitation: { class: 'PERSONAL', retention: 'com a empresa' },
   role: { class: 'PUBLIC', retention: 'do produto' },
   role_permission: { class: 'INTERNAL', retention: 'do produto e da empresa' },

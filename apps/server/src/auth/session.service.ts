@@ -25,13 +25,16 @@ export class SessionService {
     return this.database.db;
   }
 
-  /** Cria a sessão dentro da transação de quem chama. Devolve o token (vai só para o cookie). */
-  async create(tx: Tx, input: { userId: string; tenantId: string | null; ip: string | null; userAgent: string | null }) {
+  /**
+   * Cria a sessão dentro da transação de quem chama. Devolve o token (vai só para o cookie). `mfaMethod` = a entrada já
+   * provou o segundo fator (a chave de acesso vale pela senha e pelo código do app; D-A7-55): a sessão nasce verificada.
+   */
+  async create(tx: Tx, input: { userId: string; tenantId: string | null; ip: string | null; userAgent: string | null; mfaMethod?: 'chave' }) {
     const { token, hash } = newToken();
     await tx.execute(sql`
-      insert into liame.session (id, token_hash, user_id, active_tenant_id, ip, user_agent, expires_at)
+      insert into liame.session (id, token_hash, user_id, active_tenant_id, ip, user_agent, expires_at, mfa_verified_at, mfa_method)
       values (${uuidv7()}, ${hash}, ${input.userId}, ${input.tenantId}, ${input.ip}::inet, ${input.userAgent?.slice(0, 300) ?? null},
-              now() + make_interval(days => ${SESSION_DAYS}))`);
+              now() + make_interval(days => ${SESSION_DAYS}), ${input.mfaMethod ? sql`now()` : null}, ${input.mfaMethod ?? null})`);
     return token;
   }
 
@@ -49,7 +52,7 @@ export class SessionService {
         tenant_id: string | null;
         role_key: RoleKey | null;
         mfa_verified_at: string | null;
-        mfa_method: 'totp' | 'recuperacao' | null;
+        mfa_method: 'totp' | 'recuperacao' | 'chave' | null;
         mfa_configured: boolean;
         last_seen_at: string;
         member_seen_at: string | null;

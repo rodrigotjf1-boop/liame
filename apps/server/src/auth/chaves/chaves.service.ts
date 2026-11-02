@@ -15,6 +15,7 @@ import {
   generateAuthenticationOptions,
   generateRegistrationOptions,
   type RegistrationResponseJSON,
+  type VerifiedAuthenticationResponse,
   verifyAuthenticationResponse,
   verifyRegistrationResponse,
 } from '@simplewebauthn/server';
@@ -36,8 +37,9 @@ import { AAGUID_ZERO, nomeDoGerenciador } from './gerenciadores.js';
 // na transação da requisição, no contexto da pessoa (a RLS limita às chaves dela). Cadastrar pede antes a confirmação
 // (o código do app ou uma chave que a pessoa já tem); a primeira chave de quem não tem segundo fator entra sem
 // confirmar, como quem ativa o app, e, sem o app, traz os 10 códigos de recuperação. A chave vale pelo código do app na
-// entrada. Cada cerimônia tem um desafio de uso único, que vence em 5 minutos; o aparelho precisa confirmar a pessoa
-// (digital, rosto ou PIN: `userVerification: required`).
+// entrada; na parte 9b, também pela senha (entrar sem senha: o desafio sem dono, no escopo de sistema). Cada cerimônia
+// tem um desafio de uso único, que vence em 5 minutos; o aparelho precisa confirmar a pessoa (digital, rosto ou PIN:
+// `userVerification: required`).
 
 /** Até 10 chaves por pessoa (D-A7-54). */
 export const MAX_CHAVES = 10;
@@ -45,7 +47,13 @@ const MINUTOS_DO_DESAFIO = 5;
 /** ES256 e RS256: os que os gerenciadores de hoje usam (base §17.7). */
 const ALGORITMOS = [-7, -257];
 
-type Proposito = 'cadastrar' | 'confirmar' | 'segundo_fator';
+type Proposito = 'cadastrar' | 'confirmar' | 'segundo_fator' | 'entrar';
+
+/** O que a entrada sem senha achou: a chave que não existe mais, a recusada (com a pessoa, para a auditoria) ou a pessoa. */
+export type EntradaComChave =
+  | { kind: 'desconhecida' }
+  | { kind: 'recusada'; userId: string }
+  | { kind: 'ok'; userId: string; email: string; emailVerificado: boolean; chave: string };
 
 type LinhaDaChave = {
   id: string;
@@ -92,6 +100,11 @@ export class ChavesService {
     @Inject(DATABASE) private readonly database: Database | null,
   ) {}
 
+  private get db() {
+    if (!this.database) throw new Error('chaves de acesso sem banco');
+    return this.database.db;
+  }
+
   /** As chaves da pessoa, o máximo e se ela tem o app. */
   async listar(auth: AuthContext): Promise<PasskeysResponse> {
     const tx = currentTx();
@@ -135,6 +148,49 @@ export class ChavesService {
   async confirmarComChave(tx: Tx, userId: string, body: PasskeyAssertion, userAgent?: string): Promise<string> {
     await this.rateLimit.consume(`segundo-fator:${userId}`, 10, 900);
     return this.conferirUso(tx, userId, body, 'confirmar', userAgent);
+  }
+
+  /**
+   * As opções da entrada sem senha (A7, W9, parte 9b; D-A7-55): sem dizer quais chaves existem; a chave que o aparelho
+   * escolher diz quem é. O desafio não tem dono (propósito `entrar`) e fica no escopo de sistema; os vencidos ou usados
+   * da entrada saem aqui, porque não têm uma pessoa para limpá-los no pedido seguinte dela.
+   */
+  async opcoesDaEntrada(ip: string | null): Promise<PasskeyCeremony> {
+    await this.rateLimit.consume(`entrar-chave:ip:${ip ?? '-'}`, 30, 900);
+    const options = await generateAuthenticationOptions({ rpID: this.config.passkeys.rpId, userVerification: 'required' });
+    const id = uuidv7();
+    await withSystem(this.db, async (tx) => {
+      await tx.execute(sql`delete from liame.webauthn_challenge where user_id is null and (expires_at < now() or used_at is not null)`);
+      await tx.execute(sql`
+        insert into liame.webauthn_challenge (id, user_id, purpose, challenge, expires_at)
+        values (${id}, null, 'entrar', ${options.challenge}, now() + make_interval(mins => ${MINUTOS_DO_DESAFIO}))`);
+    });
+    return { challenge_id: id, options: options as unknown as Record<string, unknown> };
+  }
+
+  /**
+   * Confere a entrada sem senha na transação de sistema de quem chama (ainda não se sabe quem é): o desafio da entrada, a
+   * chave pelo id que o aparelho mandou e a pessoa pelo identificador que a chave guarda (`userHandle`). A chave que não
+   * existe mais devolve `desconhecida`; a assinatura que não confere, o identificador de outra pessoa ou a pessoa
+   * desativada devolvem `recusada` com a pessoa, para a falha ficar na auditoria dela.
+   */
+  async conferirEntrada(tx: Tx, body: PasskeyAssertion, userAgent: string | null): Promise<EntradaComChave> {
+    const desafio = await this.consumirDesafio(null, body.challenge_id, 'entrar');
+    const credencial = typeof body.response.id === 'string' ? body.response.id : '';
+    const r = await tx.execute<LinhaDaChave & { user_id: string; email: string; email_verified_at: string | null; disabled_at: string | null; webauthn_user_id: string | null }>(sql`
+      select k.id, k.credential_id, k.public_key, k.counter, k.transports, k.device_type, k.name, k.created_at, k.last_used_at, k.last_used_where,
+             k.user_id, u.email, u.email_verified_at, u.disabled_at, u.webauthn_user_id
+        from liame.passkey k join liame.app_user u on u.id = k.user_id
+       where k.credential_id = ${credencial}
+         for update of k`);
+    const chave = r.rows[0];
+    if (!chave) return { kind: 'desconhecida' };
+    const resposta = body.response.response as { userHandle?: unknown } | undefined;
+    if (!chave.webauthn_user_id || resposta?.userHandle !== chave.webauthn_user_id) return { kind: 'recusada', userId: chave.user_id };
+    const v = await this.verificarAssinatura(chave, body, desafio);
+    if (!v || chave.disabled_at) return { kind: 'recusada', userId: chave.user_id };
+    await this.gravarUso(tx, chave.id, v, userAgent);
+    return { kind: 'ok', userId: chave.user_id, email: chave.email, emailVerificado: chave.email_verified_at !== null, chave: chave.name };
   }
 
   /** As opções para cadastrar: antes, a pessoa confirma que é ela (o código do app ou uma chave), se já tem segundo fator. */
@@ -303,9 +359,16 @@ export class ChavesService {
     const r = await tx.execute<LinhaDaChave>(sql`${SELECAO} where user_id = ${userId} and credential_id = ${credencial} for update`);
     const chave = r.rows[0];
     if (!chave) throw recusada();
-    let v;
+    const v = await this.verificarAssinatura(chave, body, desafio);
+    if (!v) throw recusada();
+    await this.gravarUso(tx, chave.id, v, userAgent ?? null);
+    return chave.name;
+  }
+
+  /** A assinatura do aparelho, conferida com a chave pública guardada; `null` quando não confere. */
+  private async verificarAssinatura(chave: LinhaDaChave, body: PasskeyAssertion, desafio: string): Promise<VerifiedAuthenticationResponse | null> {
     try {
-      v = await verifyAuthenticationResponse({
+      const v = await verifyAuthenticationResponse({
         response: body.response as unknown as AuthenticationResponseJSON,
         expectedChallenge: desafio,
         expectedOrigin: this.config.passkeys.origins,
@@ -313,16 +376,19 @@ export class ChavesService {
         credential: { id: chave.credential_id, publicKey: new Uint8Array(chave.public_key), counter: Number(chave.counter), transports: lista(chave.transports) },
         requireUserVerification: true,
       });
+      return v.verified ? v : null;
     } catch {
-      throw recusada();
+      return null;
     }
-    if (!v.verified) throw recusada();
+  }
+
+  /** O uso que conferiu: o contador novo, quando e em que aparelho. */
+  private async gravarUso(tx: Tx, chaveId: string, v: VerifiedAuthenticationResponse, userAgent: string | null): Promise<void> {
     await tx.execute(sql`
       update liame.passkey
          set counter = ${v.authenticationInfo.newCounter}, last_used_at = now(), last_used_where = ${descreverAparelho(userAgent).slice(0, 80)},
              device_type = ${v.authenticationInfo.credentialDeviceType}, backed_up = ${v.authenticationInfo.credentialBackedUp}
-       where id = ${chave.id}`);
-    return chave.name;
+       where id = ${chaveId}`);
   }
 
   private async guardarDesafio(tx: Tx, userId: string, proposito: Proposito, challenge: string): Promise<string> {
@@ -337,14 +403,15 @@ export class ChavesService {
 
   /**
    * O desafio vale uma vez, para a pessoa e o propósito dele, por 5 minutos. É gasto numa transação à parte (como o limite
-   * de tentativas): a tentativa recusada desfaz a da requisição, mas o desafio continua gasto.
+   * de tentativas): a tentativa recusada desfaz a da requisição, mas o desafio continua gasto. `userId` nulo = o desafio
+   * da entrada sem senha, que não tem dono.
    */
-  private async consumirDesafio(userId: string, id: string, proposito: Proposito): Promise<string> {
-    if (!this.database) throw new Error('chaves de acesso sem banco');
-    const r = await withSystem(this.database.db, (tx) =>
+  private async consumirDesafio(userId: string | null, id: string, proposito: Proposito): Promise<string> {
+    const dono = userId === null ? sql`user_id is null` : sql`user_id = ${userId}`;
+    const r = await withSystem(this.db, (tx) =>
       tx.execute<{ challenge: string }>(sql`
         update liame.webauthn_challenge set used_at = now()
-         where id = ${id} and user_id = ${userId} and purpose = ${proposito} and used_at is null and expires_at > now()
+         where id = ${id} and ${dono} and purpose = ${proposito} and used_at is null and expires_at > now()
          returning challenge`),
     );
     const desafio = r.rows[0]?.challenge;

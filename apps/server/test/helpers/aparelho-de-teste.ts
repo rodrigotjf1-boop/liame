@@ -17,6 +17,8 @@ export class AparelhoDeTeste {
   private readonly par = generateKeyPairSync('ec', { namedCurve: 'P-256' });
   readonly credencial = randomBytes(32);
   contador = 0;
+  /** O identificador da pessoa que o servidor mandou no cadastro: a chave o guarda e o devolve a cada uso. */
+  usuario: string | null = null;
 
   constructor(
     readonly rpId: string,
@@ -56,6 +58,7 @@ export class AparelhoDeTeste {
 
   /** O cadastro: o que `navigator.credentials.create` devolveria para as opções do servidor. */
   criar(opcoes: Record<string, unknown>, o: { uv?: boolean; origem?: string } = {}): Record<string, unknown> {
+    this.usuario = (opcoes.user as { id?: string } | undefined)?.id ?? null;
     const clientData = Buffer.from(JSON.stringify({ type: 'webauthn.create', challenge: opcoes.challenge, origin: o.origem ?? this.origem, crossOrigin: false }));
     const atestado = isoCBOR.encode(
       new Map<string, unknown>([
@@ -74,8 +77,12 @@ export class AparelhoDeTeste {
     };
   }
 
-  /** O uso: o que `navigator.credentials.get` devolveria, assinado com a chave privada do aparelho. */
-  assinar(opcoes: Record<string, unknown>, o: { uv?: boolean; origem?: string } = {}): Record<string, unknown> {
+  /**
+   * O uso: o que `navigator.credentials.get` devolveria, assinado com a chave privada do aparelho. Leva o identificador
+   * da pessoa (`userHandle`), como a chave de acesso faz; `usuario` troca o que vai (nulo = não manda).
+   */
+  assinar(opcoes: Record<string, unknown>, o: { uv?: boolean; origem?: string; usuario?: string | null } = {}): Record<string, unknown> {
+    const usuario = o.usuario === undefined ? this.usuario : o.usuario;
     this.contador += 1;
     const dados = this.dados(this.marcas(o.uv ?? true, false), false);
     const clientData = Buffer.from(JSON.stringify({ type: 'webauthn.get', challenge: opcoes.challenge, origin: o.origem ?? this.origem, crossOrigin: false }));
@@ -84,7 +91,7 @@ export class AparelhoDeTeste {
       id: this.id,
       rawId: this.id,
       type: 'public-key',
-      response: { clientDataJSON: b64(clientData), authenticatorData: b64(dados), signature: b64(assinatura) },
+      response: { clientDataJSON: b64(clientData), authenticatorData: b64(dados), signature: b64(assinatura), ...(usuario ? { userHandle: usuario } : {}) },
       clientExtensionResults: {},
       authenticatorAttachment: 'platform',
     };

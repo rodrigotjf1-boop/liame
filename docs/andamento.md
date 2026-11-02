@@ -923,6 +923,17 @@ Falta da W3: o fim (parte 4) — o que acontece quando a assinatura termina (can
   - `test/db/chaves-de-acesso.spec.ts`, com um aparelho de teste que assina como um de verdade (P-256, CBOR): a primeira chave sem o app, confirmar com a chave para criar outra, o mesmo gerenciador, o desafio de uso único, renomear e tirar, a chave na entrada (recusando origem errada e o aparelho que não confirma a pessoa), o pedido de recuperação que cai e cada restrição do banco;
   - com as suítes de recuperação, segundo fator, entrada, segurança, acesso, ciclo de vida, worker, pessoas e propriedade, em UTC; o contrato da API sem quebra (o método da sessão virou texto aberto).
 
+**A W9, parte 9b1: entrar sem senha com a chave de acesso (02/11/2026; sem migration; D-A7-55, D-A7-87).** A tela vem na parte 9c.
+- **duas rotas públicas:**
+  - `POST /v1/auth/passkey-options`: o desafio sem dono, sem listar as chaves (a do aparelho diz quem é); 30 por IP a cada 15 minutos;
+  - `POST /v1/auth/passkey`: a chave pelo id, a pessoa pelo identificador que a chave devolve, a assinatura conferida;
+- **a sessão nasce verificada**, com o método `chave`: a chave vale pela senha e pelo código do app;
+- **as regras da entrada com senha valem iguais:** o limite por IP, a pessoa desativada, o e-mail por confirmar, o aviso de acesso novo e a auditoria da pessoa (`sessao.abrir` e `sessao.falhar`, com o método e a chave); o pedido de recuperação em andamento cai;
+- **a chave que saiu da conta** responde "Esta chave não abre mais o Liame" (401 `chave-desconhecida`); a que não confere, 401 `chave-recusada`;
+- **testes:**
+  - `test/db/chaves-de-acesso.spec.ts`, com o aparelho de teste devolvendo o identificador da pessoa, como a chave de verdade: a sessão verificada, o aviso de acesso novo, o evento na auditoria, o desafio de uso único, a origem errada, o aparelho que não confirma a pessoa, sem o identificador ou com o de outra pessoa, a chave nunca cadastrada, a pessoa desativada e a chave tirada;
+  - o `access.spec` com as duas rotas públicas; com as suítes de entrada, segurança e auditoria, em UTC.
+
 ## Hub DMS · F2 (o Liame na credencial nova)
 
 O plano da F2 do Hub DMS (decisões F2-1 a F2-8 do dono, 15/10/2026) tem uma etapa no Liame, a **A3**: consertar o achado A2 e comparar as duas credenciais do RegemCast (a de hoje, `rct_it_`, e a do DMS ID com a ligação) nas 10 ferramentas de leitura, até 14 dias seguidos sem diferença, cada uma comparada 50 vezes ou mais (F2-7). A porta do RegemCast já aceita a credencial nova, desligada (RegemCast #118, 16/10/2026).
