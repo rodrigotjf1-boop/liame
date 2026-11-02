@@ -10,6 +10,7 @@ import { destinoInicial } from '@/components/shell/inicio';
 import { useAvisar } from '@/components/ui/avisos';
 import { Estado } from '@/components/ui/estado';
 import { Icone } from '@/components/ui/icone';
+import { formasDeConfirmar, type Prova } from '@/lib/chave-de-acesso';
 import { useAgora } from '@/lib/agora';
 import { api, chamar, mensagemDe, type Problema, type Resultado } from '@/lib/api';
 import { useContadorAprovacoes } from '@/lib/contador-aprovacoes';
@@ -80,7 +81,8 @@ export function AprovacoesTela() {
   const podeConferirTexto = pode('dossie.ver');
   const podeOperar = pode('campanhas.operar');
   const podeVerFotos = pode('fotos.ver');
-  const temApp = me.mfa !== 'not_configured';
+  // Como a pessoa confirma ao aprovar (A7, W9, parte 9c3; D-A7-56): a chave de acesso primeiro, o código do app ao lado.
+  const { temApp, temChave } = formasDeConfirmar(me);
   // A resposta a uma avaliação de 1 ou 2 estrelas só o dono decide (A6, D-A6-4): o servidor confere; a tela só não oferece.
   const souDono = me.organizations.find((o) => o.id === me.active_organization_id)?.role === 'dono';
   const tituloDoDetalhe = useRef<HTMLHeadingElement>(null);
@@ -389,8 +391,8 @@ export function AprovacoesTela() {
     return { ok: false, texto: problema.errors?.length ? mensagemDe(problema) : erro.texto, noCodigo: erro.noCodigo };
   }
 
-  async function aprovar(acao: ActionResponse, codigo: string): Promise<Decisao> {
-    const r = await chamar(() => api.POST('/v1/actions/{id}/approve', { params: { path: { id: acao.id } }, body: { plan_hash: acao.plan_hash, code: codigo } }));
+  async function aprovar(acao: ActionResponse, prova: Prova): Promise<Decisao> {
+    const r = await chamar(() => api.POST('/v1/actions/{id}/approve', { params: { path: { id: acao.id } }, body: { plan_hash: acao.plan_hash, ...prova } }));
     if (!r.ok) return recusaDoServidor(r.problema);
     avisar(avisoDepoisDeAprovar(emPalavras(acao), r.data));
     await depoisDeDecidir(chaveDaAcao(acao.id));
@@ -467,8 +469,8 @@ export function AprovacoesTela() {
   // "Mudar a hora" do post aprovado (A6, Z5d, parte 4; D-A6-23 e D-A6-55): com o código do app, o pedido aprovado é
   // trocado por um novo, aprovado de novo com a hora nova; a tela abre o pedido novo. O código que não confere e as
   // recusas do servidor voltam para o formulário.
-  async function mudarAHoraDoPost(acao: AcaoDePost, publishAt: string, codigo: string): Promise<Feito> {
-    const r = await chamar(() => api.POST('/v1/posts/{id}/reschedule', { params: { path: { id: acao.post.id } }, body: { publish_at: publishAt, code: codigo } }));
+  async function mudarAHoraDoPost(acao: AcaoDePost, publishAt: string, prova: Prova): Promise<Feito> {
+    const r = await chamar(() => api.POST('/v1/posts/{id}/reschedule', { params: { path: { id: acao.post.id } }, body: { publish_at: publishAt, ...prova } }));
     if (!r.ok) {
       if (r.problema.code === 'post-nao-agendado') setTentativa((n) => n + 1);
       return { ok: false, texto: erroDaDecisao(r.problema).texto };
@@ -483,9 +485,9 @@ export function AprovacoesTela() {
   // "Apagar das redes" (A6, Z5d, parte 7; D-A6-57): com o código do app, o pedido de apagar nasce aprovado e executa em
   // seguida; a tela abre o pedido de apagar, que diz o andamento. O código que não confere e as recusas do servidor
   // voltam para o formulário; a que diz que o post mudou também lê a lista de novo.
-  async function apagarDoPost(acao: AcaoDePost, codigo: string): Promise<Feito> {
+  async function apagarDoPost(acao: AcaoDePost, prova: Prova): Promise<Feito> {
     const deOnde = deOndeSai(acao.post);
-    const r = await chamar(() => api.POST('/v1/posts/{id}/unpublish', { params: { path: { id: acao.post.id } }, body: { code: codigo } }));
+    const r = await chamar(() => api.POST('/v1/posts/{id}/unpublish', { params: { path: { id: acao.post.id } }, body: prova }));
     if (!r.ok) {
       if (r.problema.status === 409) setTentativa((n) => n + 1);
       return { ok: false, texto: erroDaDecisao(r.problema).texto };
@@ -585,8 +587,8 @@ export function AprovacoesTela() {
     return { ok: false, texto: problema.errors?.length ? mensagemDe(problema) : erro.texto, noCodigo: erro.noCodigo };
   }
 
-  async function aprovarPlano(plano: PlanSummary, codigo: string): Promise<Decisao> {
-    const r = await chamar(() => api.POST('/v1/plans/{id}/approve', { params: { path: { id: plano.id } }, body: { plan_hash: plano.content_hash, code: codigo } }));
+  async function aprovarPlano(plano: PlanSummary, prova: Prova): Promise<Decisao> {
+    const r = await chamar(() => api.POST('/v1/plans/{id}/approve', { params: { path: { id: plano.id } }, body: { plan_hash: plano.content_hash, ...prova } }));
     if (!r.ok) return recusaDoPlano(r.problema);
     setPlanoAberto({ id: plano.id, estado: 'ok', dados: r.data });
     avisar(`Aprovado (versão ${r.data.plan.version}). Nada foi publicado: o que fazer está no plano.`);
@@ -795,6 +797,7 @@ export function AprovacoesTela() {
         podeDecidir={podeDecidir}
         podeOperar={podeOperar}
         temApp={temApp}
+        temChave={temChave}
         titulo={tituloDoDetalhe}
         campoCodigo={campoCodigo}
         aoVoltar={voltarParaALista}
@@ -822,6 +825,7 @@ export function AprovacoesTela() {
         podeDecidir={podeDecidir}
         podeOperar={podeOperar}
         temApp={temApp}
+        temChave={temChave}
         apagada={volta && volta.status === 'executada' ? { quem: volta.requested_by.name, quando: volta.updated_at } : null}
         titulo={tituloDoDetalhe}
         campoCodigo={campoCodigo}
@@ -844,6 +848,7 @@ export function AprovacoesTela() {
         podeDecidir={podeDecidir}
         podeOperar={pode('campanhas.operar')}
         temApp={temApp}
+        temChave={temChave}
         mes={mes}
         pedindo={pedindo?.id === anuncio.id}
         titulo={tituloDoDetalhe}
@@ -868,6 +873,7 @@ export function AprovacoesTela() {
         podeOperar={podeOperar}
         podeVerContas={pode('contas.ver')}
         temApp={temApp}
+        temChave={temChave}
         foto={post.post.photo_id ? (fotos.get(post.post.photo_id) ?? null) : null}
         titulo={tituloDoDetalhe}
         campoCodigo={campoCodigo}
@@ -894,6 +900,7 @@ export function AprovacoesTela() {
         podeDecidir={podeDecidir}
         podeOperar={pode('campanhas.operar')}
         temApp={temApp}
+        temChave={temChave}
         pausa={daPausa && daPausa.status === 'executada' ? { quem: daPausa.requested_by.name, quando: daPausa.updated_at } : null}
         titulo={tituloDoDetalhe}
         campoCodigo={campoCodigo}
@@ -913,6 +920,7 @@ export function AprovacoesTela() {
         pro={pro}
         podeDecidir={podeDecidir}
         temApp={temApp}
+        temChave={temChave}
         titulo={tituloDoDetalhe}
         campoCodigo={campoCodigo}
         aoVoltar={voltarParaALista}
@@ -934,11 +942,12 @@ export function AprovacoesTela() {
           euId={me.user.id}
           podeDecidir={podeDecidirPlanos}
           temApp={temApp}
+          temChave={temChave}
           podeConferirTexto={podeConferirTexto}
           titulo={tituloDoDetalhe}
           campoCodigo={campoCodigo}
           aoVoltar={voltarParaALista}
-          aoAprovar={(codigo) => aprovarPlano(resumo, codigo)}
+          aoAprovar={(prova) => aprovarPlano(resumo, prova)}
           aoRecusar={(motivo) => recusarPlano(resumo, motivo)}
           aoEditar={(novo) => editarPlano(resumo, novo)}
           aoPedirNovaAnalise={(pedido) => pedirNovaAnalise(resumo, pedido)}

@@ -21,8 +21,12 @@ type Props = {
   /** Quem chamou está enviando outra coisa (o código): o botão espera. */
   impedido?: boolean;
   primario?: boolean;
+  /** A ação não se desfaz (apagar das redes): o botão vem no vermelho cheio. */
+  perigo?: boolean;
   /** O botão recebe o foco quando o passo abre (`data-foco`, lido por quem monta o diálogo). */
   focoInicial?: boolean;
+  /** Confere o resto do formulário antes de abrir a janela do aparelho (falso: não abre; quem chama mostra o erro). */
+  antes?: () => boolean;
 };
 
 export function ConfirmarComChave({
@@ -32,11 +36,14 @@ export function ConfirmarComChave({
   rotulo = 'Confirmar com a chave de acesso',
   impedido = false,
   primario = true,
+  perigo = false,
   focoInicial = false,
+  antes,
 }: Props) {
   const [ocupado, setOcupado] = useState(false);
 
   async function confirmar() {
+    if (antes && !antes()) return;
     setOcupado(true);
     try {
       const r = await chamar(() => api.POST('/v1/me/passkeys/confirmation-options'));
@@ -52,7 +59,7 @@ export function ConfirmarComChave({
   return (
     <button
       data-foco={focoInicial ? '' : undefined}
-      className={`btn chave-acesso-confirmar${primario ? ' btn--primary' : ''}`}
+      className={`btn chave-acesso-confirmar${perigo ? ' btn--perigo-cheio' : primario ? ' btn--primary' : ''}`}
       type="button"
       onClick={() => disparar(confirmar())}
       disabled={ocupado || impedido}

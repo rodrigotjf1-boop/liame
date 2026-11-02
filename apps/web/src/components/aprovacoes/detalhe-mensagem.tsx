@@ -2,6 +2,7 @@
 
 import type { MessagingCampaignDetailResponse } from '@liame/contracts';
 import { type RefObject, useEffect, useId, useRef, useState } from 'react';
+import type { Prova } from '@/lib/chave-de-acesso';
 import { detalheDaMensagem, numerosDa } from '@/components/mensagens/textos';
 import { ConfirmaNaLinha } from '@/components/ui/confirma-na-linha';
 import { Icone } from '@/components/ui/icone';
@@ -30,12 +31,14 @@ type Props = {
   /** Pode pedir ação em campanha (`campanhas.operar`): pausar o envio. */
   podeOperar: boolean;
   temApp: boolean;
+  /** A pessoa tem chave de acesso: ela vem primeiro ao aprovar (D-A7-56). */
+  temChave?: boolean;
   /** Quem pausou este envio e quando, quando a lista traz o pedido de pausa. */
   pausa: Pausa;
   titulo: RefObject<HTMLHeadingElement | null>;
   campoCodigo: RefObject<HTMLInputElement | null>;
   aoVoltar: () => void;
-  aoAprovar: (acao: AcaoDeMensagem, codigo: string) => Promise<Decisao>;
+  aoAprovar: (acao: AcaoDeMensagem, prova: Prova) => Promise<Decisao>;
   aoRecusar: (acao: AcaoDeMensagem, motivo: string) => Promise<Decisao>;
   /** Lê o plano de agora no RegemCast e guarda no pedido. */
   aoConferir: (acao: AcaoDeMensagem) => Promise<Feito>;
@@ -62,7 +65,7 @@ function Trechos({ trechos }: { trechos: Trecho[] }) {
   );
 }
 
-export function DetalheMensagem({ acao, grupo, agora, pro, podeDecidir, podeOperar, temApp, pausa, titulo, campoCodigo, aoVoltar, aoAprovar, aoRecusar, aoConferir, aoPausar }: Props) {
+export function DetalheMensagem({ acao, grupo, agora, pro, podeDecidir, podeOperar, temApp, temChave = false, pausa, titulo, campoCodigo, aoVoltar, aoAprovar, aoRecusar, aoConferir, aoPausar }: Props) {
   const ids = useId();
   const t = textosDaMensagem(acao);
   const quem = quemPediu(acao);
@@ -395,10 +398,11 @@ export function DetalheMensagem({ acao, grupo, agora, pro, podeDecidir, podeOper
           key={`${acao.id}:${acao.plan_hash}`}
           ids={ids}
           temApp={temApp}
+          temChave={temChave}
           campoCodigo={campoCodigo}
           motivos={MOTIVOS}
           dica="O código de 6 números que o app autenticador mostra agora. A aprovação vale só para este plano."
-          aoAprovar={(codigo) => aoAprovar(acao, codigo)}
+          aoAprovar={(prova) => aoAprovar(acao, prova)}
           aoRecusar={(motivo) => aoRecusar(acao, motivo)}
         />
       )}

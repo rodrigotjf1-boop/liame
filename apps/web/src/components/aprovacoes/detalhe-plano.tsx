@@ -2,6 +2,7 @@
 
 import type { PlanContent, PlanResponse } from '@liame/contracts';
 import { type RefObject, useEffect, useId, useRef, useState } from 'react';
+import type { Prova } from '@/lib/chave-de-acesso';
 import { TextoDaExplicacao } from '@/components/explicar/bloco-explicacao';
 import { tituloDasFontes } from '@/components/explicar/textos';
 import { Icone } from '@/components/ui/icone';
@@ -34,12 +35,14 @@ type Props = {
   podeDecidir: boolean;
   /** A conta de quem vê tem o app autenticador ativo (sem ele, o servidor não deixa aprovar). */
   temApp: boolean;
+  /** A pessoa tem chave de acesso: ela vem primeiro ao aprovar (D-A7-56). */
+  temChave?: boolean;
   /** Pode usar a conferência de frase da marca enquanto escreve (`dossie.ver`). */
   podeConferirTexto: boolean;
   titulo: RefObject<HTMLHeadingElement | null>;
   campoCodigo: RefObject<HTMLInputElement | null>;
   aoVoltar: () => void;
-  aoAprovar: (codigo: string) => Promise<Decisao>;
+  aoAprovar: (prova: Prova) => Promise<Decisao>;
   aoRecusar: (motivo: MotivoDaRecusa) => Promise<Decisao>;
   aoEditar: (novo: PlanContent) => Promise<Decisao>;
   aoPedirNovaAnalise: (pedido: string) => Promise<Decisao>;
@@ -47,7 +50,7 @@ type Props = {
   aoAvisar: (texto: string) => void;
 };
 
-export function DetalhePlano({ r, agora, pro, euId, podeDecidir, temApp, podeConferirTexto, titulo, campoCodigo, aoVoltar, aoAprovar, aoRecusar, aoEditar, aoPedirNovaAnalise, aoAvisar }: Props) {
+export function DetalhePlano({ r, agora, pro, euId, podeDecidir, temApp, temChave = false, podeConferirTexto, titulo, campoCodigo, aoVoltar, aoAprovar, aoRecusar, aoEditar, aoPedirNovaAnalise, aoAvisar }: Props) {
   const ids = useId();
   const [aberto, setAberto] = useState(false);
   const [mudando, setMudando] = useState<'nada' | 'editar' | 'nova'>('nada');
@@ -359,6 +362,7 @@ export function DetalhePlano({ r, agora, pro, euId, podeDecidir, temApp, podeCon
           <BarraDaDecisao
             ids={ids}
             temApp={temApp}
+            temChave={temChave}
             campoCodigo={campoCodigo}
             motivos={motivosDoPlano(p.kind)}
             dica={`O código de 6 números que o app autenticador mostra agora. A aprovação vale só para a versão ${p.version}.`}

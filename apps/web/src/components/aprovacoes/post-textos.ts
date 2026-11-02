@@ -51,10 +51,11 @@ export const ehHoraMudada = (a: Pick<Acao, 'status' | 'status_reason'>): boolean
 /**
  * A hora nova do "Mudar a hora" (P19; D-A6-23 e D-A6-55), conferida antes de mandar: o código com 6 números, a hora das
  * 8h às 22h, daqui a pelo menos 15 minutos, até 60 dias e diferente da marcada. O servidor confere de novo. Nulo: pode
- * mandar; senão, a frase e o campo que recebe o foco.
+ * mandar; senão, a frase e o campo que recebe o foco. `codigo` nulo: a pessoa confirma com a chave de acesso (A7, W9,
+ * parte 9c3; D-A7-56), e só o dia e a hora são conferidos.
  */
 export function erroDaHoraNova(
-  n: { dia: string; hora: string; codigo: string },
+  n: { dia: string; hora: string; codigo: string | null },
   post: { publish_at: string; timezone: string },
   agora: Date,
 ): { campo: 'dia' | 'hora' | 'codigo'; texto: string } | null {
@@ -64,7 +65,7 @@ export function erroDaHoraNova(
   if (instante < agora.getTime() + ANTECEDENCIA_MINIMA_MIN * 60_000) return { campo: 'hora', texto: `Escolha uma hora daqui a pelo menos ${ANTECEDENCIA_MINIMA_MIN} minutos.` };
   if (instante > agora.getTime() + DIAS_DE_ANTECEDENCIA * 86_400_000) return { campo: 'dia', texto: `O post pode ser marcado para até ${DIAS_DE_ANTECEDENCIA} dias.` };
   if (instante === new Date(post.publish_at).getTime()) return { campo: 'hora', texto: 'O post já está marcado para essa hora.' };
-  if (n.codigo.length !== 6 || !soDigitos(n.codigo)) return { campo: 'codigo', texto: 'Digite os 6 números do app.' };
+  if (n.codigo !== null && (n.codigo.length !== 6 || !soDigitos(n.codigo))) return { campo: 'codigo', texto: 'Digite os 6 números do app.' };
   return null;
 }
 

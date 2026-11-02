@@ -984,6 +984,12 @@ Falta da W3: o fim (parte 4) — o que acontece quando a assinatura termina (can
   - fechar a janela;
   - confirmar a entrada com a chave depois da senha.
 
+**A W9, parte 9c3a: a chave primeiro em Aprovações e na Agenda (02/11/2026; tela; sem migration; P28; D-A7-56).**
+- **Aprovações:** a barra da decisão de todos os pedidos (anúncio, mensagem, plano, post, resposta, sugestões, pedido) mostra "Aprovar com a chave" primeiro, para quem tem chave; o código do app fica ao lado ("Ou o código do app", "Aprovar com o código"). Quem só tem chave não vê o campo do código; quem não tem nenhum dos dois é mandado a Segurança da conta;
+- **"Mudar a hora" e "Apagar das redes"** (em Aprovações e na gaveta do post da Agenda): "Mudar a hora com a chave" (o dia e a hora são conferidos antes de abrir a janela do aparelho) e "Apagar com a chave", em vermelho cheio;
+- **"tem o app" e "tem chave"** saem do `/v1/me` (`mfa_methods`; `lib/chave-de-acesso.ts`, `formasDeConfirmar`): o "segundo fator configurado" de antes inclui a chave desde a 9a;
+- **testes:** `apps/web/test/confirmar-com-chave.spec.ts` (a regra, a hora nova sem o código e as três telas nas três situações); as suítes de Aprovações e da Agenda.
+
 ## Hub DMS · F2 (o Liame na credencial nova)
 
 O plano da F2 do Hub DMS (decisões F2-1 a F2-8 do dono, 15/10/2026) tem uma etapa no Liame, a **A3**: consertar o achado A2 e comparar as duas credenciais do RegemCast (a de hoje, `rct_it_`, e a do DMS ID com a ligação) nas 10 ferramentas de leitura, até 14 dias seguidos sem diferença, cada uma comparada 50 vezes ou mais (F2-7). A porta do RegemCast já aceita a credencial nova, desligada (RegemCast #118, 16/10/2026).

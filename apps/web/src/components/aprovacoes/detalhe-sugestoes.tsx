@@ -1,6 +1,7 @@
 'use client';
 
 import { type RefObject, useEffect, useId, useRef, useState } from 'react';
+import type { Prova } from '@/lib/chave-de-acesso';
 import { Icone } from '@/components/ui/icone';
 import { disparar } from '@/lib/disparar';
 import { quandoComHora } from '@/lib/formato';
@@ -104,10 +105,12 @@ type Props = {
   /** Pode pedir (`campanhas.operar`): escolher, ajustar, escrever do zero, pedir outras. */
   podeOperar: boolean;
   temApp: boolean;
+  /** A pessoa tem chave de acesso: ela vem primeiro ao aprovar (D-A7-56). */
+  temChave?: boolean;
   titulo: RefObject<HTMLHeadingElement | null>;
   campoCodigo: RefObject<HTMLInputElement | null>;
   aoVoltar: () => void;
-  aoAprovar: (acao: AcaoDeResposta, codigo: string) => Promise<Decisao>;
+  aoAprovar: (acao: AcaoDeResposta, prova: Prova) => Promise<Decisao>;
   aoRecusar: (acao: AcaoDeResposta, motivo: string) => Promise<Decisao>;
   /** Grava o texto do pedido (a sugestão escolhida, ou a versão ajustada), com o aviso que a tela mostra. */
   aoAlterarTexto: (acao: AcaoDeResposta, texto: string, aviso: string) => Promise<Feito>;
@@ -126,6 +129,7 @@ export function DetalheSugestoes({
   podeDecidir,
   podeOperar,
   temApp,
+  temChave = false,
   titulo,
   campoCodigo,
   aoVoltar,
@@ -507,10 +511,11 @@ export function DetalheSugestoes({
           key={`${acao.id}:${acao.plan_hash}`}
           ids={ids}
           temApp={temApp}
+          temChave={temChave}
           campoCodigo={campoCodigo}
           motivos={MOTIVOS}
           dica="O código de 6 números que o app autenticador mostra agora. A aprovação vale só para o texto escolhido."
-          aoAprovar={(codigo) => aoAprovar(acao, codigo)}
+          aoAprovar={(prova) => aoAprovar(acao, prova)}
           aoRecusar={(motivo) => aoRecusar(acao, motivo)}
         />
       )}

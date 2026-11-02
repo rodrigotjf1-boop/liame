@@ -9,6 +9,7 @@ import { Icone } from '@/components/ui/icone';
 import { useAgora } from '@/lib/agora';
 import { api, chamar, mensagemDe, type Problema } from '@/lib/api';
 import { disparar } from '@/lib/disparar';
+import { formasDeConfirmar } from '@/lib/chave-de-acesso';
 import { useSessao } from '@/lib/sessao';
 import { GavetaNovoPost } from './gaveta-novo-post';
 import { GavetaPacote } from './gaveta-pacote';
@@ -28,7 +29,9 @@ type Carga = { tipo: 'carregando' } | { tipo: 'ok'; dados: PostListResponse; sem
 const fusoDoNavegador = () => Intl.DateTimeFormat().resolvedOptions().timeZone || 'America/Sao_Paulo';
 
 export function AgendaTela() {
-  const { pode } = useSessao();
+  const { pode, me } = useSessao();
+  // Como a pessoa confirma ao apagar das redes (A7, W9, parte 9c3; D-A7-56): a chave de acesso primeiro, o código do app ao lado.
+  const { temApp, temChave } = formasDeConfirmar(me);
   const podeVer = pode('campanhas.ver');
   const podeOperar = pode('campanhas.operar');
   const podeVerContas = pode('contas.ver');
@@ -369,6 +372,8 @@ export function AgendaTela() {
       )}
       {postAberto && carga.tipo === 'ok' && !ehPacote(postAberto) && (
         <GavetaPost
+          temApp={temApp}
+          temChave={temChave}
           key={`gaveta-${postAberto.id}`}
           post={postAberto}
           fuso={carga.dados.timezone}
