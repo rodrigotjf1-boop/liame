@@ -19,6 +19,8 @@ import {
 
 /** O tamanho mínimo da chave RSA da DMS. */
 export const MENOR_CHAVE_RSA = 3072;
+/** A etiqueta do GCM, em bytes (a coluna `tag` confere o mesmo tamanho). */
+const TAG = 16;
 
 export type Lacrado = { keyId: string; wrappedKey: Buffer; iv: Buffer; tag: Buffer; ciphertext: Buffer };
 
@@ -46,7 +48,7 @@ export function impressaoDigital(publica: KeyObject): string {
 export function lacrar(publica: KeyObject, bytes: Buffer): Lacrado {
   const chave = randomBytes(32);
   const iv = randomBytes(12);
-  const cifra = createCipheriv('aes-256-gcm', chave, iv);
+  const cifra = createCipheriv('aes-256-gcm', chave, iv, { authTagLength: TAG });
   const ciphertext = Buffer.concat([cifra.update(bytes), cifra.final()]);
   const tag = cifra.getAuthTag();
   const wrappedKey = publicEncrypt({ key: publica, padding: constants.RSA_PKCS1_OAEP_PADDING, oaepHash: 'sha256' }, chave);
@@ -59,7 +61,8 @@ export function abrir(privada: KeyObject, lacrado: Lacrado): Buffer {
   const publica = createPublicKey(privada);
   if (impressaoDigital(publica) !== lacrado.keyId) throw new Error('esta chave privada não é a que lacrou o documento');
   const chave = privateDecrypt({ key: privada, padding: constants.RSA_PKCS1_OAEP_PADDING, oaepHash: 'sha256' }, lacrado.wrappedKey);
-  const decifra = createDecipheriv('aes-256-gcm', chave, lacrado.iv);
+  // O tamanho da etiqueta fixo: sem ele, o GCM aceitaria uma etiqueta curta, mais fácil de forjar.
+  const decifra = createDecipheriv('aes-256-gcm', chave, lacrado.iv, { authTagLength: TAG });
   decifra.setAuthTag(lacrado.tag);
   const bytes = Buffer.concat([decifra.update(lacrado.ciphertext), decifra.final()]);
   chave.fill(0);
