@@ -65,6 +65,30 @@ export const MyAccountRecoveryResponse = z.strictObject({
 });
 export type MyAccountRecoveryResponse = z.infer<typeof MyAccountRecoveryResponse>;
 
+/**
+ * O aviso aos Administradores da empresa (A7, W8, parte 4b; D-A7-62, D-A7-64): na espera, o pedido de recuperação do Dono
+ * aparece em Pessoas e acessos, com "Não reconheço este pedido". Só para os Administradores da própria empresa.
+ */
+export const AccountRecoveryNotice = z.strictObject({
+  id: z.uuid(),
+  protocol: z.string(),
+  /** O nome do Dono que pediu. */
+  owner_name: z.string(),
+  /** `conferido` (a espera, até `applies_at`) ou `parado` (um Administrador não reconheceu; só a DMS retoma). */
+  status: z.enum(['conferido', 'parado']),
+  created_at: z.string(),
+  checked_at: z.string(),
+  /** Quando o app do Dono é trocado, se nada mudar; nulo com o pedido parado. */
+  applies_at: z.string().nullable(),
+  stopped_at: z.string().nullable(),
+  /** Foi quem pede que parou o pedido. */
+  stopped_by_me: z.boolean(),
+});
+export type AccountRecoveryNotice = z.infer<typeof AccountRecoveryNotice>;
+
+export const AccountRecoveryNoticeResponse = z.strictObject({ notice: AccountRecoveryNotice.nullable() });
+export type AccountRecoveryNoticeResponse = z.infer<typeof AccountRecoveryNoticeResponse>;
+
 /** O pedido: o que aconteceu vai na consulta; o documento com foto, cru, no corpo. */
 export const CreateAccountRecoveryQuery = z.strictObject({ reason: AccountRecoveryReason });
 export type CreateAccountRecoveryQuery = z.infer<typeof CreateAccountRecoveryQuery>;

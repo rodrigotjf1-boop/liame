@@ -32,6 +32,12 @@ const DIAS_DO_ULTIMO = 30;
 /** Até 3 pedidos por dia por pessoa (cada um leva um documento de até 10 MB). */
 const PEDIDOS_POR_DIA = 3;
 
+/**
+ * O cancelamento: o e-mail ao Dono sai da própria API. Antes da conferência, ninguém mais sabia do pedido, e o aviso fica
+ * dado; depois dela, os Administradores tinham sido avisados, e o worker avisa a eles que o pedido caiu (parte 4b).
+ */
+const AVISO_DO_CANCELAMENTO = sql`notified_status = case when checked_at is null then 'cancelado' else notified_status end`;
+
 /** As situações em que o pedido anda (e um só por pessoa). */
 export const EM_ANDAMENTO = ['pedido', 'conferido', 'parado'] as const;
 
@@ -102,7 +108,7 @@ const semId = (empresas: readonly AccountRecoveryCompany[]): AccountRecoveryComp
 export async function cairPorqueEntrou(tx: Tx, userId: string): Promise<string | null> {
   const r = await tx.execute<{ protocol: string }>(sql`
     update liame.account_recovery
-       set status = 'cancelado', cancelled_by = 'entrou', closed_at = now(), notified_status = 'cancelado',
+       set status = 'cancelado', cancelled_by = 'entrou', closed_at = now(), ${AVISO_DO_CANCELAMENTO},
            documents_expire_at = now() + make_interval(days => ${DIAS_DOS_DOCUMENTOS})
      where user_id = ${userId} and status in ('pedido', 'conferido', 'parado')
      returning protocol`);
@@ -200,7 +206,7 @@ export class RecuperacaoDaContaService {
     if (!linha) throw naoEncontrado();
     await tx.execute(sql`
       update liame.account_recovery
-         set status = 'cancelado', cancelled_by = 'voce', closed_at = now(), notified_status = 'cancelado',
+         set status = 'cancelado', cancelled_by = 'voce', closed_at = now(), ${AVISO_DO_CANCELAMENTO},
              documents_expire_at = now() + make_interval(days => ${DIAS_DOS_DOCUMENTOS})
        where id = ${id}`);
     auditDetail({ before: { protocolo: linha.protocol, situacao: linha.status } });

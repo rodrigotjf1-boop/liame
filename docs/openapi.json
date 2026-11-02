@@ -3434,6 +3434,331 @@
         ]
       }
     },
+    "/v1/account-recovery/notice": {
+      "get": {
+        "description": "Na espera de 7 dias depois da conferência da DMS (ou parado por um Administrador), o pedido do Dono desta empresa: o protocolo, quem pediu, quando a DMS conferiu e quando o app dele é trocado. Nulo para quem não é Administrador da própria empresa e sem pedido.",
+        "operationId": "AvisoDaRecuperacaoController_ler",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "notice": {
+                      "type": [
+                        "object",
+                        "null"
+                      ],
+                      "properties": {
+                        "id": {
+                          "type": "string",
+                          "format": "uuid",
+                          "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                        },
+                        "protocol": {
+                          "type": "string"
+                        },
+                        "owner_name": {
+                          "type": "string"
+                        },
+                        "status": {
+                          "type": "string",
+                          "enum": [
+                            "conferido",
+                            "parado"
+                          ]
+                        },
+                        "created_at": {
+                          "type": "string"
+                        },
+                        "checked_at": {
+                          "type": "string"
+                        },
+                        "applies_at": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "stopped_at": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "stopped_by_me": {
+                          "type": "boolean"
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "protocol",
+                        "owner_name",
+                        "status",
+                        "created_at",
+                        "checked_at",
+                        "applies_at",
+                        "stopped_at",
+                        "stopped_by_me"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": [
+                    "notice"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "liame_sessao": []
+          }
+        ],
+        "summary": "O pedido de recuperação do Dono, para os Administradores",
+        "tags": [
+          "people"
+        ]
+      }
+    },
+    "/v1/account-recovery/{id}/stop": {
+      "post": {
+        "description": "Só um Administrador da própria empresa (403 `so-administrador`), com o pedido na espera (404 `nao-encontrado`). O pedido para, e só a DMS o retoma, depois de falar com o Dono; o worker avisa o Dono e a DMS por e-mail.",
+        "operationId": "AvisoDaRecuperacaoController_parar",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "notice": {
+                      "type": [
+                        "object",
+                        "null"
+                      ],
+                      "properties": {
+                        "id": {
+                          "type": "string",
+                          "format": "uuid",
+                          "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                        },
+                        "protocol": {
+                          "type": "string"
+                        },
+                        "owner_name": {
+                          "type": "string"
+                        },
+                        "status": {
+                          "type": "string",
+                          "enum": [
+                            "conferido",
+                            "parado"
+                          ]
+                        },
+                        "created_at": {
+                          "type": "string"
+                        },
+                        "checked_at": {
+                          "type": "string"
+                        },
+                        "applies_at": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "stopped_at": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "stopped_by_me": {
+                          "type": "boolean"
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "protocol",
+                        "owner_name",
+                        "status",
+                        "created_at",
+                        "checked_at",
+                        "applies_at",
+                        "stopped_at",
+                        "stopped_by_me"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": [
+                    "notice"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string",
+                      "format": "uri"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "integer",
+                      "minimum": 400,
+                      "maximum": 599
+                    },
+                    "detail": {
+                      "type": "string"
+                    },
+                    "instance": {
+                      "type": "string"
+                    },
+                    "code": {
+                      "type": "string"
+                    },
+                    "trace_id": {
+                      "type": "string"
+                    },
+                    "errors": {
+                      "description": "Campos inválidos, quando o erro é de validação",
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "path": {
+                            "type": "string"
+                          },
+                          "message": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "path",
+                          "message"
+                        ],
+                        "additionalProperties": false
+                      }
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "title",
+                    "status",
+                    "code",
+                    "trace_id"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string",
+                      "format": "uri"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "integer",
+                      "minimum": 400,
+                      "maximum": 599
+                    },
+                    "detail": {
+                      "type": "string"
+                    },
+                    "instance": {
+                      "type": "string"
+                    },
+                    "code": {
+                      "type": "string"
+                    },
+                    "trace_id": {
+                      "type": "string"
+                    },
+                    "errors": {
+                      "description": "Campos inválidos, quando o erro é de validação",
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "path": {
+                            "type": "string"
+                          },
+                          "message": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "path",
+                          "message"
+                        ],
+                        "additionalProperties": false
+                      }
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "title",
+                    "status",
+                    "code",
+                    "trace_id"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "liame_sessao": []
+          }
+        ],
+        "summary": "Não reconheço este pedido",
+        "tags": [
+          "people"
+        ]
+      }
+    },
     "/v1/agency/clients": {
       "get": {
         "description": "As empresas que aceitaram o vínculo (vivo, vencido ou desfeito) e os pedidos da agência (esperando, recusados e vencidos), com o acesso de quem pede e o que pede atenção em cada empresa, só o que o nível dela ali deixa ver. O membro vê só os clientes em que está.",

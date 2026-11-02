@@ -531,6 +531,8 @@ export {
   ACCOUNT_RECOVERY_DOCUMENT_LIMITS,
   AccountRecovery,
   AccountRecoveryCompany,
+  AccountRecoveryNotice,
+  AccountRecoveryNoticeResponse,
   AccountRecoveryReason,
   AccountRecoveryStatus,
   CreateAccountRecoveryQuery,

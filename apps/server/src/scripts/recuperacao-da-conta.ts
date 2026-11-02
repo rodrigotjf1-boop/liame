@@ -3,7 +3,7 @@ import { join, resolve } from 'node:path';
 import { parseArgs } from 'node:util';
 import { createDatabase } from '@liame/database';
 import { z } from 'zod';
-import { abrirDocumentos, conferirPedido, listarPedidos, type PedidoNaDistribuicao, recusarPedido } from '../auth/recuperacao/distribuicao.js';
+import { abrirDocumentos, conferirPedido, listarPedidos, type PedidoNaDistribuicao, recusarPedido, retomarPedido } from '../auth/recuperacao/distribuicao.js';
 import { chavePrivadaDaDms, gerarChaves } from '../auth/recuperacao/lacre.js';
 
 // A DMS decide os pedidos de recuperação da conta do Dono (A7, W8, parte 4a; D-A7-62, D-A7-64; D-A7-85). Usa o papel
@@ -20,9 +20,11 @@ import { chavePrivadaDaDms, gerarChaves } from '../auth/recuperacao/lacre.js';
 //     ... --conferir REC-2026-0001 --por "Nome" --documento --socios --videochamada
 //   Ou recusar, com o motivo que a pessoa lê
 //     ... --recusar REC-2026-0001 --por "Nome" --motivo "O nome do documento não está no quadro de sócios."
+//   Um Administrador parou o pedido ("Não reconheço"): depois de falar com o Dono, retomar (a espera recomeça) ou recusar
+//     ... --retomar REC-2026-0001 --por "Nome" --motivo "Confirmado com o Dono por telefone em 05/11."
 
 const USO =
-  'uso: recuperacao-da-conta (--gerar-chaves --pasta <pasta> | [--url-env <variável>] (--listar [--todos] | --ver <protocolo> --chave <arquivo .pem> --pasta <pasta> | --conferir <protocolo> --por "<quem>" --documento --socios --videochamada | --recusar <protocolo> --por "<quem>" --motivo "<motivo>"))';
+  'uso: recuperacao-da-conta (--gerar-chaves --pasta <pasta> | [--url-env <variável>] (--listar [--todos] | --ver <protocolo> --chave <arquivo .pem> --pasta <pasta> | --conferir <protocolo> --por "<quem>" --documento --socios --videochamada | --recusar <protocolo> --por "<quem>" --motivo "<motivo>" | --retomar <protocolo> --por "<quem>" --motivo "<como confirmou com o Dono>"))';
 
 const Protocolo = z.string().regex(/^REC-\d{4}-\d{4,}$/);
 const EXTENSAO: Record<string, string> = { 'image/jpeg': 'jpg', 'image/png': 'png', 'application/pdf': 'pdf' };
@@ -52,6 +54,7 @@ async function main(): Promise<void> {
       pasta: { type: 'string' },
       conferir: { type: 'string' },
       recusar: { type: 'string' },
+      retomar: { type: 'string' },
       por: { type: 'string' },
       motivo: { type: 'string' },
       documento: { type: 'boolean', default: false },
@@ -76,7 +79,7 @@ async function main(): Promise<void> {
 
   const variavel = z.string().regex(/^[A-Z][A-Z0-9_]{2,60}$/).safeParse(values['url-env']);
   if (!variavel.success) throw new Error(USO);
-  const acoes = [values.listar, values.ver, values.conferir, values.recusar].filter(Boolean).length;
+  const acoes = [values.listar, values.ver, values.conferir, values.recusar, values.retomar].filter(Boolean).length;
   if (acoes !== 1) throw new Error(USO);
   const url = new Map(Object.entries(process.env)).get(variavel.data);
   if (!url) throw new Error(`defina ${variavel.data}: o endereço do banco com o papel liame_owner (o mesmo das migrations)`);
@@ -115,6 +118,13 @@ async function main(): Promise<void> {
         videochamada: values.videochamada,
       });
       console.log(`${protocolo.data} conferido. Se nada mudar, o app antigo sai em ${dataHora(r.appliesAt)}. O worker avisa a pessoa e os Administradores.`);
+      return;
+    }
+    if (values.retomar) {
+      const protocolo = Protocolo.safeParse(values.retomar);
+      if (!protocolo.success || !values.por || !values.motivo) throw new Error(USO);
+      const r = await retomarPedido(database.db, { protocolo: protocolo.data, por: values.por, motivo: values.motivo });
+      console.log(`${protocolo.data} retomado. A espera recomeça: se nada mudar, o app antigo sai em ${dataHora(r.appliesAt)}. O worker avisa a pessoa e os Administradores.`);
       return;
     }
     const protocolo = Protocolo.safeParse(values.recusar);
