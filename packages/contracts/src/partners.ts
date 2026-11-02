@@ -61,6 +61,8 @@ export const AgencyClientResponse = z.strictObject({
   ended_at: z.string().nullable(),
   /** Quem desfez: a empresa ou a própria agência. */
   ended_side: z.enum(['empresa', 'agencia']).nullable(),
+  /** Quem do time está nesta empresa agora, com o nível (A7, W6, parte 5); vazio no vínculo que acabou. */
+  team: z.array(z.strictObject({ user_id: z.uuid(), name: z.string(), role: PartnerRole })).optional(),
 });
 export type AgencyClientResponse = z.infer<typeof AgencyClientResponse>;
 

@@ -65,6 +65,16 @@ export const NAVEGACAO: GrupoNav[] = [
     ],
   },
   {
+    // A agência (P27; A7, W6, parte 5): só os papéis da agência têm `agencia.*`, então o grupo só aparece com a agência
+    // ativa (e o da empresa some, sem as permissões das empresas). O menu mostra o nome da agência no lugar do rótulo.
+    id: 'parceiro',
+    rotulo: 'Agência',
+    itens: [
+      { href: '/agencia/clientes', rotulo: 'Clientes', icone: 'briefcase', permissao: 'agencia.clientes' },
+      { href: '/agencia/time', rotulo: 'Time da agência', icone: 'users', permissao: 'agencia.ver' },
+    ],
+  },
+  {
     id: 'operacao',
     rotulo: 'Operação',
     ferramenta: true,

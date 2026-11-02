@@ -1,0 +1,38 @@
+/* ===== As telas da agência: Clientes e Time da agência (P27 aprovado; A7, W6, parte 5) ===== */
+.secao-t { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: var(--sp-2); margin: var(--sp-6) 0 var(--sp-3); }
+.secao-t h2 { font-size: var(--text-md); }
+/* os pedidos da agência */
+.pedidos { display: grid; }
+.pedido-linha { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-2) var(--sp-4); padding: var(--sp-3) 0; border-bottom: 1px solid var(--border); }
+.pedido-linha:last-child { border-bottom: 0; }
+.pedido-linha-txt { flex: 1 1 260px; min-width: 0; display: grid; gap: 2px; }
+.pedido-linha-txt b { font-weight: 600; overflow-wrap: anywhere; }
+.pedido-linha-txt span { font-size: var(--text-sm); color: var(--text-muted); }
+.pedido-linha .btn { flex: none; }
+.pedido-linha .confirma-linha { flex: 1 1 100%; min-width: 0; justify-content: flex-start; }
+/* as empresas */
+.clientes { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 300px), 1fr)); gap: var(--sp-4); }
+.cliente { display: flex; flex-direction: column; gap: var(--sp-3); }
+.cliente-cab { display: flex; align-items: center; gap: var(--sp-3); min-width: 0; }
+.cliente-cab .pessoa-av { flex: none; border-radius: 11px; }
+.cliente-cab h3 { font-size: var(--text-md); overflow-wrap: anywhere; }
+.cliente-cab p { font-size: var(--text-xs); color: var(--text-muted); }
+.cliente-acesso { font-size: var(--text-sm); color: var(--text-muted); overflow-wrap: anywhere; }
+.cliente-time { font-size: var(--text-xs); color: var(--text-muted); overflow-wrap: anywhere; }
+.cliente-acoes { display: flex; flex-wrap: wrap; gap: var(--sp-2); margin-top: auto; padding-top: var(--sp-2); }
+.clientes-depois { margin-top: var(--sp-4); }
+/* quem entra num cliente */
+.time-esc { display: grid; gap: var(--sp-3); container-type: inline-size; }
+.time-esc-linha { display: grid; grid-template-columns: minmax(0, 1fr) minmax(140px, 180px) minmax(120px, 150px); align-items: end; gap: var(--sp-2) var(--sp-3); padding: var(--sp-3); border: 1px solid var(--border); border-radius: var(--radius); }
+.time-esc-linha .check { align-self: center; font-weight: 600; overflow-wrap: anywhere; }
+.time-esc-nota { grid-column: 1 / -1; margin: 0; }
+.campo-mini { display: grid; gap: 4px; min-width: 0; }
+.campo-mini .input { width: 100%; }
+.rot-mini { font-size: var(--text-xs); color: var(--text-muted); }
+.textarea { min-height: 88px; padding: var(--sp-2) var(--sp-3); resize: vertical; line-height: 1.5; }
+/* os papéis na agência */
+.papeis td { min-width: 110px; }
+
+@container (max-width: 460px) {
+  .time-esc-linha { grid-template-columns: minmax(0, 1fr); }
+}

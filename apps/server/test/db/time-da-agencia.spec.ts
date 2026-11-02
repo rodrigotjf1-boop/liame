@@ -118,6 +118,9 @@ describe.skipIf(!hasDb)('o time da agência no cliente', () => {
     expect((await salvar(dona, linkId, [{ user_id: time.membro.userId, role: 'gestor' }])).status).toBe(200);
     const depois = await api.call('GET', '/v1/people', { cookie: e.cookie });
     expect(depois.body.members.some((m: { email: string }) => m.email === time.admin.email)).toBe(false);
+    // A lista de clientes da agência diz quem do time está em cada um (parte 5).
+    const clientes = await api.call('GET', '/v1/agency/clients', { cookie: dona.cookie });
+    expect(clientes.body.clients[0].team).toEqual([{ user_id: time.membro.userId, name: 'Pessoa membro', role: 'gestor' }]);
   });
 
   it('quem vem da agência nunca convida, remove nem vê a cobrança, nem como Administrador; entra só com o app; e age como partner', async () => {
