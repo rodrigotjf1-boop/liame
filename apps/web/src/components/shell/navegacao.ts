@@ -72,6 +72,8 @@ export const NAVEGACAO: GrupoNav[] = [
     itens: [
       { href: '/agencia/clientes', rotulo: 'Clientes', icone: 'briefcase', permissao: 'agencia.ver' },
       { href: '/agencia/time', rotulo: 'Time da agência', icone: 'users', permissao: 'agencia.ver' },
+      // A marca da agência (P29; A7, W7, parte 5a): a dona e o administrador.
+      { href: '/agencia/marca', rotulo: 'A marca da agência', icone: 'palette', permissao: 'agencia.clientes' },
     ],
   },
   {

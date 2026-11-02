@@ -46,3 +46,13 @@
 .rm-custo { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--sp-2) var(--sp-4); margin: 0; padding-top: var(--sp-3); border-top: 1px solid var(--border-strong); font-size: var(--text-sm); color: var(--text-muted); }
 .rm-custo b { color: var(--text); font-weight: 600; }
 .rm-custo .num { font-family: var(--font-mono); font-weight: 600; color: var(--text); }
+
+/* O que a agência mandou deste relatório (P29 aprovado; A7, W7, parte 5a): a marca dela e o comentário assinado. */
+.rel-agencia { display: grid; gap: var(--sp-3); margin-bottom: var(--sp-5); min-width: 0; }
+.rel-agencia-marca { display: flex; align-items: center; gap: var(--sp-3); min-width: 0; }
+.rel-agencia-marca > span { display: grid; min-width: 0; }
+.rel-agencia-marca b { font-weight: 600; overflow-wrap: anywhere; }
+.rel-agencia-marca small { font-size: var(--text-xs); color: var(--text-muted); }
+.comentario-ag { margin: 0; padding: var(--sp-3) var(--sp-4); border-left: 3px solid var(--fio); border-radius: 0 var(--radius) var(--radius) 0; background: var(--surface-2); }
+.comentario-ag p { margin: 0; white-space: pre-line; overflow-wrap: anywhere; }
+.comentario-ag footer { margin-top: var(--sp-2); font-size: var(--text-xs); color: var(--text-muted); }
