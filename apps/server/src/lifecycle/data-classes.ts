@@ -222,6 +222,8 @@ export const DATA_CLASSES: Record<string, TableClassification> = {
   billing_notice: { class: 'PERSONAL', retention: 'com a fatura e com a pessoa (some com qualquer uma das duas)' },
   // O resumo da semana do que cada pessoa fez, ao Dono (A7, W8, migration 0097): cada entrega, sem o endereço nem o texto.
   people_digest: { class: 'PERSONAL', retention: 'com a empresa e com a pessoa (some com qualquer uma das duas)' },
+  // O vínculo de parceiro (A7, W6, parte 2): o e-mail do Dono a quem a agência pediu.
+  partner_link: { class: 'PERSONAL', retention: 'com a agência e com a empresa (some com qualquer uma das duas)' },
   // A empresa como cliente no meio de pagamento (A7, W2a, migration 0081): só o id dela lá (`cus_…`). O nome e o CNPJ
   // que o Asaas guarda são os da empresa, enviados na primeira cobrança.
   billing_customer: { class: 'CONFIDENTIAL', retention: 'com a empresa' },
