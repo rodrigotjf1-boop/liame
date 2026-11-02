@@ -521,3 +521,9 @@ export {
   SubscribeRequest,
   WithdrawSubscriptionRequest,
 } from './cobranca.js';
+export {
+  AcceptOwnershipTransferRequest,
+  CreateOwnershipTransferRequest,
+  OwnershipResponse,
+  OwnershipTransfer,
+} from './ownership.js';
