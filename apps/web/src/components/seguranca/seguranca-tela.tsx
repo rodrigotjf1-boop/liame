@@ -2,6 +2,7 @@
 
 import type { SecurityEventsResponse, SecuritySummaryResponse, SessionListResponse } from '@liame/contracts';
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { CartaoTermos } from '@/components/termos/cartao-termos';
 import { useAvisar } from '@/components/ui/avisos';
 import { Estado } from '@/components/ui/estado';
 import { Icone } from '@/components/ui/icone';
@@ -323,6 +324,9 @@ export function SegurancaTela() {
       </article>
 
       <CartaoAgencia reserva={titulo} />
+
+      {/* Os Termos novos (A7, W14, parte 14e): o que vale, o que a pessoa aceitou e as versões; some com a função desligada. */}
+      <CartaoTermos reserva={titulo} />
 
       {dialogo === 'codigos' && dados && (
         <DialogoCodigos

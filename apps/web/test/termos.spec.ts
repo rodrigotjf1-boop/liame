@@ -1,15 +1,20 @@
-import type { TermsVersionInfo } from '@liame/contracts';
+import type { MyTermsResponse, TermsVersionInfo } from '@liame/contracts';
 import { describe, expect, it } from 'vitest';
 import {
   dataBr,
+  diaDoAviso,
+  diaEHora,
   diasAte,
   faixaDoDiaNaCobranca,
   faixaDosTermos,
   fraseDoAceite,
   hojeEmBrasilia,
+  linhaDaVersao,
+  linhaDoAceite,
   naoConcorda,
   quandoVale,
   secaoDaMudanca,
+  seloDaVersao,
   tituloDaTelaDoDia,
   vespera,
 } from '@/components/termos/textos';
@@ -83,5 +88,56 @@ describe('a gaveta e a tela do aceite (D-A7-91 a D-A7-93)', () => {
     expect(tituloDaTelaDoDia(versao())).toBe('Os Termos novos valem desde 02/12/2026');
     expect(secaoDaMudanca(versao().changes[3]!)).toBe('Política de Privacidade · 4');
     expect(faixaDoDiaNaCobranca(versao()).texto).toBe('Para voltar às outras telas, aceite. Aqui você pode cancelar a assinatura, sem multa, e exportar os dados.');
+  });
+});
+
+describe('"Termos e privacidade" em Segurança da conta (D-A7-95)', () => {
+  const estado = (extra: Partial<MyTermsResponse> = {}): MyTermsResponse => ({
+    enabled: true,
+    current: { version: '2026-10-16', terms_url: 'https://agencialiame.com/termos/', privacy_url: 'https://agencialiame.com/privacidade/' },
+    base_version: '2026-10-16',
+    accepted: null,
+    next: versao(),
+    next_accepted_at: null,
+    required: null,
+    history: [versao()],
+    ...extra,
+  });
+
+  it('o dia do aviso é o de Brasília (o aviso das 23h30 de Brasília já é o dia seguinte em UTC)', () => {
+    expect(diaDoAviso(versao({ notice_at: '2026-11-03T02:30:00.000Z' }))).toBe('02/11/2026');
+    expect(diaDoAviso(versao())).toBe('02/11/2026');
+  });
+
+  it('a versão escrita como dia, sem o sufixo; a do ambiente que não é data fica como é', () => {
+    expect(linhaDaVersao('2026-12-02')).toBe('02/12/2026');
+    expect(linhaDaVersao('2026-12-02-a')).toBe('02/12/2026');
+    expect(linhaDaVersao('rascunho-2026-09-25')).toBe('rascunho-2026-09-25');
+  });
+
+  it('o aceite: a versão, o dia e a hora em Brasília e onde; sem nenhum, a do cadastro', () => {
+    expect(diaEHora('2026-11-05T12:12:00.000Z')).toBe('05/11/2026, às 09:12');
+    expect(linhaDoAceite(estado())).toBe('Os de 16/10/2026, ao criar a conta ou pelo convite');
+    expect(linhaDoAceite(estado({ accepted: { version: '2026-12-02', accepted_at: '2026-11-05T12:12:00.000Z', via: 'aviso' } }))).toBe(
+      'Os de 02/12/2026, em 05/11/2026, às 09:12, pelo aviso no alto da tela',
+    );
+  });
+
+  it('o selo de cada versão: vem aí, vale hoje, anterior, retirada e o ajuste de redação', () => {
+    expect(seloDaVersao(versao(), estado(), '2026-11-05')).toMatchObject({ tom: 'info', texto: 'Vem aí' });
+    expect(seloDaVersao(versao(), estado({ current: { ...estado().current, version: '2026-12-02' } }), '2026-12-03')).toMatchObject({ tom: 'concluido', texto: 'Vale hoje' });
+    expect(seloDaVersao(versao(), estado(), '2027-01-10')).toMatchObject({ texto: 'Anterior' });
+    // A que já passou diz até quando valeu: a véspera da seguinte que já vale (a retirada e a que ainda vem não contam).
+    const seguinte = versao({ version: '2027-01-05', effective_on: '2027-01-05' });
+    const historico = [versao(), versao({ version: '2026-12-20', effective_on: '2026-12-20', withdrawn: true }), seguinte, versao({ version: '2027-03-01', effective_on: '2027-03-01' })];
+    expect(seloDaVersao(versao(), estado({ history: historico }), '2027-01-10')).toMatchObject({ tom: 'espera', texto: 'Valeu até 04/01/2027' });
+    expect(seloDaVersao(versao(), estado({ history: historico }), '2027-01-04')).toMatchObject({ texto: 'Anterior' });
+    expect(seloDaVersao(versao({ withdrawn: true }), estado(), '2026-11-05')).toMatchObject({ texto: 'Retirada', detalhe: 'Avisada em 02/11/2026 e retirada antes do dia: nada mudou.' });
+    expect(seloDaVersao(versao(), estado(), '2026-11-05').detalhe).toBe(
+      '4 mudanças: Agências parceiras; Cobrança, atraso e cancelamento; A conta do Dono; Chaves de acesso. Avisada em 02/11/2026; pede o aceite de cada pessoa.',
+    );
+    expect(seloDaVersao(versao({ kind: 'redacao', changes: [], reason: 'O contato do encarregado.' }), estado(), '2026-11-05').detalhe).toBe(
+      'Ajuste de redação: O contato do encarregado. Valeu na hora, sem aviso e sem aceite.',
+    );
   });
 });

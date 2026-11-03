@@ -10,6 +10,7 @@ import { destinoDepoisDeEntrar, useTermos } from '@/lib/entrada';
 import { iniciais } from '@/lib/formato';
 import { EXIGEM_APP, NIVEIS } from '@/lib/niveis';
 import { useCena, useLia } from './lia';
+import { FraseDosTermos } from './frase-dos-termos';
 import { Aviso, AvisoProblema, BotaoEnviar, CampoSenha, SENHA_MIN } from './pecas';
 
 // Aceite de convite (ADR-017): quem não tem conta cria o login pelo próprio link (o link prova o e-mail);
@@ -73,7 +74,10 @@ export function TelaConvite() {
     setEnviando(true);
     lia.reagir('think');
     const r = await chamar(() =>
-      api.POST('/v1/invitations/signup', { body: { token, name: nome.trim(), password: senha, terms_version: termos.version } }),
+      api.POST('/v1/invitations/signup', {
+        // No meio do aviso, o aceite vale também para a versão que vem (W14; D-A7-94).
+        body: { token, name: nome.trim(), password: senha, terms_version: termos.version, ...(termos.next ? { next_terms_version: termos.next.version } : {}) },
+      }),
     );
     setEnviando(false);
     if (!r.ok) {
@@ -184,19 +188,7 @@ export function TelaConvite() {
             aoMostrar={() => setMostrar((m) => !m)}
             erro={erroSenha || undefined}
           />
-          {termos && (
-            <p className="campo-dica">
-              Ao criar o login, você concorda com os{' '}
-              <a href={termos.terms_url} target="_blank" rel="noopener noreferrer">
-                Termos de Uso
-              </a>{' '}
-              e a{' '}
-              <a href={termos.privacy_url} target="_blank" rel="noopener noreferrer">
-                Política de Privacidade
-              </a>
-              .
-            </p>
-          )}
+          {termos && <FraseDosTermos termos={termos} acao="Ao criar o login" />}
           <BotaoEnviar enviando={enviando || !termos}>Criar login e entrar</BotaoEnviar>
           {EXIGEM_APP.has(c.role) && (
             <p className="campo-dica">Em seguida, você ativa o app autenticador (obrigatório para {NIVEIS[c.role].nome}).</p>

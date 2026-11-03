@@ -7,6 +7,7 @@ import { api, chamar, type Problema } from '@/lib/api';
 import { disparar } from '@/lib/disparar';
 import { useTermos } from '@/lib/entrada';
 import { useCena, useLia } from './lia';
+import { FraseDosTermos } from './frase-dos-termos';
 import { Aviso, AvisoProblema, BotaoEnviar, CampoSenha, SENHA_MIN } from './pecas';
 
 // Criar conta: a conta é da empresa; o dono convida quem cuida do marketing depois (ADR-017). Com `?conta=agencia`, é a
@@ -70,6 +71,8 @@ export function TelaCriarConta() {
           password: valores.senha,
           company: { name: valores.empresa.trim(), ...(cnpj ? { cnpj } : {}) },
           terms_version: termos.version,
+          // No meio do aviso, a tela mostrou também a versão que vem: o aceite vale para as duas (W14; D-A7-94).
+          ...(termos.next ? { next_terms_version: termos.next.version } : {}),
           ...(agencia ? { kind: 'agencia' as const } : {}),
         },
       }),
@@ -175,19 +178,7 @@ export function TelaCriarConta() {
             </span>
           )}
         </div>
-        {termos && (
-          <p className="campo-dica">
-            Ao criar a conta, você concorda com os{' '}
-            <a href={termos.terms_url} target="_blank" rel="noopener noreferrer">
-              Termos de Uso
-            </a>{' '}
-            e a{' '}
-            <a href={termos.privacy_url} target="_blank" rel="noopener noreferrer">
-              Política de Privacidade
-            </a>
-            .
-          </p>
-        )}
+        {termos && <FraseDosTermos termos={termos} acao="Ao criar a conta" />}
         <BotaoEnviar enviando={enviando || !termos}>{agencia ? 'Criar a conta da agência' : 'Criar conta'}</BotaoEnviar>
       </form>
       <p className="alternativa">

@@ -1,4 +1,4 @@
-import type { TermsDocument, TermsVersionInfo } from '@liame/contracts';
+import type { MyTermsResponse, TermsDocument, TermsVersionInfo } from '@liame/contracts';
 
 // As frases dos Termos novos (A7, W14, parte 14d; P35 aprovado pelo dono em 02/11/2026; D-A7-90 a D-A7-93): a faixa no
 // alto das telas, a gaveta "O que muda" e a tela do aceite no dia. Funções puras, testadas em `test/termos.spec.ts`.
@@ -84,3 +84,61 @@ export function faixaDoDiaNaCobranca(v: TermsVersionInfo): { titulo: string; tex
 
 /** A seção de cada mudança: "Termos de Uso · 4". */
 export const secaoDaMudanca = (m: TermsVersionInfo['changes'][number]): string => `${NOME_DO_DOCUMENTO[m.document]} · ${m.section}`;
+
+// ---------------------------------------------------------------- "Termos e privacidade" em Segurança da conta (14e; D-A7-95)
+
+/** A versão como a pessoa lê: o dia (DD/MM/AAAA), sem o sufixo; a do ambiente que não é uma data fica como é. */
+export function linhaDaVersao(versao: string): string {
+  return /^\d{4}-\d{2}-\d{2}/.test(versao) ? dataBr(versao.slice(0, 10)) : versao;
+}
+
+const ONDE: Record<NonNullable<MyTermsResponse['accepted']>['via'], string> = {
+  aviso: 'pelo aviso no alto da tela',
+  tela_do_dia: 'na tela do aceite',
+  cadastro: 'ao criar a conta',
+  convite: 'pelo convite',
+};
+
+/** O dia e a hora de Brasília: "05/11/2026, às 09:12". */
+export function diaEHora(instante: string): string {
+  const partes = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'America/Sao_Paulo',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    hourCycle: 'h23',
+  }).formatToParts(new Date(instante));
+  const v = (t: string) => partes.find((p) => p.type === t)?.value ?? '';
+  return `${v('day')}/${v('month')}/${v('year')}, às ${v('hour')}:${v('minute')}`;
+}
+
+/** O último aceite da pessoa; sem nenhum de versão declarada, a do cadastro ou do convite. */
+export function linhaDoAceite(e: MyTermsResponse): string {
+  if (!e.accepted) return `Os de ${linhaDaVersao(e.base_version)}, ao criar a conta ou pelo convite`;
+  return `Os de ${linhaDaVersao(e.accepted.version)}, em ${diaEHora(e.accepted.accepted_at)}, ${ONDE[e.accepted.via]}`;
+}
+
+/** O dia do aviso, em Brasília (DD/MM/AAAA). */
+export const diaDoAviso = (v: TermsVersionInfo): string => dataBr(hojeEmBrasilia(new Date(v.notice_at)));
+
+/** O selo e a frase de cada versão da lista; a que já passou diz até quando valeu (a véspera da seguinte). */
+export function seloDaVersao(
+  v: TermsVersionInfo,
+  e: MyTermsResponse,
+  hoje: string = hojeEmBrasilia(),
+): { tom: 'concluido' | 'info' | 'espera'; texto: string; detalhe: string } {
+  const detalhe =
+    v.kind === 'redacao'
+      ? `Ajuste de redação${v.reason ? `: ${v.reason.replace(/\.$/, '')}` : ''}. Valeu na hora, sem aviso e sem aceite.`
+      : `${v.changes.length === 1 ? '1 mudança' : `${v.changes.length} mudanças`}: ${v.changes.map((m) => m.title).join('; ')}. Avisada em ${diaDoAviso(v)}; pede o aceite de cada pessoa.`;
+  if (v.withdrawn) return { tom: 'espera', texto: 'Retirada', detalhe: `Avisada em ${diaDoAviso(v)} e retirada antes do dia: nada mudou.` };
+  if (v.version === e.current.version) return { tom: 'concluido', texto: 'Vale hoje', detalhe };
+  if (v.effective_on > hoje) return { tom: 'info', texto: 'Vem aí', detalhe };
+  const seguinte = e.history
+    .filter((o) => !o.withdrawn && o.effective_on > v.effective_on && o.effective_on <= hoje)
+    .map((o) => o.effective_on)
+    .sort()[0];
+  return { tom: 'espera', texto: seguinte ? `Valeu até ${vespera(seguinte)}` : 'Anterior', detalhe };
+}
