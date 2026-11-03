@@ -38,3 +38,17 @@
 .termos-tela-outro { display: grid; gap: var(--sp-2); padding-top: var(--sp-4); border-top: 1px solid var(--border); }
 .termos-tela-outro h2 { font-size: var(--text-md); }
 .termos-tela-outro p { font-size: var(--text-sm); color: var(--text-muted); }
+
+/* Segurança da conta: o cartão "Termos e privacidade" (parte 14e) */
+.termos-cartao { container: termos-cartao / inline-size; }
+.termos-dl { display: grid; gap: var(--sp-3); margin: 0; }
+.termos-dl > div { display: grid; grid-template-columns: minmax(0, 170px) minmax(0, 1fr); gap: var(--sp-2) var(--sp-4); min-width: 0; }
+.termos-dl dt { font-size: var(--text-sm); color: var(--text-muted); }
+.termos-dl dd { margin: 0; display: grid; gap: var(--sp-2); justify-items: start; font-size: var(--text-sm); min-width: 0; overflow-wrap: anywhere; }
+@container termos-cartao (max-width: 520px) { .termos-dl > div { grid-template-columns: minmax(0, 1fr); } }
+.termos-sub { margin-top: var(--sp-2); font-size: var(--text-md); }
+.termos-versoes { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--sp-3); }
+.termos-versao { display: grid; gap: var(--sp-2); justify-items: start; min-width: 0; padding: var(--sp-3) var(--sp-4); border: 1px solid var(--border); border-radius: var(--radius); }
+.termos-versao-cab { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-2) var(--sp-3); }
+.termos-versao-cab b { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+.termos-versao p { font-size: var(--text-sm); color: var(--text-muted); overflow-wrap: anywhere; }
