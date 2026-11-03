@@ -1,36 +1,29 @@
 'use client';
 
-import type { MyTermsResponse, TermsVersionInfo } from '@liame/contracts';
-import { type RefObject, useCallback, useEffect, useRef, useState } from 'react';
-import { api, chamar } from '@/lib/api';
-import { disparar } from '@/lib/disparar';
+import type { TermsVersionInfo } from '@liame/contracts';
+import { type RefObject, useRef, useState } from 'react';
 import { useSessao } from '@/lib/sessao';
+import { useTermosNovos } from './aviso-dos-termos';
 import { GavetaOQueMuda } from './gaveta-o-que-muda';
-import { linhaDoAceite, linhaDaVersao, seloDaVersao } from './textos';
+import { diaDoAviso, diaEHora, linhaDaVersao, linhaDoAceite, seloDaVersao } from './textos';
 
 // "Termos e privacidade" em Segurança da conta (A7, W14, parte 14e; P35 aprovado; D-A7-95): o que vale hoje, o que a pessoa
-// aceitou e quando, o que vem (se houver) e as versões, cada uma com o que mudou. Com a função desligada (ou sem resposta),
-// o cartão não aparece.
+// aceitou e quando, o que vem (se houver) e as versões, cada uma com o que mudou. A situação é a do shell (o aviso dos
+// Termos): "Ver o que muda" da versão que vem abre a mesma gaveta da faixa, com o aceite, e aceitar aqui tira a faixa na
+// hora. Já aceita, a gaveta só mostra quando. Com a função desligada (ou sem resposta), o cartão não aparece.
 
 export function CartaoTermos({ reserva }: { reserva: RefObject<HTMLElement | null> }) {
   const { empresa } = useSessao();
-  const [estado, setEstado] = useState<MyTermsResponse | null>(null);
-  const [vendo, setVendo] = useState<{ versao: TermsVersionInfo; leitura: boolean } | null>(null);
+  const { estado, verOQueMuda } = useTermosNovos();
+  const [vendo, setVendo] = useState<{ versao: TermsVersionInfo; aceitoEm: string | null } | null>(null);
   const origem = useRef<HTMLElement | null>(null);
 
-  const ler = useCallback(async () => {
-    const r = await chamar(() => api.GET('/v1/me/terms'));
-    setEstado(r.ok ? r.data : null);
-  }, []);
-  useEffect(() => {
-    disparar(ler());
-  }, [ler]);
-
-  if (!estado?.enabled) return null;
-  const abrir = (de: HTMLElement, versao: TermsVersionInfo) => {
+  if (!estado) return null;
+  const ler = (de: HTMLElement, versao: TermsVersionInfo, aceitoEm: string | null = null) => {
     origem.current = de;
-    setVendo({ versao, leitura: true });
+    setVendo({ versao, aceitoEm });
   };
+  const proxima = estado.next;
   return (
     <article className="card seg-largo termos-cartao" aria-labelledby="t-termos">
       <div className="card-cab">
@@ -55,16 +48,26 @@ export function CartaoTermos({ reserva }: { reserva: RefObject<HTMLElement | nul
             <span>{linhaDoAceite(estado)}</span>
           </dd>
         </div>
-        {estado.next && (
+        {proxima && (
           <div>
             <dt>Vêm aí</dt>
             <dd>
-              <span>Os de {linhaDaVersao(estado.next.version)}</span>
+              <span>
+                Os de {linhaDaVersao(proxima.version)}, avisados em {diaDoAviso(proxima)}
+              </span>
               <span className={`st ${estado.next_accepted_at ? 'st--concluido' : 'st--aguardando'}`}>
                 <span className="dot" aria-hidden="true" />
                 {estado.next_accepted_at ? 'Aceitos' : 'Falta o seu aceite'}
               </span>
-              <button className="link-bt" type="button" aria-haspopup="dialog" onClick={(e) => estado.next && abrir(e.currentTarget, estado.next)}>
+              <button
+                className={`btn btn--sm${verOQueMuda ? ' btn--primary' : ''}`}
+                type="button"
+                aria-haspopup="dialog"
+                onClick={(e) => {
+                  if (verOQueMuda) verOQueMuda(e.currentTarget);
+                  else ler(e.currentTarget, proxima, estado.next_accepted_at ? diaEHora(estado.next_accepted_at) : null);
+                }}
+              >
                 Ver o que muda
               </button>
             </dd>
@@ -88,7 +91,7 @@ export function CartaoTermos({ reserva }: { reserva: RefObject<HTMLElement | nul
                   </div>
                   <p>{selo.detalhe}</p>
                   {v.kind === 'relevante' && v.changes.length > 0 && (
-                    <button className="link-bt" type="button" aria-haspopup="dialog" onClick={(e) => abrir(e.currentTarget, v)}>
+                    <button className="link-bt" type="button" aria-haspopup="dialog" onClick={(e) => ler(e.currentTarget, v)}>
                       O que mudou
                     </button>
                   )}
@@ -104,7 +107,8 @@ export function CartaoTermos({ reserva }: { reserva: RefObject<HTMLElement | nul
           noDia={false}
           dono={empresa?.role === 'dono'}
           hoje={{ termos: estado.current.terms_url, privacidade: estado.current.privacy_url }}
-          leitura={vendo.leitura}
+          leitura
+          aceitoEm={vendo.aceitoEm}
           reserva={origem.current ? origem : reserva}
           aoFechar={() => setVendo(null)}
         />

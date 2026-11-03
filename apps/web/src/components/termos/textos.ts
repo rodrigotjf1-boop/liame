@@ -120,7 +120,10 @@ export function linhaDoAceite(e: MyTermsResponse): string {
   return `Os de ${linhaDaVersao(e.accepted.version)}, em ${diaEHora(e.accepted.accepted_at)}, ${ONDE[e.accepted.via]}`;
 }
 
-/** O selo e a frase de cada versão da lista. */
+/** O dia do aviso, em Brasília (DD/MM/AAAA). */
+export const diaDoAviso = (v: TermsVersionInfo): string => dataBr(hojeEmBrasilia(new Date(v.notice_at)));
+
+/** O selo e a frase de cada versão da lista; a que já passou diz até quando valeu (a véspera da seguinte). */
 export function seloDaVersao(
   v: TermsVersionInfo,
   e: MyTermsResponse,
@@ -129,9 +132,13 @@ export function seloDaVersao(
   const detalhe =
     v.kind === 'redacao'
       ? `Ajuste de redação${v.reason ? `: ${v.reason.replace(/\.$/, '')}` : ''}. Valeu na hora, sem aviso e sem aceite.`
-      : `${v.changes.length === 1 ? '1 mudança' : `${v.changes.length} mudanças`}: ${v.changes.map((m) => m.title).join('; ')}. Avisada em ${dataBr(v.notice_at.slice(0, 10))}; pede o aceite de cada pessoa.`;
-  if (v.withdrawn) return { tom: 'espera', texto: 'Retirada', detalhe: `Avisada em ${dataBr(v.notice_at.slice(0, 10))} e retirada antes do dia: nada mudou.` };
+      : `${v.changes.length === 1 ? '1 mudança' : `${v.changes.length} mudanças`}: ${v.changes.map((m) => m.title).join('; ')}. Avisada em ${diaDoAviso(v)}; pede o aceite de cada pessoa.`;
+  if (v.withdrawn) return { tom: 'espera', texto: 'Retirada', detalhe: `Avisada em ${diaDoAviso(v)} e retirada antes do dia: nada mudou.` };
   if (v.version === e.current.version) return { tom: 'concluido', texto: 'Vale hoje', detalhe };
   if (v.effective_on > hoje) return { tom: 'info', texto: 'Vem aí', detalhe };
-  return { tom: 'espera', texto: 'Anterior', detalhe };
+  const seguinte = e.history
+    .filter((o) => !o.withdrawn && o.effective_on > v.effective_on && o.effective_on <= hoje)
+    .map((o) => o.effective_on)
+    .sort()[0];
+  return { tom: 'espera', texto: seguinte ? `Valeu até ${vespera(seguinte)}` : 'Anterior', detalhe };
 }
