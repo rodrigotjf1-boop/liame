@@ -1,0 +1,40 @@
+/* ===== Os Termos novos (A7, W14, parte 14d; P35 aprovado): a gaveta "O que muda" e a tela do aceite ===== */
+
+/* a gaveta: o dia em que vale, ao lado do aviso */
+.termos-quando { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-2) var(--sp-3); }
+.termos-quando-txt { flex: 1 1 260px; min-width: 0; font-size: var(--text-md); font-weight: 600; }
+
+/* uma mudança por bloco: o de hoje e o que fica, um embaixo do outro */
+.termos-mudancas { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--sp-3); }
+.termos-mudanca { display: grid; gap: var(--sp-2); min-width: 0; padding: var(--sp-4); border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface-2); }
+.termos-mudanca-doc { font-family: var(--font-mono); font-size: 11px; font-weight: 500; letter-spacing: .08em; text-transform: uppercase; color: var(--text-subtle); }
+.termos-mudanca h3 { font-size: var(--text-md); text-wrap: balance; }
+.termos-mudanca dl { display: grid; gap: var(--sp-2); margin: 0; }
+.termos-mudanca dl > div { display: grid; gap: 2px; min-width: 0; }
+.termos-mudanca dt { font-size: var(--text-xs); font-weight: 600; color: var(--text-muted); }
+.termos-mudanca dd { margin: 0; font-size: var(--text-sm); overflow-wrap: anywhere; }
+.termos-nota-fraca { font-size: var(--text-sm); color: var(--text-muted); }
+
+/* os textos inteiros */
+.termos-textos { display: grid; gap: var(--sp-2); }
+.termos-textos h3 { font-size: var(--text-sm); }
+.termos-textos-links { display: flex; flex-wrap: wrap; gap: var(--sp-2) var(--sp-4); font-size: var(--text-sm); }
+.termos-textos-links a { display: inline-flex; align-items: center; gap: 6px; min-width: 0; color: var(--link); overflow-wrap: anywhere; }
+.termos-textos-links a svg { width: 14px; height: 14px; flex: none; }
+
+/* depois de aceitar, e a frase do que se aceita junto do botão */
+.termos-aceito { display: flex; gap: var(--sp-2); padding: var(--sp-3); border-radius: var(--radius); background: var(--success-soft); font-size: var(--text-sm); }
+.termos-aceito svg { flex: none; margin-top: 2px; color: var(--success); }
+.termos-frase-do-aceite { flex: 1 1 100%; margin: 0; font-size: var(--text-xs); color: var(--text-muted); text-align: right; }
+
+/* a tela do aceite, no dia: no lugar do conteúdo */
+.termos-tela { max-width: 680px; margin: 0 auto; }
+.termos-tela-card { display: grid; gap: var(--sp-5); padding: var(--sp-6); }
+.termos-tela-card h1 { font-size: var(--text-xl); text-wrap: balance; outline: none; }
+.termos-tela-ic { width: 48px; height: 48px; display: grid; place-items: center; border-radius: 14px; background: var(--primary-soft); color: var(--link); }
+.termos-tela-txt { margin-top: var(--sp-1); font-size: var(--text-sm); color: var(--text-muted); }
+.termos-tela-lista { margin: 0; padding-left: 1.2em; display: grid; gap: 6px; font-size: var(--text-sm); }
+.termos-tela-acoes { display: flex; flex-wrap: wrap; gap: var(--sp-2); }
+.termos-tela-outro { display: grid; gap: var(--sp-2); padding-top: var(--sp-4); border-top: 1px solid var(--border); }
+.termos-tela-outro h2 { font-size: var(--text-md); }
+.termos-tela-outro p { font-size: var(--text-sm); color: var(--text-muted); }

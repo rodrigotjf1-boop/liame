@@ -52,6 +52,7 @@ export class CobrancaController {
   constructor(private readonly cobranca: CobrancaService) {}
 
   @Get('plans')
+  @DuranteOAceite()
   @Permissao('cobranca.ver')
   @ApiOperation({
     summary: 'Os planos para assinar',
@@ -95,6 +96,7 @@ export class CobrancaController {
   }
 
   @Get('invoices/:id/pix')
+  @DuranteOAceite()
   @Permissao('cobranca.pagar')
   @SemTransacao(CHAMA_O_MEIO_DE_PAGAMENTO)
   @ApiOperation({

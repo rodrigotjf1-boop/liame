@@ -12,7 +12,7 @@ import { Body, Controller, Get, HttpCode, Param, Post, Query } from '@nestjs/com
 import { ApiCookieAuth, ApiCreatedResponse, ApiForbiddenResponse, ApiNotFoundResponse, ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { sql } from 'drizzle-orm';
 import { Auditar } from '../audit/auditar.js';
-import { Auth, Permissao } from '../auth/access.js';
+import { Auth, DuranteOAceite, Permissao } from '../auth/access.js';
 import { auditDetail, type AuthContext, currentTx } from '../context/request-context.js';
 import { AppProblem } from '../errors/problems.js';
 import { emitEvent } from '../events/outbox.js';
@@ -49,6 +49,8 @@ export class TenancyController {
   }
 
   @Get('brands')
+  // Plano e cobrança lê as marcas, e o Dono a abre no dia dos Termos novos, antes de aceitar (W14, D-A7-102).
+  @DuranteOAceite()
   @Permissao('marcas.ver')
   @ApiOperation({ summary: 'Marcas', description: 'Marcas ativas da empresa; `include_archived=true` traz também as arquivadas.' })
   @ApiOkResponse({ standardSchema: BrandListResponse })
