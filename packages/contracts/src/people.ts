@@ -108,5 +108,10 @@ export const InvitationSignupRequest = z.strictObject({
   name: z.string().trim().min(1).max(200),
   password: Password,
   terms_version: TermsVersion,
+  /**
+   * A versão que vem (A7, W14; D-A7-94): quem se cadastra entre o aviso e o dia aceita as duas, a de hoje e a que vem
+   * (`next` de `GET /v1/legal/terms`). Sem ela, a pessoa vê o aviso depois de entrar.
+   */
+  next_terms_version: TermsVersion.optional(),
 });
 export type InvitationSignupRequest = z.infer<typeof InvitationSignupRequest>;

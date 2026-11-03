@@ -11,6 +11,7 @@ import { Mailer, type MailMessage } from '../mail/mailer.js';
 import { ROLE_LABEL } from '../people/grant-rules.js';
 import { descreverAparelho, mascararIp } from './aparelho.js';
 import { ChavesService } from './chaves/chaves.service.js';
+import { TermosService } from './termos/termos.service.js';
 import { burnPasswordTime, hashPassword, isBreachedPassword, verifyPassword } from './password.js';
 import { MFA_REQUIRED, permissoesDoVinculo } from './permissions.js';
 import { RateLimitService } from './rate-limit.service.js';
@@ -51,6 +52,7 @@ export class AuthService {
     private readonly rateLimit: RateLimitService,
     private readonly mailer: Mailer,
     private readonly chaves: ChavesService,
+    private readonly termos: TermosService,
   ) {}
 
   private get db() {
@@ -62,7 +64,7 @@ export class AuthService {
 
   async signup(input: SignupRequest, meta: RequestMeta): Promise<AcceptedResponse> {
     await this.rateLimit.consume(`cadastro:ip:${meta.ip ?? '-'}`, 10, 3600);
-    this.assertCurrentTerms(input.terms_version);
+    const aceites = await this.conferirTermos(input.terms_version, input.next_terms_version);
     await this.rejectBreached(input.password);
     const passwordHash = await hashPassword(input.password);
 
@@ -85,6 +87,8 @@ export class AuthService {
         await tx.execute(sql`
           insert into liame.app_user (id, email, name, password_hash, terms_version, terms_accepted_at)
           values (${userId}, ${input.email}, ${input.name}, ${passwordHash}, ${input.terms_version}, now())`);
+        // Os Termos novos (W14; D-A7-94): a versão declarada que vale e a que vem, quando a pessoa aceitou as duas.
+        await this.termos.gravarAceites(tx, userId, aceites, 'cadastro');
         // "Sou agência ou consultor" (A7, W6; D-A7-45): a agência nasce com a dona, sem marca e sem assinatura.
         const agencia = input.kind === 'agencia';
         await tx.execute(sql`insert into liame.organization (id, name, cnpj, kind)
@@ -393,12 +397,16 @@ export class AuthService {
 
   /**
    * A tela mostra os termos vigentes e devolve a versão; se mudaram no meio do caminho, a pessoa confere
-   * a versão nova antes de aceitar (a conta grava o que ela viu).
+   * a versão nova antes de aceitar (a conta grava o que ela viu). Com os Termos novos (W14; D-A7-94), também a versão
+   * que vem, quando a tela a mostrou. Devolve as versões declaradas a gravar como aceitas.
    */
-  assertCurrentTerms(version: string): void {
-    if (version !== this.config.terms.version) {
-      throw new AppProblem(409, 'termos-desatualizados', 'Os termos mudaram', 'Recarregue a página e confira a versão nova dos termos.');
-    }
+  conferirTermos(version: string, proxima?: string): Promise<string[]> {
+    return this.termos.conferirNoCadastro(version, proxima);
+  }
+
+  /** Grava os aceites do cadastro ou do convite, na transação que cria a pessoa. */
+  gravarAceitesDosTermos(tx: Tx, userId: string, versoes: readonly string[], via: 'cadastro' | 'convite'): Promise<void> {
+    return this.termos.gravarAceites(tx, userId, versoes, via);
   }
 
   async rejectBreached(password: string): Promise<void> {

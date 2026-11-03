@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { TermsVersionInfo } from './termos.js';
 
 // Contratos de identidade e acesso (ADR-013, ADR-017). Campos em inglês e snake_case (contrato público);
 // textos para a pessoa em pt-BR.
@@ -45,6 +46,11 @@ export const SignupRequest = z.strictObject({
   }),
   terms_version: TermsVersion,
   /**
+   * A versão que vem (A7, W14; D-A7-94): quem se cadastra entre o aviso e o dia aceita as duas, a de hoje e a que vem
+   * (`next` de `GET /v1/legal/terms`). Sem ela, a pessoa vê o aviso depois de entrar.
+   */
+  next_terms_version: TermsVersion.optional(),
+  /**
    * "Sou agência ou consultor" (D-A7-45): a conta nasce como agência, com o time e sem marca. Sem o campo, é uma
    * empresa, como sempre.
    */
@@ -64,6 +70,11 @@ export const LegalTermsResponse = z.strictObject({
   version: z.string(),
   terms_url: z.url(),
   privacy_url: z.url(),
+  /**
+   * A versão relevante que vem (A7, W14; D-A7-90 e D-A7-94): avisada, ainda não vale. Nula sem versão a caminho, ou com
+   * a função `termos_novos` desligada.
+   */
+  next: TermsVersionInfo.nullable(),
 });
 export type LegalTermsResponse = z.infer<typeof LegalTermsResponse>;
 

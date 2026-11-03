@@ -1,24 +1,26 @@
 import { LegalTermsResponse } from '@liame/contracts';
-import { Controller, Get, Inject } from '@nestjs/common';
+import { Controller, Get } from '@nestjs/common';
 import { ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
-import { APP_CONFIG, type AppConfig } from '../config.js';
 import { Publico } from './access.js';
+import { TermosService } from './termos/termos.service.js';
 
-// Termos vigentes (A0-6): o cadastro e o convite mostram os links e devolvem a versão aceita.
+// Termos vigentes (A0-6): o cadastro e o convite mostram os links e devolvem a versão aceita. Com os Termos novos (A7,
+// W14), também a versão relevante que vem, para quem se cadastra no meio do aviso aceitar as duas (D-A7-94).
 @ApiTags('auth')
 @Controller('legal')
 export class LegalController {
-  constructor(@Inject(APP_CONFIG) private readonly config: AppConfig) {}
+  constructor(private readonly termos: TermosService) {}
 
   @Get('terms')
   @Publico()
   @ApiOperation({
     summary: 'Termos vigentes',
-    description: 'Versão e endereços dos Termos de Uso e da Política de Privacidade. O cadastro envia a versão que a pessoa aceitou.',
+    description:
+      'Versão e endereços dos Termos de Uso e da Política de Privacidade. O cadastro envia a versão que a pessoa aceitou. `next` é a versão relevante que vem (avisada, ainda não vale): quem se cadastra no meio do aviso manda também `next_terms_version`. Nulo sem versão a caminho, ou com a função `termos_novos` desligada.',
   })
   @ApiOkResponse({ standardSchema: LegalTermsResponse })
-  terms(): LegalTermsResponse {
-    const { version, termsUrl, privacyUrl } = this.config.terms;
-    return { version, terms_url: termsUrl, privacy_url: privacyUrl };
+  async terms(): Promise<LegalTermsResponse> {
+    const { vigente, aVir } = await this.termos.publico();
+    return { version: vigente.version, terms_url: vigente.termsUrl, privacy_url: vigente.privacyUrl, next: aVir };
   }
 }

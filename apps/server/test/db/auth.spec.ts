@@ -104,7 +104,8 @@ describe.skipIf(!hasDb)('identidade: cadastro, e-mail, sessão, senha e empresa 
   it('o cadastro grava a versão dos termos vigentes; sem ela, ou com outra, recusa', async () => {
     const vigentes = await api.call('GET', '/v1/legal/terms');
     expect(vigentes.status).toBe(200);
-    expect(vigentes.body).toEqual({
+    // `next` (a versão que vem, A7, W14) pode aparecer quando o termos-novos.spec liga o ambiente com uma versão a caminho.
+    expect(vigentes.body).toMatchObject({
       version: TERMOS,
       terms_url: 'https://agencialiame.com/termos',
       privacy_url: 'https://agencialiame.com/privacidade',

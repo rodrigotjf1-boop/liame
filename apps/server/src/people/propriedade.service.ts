@@ -4,6 +4,7 @@ import { Inject, Injectable } from '@nestjs/common';
 import { sql } from 'drizzle-orm';
 import { ConfirmacaoService } from '../auth/confirmacao.service.js';
 import { APP_CONFIG, type AppConfig } from '../config.js';
+import { TermosService } from '../auth/termos/termos.service.js';
 import { afterCommit, auditDetail, type AuthContext, currentTx } from '../context/request-context.js';
 import { AppProblem } from '../errors/problems.js';
 import { Mailer } from '../mail/mailer.js';
@@ -42,6 +43,7 @@ export class PropriedadeService {
     private readonly confirmacao: ConfirmacaoService,
     private readonly mailer: Mailer,
     @Inject(APP_CONFIG) private readonly config: AppConfig,
+    private readonly termos: TermosService,
   ) {}
 
   /** A propriedade: o Dono, desde quando, o pedido em aberto (para o Dono e para quem recebe) e quem pode receber. */
@@ -160,7 +162,7 @@ export class PropriedadeService {
        for update`);
     const pedido = r.rows[0];
     if (!pedido) throw naoEncontrado();
-    if (body.terms_version !== this.config.terms.version) {
+    if (body.terms_version !== (await this.termos.vigente({ userId: auth.userId, tenantId })).version) {
       throw new AppProblem(409, 'termos-desatualizados', 'Os termos mudaram', 'Recarregue a página e confira a versão nova dos termos.');
     }
     // Quem recebe ainda é Administrador da empresa, com o app, e não vem de uma agência.

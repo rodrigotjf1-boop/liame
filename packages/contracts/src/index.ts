@@ -559,3 +559,4 @@ export {
   RenamePasskeyRequest,
   WebAuthnJson,
 } from './passkeys.js';
+export { AcceptTermsRequest, MyTermsResponse, TermsAcceptanceVia, TermsChange, TermsDocument, TermsVersionInfo } from './termos.js';
