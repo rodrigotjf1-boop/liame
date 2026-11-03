@@ -1007,6 +1007,8 @@ Falta da W3: o fim (parte 4) — o que acontece quando a assinatura termina (can
   - `test/db/chaves-de-acesso.spec.ts` (a flag desligada para a pessoa: o cadastro recusa, a lista diz, a chave que existe segue valendo; e a entrada sem a regra do ambiente);
   - `test/helpers/chaves.ts` (`flagDasChaves`): os testes das chaves ligam a flag (o ambiente num arquivo, a empresa no outro, porque no CI os dois rodam juntos).
 
+**A W9 ligada (03/11/2026; migration 0110).** Com os textos da Política aprovados pelo dono (#423), a flag `chaves_de_acesso` foi ligada primeiro na Mister Burgers, pelo `ligar-flag` do dono (03/11, 05h23). O teste dele, conferido na produção pela leitura: a chave "note pessoal" criada em Segurança da conta (só neste aparelho); a primeira resposta sugerida a uma avaliação aprovada com ela e publicada no Google (06h00); e a entrada de novo, com a chave no lugar do código do app depois da senha (a sessão com `mfa_method` = `chave`, 06h02). Depois, "pode ligar para todos": a migration 0110 grava a regra do ambiente de produção (o "Entrar com chave de acesso", sem senha, só olha o ambiente). Desligar de novo = apagar a regra; o que já existe continua valendo.
+
 ## Hub DMS · F2 (o Liame na credencial nova)
 
 O plano da F2 do Hub DMS (decisões F2-1 a F2-8 do dono, 15/10/2026) tem uma etapa no Liame, a **A3**: consertar o achado A2 e comparar as duas credenciais do RegemCast (a de hoje, `rct_it_`, e a do DMS ID com a ligação) nas 10 ferramentas de leitura, até 14 dias seguidos sem diferença, cada uma comparada 50 vezes ou mais (F2-7). A porta do RegemCast já aceita a credencial nova, desligada (RegemCast #118, 16/10/2026).
