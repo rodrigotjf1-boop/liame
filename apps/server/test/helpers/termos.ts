@@ -45,9 +45,10 @@ export async function versaoDeTeste(daqui: number, o: { kind?: 'relevante' | 're
   return versao;
 }
 
-/** Apaga as versões de teste e os aceites delas. */
+/** Apaga as versões de teste, as entregas dos e-mails e os aceites delas. */
 export async function apagarVersoes(versoes: readonly string[]): Promise<void> {
   if (!versoes.length) return;
+  await ownerQuery(`delete from liame.terms_notice where version = any($1::text[])`, [versoes]);
   await ownerQuery(`delete from liame.terms_acceptance where version = any($1::text[])`, [versoes]);
   await ownerQuery(`delete from liame.terms_version where version = any($1::text[])`, [versoes]);
 }

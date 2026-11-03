@@ -4,6 +4,7 @@ import { ActionExecutor } from './action-executor.js';
 import { AssinaturasLoop } from './assinaturas-loop.js';
 import { AvisoNoAsaasLoop } from './aviso-no-asaas-loop.js';
 import { AvisosDeAtrasoService } from './avisos-de-atraso.service.js';
+import { AvisosDosTermosService } from './avisos-dos-termos.service.js';
 import { CobrancasDoMesService } from './cobrancas-do-mes.service.js';
 import { CobrancasPixLoop } from './cobrancas-pix-loop.js';
 import { CobrancasReleituraLoop } from './cobrancas-releitura-loop.js';
@@ -84,6 +85,7 @@ export class EventsLoopService implements OnApplicationBootstrap, OnApplicationS
     private readonly postsSugeridos: PostsSugeridosLoop,
     private readonly assinaturas: AssinaturasLoop,
     private readonly avisosDeAtraso: AvisosDeAtrasoService,
+    private readonly avisosDosTermos: AvisosDosTermosService,
     private readonly cobrancasDoMes: CobrancasDoMesService,
     private readonly resumoDasPessoas: ResumoDasPessoasService,
     private readonly cobrancasPix: CobrancasPixLoop,
@@ -172,6 +174,9 @@ export class EventsLoopService implements OnApplicationBootstrap, OnApplicationS
       // O aviso do atraso por e-mail (A7, W3, parte 2): no 1º, no 7º, no 10º e no 30º dia, a quem paga, uma vez por
       // fatura, dia e pessoa; olhado de 30 em 30 minutos, em páginas por todas as assinaturas em atraso.
       this.loop('avisos-de-atraso', 100, 1_800_000, async (n) => (await this.avisosDeAtraso.executarLote(n)).length),
+      // Os e-mails dos Termos novos (A7, W14, parte 14c; D-A7-90): o aviso no dia da versão nova, o lembrete 7 dias antes
+      // (só para quem não aceitou) e a retirada; uma vez por versão, tipo e pessoa; olhados de 30 em 30 minutos.
+      this.loop('avisos-dos-termos', 100, 1_800_000, async (n) => (await this.avisosDosTermos.executarLote(n)).length),
       // A cobrança do mês por e-mail, com o código do PIX (A7; D-A7-17, D-A7-44): a fatura do período seguinte que já tem a
       // cobrança no Asaas, a quem paga, uma vez por fatura e pessoa; olhada de 30 em 30 minutos.
       this.loop('cobranca-do-mes', 100, 1_800_000, async (n) => (await this.cobrancasDoMes.executarLote(n)).length),
