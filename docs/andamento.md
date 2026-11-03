@@ -1009,6 +1009,16 @@ Falta da W3: o fim (parte 4) — o que acontece quando a assinatura termina (can
 
 **A W9 ligada (03/11/2026; migration 0110).** Com os textos da Política aprovados pelo dono (#423), a flag `chaves_de_acesso` foi ligada primeiro na Mister Burgers, pelo `ligar-flag` do dono (03/11, 05h23). O teste dele, conferido na produção pela leitura: a chave "note pessoal" criada em Segurança da conta (só neste aparelho); a primeira resposta sugerida a uma avaliação aprovada com ela e publicada no Google (06h00); e a entrada de novo, com a chave no lugar do código do app depois da senha (a sessão com `mfa_method` = `chave`, 06h02). Depois, "pode ligar para todos": a migration 0110 grava a regra do ambiente de produção (o "Entrar com chave de acesso", sem senha, só olha o ambiente). Desligar de novo = apagar a regra; o que já existe continua valendo.
 
+**A W14, parte 14a: os Termos novos no servidor (03/11/2026; migration 0111; D-A7-97 a D-A7-101; a função `termos_novos` nasce desligada).** O P35 foi aprovado pelo dono em 02/11/2026; esta parte é o servidor, sem tela.
+- **as versões** (`liame.terms_version`, da distribuição): a relevante, com o aviso de 30 dias (o banco recusa menos) e o que muda; a de redação, que vale na hora, com o motivo; os textos com o endereço e a impressão digital (SHA-256);
+- **o aceite** (`liame.terms_acceptance`, da pessoa): a versão, quando, onde (`aviso`, `tela_do_dia`, `cadastro`, `convite`) e o aparelho, sem o IP;
+- **as rotas:** `GET /v1/legal/terms` diz também a versão que vem (`next`); `GET /v1/me/terms` (o que vale, o último aceite, a que vem, o que falta no dia e as versões); `POST /v1/me/terms/accept` (a que vem ou a que falta; outra, 409 `versao-sem-aceite`; na auditoria da pessoa, `termos.aceitar`);
+- **o cadastro e o convite** aceitam também a versão que vem (`next_terms_version`); as duas trocas de dono conferem a versão vigente da pessoa, não mais a do ambiente;
+- **o comando** `termos-novos` (`--declarar` com um arquivo JSON, `--listar`, `--retirar`), com o papel dono do banco, na auditoria do sistema;
+- **desligada a função**, nada muda: a versão vigente é a do ambiente, e a rota pública não diz a que vem;
+- **testes:** `test/db/termos-novos.spec.ts` (desligada; antes do dia, pelo aviso; no dia; a redação; o cadastro e o convite no meio do aviso; a distribuição; as regras do banco), com `test/helpers/termos.ts` (a função por pessoa; o ambiente só com versão que ainda não vale); o `auth.spec` passa a conferir os três campos de sempre da rota pública.
+- **falta:** a trava do dia (14b), os e-mails (14c), as telas (14d e 14e) e o texto da Política sobre o aceite, antes de ligar.
+
 ## Hub DMS · F2 (o Liame na credencial nova)
 
 O plano da F2 do Hub DMS (decisões F2-1 a F2-8 do dono, 15/10/2026) tem uma etapa no Liame, a **A3**: consertar o achado A2 e comparar as duas credenciais do RegemCast (a de hoje, `rct_it_`, e a do DMS ID com a ligação) nas 10 ferramentas de leitura, até 14 dias seguidos sem diferença, cada uma comparada 50 vezes ou mais (F2-7). A porta do RegemCast já aceita a credencial nova, desligada (RegemCast #118, 16/10/2026).

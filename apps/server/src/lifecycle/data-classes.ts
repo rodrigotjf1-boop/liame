@@ -29,6 +29,11 @@ export const DATA_CLASSES: Record<string, TableClassification> = {
   // próximo pedido da pessoa.
   passkey: { class: 'PERSONAL', retention: 'até a pessoa tirar; com a pessoa' },
   webauthn_challenge: { class: 'INTERNAL', retention: '5 minutos (sai no próximo pedido da pessoa; o da entrada sem senha, no próximo pedido de entrada)' },
+  // Os Termos novos (A7, W14, migration 0111; D-A7-88, D-A7-92): a versão é da distribuição (os endereços, as impressões
+  // digitais e o que muda; nada pessoal), e o histórico fica, as retiradas também; o aceite é da pessoa (onde e o
+  // aparelho, sem o IP) e sai com ela; o evento do aceite fica na auditoria encadeada (5 anos).
+  terms_version: { class: 'INTERNAL', retention: 'para sempre: o histórico das versões, as retiradas também' },
+  terms_acceptance: { class: 'PERSONAL', retention: 'com a pessoa; o evento fica na auditoria (5 anos)' },
   invitation: { class: 'PERSONAL', retention: 'com a empresa' },
   role: { class: 'PUBLIC', retention: 'do produto' },
   role_permission: { class: 'INTERNAL', retention: 'do produto e da empresa' },

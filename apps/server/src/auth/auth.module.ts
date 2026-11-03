@@ -19,6 +19,8 @@ import { InvitationAcceptService } from './invitation-accept.service.js';
 import { InvitationController } from './invitation.controller.js';
 import { LegalController } from './legal.controller.js';
 import { SecurityController } from './security.controller.js';
+import { TermosController } from './termos/termos.controller.js';
+import { TermosService } from './termos/termos.service.js';
 import { SecurityService } from './security.service.js';
 import { MfaController } from './mfa.controller.js';
 import { MfaService } from './mfa.service.js';
@@ -40,6 +42,7 @@ import { SessionService } from './session.service.js';
     AgencyReplyToController,
     RecuperacaoDaContaController,
     ChavesController,
+    TermosController,
   ],
   providers: [
     { provide: APP_CONFIG, useFactory: () => loadConfig() },
@@ -59,6 +62,7 @@ import { SessionService } from './session.service.js';
     RecuperacaoDaContaService,
     ChavesService,
     ConfirmacaoService,
+    TermosService,
     { provide: APP_GUARD, useClass: AccessGuard },
     { provide: APP_INTERCEPTOR, useClass: UnitOfWorkInterceptor },
     // Depois da unidade de trabalho: a política é avaliada dentro da transação da requisição.
@@ -66,6 +70,6 @@ import { SessionService } from './session.service.js';
     { provide: APP_INTERCEPTOR, useClass: PolicyInterceptor },
   ],
   // A confirmação na hora (o código do app ou a chave de acesso; D-A7-56) para quem aprova ou muda algo de risco.
-  exports: [APP_CONFIG, Mailer, SessionService, RateLimitService, PolicyService, MfaService, ConfirmacaoService],
+  exports: [APP_CONFIG, Mailer, SessionService, RateLimitService, PolicyService, MfaService, ConfirmacaoService, TermosService],
 })
 export class AuthModule {}

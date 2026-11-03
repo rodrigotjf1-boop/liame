@@ -6,6 +6,7 @@ import { RateLimitService } from '../auth/rate-limit.service.js';
 import { lacrar } from '../auth/recuperacao/lacre.js';
 import { DIAS_DE_ESPERA_DA_PROPRIEDADE } from '../auth/recuperacao/propriedade-pela-dms.js';
 import { tipoDoDocumento } from '../auth/recuperacao/recuperacao.service.js';
+import { TermosService } from '../auth/termos/termos.service.js';
 import { APP_CONFIG, type AppConfig } from '../config.js';
 import { afterCommit, auditDetail, type AuthContext, currentTx } from '../context/request-context.js';
 import { AppProblem } from '../errors/problems.js';
@@ -95,6 +96,7 @@ export class PropriedadePelaDmsService {
     private readonly mailer: Mailer,
     private readonly rateLimit: RateLimitService,
     @Inject(APP_CONFIG) private readonly config: AppConfig,
+    private readonly termos: TermosService,
   ) {}
 
   /** O pedido de quem lê (ou, para o Dono, o pedido sobre ele na espera) e se dá para pedir. */
@@ -121,7 +123,7 @@ export class PropriedadePelaDmsService {
   async comecar(auth: AuthContext, body: CreateOwnershipClaimRequest): Promise<OwnershipClaimResponse> {
     const tx = currentTx();
     const tenantId = empresaDe(auth);
-    if (body.terms_version !== this.config.terms.version) {
+    if (body.terms_version !== (await this.termos.vigente({ userId: auth.userId, tenantId })).version) {
       throw new AppProblem(409, 'termos-desatualizados', 'Os termos mudaram', 'Recarregue a página e confira a versão nova dos termos.');
     }
     // Uma trava por empresa: dois pedidos ao mesmo tempo não passam juntos pela conferência de "um por empresa".
