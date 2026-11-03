@@ -1034,6 +1034,14 @@ Falta da W3: o fim (parte 4) — o que acontece quando a assinatura termina (can
 - **testes:** `test/termos-emails.spec.ts` (os textos: o do Dono e o de quem não é, a véspera, os dias do lembrete, a retirada) e o caso da rotina no `test/db/termos-novos.spec.ts` (o aviso a quem não aceitou, uma vez só; o lembrete; a retirada só a quem recebeu o aviso; desligada para a pessoa, nada).
 - **falta:** as telas (14d e 14e) e o texto da Política sobre o aceite, antes de ligar.
 
+**A W14, parte 14d: os Termos novos na tela (03/11/2026; sem migration; D-A7-104; a função segue desligada).** O P35 no web:
+- **a faixa** no alto de todas as telas durante o aviso, com o dia e quantas mudanças, âmbar e contando os dias nos últimos 7, e "Ver o que muda";
+- **a gaveta "O que muda"**: cada mudança com o documento e a seção, como é hoje e como fica; "nada muda para trás"; os textos inteiros (os novos e os de hoje); o cancelar sem multa até a véspera para o Dono ou "fale com o Dono"; e "Aceitar os Termos novos", com a frase ao lado do botão;
+- **a tela do aceite**, no dia, no lugar do conteúdo (aceitar, ver o que muda, sair; o Dono vai a Plano e cobrança);
+- **Plano e cobrança no dia**, para o Dono, com a faixa do dia; o roteiro de navegador achou que a tela não carregava (a trava recusava as marcas, os planos e o PIX da fatura, que ela lê ao abrir): as três leituras passaram a abrir (ERR-200);
+- **testes:** `apps/web/test/termos.spec.ts` (as frases da faixa, da gaveta e da tela do dia); o caso da trava no `test/db/termos-novos.spec.ts` confere as leituras liberadas; o roteiro de navegador (fora do repositório): 7 cenários, 34 execuções em 1440, 1024, 768 e 375 px, claro e escuro, com os aceites de verdade contra a API local, todas verdes.
+- **falta:** o cadastro e o convite no meio do aviso e "Termos e privacidade" em Segurança da conta (14e), e o texto da Política sobre o aceite, antes de ligar.
+
 ## Hub DMS · F2 (o Liame na credencial nova)
 
 O plano da F2 do Hub DMS (decisões F2-1 a F2-8 do dono, 15/10/2026) tem uma etapa no Liame, a **A3**: consertar o achado A2 e comparar as duas credenciais do RegemCast (a de hoje, `rct_it_`, e a do DMS ID com a ligação) nas 10 ferramentas de leitura, até 14 dias seguidos sem diferença, cada uma comparada 50 vezes ou mais (F2-7). A porta do RegemCast já aceita a credencial nova, desligada (RegemCast #118, 16/10/2026).
