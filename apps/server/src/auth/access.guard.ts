@@ -4,7 +4,8 @@ import { APP_CONFIG, type AppConfig } from '../config.js';
 import type { AuthContext } from '../context/request-context.js';
 import { AppProblem } from '../errors/problems.js';
 import { FlagService } from '../flags/flag.service.js';
-import { ACCESS_KEY, type Access, DURING_CLOSURE_KEY, DURING_SUSPENSION_KEY, OPEN_DURING_SUSPENSION_KEY, type RequestWithAuth } from './access.js';
+import { ACCESS_KEY, type Access, DURING_CLOSURE_KEY, DURING_SUSPENSION_KEY, DURING_TERMS_KEY, OPEN_DURING_SUSPENSION_KEY, type RequestWithAuth } from './access.js';
+import { FLAG_TERMOS } from './termos/termos.service.js';
 import { MFA_REQUIRED } from './permissions.js';
 import { readCookie, SESSION_COOKIE, SessionService } from './session.service.js';
 
@@ -67,6 +68,21 @@ export class AccessGuard implements CanActivate {
     // Quem tem app autenticador precisa verificar o código antes de usar a conta (ADR-013).
     if (auth.mfaConfigured && !auth.mfaVerifiedAt && !(access.kind === 'autenticado' && access.beforeMfa)) {
       throw new AppProblem(401, 'segundo-fator-necessario', 'Digite o código do app', 'Confirme o acesso com o código do app autenticador.');
+    }
+
+    // Os Termos novos (A7, W14, parte 14b; D-A7-93): no dia, quem não aceitou a versão relevante só lê e aceita, troca de
+    // empresa, e o Dono cancela, exporta ou encerra. Só depois do segundo fator; a função só é lida quando há versão
+    // pendente para a pessoa (o caso raro): o resto do pedido não paga nada a mais.
+    if (auth.termsRequired && !(access.kind === 'autenticado' && access.beforeMfa)) {
+      const liberada = this.reflector.getAllAndOverride<boolean | undefined>(DURING_TERMS_KEY, [ctx.getHandler(), ctx.getClass()]);
+      if (!liberada && (await this.termosLigados(auth))) {
+        throw new AppProblem(
+          403,
+          'aceite-os-termos',
+          'Aceite os Termos novos',
+          'Os Termos de Uso e a Política de Privacidade mudaram. Para continuar, leia o que muda e aceite.',
+        );
+      }
     }
 
     if (access.kind === 'permissao') {
@@ -134,6 +150,13 @@ export class AccessGuard implements CanActivate {
       if (await flags.isEnabled(FLAG_DA_COBRANCA, flags.context({ tenantId: auth.tenantId, userId: auth.userId, brandId }))) return true;
     }
     return false;
+  }
+
+  /** A função dos Termos novos para a pessoa (e a empresa ativa). */
+  private async termosLigados(auth: AuthContext): Promise<boolean> {
+    const flags = this.flags();
+    if (!flags) return false;
+    return flags.isEnabled(FLAG_TERMOS, flags.context({ userId: auth.userId, tenantId: auth.tenantId }));
   }
 
   /** As funções ficam no módulo do app, não no de autenticação: lidas pelo contêiner inteiro (como o `setup.ts` faz). */

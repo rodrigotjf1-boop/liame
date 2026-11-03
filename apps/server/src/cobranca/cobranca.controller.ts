@@ -28,7 +28,7 @@ import {
   ApiUnauthorizedResponse,
 } from '@nestjs/swagger';
 import { Auditar } from '../audit/auditar.js';
-import { AbertaNaSuspensao, Auth, DuranteSuspensao, Permissao } from '../auth/access.js';
+import { AbertaNaSuspensao, Auth, DuranteOAceite, DuranteSuspensao, Permissao } from '../auth/access.js';
 import type { AuthContext } from '../context/request-context.js';
 import { SemTransacao } from '../context/sem-transacao.js';
 import { ACAO_ASSINAR, ACAO_CANCELAR, ACAO_DESISTIR, ACAO_MANTER, ACAO_TROCAR_PLANO, CobrancaService, RECURSO } from './cobranca.service.js';
@@ -64,6 +64,7 @@ export class CobrancaController {
   }
 
   @Get('contacts')
+  @DuranteOAceite()
   @Permissao('empresa.ver')
   @AbertaNaSuspensao()
   @ApiOperation({
@@ -78,6 +79,7 @@ export class CobrancaController {
   }
 
   @Get()
+  @DuranteOAceite()
   @Permissao('cobranca.ver')
   @ApiOperation({
     summary: 'A cobrança da marca',
@@ -147,6 +149,7 @@ export class CobrancaController {
   }
 
   @Post('subscription/cancel')
+  @DuranteOAceite()
   @HttpCode(200)
   @Permissao('cobranca.gerenciar')
   @Auditar(ACAO_CANCELAR, { recurso: RECURSO })
@@ -166,6 +169,7 @@ export class CobrancaController {
   }
 
   @Post('subscription/keep')
+  @DuranteOAceite()
   @HttpCode(200)
   @Permissao('cobranca.gerenciar')
   @Auditar(ACAO_MANTER, { recurso: RECURSO })
@@ -183,6 +187,7 @@ export class CobrancaController {
   }
 
   @Post('subscription/withdraw')
+  @DuranteOAceite()
   @HttpCode(200)
   @Permissao('cobranca.gerenciar')
   @Auditar(ACAO_DESISTIR, { recurso: RECURSO })

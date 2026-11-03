@@ -26,7 +26,7 @@ import {
   ApiUnauthorizedResponse,
 } from '@nestjs/swagger';
 import type { AuthContext } from '../context/request-context.js';
-import { Auth, Autenticado, Publico } from './access.js';
+import { Auth, Autenticado, DuranteOAceite, Publico } from './access.js';
 import { AuthService, type RequestMeta } from './auth.service.js';
 import { ChavesService } from './chaves/chaves.service.js';
 import { SessionService } from './session.service.js';
@@ -192,6 +192,7 @@ export class MeController {
   }
 
   @Put('active-organization')
+  @DuranteOAceite()
   @Auditar('empresa.trocar_ativa', { escopo: 'pessoa', recurso: 'organization' })
   @Autenticado()
   @ApiOperation({ summary: 'Trocar de empresa', description: 'Muda a empresa ativa da sessão. Só para empresas com vínculo ativo.' })

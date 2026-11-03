@@ -64,6 +64,7 @@ export class SessionService {
         partner_link_id: string | null;
         agency_id: string | null;
         agency_name: string | null;
+        terms_required: string | null;
       }>(sql`
         select s.id as session_id, u.id as user_id, u.email, u.name, s.mfa_verified_at, s.mfa_method, s.last_seen_at,
                m.tenant_id, m.role_key, m.last_seen_at as member_seen_at, m.billing_access, p.permissions, o.status as tenant_status,
@@ -77,7 +78,12 @@ export class SessionService {
                (susp.brands is not null and not exists (
                   select 1 from liame.brand b
                    where b.tenant_id = m.tenant_id and b.archived_at is null
-                     and not exists (select 1 from liame.subscription x where x.brand_id = b.id and x.status = 'suspensa'))) as all_brands_suspended
+                     and not exists (select 1 from liame.subscription x where x.brand_id = b.id and x.status = 'suspensa'))) as all_brands_suspended,
+               -- A versão relevante dos Termos que vale e a pessoa não aceitou (A7, W14, parte 14b; D-A7-93): a mais nova em vigor.
+               (select v.version from (select t.version from liame.terms_version t
+                                         where t.kind = 'relevante' and t.withdrawn_at is null and t.effective_at <= now()
+                                         order by t.effective_at desc limit 1) v
+                 where not exists (select 1 from liame.terms_acceptance a where a.user_id = u.id and a.version = v.version)) as terms_required
           from liame.session s
           join liame.app_user u on u.id = s.user_id
           left join liame.membership m
@@ -143,6 +149,7 @@ export class SessionService {
         mfaVerifiedAt: row.mfa_verified_at ? new Date(row.mfa_verified_at) : null,
         mfaConfigured: row.mfa_configured,
         mfaMethod: row.mfa_method,
+        termsRequired: row.terms_required,
       };
     });
   }

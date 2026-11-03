@@ -1019,6 +1019,13 @@ Falta da W3: o fim (parte 4) — o que acontece quando a assinatura termina (can
 - **testes:** `test/db/termos-novos.spec.ts` (desligada; antes do dia, pelo aviso; no dia; a redação; o cadastro e o convite no meio do aviso; a distribuição; as regras do banco), com `test/helpers/termos.ts` (a função por pessoa; o ambiente só com versão que ainda não vale); o `auth.spec` passa a conferir os três campos de sempre da rota pública.
 - **falta:** a trava do dia (14b), os e-mails (14c), as telas (14d e 14e) e o texto da Política sobre o aceite, antes de ligar.
 
+**A W14, parte 14b: a trava do dia (03/11/2026; sem migration; D-A7-102; a função segue desligada).** No dia, quem não aceitou a versão relevante em vigor recebe 403 `aceite-os-termos` em toda rota que não esteja marcada `@DuranteOAceite`.
+- **a sessão** traz a versão pendente na mesma consulta de cada pedido (`termsRequired`); sem ela, a função nem é lida;
+- **liberadas:** ler e aceitar os Termos, trocar de empresa, Plano e cobrança (ver, quem cuida, cancelar, manter, desistir), exportar e encerrar a conta; as de antes do segundo fator (quem sou, sair) nunca travam;
+- **nada da empresa para:** os funcionários de IA e as rotinas não passam pela guarda;
+- **testes:** o caso da trava no `test/db/termos-novos.spec.ts` (desligada para a pessoa, nada trava; ligada, ler e mudar dá 403, as liberadas passam; o aceite destrava), no mesmo arquivo dos outros casos porque a trava com o ambiente ligado travaria as pessoas dos outros arquivos.
+- **falta:** os e-mails (14c), as telas (14d e 14e) e o texto da Política sobre o aceite, antes de ligar.
+
 ## Hub DMS · F2 (o Liame na credencial nova)
 
 O plano da F2 do Hub DMS (decisões F2-1 a F2-8 do dono, 15/10/2026) tem uma etapa no Liame, a **A3**: consertar o achado A2 e comparar as duas credenciais do RegemCast (a de hoje, `rct_it_`, e a do DMS ID com a ligação) nas 10 ferramentas de leitura, até 14 dias seguidos sem diferença, cada uma comparada 50 vezes ou mais (F2-7). A porta do RegemCast já aceita a credencial nova, desligada (RegemCast #118, 16/10/2026).
