@@ -3,7 +3,7 @@ import { Body, Controller, Get, HttpCode, Post } from '@nestjs/common';
 import { ApiConflictResponse, ApiCookieAuth, ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { Auditar } from '../../audit/auditar.js';
 import { type AuthContext } from '../../context/request-context.js';
-import { Auth, Autenticado } from '../access.js';
+import { Auth, Autenticado, DuranteOAceite } from '../access.js';
 import { TermosService } from './termos.service.js';
 
 // Os Termos novos para a própria pessoa (A7, W14, parte 14a; P35; D-A7-92, D-A7-95).
@@ -14,6 +14,7 @@ export class TermosController {
   constructor(private readonly termos: TermosService) {}
 
   @Get('terms')
+  @DuranteOAceite()
   @Autenticado()
   @ApiOperation({
     summary: 'Os Termos para mim',
@@ -26,6 +27,7 @@ export class TermosController {
   }
 
   @Post('terms/accept')
+  @DuranteOAceite()
   @HttpCode(200)
   @Autenticado()
   @Auditar('termos.aceitar', { escopo: 'pessoa', recurso: 'terms_version' })

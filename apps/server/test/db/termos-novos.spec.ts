@@ -118,6 +118,31 @@ describe.skipIf(!hasDb)('os Termos novos', () => {
     await apagarVersoes([ajuste]);
   });
 
+  it('a trava do dia (14b): quem não aceitou só lê e aceita, troca de empresa, e o Dono vê a cobrança e exporta; o resto, 403; o aceite destrava', async () => {
+    const vale = await versao(-2);
+    const s = await signupAndLogin(api, undefined, 'Empresa Termos Trava');
+    await enableMfa(api, s.cookie);
+    // Desligada para a pessoa (a regra dela), a versão pendente não trava nada.
+    await flagDosTermos(api, { tipo: 'user', id: s.me.user.id }, false);
+    expect((await chamar('GET', '/v1/brands', s.cookie)).status).toBe(200);
+
+    await flagDosTermos(api, { tipo: 'user', id: s.me.user.id }, true);
+    const travada = await chamar('GET', '/v1/brands', s.cookie);
+    expect(travada.status).toBe(403);
+    expect(travada.body.code).toBe('aceite-os-termos');
+    expect((await chamar('POST', '/v1/brands', s.cookie, { name: 'Outra marca' })).body.code).toBe('aceite-os-termos');
+    // Liberadas: quem sou, os Termos, a cobrança, exportar.
+    for (const [metodo, caminho] of [['GET', '/v1/me'], ['GET', '/v1/me/terms'], ['GET', '/v1/billing'], ['GET', '/v1/billing/contacts'], ['GET', '/v1/export']] as const) {
+      const r = await chamar(metodo, caminho, s.cookie);
+      expect(r.body?.code, `${metodo} ${caminho}`).not.toBe('aceite-os-termos');
+    }
+    expect((await meus(s.cookie)).required?.version).toBe(vale);
+
+    expect((await chamar('POST', '/v1/me/terms/accept', s.cookie, { version: vale })).status).toBe(200);
+    expect((await chamar('GET', '/v1/brands', s.cookie)).status).toBe(200);
+    await apagarVersoes([vale]);
+  });
+
   it('o cadastro e o convite no meio do aviso aceitam as duas versões; a que vem errada recusa; sem ela, só a de hoje', async () => {
     // Antes de ligar o ambiente, só versões que ainda não valem: a vigente dos outros arquivos continua a do ambiente.
     await apagarVersoes(criadas.splice(0));

@@ -2,7 +2,7 @@ import { CloseOrganizationRequest, ExportResponse, ProblemDetails } from '@liame
 import { Body, Controller, Get, HttpCode, Post } from '@nestjs/common';
 import { ApiConflictResponse, ApiCookieAuth, ApiNoContentResponse, ApiOkResponse, ApiOperation, ApiTags, ApiUnauthorizedResponse } from '@nestjs/swagger';
 import { Auditar } from '../audit/auditar.js';
-import { Auth, DuranteEncerramento, DuranteSuspensao, Permissao } from '../auth/access.js';
+import { Auth, DuranteEncerramento, DuranteOAceite, DuranteSuspensao, Permissao } from '../auth/access.js';
 import type { AuthContext } from '../context/request-context.js';
 import { GRACE_DAYS, LifecycleService } from './lifecycle.service.js';
 
@@ -14,6 +14,7 @@ export class LifecycleController {
   constructor(private readonly lifecycle: LifecycleService) {}
 
   @Post('organization/close')
+  @DuranteOAceite()
   @Permissao('empresa.encerrar')
   @DuranteSuspensao()
   @Auditar('empresa.encerrar', { recurso: 'organization' })
@@ -43,6 +44,7 @@ export class LifecycleController {
   }
 
   @Get('export')
+  @DuranteOAceite()
   @Permissao('empresa.exportar')
   @ApiOperation({ summary: 'Exportar os dados', description: 'Tudo o que é da empresa, em JSON, sem segredo, senha, token ou sessão. Fica na auditoria.' })
   @ApiOkResponse({ standardSchema: ExportResponse })

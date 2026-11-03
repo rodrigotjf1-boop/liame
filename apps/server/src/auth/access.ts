@@ -51,3 +51,11 @@ export const DuranteSuspensao = () => SetMetadata(DURING_SUSPENSION_KEY, true);
  */
 export const OPEN_DURING_SUSPENSION_KEY = 'liame:aberta-na-suspensao';
 export const AbertaNaSuspensao = () => SetMetadata(OPEN_DURING_SUSPENSION_KEY, true);
+
+/**
+ * Rota que continua aberta no dia dos Termos novos para quem ainda não aceitou (A7, W14, parte 14b; D-A7-93): ler e
+ * aceitar, trocar de empresa e, para o Dono, Plano e cobrança (cancelar sem multa), exportar e encerrar a conta. As rotas
+ * de antes do segundo fator (quem sou, sair) nunca travam. A permissão de cada rota continua valendo.
+ */
+export const DURING_TERMS_KEY = 'liame:durante-o-aceite';
+export const DuranteOAceite = () => SetMetadata(DURING_TERMS_KEY, true);

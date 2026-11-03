@@ -32,6 +32,11 @@ export interface AuthContext {
   mfaConfigured: boolean;
   /** Como a sessão provou o segundo fator. */
   mfaMethod: 'totp' | 'recuperacao' | 'chave' | null;
+  /**
+   * A versão relevante dos Termos que vale e a pessoa ainda não aceitou (A7, W14, parte 14b; D-A7-93): com a função
+   * `termos_novos` ligada para ela, a guarda recusa as outras rotas até o aceite. Nula quase sempre.
+   */
+  termsRequired?: string | null;
 }
 
 interface RequestStore {
