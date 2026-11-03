@@ -136,22 +136,31 @@ describe.skipIf(!hasDb)('os Termos novos', () => {
     await enableMfa(api, s.cookie);
     // Desligada para a pessoa (a regra dela), a versão pendente não trava nada.
     await flagDosTermos(api, { tipo: 'user', id: s.me.user.id }, false);
-    expect((await chamar('GET', '/v1/brands', s.cookie)).status).toBe(200);
+    expect((await chamar('GET', '/v1/connections', s.cookie)).status).toBe(200);
 
     await flagDosTermos(api, { tipo: 'user', id: s.me.user.id }, true);
-    const travada = await chamar('GET', '/v1/brands', s.cookie);
+    const travada = await chamar('GET', '/v1/connections', s.cookie);
     expect(travada.status).toBe(403);
     expect(travada.body.code).toBe('aceite-os-termos');
     expect((await chamar('POST', '/v1/brands', s.cookie, { name: 'Outra marca' })).body.code).toBe('aceite-os-termos');
-    // Liberadas: quem sou, os Termos, a cobrança, exportar.
-    for (const [metodo, caminho] of [['GET', '/v1/me'], ['GET', '/v1/me/terms'], ['GET', '/v1/billing'], ['GET', '/v1/billing/contacts'], ['GET', '/v1/export']] as const) {
+    // Liberadas: quem sou, os Termos, Plano e cobrança (o que a tela lê: as marcas, os planos, a assinatura e quem cuida) e
+    // exportar.
+    for (const [metodo, caminho] of [
+      ['GET', '/v1/me'],
+      ['GET', '/v1/me/terms'],
+      ['GET', '/v1/brands'],
+      ['GET', '/v1/billing'],
+      ['GET', '/v1/billing/plans'],
+      ['GET', '/v1/billing/contacts'],
+      ['GET', '/v1/export'],
+    ] as const) {
       const r = await chamar(metodo, caminho, s.cookie);
       expect(r.body?.code, `${metodo} ${caminho}`).not.toBe('aceite-os-termos');
     }
     expect((await meus(s.cookie)).required?.version).toBe(vale);
 
     expect((await chamar('POST', '/v1/me/terms/accept', s.cookie, { version: vale })).status).toBe(200);
-    expect((await chamar('GET', '/v1/brands', s.cookie)).status).toBe(200);
+    expect((await chamar('GET', '/v1/connections', s.cookie)).status).toBe(200);
     await apagarVersoes([vale]);
   });
 
