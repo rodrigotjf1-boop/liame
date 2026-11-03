@@ -34,6 +34,9 @@ export const DATA_CLASSES: Record<string, TableClassification> = {
   // aparelho, sem o IP) e sai com ela; o evento do aceite fica na auditoria encadeada (5 anos).
   terms_version: { class: 'INTERNAL', retention: 'para sempre: o histórico das versões, as retiradas também' },
   terms_acceptance: { class: 'PERSONAL', retention: 'com a pessoa; o evento fica na auditoria (5 anos)' },
+  // A entrega de cada e-mail dos Termos novos (W14, parte 14c, migration 0112): a versão, o tipo, a pessoa e a situação,
+  // sem o endereço nem o texto; sai com a pessoa.
+  terms_notice: { class: 'PERSONAL', retention: 'com a pessoa' },
   invitation: { class: 'PERSONAL', retention: 'com a empresa' },
   role: { class: 'PUBLIC', retention: 'do produto' },
   role_permission: { class: 'INTERNAL', retention: 'do produto e da empresa' },

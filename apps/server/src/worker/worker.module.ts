@@ -28,6 +28,7 @@ import { ActionExecutor } from './action-executor.js';
 import { MeioAsaas } from '../cobranca/meio-asaas.js';
 import { AssinaturasLoop } from './assinaturas-loop.js';
 import { AvisosDeAtrasoService } from './avisos-de-atraso.service.js';
+import { AvisosDosTermosService } from './avisos-dos-termos.service.js';
 import { AuditAnchorService } from './audit-anchor.service.js';
 import { CobrancasDoMesService } from './cobrancas-do-mes.service.js';
 import { ResumoDasPessoasService } from './resumo-das-pessoas.service.js';
@@ -235,6 +236,8 @@ import { WebhookDeliverer } from './webhook-deliverer.js';
     AssinaturasLoop,
     // O aviso do atraso por e-mail a quem paga (A7, W3, parte 2). Só com a função `cobranca` ligada.
     AvisosDeAtrasoService,
+    // Os e-mails dos Termos novos (A7, W14, parte 14c): o aviso, o lembrete e a retirada. Só com a função `termos_novos`.
+    AvisosDosTermosService,
     // A cobrança do mês por e-mail, com o código do PIX (A7; D-A7-44). Só com a função ligada e o Asaas configurado.
     CobrancasDoMesService,
     // O resumo da semana do que cada pessoa fez, ao Dono (A7, W8; D-A7-53). Só com a função ligada.

@@ -6,15 +6,27 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { declararVersao, type DeclaracaoDeVersao, retirarVersao } from '../../src/auth/termos/distribuicao.js';
 import { TermosService } from '../../src/auth/termos/termos.service.js';
 import { diaEmBrasilia } from '../../src/auth/termos/versoes.js';
+import { APP_CONFIG, type AppConfig } from '../../src/config.js';
+import { FlagService } from '../../src/flags/flag.service.js';
+import { type MailMessage, Mailer } from '../../src/mail/mailer.js';
+import { AvisosDosTermosService } from '../../src/worker/avisos-dos-termos.service.js';
 import { enableMfa, ownerQuery, PASSWORD, resetIpRateLimits, signupAndLogin, startApi, type TestApi, TERMOS, tokenFrom, uniqueEmail } from '../helpers/api.js';
 import { apagarVersoes, flagDosTermos, versaoDeTeste } from '../helpers/termos.js';
-import { hasDb, OWNER_URL } from './env.js';
+import { APP_URL, hasDb, OWNER_URL } from './env.js';
 
 // Os Termos novos (A7, W14, parte 14a; P35; D-A7-88 a D-A7-95, D-A7-97 a D-A7-100): com a função desligada, nada muda;
 // ligada, a versão que vem, o aceite antes do dia (pelo aviso) e no dia (pela tela do aceite), o cadastro e o convite no
 // meio do aviso, a versão vigente nas trocas de dono, e o lado da distribuição (declarar, com a impressão digital e os 30
 // dias, e retirar). As versões valem para o banco de teste inteiro: a função liga só para as pessoas do teste, e o
 // ambiente só com uma versão que ainda não vale (ver `helpers/termos.ts`).
+
+/** O carteiro da rotina: guarda o que sairia. */
+class CarteiroDeTeste extends Mailer {
+  readonly enviados: MailMessage[] = [];
+  async send(m: MailMessage): Promise<void> {
+    this.enviados.push(m);
+  }
+}
 
 const CHROME_WINDOWS = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0 Safari/537.36';
 
@@ -141,6 +153,59 @@ describe.skipIf(!hasDb)('os Termos novos', () => {
     expect((await chamar('POST', '/v1/me/terms/accept', s.cookie, { version: vale })).status).toBe(200);
     expect((await chamar('GET', '/v1/brands', s.cookie)).status).toBe(200);
     await apagarVersoes([vale]);
+  });
+
+  it('os e-mails (14c): o aviso a quem não aceitou, uma vez só; o lembrete nos 7 dias antes; a retirada a quem recebeu o aviso; desligada, nada', async () => {
+    await apagarVersoes(criadas.splice(0));
+    const carteiro = new CarteiroDeTeste();
+    const banco = createDatabase({ connectionString: APP_URL, max: 2, applicationName: 'liame-test-termos' });
+    try {
+      const avisos = new AvisosDosTermosService(banco, api.app.get(FlagService), carteiro, api.app.get<AppConfig>(APP_CONFIG));
+      const vem = await versao(35);
+      const perto = await versao(5);
+      const a = await signupAndLogin(api, undefined, 'Empresa Termos Aviso A');
+      const b = await signupAndLogin(api, undefined, 'Empresa Termos Aviso B');
+      const c = await signupAndLogin(api, undefined, 'Empresa Termos Aviso C');
+      for (const s of [a, c]) await flagDosTermos(api, { tipo: 'user', id: s.me.user.id }, true);
+      await flagDosTermos(api, { tipo: 'user', id: b.me.user.id }, false);
+      // Antes do dia, só a versão mais próxima aceita aceite.
+      expect((await chamar('POST', '/v1/me/terms/accept', c.cookie, { version: perto })).status).toBe(200);
+      const pessoas = [a, b, c].map((s) => s.me.user.id);
+      const para = (s: { email: string }) => carteiro.enviados.filter((m) => m.to === s.email).map((m) => m.subject).sort();
+
+      await avisos.executarLote(100, { pessoas });
+      expect(para(a)).toEqual([
+        'Faltam 5 dias para os Termos novos do Liame',
+        `Os Termos do Liame mudam em ${diaEmBrasilia(new Date(Date.now() + 35 * 86_400_000)).split('-').reverse().join('/')}`,
+        `Os Termos do Liame mudam em ${diaEmBrasilia(new Date(Date.now() + 5 * 86_400_000)).split('-').reverse().join('/')}`,
+      ].sort());
+      // C já aceitou a de perto: só o aviso da outra. B está com a função desligada: nada.
+      expect(para(c)).toHaveLength(1);
+      expect(para(b)).toEqual([]);
+      expect(carteiro.enviados.find((m) => m.to === a.email)?.text).toContain('Você pode cancelar a assinatura sem multa');
+
+      // Rodar de novo não manda em dobro.
+      await avisos.executarLote(100, { pessoas });
+      expect(carteiro.enviados).toHaveLength(4);
+
+      // A retirada: só quem recebeu o aviso daquela versão.
+      await ownerQuery(`update liame.terms_version set withdrawn_at = now(), withdrawn_by = 'testes', withdrawn_reason = 'Teste da retirada.' where version = $1`, [perto]);
+      await avisos.executarLote(100, { pessoas });
+      expect(para(a)).toContain('A mudança dos Termos do Liame foi cancelada');
+      expect(para(c)).not.toContain('A mudança dos Termos do Liame foi cancelada');
+      const entregas = await ownerQuery<{ kind: string; status: string }>(
+        `select kind, status from liame.terms_notice where user_id = $1 and version = $2 order by kind`,
+        [a.me.user.id, perto],
+      );
+      expect(entregas).toEqual([
+        { kind: 'aviso', status: 'enviado' },
+        { kind: 'lembrete', status: 'enviado' },
+        { kind: 'retirada', status: 'enviado' },
+      ]);
+    } finally {
+      await ownerQuery(`delete from liame.terms_notice where version = any($1::text[])`, [criadas]);
+      await banco.close();
+    }
   });
 
   it('o cadastro e o convite no meio do aviso aceitam as duas versões; a que vem errada recusa; sem ela, só a de hoje', async () => {

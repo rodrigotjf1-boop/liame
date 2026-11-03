@@ -1026,6 +1026,14 @@ Falta da W3: o fim (parte 4) — o que acontece quando a assinatura termina (can
 - **testes:** o caso da trava no `test/db/termos-novos.spec.ts` (desligada para a pessoa, nada trava; ligada, ler e mudar dá 403, as liberadas passam; o aceite destrava), no mesmo arquivo dos outros casos porque a trava com o ambiente ligado travaria as pessoas dos outros arquivos.
 - **falta:** os e-mails (14c), as telas (14d e 14e) e o texto da Política sobre o aceite, antes de ligar.
 
+**A W14, parte 14c: os e-mails dos Termos novos (03/11/2026; migration 0112; D-A7-103; a função segue desligada).** Pelo worker, de 30 em 30 minutos, com os textos do P35:
+- **o aviso**, no dia da versão nova, a cada pessoa com acesso ativo e e-mail confirmado que ainda não aceitou;
+- **o lembrete**, nos 7 dias antes do dia, só a quem ainda não aceitou ("Faltam N dias");
+- **a retirada**, a quem tinha recebido o aviso, quando a versão é retirada antes do dia;
+- **uma vez por versão, tipo e pessoa** (`liame.terms_notice`, sem o endereço nem o texto), com a reserva antes do envio e até 3 tentativas, como o aviso do atraso;
+- **testes:** `test/termos-emails.spec.ts` (os textos: o do Dono e o de quem não é, a véspera, os dias do lembrete, a retirada) e o caso da rotina no `test/db/termos-novos.spec.ts` (o aviso a quem não aceitou, uma vez só; o lembrete; a retirada só a quem recebeu o aviso; desligada para a pessoa, nada).
+- **falta:** as telas (14d e 14e) e o texto da Política sobre o aceite, antes de ligar.
+
 ## Hub DMS · F2 (o Liame na credencial nova)
 
 O plano da F2 do Hub DMS (decisões F2-1 a F2-8 do dono, 15/10/2026) tem uma etapa no Liame, a **A3**: consertar o achado A2 e comparar as duas credenciais do RegemCast (a de hoje, `rct_it_`, e a do DMS ID com a ligação) nas 10 ferramentas de leitura, até 14 dias seguidos sem diferença, cada uma comparada 50 vezes ou mais (F2-7). A porta do RegemCast já aceita a credencial nova, desligada (RegemCast #118, 16/10/2026).
