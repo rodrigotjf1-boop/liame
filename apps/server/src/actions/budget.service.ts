@@ -12,7 +12,20 @@ import { diaNoFuso, menosDias } from '../results/fora-do-normal.js';
 import type { VerbaDoMesGuardada } from '../results/relatorio-mensal.js';
 import { DIAS_CONFERINDO, nomeDaPlataforma, textoDoGastoAcima } from './conferencia-do-gasto.js';
 import { CONNECTORS } from './connectors.js';
-import { cabeNoMes, type ContaDeAnuncio, type ContaDoMes, contaDoMes, fraseDeNaoCaber, mesDe, PLATAFORMAS_DE_ANUNCIO } from './verba-do-mes.js';
+import {
+  cabeNoMes,
+  type ContaDeAnuncio,
+  type ContaDoMes,
+  contaDoMes,
+  erroDaDivisao,
+  fraseDeNaoCaber,
+  fraseDeNaoCaberNaParte,
+  mesDe,
+  PLATAFORMAS_DE_ANUNCIO,
+  type PartesDaVerba,
+  partesDaColuna,
+  somaDasPartes,
+} from './verba-do-mes.js';
 
 const brl = (micros: number | bigint) => (Number(micros) / 1_000_000).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 const FUSO_PADRAO = 'America/Sao_Paulo';
@@ -24,6 +37,13 @@ const DIAS_DE_GASTO = 62;
  * duas se usa aqui.
  */
 const PLATAFORMA_DA_ESCRITA = 'meta_ads';
+/** A divisão do teto do mês por plataforma (A4, X9; D-A4-36). Desligada, a divisão gravada não vale e não se muda. */
+export const FLAG_DA_DIVISAO = 'verba_por_plataforma';
+/** A ordem das plataformas na divisão: a da lista das plataformas de anúncio (a Meta, depois o Google). */
+const ordemDaPlataforma = (provider: string): number => {
+  const i = PLATAFORMAS_DE_ANUNCIO.indexOf(provider);
+  return i < 0 ? PLATAFORMAS_DE_ANUNCIO.length : i;
+};
 
 /** O fuso em que o mês da empresa vira. */
 async function fusoDaEmpresa(tx: Tx, tenantId: string): Promise<string> {
@@ -101,19 +121,21 @@ export class BudgetService {
   /**
    * Reserva no envelope da empresa e no da marca (quando houver); passou do teto, nega. `sobeOGasto`: o pedido aumenta
    * verba ou volta a gastar numa plataforma de anúncio, e por isso passa pela conta do mês inteiro (com `amountMicros`
-   * sendo o que ele acrescenta por dia, que pode ser zero no anúncio sem verba própria).
+   * sendo o que ele acrescenta por dia, que pode ser zero no anúncio sem verba própria). Com o teto da empresa dividido
+   * por plataforma (D-A4-37, função `verba_por_plataforma`), o pedido também precisa caber na parte da plataforma dele
+   * (`provider`): a conta do mês só das contas dela, com a parte no lugar do teto.
    */
   async reserve(
     tx: Tx,
-    input: { tenantId: string; brandId: string | null; actionId: string; amountMicros: number; sobeOGasto?: boolean; agora?: Date },
+    input: { tenantId: string; brandId: string | null; actionId: string; amountMicros: number; sobeOGasto?: boolean; provider?: string; agora?: Date },
   ): Promise<void> {
     if (input.amountMicros <= 0 && !input.sobeOGasto) return;
     const agora = input.agora ?? new Date();
     const fuso = await fusoDaEmpresa(tx, input.tenantId);
     const period = diaNoFuso(agora, fuso).slice(0, 7);
     // Trava na ordem empresa → marca (sempre a mesma: sem impasse entre transações).
-    const envelopes = await tx.execute<{ brand_id: string | null; limit_micros: string }>(sql`
-      select brand_id, limit_micros from liame.budget_policy
+    const envelopes = await tx.execute<{ brand_id: string | null; limit_micros: string; platform_parts: unknown }>(sql`
+      select brand_id, limit_micros, platform_parts from liame.budget_policy
        where tenant_id = ${input.tenantId} and (brand_id is null or brand_id = ${input.brandId})
        order by brand_id nulls first
        for update`);
@@ -123,6 +145,15 @@ export class BudgetService {
         const conta = await this.contaDoMes(tx, { tenantId: input.tenantId, brandId: env.brand_id, fuso, agora, teto: BigInt(env.limit_micros), exceto: input.actionId });
         const { cabe, acrescenta } = cabeNoMes(conta, BigInt(input.amountMicros));
         if (!cabe) throw new AppProblem(422, 'orcamento-insuficiente', 'Não cabe na verba do mês', fraseDeNaoCaber(conta, acrescenta, brl, scope));
+        // A parte da plataforma (D-A4-37): só no envelope da empresa, onde a divisão mora.
+        const parte = env.brand_id === null && input.provider ? (await this.partesQueValem(input.tenantId, env.platform_parts))?.get(input.provider) : undefined;
+        if (parte !== undefined && input.provider) {
+          const daPlataforma = await this.contaDoMes(tx, { tenantId: input.tenantId, brandId: null, fuso, agora, teto: parte, exceto: input.actionId, provider: input.provider });
+          const naParte = cabeNoMes(daPlataforma, BigInt(input.amountMicros));
+          if (!naParte.cabe) {
+            throw new AppProblem(422, 'orcamento-insuficiente', 'Não cabe na parte da plataforma', fraseDeNaoCaberNaParte(daPlataforma, naParte.acrescenta, brl, input.provider));
+          }
+        }
         continue;
       }
       const committed = await this.committed(tx, input.tenantId, period, env.brand_id);
@@ -140,6 +171,17 @@ export class BudgetService {
     await tx.execute(sql`
       insert into liame.budget_ledger_entry (id, tenant_id, brand_id, period, action_request_id, kind, amount_micros)
       values (${uuidv7()}, ${input.tenantId}, ${input.brandId}, ${period}, ${input.actionId}, 'reserva', ${input.amountMicros})`);
+  }
+
+  /** A função da divisão por plataforma está ligada para a empresa (D-A4-36)? */
+  private divisaoLigada(tenantId: string): Promise<boolean> {
+    return this.flags.isEnabled(FLAG_DA_DIVISAO, this.flags.context({ tenantId }));
+  }
+
+  /** A divisão gravada, se a função dela está ligada para a empresa; desligada, a divisão não vale (nem trava). */
+  private async partesQueValem(tenantId: string, coluna: unknown): Promise<PartesDaVerba | null> {
+    const partes = partesDaColuna(coluna);
+    return partes && (await this.divisaoLigada(tenantId)) ? partes : null;
   }
 
   /** Devolve ao envelope o que a ação reservou e não executou (cancelada, expirada, falhou ou mudou). */
@@ -212,8 +254,8 @@ export class BudgetService {
     const tx = currentTx();
     const tenantId = tenantOf(auth);
     const fuso = await fusoDaEmpresa(tx, tenantId);
-    const env = await tx.execute<{ limit_micros: string; updated_at: Date | string; updated_by: string | null; nome: string | null }>(sql`
-      select b.limit_micros::text as limit_micros, b.updated_at, b.updated_by, u.name as nome
+    const env = await tx.execute<{ limit_micros: string; updated_at: Date | string; updated_by: string | null; nome: string | null; platform_parts: unknown }>(sql`
+      select b.limit_micros::text as limit_micros, b.updated_at, b.updated_by, u.name as nome, b.platform_parts
         from liame.budget_policy b left join liame.app_user u on u.id = b.updated_by
        where b.tenant_id = ${tenantId} and b.brand_id is null`);
     const envelope = env.rows[0] ?? null;
@@ -224,6 +266,20 @@ export class BudgetService {
     const { mes } = conta;
     const mudancas = await this.mudancasDoMes(tx, { tenantId, fuso, inicio: mes.inicio, hoje: mes.hoje });
     const comEscrita = await this.plataformasComEscrita(tx, tenantId, auth.userId);
+    // A divisão por plataforma (D-A4-36), com a função ligada: a parte de cada uma e o que pesa hoje nela.
+    const divisaoLigada = await this.divisaoLigada(tenantId);
+    const partes = divisaoLigada ? partesDaColuna(envelope?.platform_parts) : null;
+    const pesamNaPlataforma = new Map<string, bigint>();
+    for (const provider of partes?.keys() ?? []) {
+      const porDia = await this.pesamHoje(tx, { tenantId, brandId: null, fuso, hoje: mes.hoje, exceto: null, provider });
+      pesamNaPlataforma.set(provider, porDia * BigInt(mes.diasQueFaltam));
+    }
+    const parteDa = (provider: string, previsto: bigint): BudgetMonthResponse['platforms'][number]['part'] => {
+      const parte = partes?.get(provider);
+      if (parte === undefined) return null;
+      const pesam = pesamNaPlataforma.get(provider) ?? 0n;
+      return { micros: Number(parte), pending_micros: Number(pesam), remaining_micros: Number(parte - previsto - pesam) };
+    };
     return {
       period: mes.periodo,
       timezone: fuso,
@@ -244,6 +300,12 @@ export class BudgetService {
         campaign_daily_micros: teto,
         set_by: envelope?.updated_by && envelope.nome ? { id: envelope.updated_by, name: envelope.nome } : null,
         set_at: envelope ? new Date(envelope.updated_at).toISOString() : null,
+        platform_parts: partes
+          ? [...partes]
+              .sort(([a], [b]) => ordemDaPlataforma(a) - ordemDaPlataforma(b) || a.localeCompare(b))
+              .map(([provider, micros]) => ({ provider, micros: Number(micros) }))
+          : null,
+        platform_parts_enabled: divisaoLigada,
       },
       remaining_micros: conta.sobra === null ? null : Number(conta.sobra),
       platforms: conta.plataformas.map((p) => ({
@@ -257,6 +319,7 @@ export class BudgetService {
         stale: p.atrasada,
         last_success_at: p.lidoEm ? p.lidoEm.toISOString() : null,
         writes: comEscrita.has(p.provider),
+        part: parteDa(p.provider, p.previsto),
       })),
       days: conta.dias.map((d) => ({ day: d.dia, spend_micros: Number(d.gasto), missing: d.faltam })),
       rules: regras,
@@ -406,7 +469,9 @@ export class BudgetService {
 
   /**
    * Define os dois limites da empresa (D-A4-22): o teto do mês, no envelope, e o teto por campanha, numa versão nova
-   * da política da empresa. Valem na hora, para os pedidos seguintes, e a mudança fica na auditoria.
+   * da política da empresa. Valem na hora, para os pedidos seguintes, e a mudança fica na auditoria. Com a função
+   * `verba_por_plataforma` ligada, também a divisão do teto do mês por plataforma (D-A4-36): uma parte para cada
+   * plataforma de anúncio conectada, e o teto do mês é a soma delas. Ausente, a divisão fica como está; nula, sai.
    */
   async setLimits(auth: AuthContext, input: BudgetLimitsRequest, agora = new Date()): Promise<BudgetMonthResponse> {
     const tx = currentTx();
@@ -414,35 +479,82 @@ export class BudgetService {
     if (input.campaign_daily_micros > input.month_micros) {
       throw new ValidationProblem([{ path: 'campaign_daily_micros', message: 'O teto por campanha é por dia e não pode passar do teto do mês.' }]);
     }
+    const pedida = input.platform_parts;
+    const ligada = await this.divisaoLigada(tenantId);
+    if (pedida && !ligada) {
+      throw new AppProblem(409, 'funcao-desligada', 'A divisão por plataforma ainda não está ligada', 'Por enquanto, a verba do mês tem o teto da empresa e o teto por campanha.');
+    }
+    // A linha do envelope fica travada desde a leitura da divisão de antes (dois pedidos juntos não gravam metade de cada).
+    const atual = await tx.execute<{ platform_parts: unknown }>(sql`
+      select platform_parts from liame.budget_policy where tenant_id = ${tenantId} and brand_id is null for update`);
+    const partesAntes = partesDaColuna(atual.rows[0]?.platform_parts);
+    let partesDepois: PartesDaVerba | null | undefined;
+    if (pedida) {
+      const fuso = await fusoDaEmpresa(tx, tenantId);
+      const conectadas = [...new Set((await this.contasDeAnuncio(tx, { tenantId, brandId: null, fuso })).map((c) => c.provider))];
+      const erro = erroDaDivisao(pedida, conectadas, input.month_micros);
+      if (erro) throw new ValidationProblem([erro]);
+      partesDepois = new Map(pedida.map((p) => [p.provider, BigInt(p.micros)]));
+    } else if (pedida === null) {
+      partesDepois = null;
+    } else if (ligada && partesAntes && somaDasPartes(partesAntes) !== BigInt(input.month_micros)) {
+      throw new ValidationProblem([{ path: 'month_micros', message: 'Com a divisão por plataforma, o teto do mês é a soma das partes: mude as partes, ou tire a divisão.' }]);
+    }
     const { policies } = await this.policies.load(tx, tenantId, null);
     const tetoAntes = tetoDaVerba(policies, PLATAFORMA_DA_ESCRITA);
-    const mesAntes = await this.gravarEnvelope(tx, { tenantId, brandId: null, limitMicros: input.month_micros, userId: auth.userId });
+    const mesAntes = await this.gravarEnvelope(tx, { tenantId, brandId: null, limitMicros: input.month_micros, userId: auth.userId, partes: partesDepois });
     const politica = await this.policies.publicarTetoDaVerba(tx, { tenantId, userId: auth.userId, maxMicros: input.campaign_daily_micros });
+    // A divisão entra na auditoria só quando existe ou muda: quem não divide tem o registro de sempre.
+    const comoObjeto = (p: PartesDaVerba | null) => (p ? Object.fromEntries([...p].map(([k, v]) => [k, Number(v)])) : null);
+    const comDivisao = partesAntes !== null || (partesDepois !== undefined && partesDepois !== null);
     auditDetail({
       resourceId: tenantId,
-      before: { month_micros: mesAntes, campaign_daily_micros: tetoAntes },
-      after: { month_micros: input.month_micros, campaign_daily_micros: input.campaign_daily_micros, policy_version: politica.version },
+      before: { month_micros: mesAntes, campaign_daily_micros: tetoAntes, ...(comDivisao ? { platform_parts: comoObjeto(partesAntes) } : {}) },
+      after: {
+        month_micros: input.month_micros,
+        campaign_daily_micros: input.campaign_daily_micros,
+        policy_version: politica.version,
+        ...(comDivisao ? { platform_parts: comoObjeto(partesDepois === undefined ? partesAntes : partesDepois) } : {}),
+      },
     });
     return this.month(auth, agora);
   }
 
-  /** Grava o envelope (da empresa ou da marca) e devolve o limite de antes, ou nulo se não havia. */
-  private async gravarEnvelope(tx: Tx, e: { tenantId: string; brandId: string | null; limitMicros: number; userId: string }): Promise<number | null> {
+  /**
+   * Grava o envelope (da empresa ou da marca) e devolve o limite de antes, ou nulo se não havia. `partes`: a divisão
+   * por plataforma do envelope da empresa (D-A4-36); ausente, a coluna fica como está; nula, a divisão sai.
+   */
+  private async gravarEnvelope(
+    tx: Tx,
+    e: { tenantId: string; brandId: string | null; limitMicros: number; userId: string; partes?: PartesDaVerba | null },
+  ): Promise<number | null> {
     const before = await tx.execute<{ limit_micros: string }>(sql`
       select limit_micros from liame.budget_policy where tenant_id = ${e.tenantId} and brand_id is not distinct from ${e.brandId} for update`);
-    await tx.execute(sql`
-      insert into liame.budget_policy (id, tenant_id, brand_id, limit_micros, created_by, updated_by)
-      values (${uuidv7()}, ${e.tenantId}, ${e.brandId}, ${e.limitMicros}, ${e.userId}, ${e.userId})
-      on conflict (tenant_id, brand_id) do update set limit_micros = excluded.limit_micros, updated_by = excluded.updated_by, updated_at = now()`);
+    if (e.partes === undefined) {
+      await tx.execute(sql`
+        insert into liame.budget_policy (id, tenant_id, brand_id, limit_micros, created_by, updated_by)
+        values (${uuidv7()}, ${e.tenantId}, ${e.brandId}, ${e.limitMicros}, ${e.userId}, ${e.userId})
+        on conflict (tenant_id, brand_id) do update set limit_micros = excluded.limit_micros, updated_by = excluded.updated_by, updated_at = now()`);
+    } else {
+      const partes = e.partes ? JSON.stringify(Object.fromEntries([...e.partes].map(([k, v]) => [k, Number(v)]))) : null;
+      await tx.execute(sql`
+        insert into liame.budget_policy (id, tenant_id, brand_id, limit_micros, created_by, updated_by, platform_parts)
+        values (${uuidv7()}, ${e.tenantId}, ${e.brandId}, ${e.limitMicros}, ${e.userId}, ${e.userId}, ${partes}::jsonb)
+        on conflict (tenant_id, brand_id) do update set limit_micros = excluded.limit_micros, updated_by = excluded.updated_by, updated_at = now(),
+                                                        platform_parts = excluded.platform_parts`);
+    }
     return before.rows[0] ? Number(before.rows[0].limit_micros) : null;
   }
 
   /**
    * A conta do mês no escopo de um envelope: a empresa inteira (`brandId` nulo) ou uma marca. Lê as contas de anúncio
    * conectadas, o gasto de cada dia e os aumentos e retomadas que ainda pesam (`exceto`: o próprio pedido, que entra
-   * à parte na conferência).
+   * à parte na conferência). `provider`: só as contas e os pedidos de uma plataforma (a conta da parte dela, D-A4-37).
    */
-  private async contaDoMes(tx: Tx, e: { tenantId: string; brandId: string | null; fuso: string; agora: Date; teto: bigint | null; exceto: string | null }): Promise<ContaDoMes> {
+  private async contaDoMes(
+    tx: Tx,
+    e: { tenantId: string; brandId: string | null; fuso: string; agora: Date; teto: bigint | null; exceto: string | null; provider?: string },
+  ): Promise<ContaDoMes> {
     const hoje = diaNoFuso(e.agora, e.fuso);
     const mes = mesDe(hoje);
     const contas = await this.contasDeAnuncio(tx, e);
@@ -457,14 +569,21 @@ export class BudgetService {
     return contaDoMes({ hoje, contas: contas satisfies ContaDeAnuncio[], pesamPorDia: await this.pesamHoje(tx, { ...e, hoje }), teto: e.teto });
   }
 
-  /** As contas de anúncio conectadas da empresa (ou de uma marca) e até que dia a leitura de cada uma vai. */
-  private async contasDeAnuncio(tx: Tx, e: { tenantId: string; brandId: string | null; fuso: string }): Promise<Array<Omit<ContaDeAnuncio, 'gastoPorDia'> & { gastoPorDia: Map<string, bigint> }>> {
+  /**
+   * As contas de anúncio conectadas da empresa (ou de uma marca) e até que dia a leitura de cada uma vai. `provider`:
+   * só as de uma plataforma.
+   */
+  private async contasDeAnuncio(
+    tx: Tx,
+    e: { tenantId: string; brandId: string | null; fuso: string; provider?: string },
+  ): Promise<Array<Omit<ContaDeAnuncio, 'gastoPorDia'> & { gastoPorDia: Map<string, bigint> }>> {
     const daMarca = e.brandId ? sql`and a.brand_id = ${e.brandId}` : sql``;
+    const daPlataforma = e.provider ? sql`and a.provider = ${e.provider}` : sql``;
     const lidas = await tx.execute<{ id: string; provider: string; timezone: string | null; last_success_at: Date | string | null }>(sql`
       select a.id, a.provider, a.timezone, s.last_success_at
         from liame.connected_account a
         left join liame.sync_state s on s.connected_account_id = a.id and s.dataset = 'metricas'
-       where a.tenant_id = ${e.tenantId} and a.disconnected_at is null and a.provider in ${[...PLATAFORMAS_DE_ANUNCIO]} ${daMarca}
+       where a.tenant_id = ${e.tenantId} and a.disconnected_at is null and a.provider in ${[...PLATAFORMAS_DE_ANUNCIO]} ${daMarca} ${daPlataforma}
        order by a.provider, a.id`);
     return lidas.rows.map((c) => {
       const lidoEm = c.last_success_at ? new Date(c.last_success_at) : null;
@@ -541,13 +660,17 @@ export class BudgetService {
    * O que os aumentos e as retomadas pedidos ou feitos hoje acrescentam por dia (o ritmo de 7 dias ainda não os
    * mostra): os pedidos vivos (esperando aprovação ou execução) e os executados hoje que não foram desfeitos.
    */
-  private async pesamHoje(tx: Tx, e: { tenantId: string; brandId: string | null; fuso: string; hoje: string; exceto: string | null }): Promise<bigint> {
+  private async pesamHoje(
+    tx: Tx,
+    e: { tenantId: string; brandId: string | null; fuso: string; hoje: string; exceto: string | null; provider?: string },
+  ): Promise<bigint> {
     if (!PROVEDORES_QUE_GASTAM.length) return 0n;
     const r = await tx.execute<{ n: string }>(sql`
       select coalesce(sum(r.reserved_micros), 0)::text as n
         from liame.action_request r
        where r.tenant_id = ${e.tenantId} ${e.brandId ? sql`and r.brand_id = ${e.brandId}` : sql``}
          and r.provider in ${PROVEDORES_QUE_GASTAM} and r.budget_impact in ('increase', 'new_spend')
+         ${e.provider ? sql`and r.provider = ${e.provider}` : sql``}
          ${e.exceto ? sql`and r.id <> ${e.exceto}` : sql``}
          and (r.status in ('aguardando_aprovacao', 'aprovada', 'executando')
               or (r.status = 'executada' and r.updated_at >= (${e.hoje}::date)::timestamp at time zone ${e.fuso}

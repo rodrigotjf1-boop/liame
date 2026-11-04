@@ -20,6 +20,8 @@ import { hasDb, OWNER_URL } from './env.js';
 // já foi pedido ou feito hoje e com ele, couber no teto. Reduzir e pausar passam sempre. Os dois limites (o teto do mês
 // e o teto por campanha) são definidos juntos, pelo Dono ou pelo Administrador. A conta em si (calendário, ritmo,
 // arredondamento) é provada em `test/verba-do-mes.spec.ts`; aqui, o que sai do banco e o que o pedido respeita.
+// A4 · X9, parte 1 (D-A4-36 e D-A4-37): com a função `verba_por_plataforma`, o teto do mês dividido por plataforma, e
+// a parte da plataforma do pedido travando o aumento nela, mesmo com o total cabendo.
 
 const REAL = 1_000_000;
 const FUSO = 'America/Sao_Paulo';
@@ -168,7 +170,7 @@ describe.skipIf(!hasDb)('a verba do mês: o teto conta o gasto inteiro (A4 · X4
     const metaNoMes = META_POR_DIA * diasNoMes();
     expect(v.platforms).toEqual([
       // `writes`: a escrita na Meta está ligada para esta empresa; a do Google, não (o Liame só lê o Google nela).
-      { provider: 'meta_ads', accounts: 1, spend_micros: metaNoMes, daily_micros: META_POR_DIA, forecast_micros: metaNoMes + META_POR_DIA * dias, read_through: mes.ontem, forecast_days: dias, stale: false, last_success_at: expect.any(String), writes: true },
+      { provider: 'meta_ads', accounts: 1, spend_micros: metaNoMes, daily_micros: META_POR_DIA, forecast_micros: metaNoMes + META_POR_DIA * dias, read_through: mes.ontem, forecast_days: dias, stale: false, last_success_at: expect.any(String), writes: true, part: null },
       {
         provider: 'google_ads',
         accounts: 1,
@@ -181,6 +183,8 @@ describe.skipIf(!hasDb)('a verba do mês: o teto conta o gasto inteiro (A4 · X4
         stale: false,
         last_success_at: expect.any(String),
         writes: false,
+        // Sem a divisão por plataforma (D-A4-36), nenhuma tem parte.
+        part: null,
       },
     ]);
     expect([v.spend_micros, v.daily_micros, v.forecast_micros]).toEqual([metaNoMes + googleNoMes(diasNoMes()), META_POR_DIA + GOOGLE_RITMO, previstoNormal()]);
@@ -245,7 +249,15 @@ describe.skipIf(!hasDb)('a verba do mês: o teto conta o gasto inteiro (A4 · X4
     const feito = await limites(5_500 * REAL, 80 * REAL);
     expect(feito.status, JSON.stringify(feito.body)).toBe(200);
     const v = BudgetMonthResponse.parse(feito.body);
-    expect(v.limits).toEqual({ month_micros: 5_500 * REAL, campaign_daily_micros: 80 * REAL, set_by: { id: e.userId, name: 'Pessoa de Teste' }, set_at: expect.any(String) });
+    expect(v.limits).toEqual({
+      month_micros: 5_500 * REAL,
+      campaign_daily_micros: 80 * REAL,
+      set_by: { id: e.userId, name: 'Pessoa de Teste' },
+      set_at: expect.any(String),
+      // A divisão por plataforma (D-A4-36): nenhuma, e a função desligada para a empresa.
+      platform_parts: null,
+      platform_parts_enabled: false,
+    });
     expect(v.remaining_micros).toBe(5_500 * REAL - previstoNormal());
     // O teto por campanha é uma versão nova da política da empresa: a regra do teto no fim, a outra regra como estava.
     const depois = await politicaAtiva();
@@ -375,6 +387,86 @@ describe.skipIf(!hasDb)('a verba do mês: o teto conta o gasto inteiro (A4 · X4
     expect([ra.status, rb.status].sort()).toEqual([201, 422]);
     expect([ra, rb].find((r) => r.status === 422)!.body.code).toBe('orcamento-insuficiente');
     expect(await verba()).toMatchObject({ pending_daily_micros: 3 * REAL, remaining_micros: 1 * dias * REAL });
+  });
+
+  it('D-A4-36 e D-A4-37: o teto dividido por plataforma, só com a função ligada; a parte da Meta trava o aumento nela, mesmo com o total cabendo', async () => {
+    const metaPrevista = META_POR_DIA * diasNoMes() + META_POR_DIA * dias;
+    const googlePrevisto = googleNoMes(diasNoMes()) + GOOGLE_RITMO * dias;
+    // O total com folga de R$ 1.000,00; a Meta com R$ 5,00 por dia de folga, e o Google com o resto.
+    const total = previstoNormal() + 1_000 * REAL;
+    const parteMeta = metaPrevista + 5 * dias * REAL;
+    const parteGoogle = total - parteMeta;
+    const partes = [
+      { provider: 'meta_ads', micros: parteMeta },
+      { provider: 'google_ads', micros: parteGoogle },
+    ];
+    const dividir = (divisao: Array<{ provider: string; micros: number }> | null, month = total): Promise<Resposta> =>
+      api.call('PUT', '/v1/budget/limits', { cookie: e.cookie, body: { month_micros: month, campaign_daily_micros: 150 * REAL, platform_parts: divisao } });
+    try {
+      // Desligada, a divisão não entra, e a tela não a oferece.
+      const desligada = await dividir(partes);
+      expect([desligada.status, desligada.body.code]).toEqual([409, 'funcao-desligada']);
+      expect((await verba()).limits).toMatchObject({ platform_parts: null, platform_parts_enabled: false });
+
+      await ligarFlagDaEmpresa(api, 'verba_por_plataforma', e.tenantId, true);
+      // O que não entra: falta o Google, a Meta repetida e a soma diferente do teto do mês.
+      const falta = await dividir([partes[0]!]);
+      expect([falta.status, falta.body.errors]).toEqual([400, [{ path: 'platform_parts', message: 'Falta a parte do Google: cada plataforma conectada ganha uma parte.' }]]);
+      expect((await dividir([partes[0]!, partes[0]!])).body.errors).toEqual([{ path: 'platform_parts', message: 'A parte da Meta aparece duas vezes.' }]);
+      expect((await dividir(partes, total + REAL)).body.errors).toEqual([{ path: 'month_micros', message: 'Com a divisão por plataforma, o teto do mês é a soma das partes.' }]);
+
+      // Dividido: a parte de cada plataforma, e o que sobra nela (parte − previsão − o que pesa hoje nela).
+      const feita = await dividir(partes);
+      expect(feita.status, JSON.stringify(feita.body)).toBe(200);
+      const v = BudgetMonthResponse.parse(feita.body);
+      expect(v.limits).toMatchObject({ month_micros: total, platform_parts: partes, platform_parts_enabled: true });
+      expect(v.platforms.map((p) => [p.provider, p.part])).toEqual([
+        ['meta_ads', { micros: parteMeta, pending_micros: 0, remaining_micros: 5 * dias * REAL }],
+        ['google_ads', { micros: parteGoogle, pending_micros: 0, remaining_micros: parteGoogle - googlePrevisto }],
+      ]);
+      // Sem as partes no pedido, elas ficam como estão: o mesmo teto passa; outro teto, não (o teto é a soma delas).
+      expect((await limites(total, 150 * REAL)).body.limits.platform_parts).toEqual(partes);
+      const outroTeto = await limites(total + 100 * REAL, 150 * REAL);
+      expect([outroTeto.status, outroTeto.body.errors?.[0]?.path]).toEqual([400, 'month_micros']);
+
+      // A trava (D-A4-37): R$ 3,00 por dia cabem na parte da Meta; outros R$ 3,00 não cabem nela, com o total sobrando.
+      const [c1, c2, c3] = [await objetoLido(meta, e, 'campanha'), await objetoLido(meta, e, 'campanha'), await objetoLido(meta, e, 'campanha')];
+      const primeiro = await verbaDe(c1.recurso, 33);
+      expect([primeiro.status, primeiro.body.status], JSON.stringify(primeiro.body)).toEqual([201, 'aguardando_aprovacao']);
+      expect((await verba()).platforms[0]!.part).toEqual({ micros: parteMeta, pending_micros: 3 * dias * REAL, remaining_micros: 2 * dias * REAL });
+      const naoCabe = await verbaDe(c2.recurso, 33);
+      expect([naoCabe.status, naoCabe.body.code, naoCabe.body.title]).toEqual([422, 'orcamento-insuficiente', 'Não cabe na parte da plataforma']);
+      expect(naoCabe.body.detail).toMatch(
+        /^Não cabe na parte da Meta: o pedido acrescenta R\$\s[\d.]+,00 até o fim do mês, e sobram R\$\s[\d.]+,00\. No ritmo atual, o gasto da Meta em [a-zç]+ fecha em R\$\s[\d.]+,\d\d, mais R\$\s[\d.]+,00 de aumentos pedidos ou feitos hoje, e a parte da Meta é de R\$\s[\d.]+,\d\d\. O Dono ou um Administrador pode mudar a divisão em Verba do mês\.$/,
+      );
+      expect((await verba()).remaining_micros).toBeGreaterThan(0);
+      // Reduzir é a direção segura: a parte não barra (V95).
+      const reduz = await verbaDe(c3.recurso, 27);
+      expect([reduz.status, reduz.body.action]).toEqual([201, 'orcamento.reduzir']);
+
+      // Desligada a função, a divisão gravada não vale (nem trava): o mesmo aumento passa pelo total.
+      await ligarFlagDaEmpresa(api, 'verba_por_plataforma', e.tenantId, false);
+      expect((await verbaDe(c2.recurso, 33)).status).toBe(201);
+      expect((await verba()).limits).toMatchObject({ platform_parts: null, platform_parts_enabled: false });
+
+      // Tirar a divisão (nula) volta ao teto de antes; a auditoria registra a divisão nas mudanças que a tocaram.
+      await ligarFlagDaEmpresa(api, 'verba_por_plataforma', e.tenantId, true);
+      expect((await verba()).limits.platform_parts).toEqual(partes);
+      expect((await dividir(null)).body.limits.platform_parts).toBeNull();
+      const trilha = await ownerQuery<{ before: Record<string, unknown>; after: Record<string, unknown> }>(
+        `select "before", "after" from liame.audit_event where chain_key = $1 and action = 'orcamento.limites' and "after" ? 'platform_parts' order by chain_seq`,
+        [e.tenantId],
+      );
+      const divisao = { meta_ads: parteMeta, google_ads: parteGoogle };
+      expect(trilha.map((t) => [t.before.platform_parts, t.after.platform_parts])).toEqual([
+        [null, divisao],
+        [divisao, divisao],
+        [divisao, null],
+      ]);
+    } finally {
+      await ligarFlagDaEmpresa(api, 'verba_por_plataforma', e.tenantId, false);
+      await ownerQuery(`update liame.budget_policy set platform_parts = null where tenant_id = $1`, [e.tenantId]);
+    }
   });
 
   it('o teto de uma marca conta só as contas e os pedidos dela', async () => {
