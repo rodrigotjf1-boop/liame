@@ -5,11 +5,16 @@ import { cardapioValido, codigoDoPost, linkComRastreio, TAMANHO_CODIGO } from '.
 
 // O link do post (A6, Z7, parte a; D-A6-16 e as decisões técnicas D-A6-46 a D-A6-48): um link com rastreio do contrato
 // que já existe (`tracking_link`), marcado como de post e preso a ele, com o código só dele. O destino é o cardápio do
-// Regem da loja da marca, quando ela tem uma loja só com o cardápio ligado. Na Página, o link vai no fim do texto, já
+// Regem da loja da marca, quando ela tem uma loja só com o cardápio ligado e essa loja não diz receber os pedidos online
+// por outra plataforma (Links e cupons; 04/11/2026: o post mandava o cliente ao cardápio que a loja não usa, ERR-201).
+// Na Página, o link vai no fim do texto, já
 // na criação (D-A6-47); no pacote, é o link da bio. O motor de atribuição não conta o clique nele como anúncio (D-A6-48).
 
-/** Por que o post nasce sem link: nenhuma loja da marca com o cardápio ligado, ou mais de uma (a escolha não existe). */
-export type SemLinkDoPost = 'sem_cardapio' | 'varias_lojas';
+/**
+ * Por que o post nasce sem link: nenhuma loja da marca com o cardápio ligado, mais de uma (a escolha não existe), ou a
+ * loja diz receber os pedidos online por outra plataforma (o Anota AI, por exemplo).
+ */
+export type SemLinkDoPost = 'sem_cardapio' | 'varias_lojas' | 'outra_plataforma';
 
 export type DestinoDoPost = { ok: true; unitId: string; url: string } | { ok: false; motivo: SemLinkDoPost };
 
@@ -26,18 +31,23 @@ const TENTATIVAS = 4;
 
 /**
  * O cardápio da loja da marca para o link do post: o das contas do Regem ligadas a uma loja, com o cardápio válido,
- * como na criação dos links de campanha. Uma loja só: o cardápio dela (o da conexão mais recente). Nenhuma, ou mais de
- * uma: o porquê.
+ * como na criação dos links de campanha. Uma loja só: o cardápio dela (o da conexão mais recente), se a loja não diz
+ * receber os pedidos online por outra plataforma; sem a plataforma informada, vale o cardápio. Nenhuma, mais de uma, ou
+ * a loja com outra plataforma: o porquê.
  */
 export async function destinoDoPost(tx: Tx, tenantId: string, brandId: string): Promise<DestinoDoPost> {
-  const r = await tx.execute<{ unit_id: string; url: string | null }>(sql`
-    select a.unit_id, a.provider_attributes->>'cardapio_url' as url from liame.connected_account a
+  const r = await tx.execute<{ unit_id: string; url: string | null; plataforma: string | null }>(sql`
+    select a.unit_id, a.provider_attributes->>'cardapio_url' as url, u.order_platform as plataforma from liame.connected_account a
+      join liame.unit u on u.id = a.unit_id and u.tenant_id = a.tenant_id
      where a.tenant_id = ${tenantId} and a.brand_id = ${brandId} and a.provider = 'regem' and a.unit_id is not null and ${contaConectada('a')}
      order by a.connected_at desc, a.id`);
   const usaveis = r.rows.filter((l) => cardapioValido(l.url) !== null);
   const lojas = [...new Set(usaveis.map((l) => l.unit_id))];
   if (lojas.length === 0) return { ok: false, motivo: 'sem_cardapio' };
   if (lojas.length > 1) return { ok: false, motivo: 'varias_lojas' };
+  // A loja que recebe os pedidos online por outra plataforma: o post não manda o cliente ao cardápio do Regem.
+  const plataforma = usaveis[0]!.plataforma;
+  if (plataforma !== null && plataforma !== 'regem') return { ok: false, motivo: 'outra_plataforma' };
   return { ok: true, unitId: lojas[0]!, url: cardapioValido(usaveis[0]!.url)!.toString() };
 }
 

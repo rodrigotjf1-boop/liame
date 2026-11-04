@@ -380,11 +380,13 @@ export function linkCurto(link: string): string {
 
 /**
  * O que o novo post diz do link do post na Página (D-A6-46 e D-A6-47): que ele entra no fim do texto, ou por que o post
- * sai sem ele (a marca sem loja com o cardápio, ou com mais de uma). Sem a resposta (o servidor antigo), como o P19.
+ * sai sem ele (a marca sem loja com o cardápio, com mais de uma, ou a loja com outra plataforma de pedidos). Sem a
+ * resposta (o servidor antigo), como o P19.
  */
 export function dicaDoLinkDoPost(postLink: { ok: boolean; reason: string | null } | undefined): string {
   if (!postLink || postLink.ok) return 'O link do post entra no fim, com o código só deste post.';
   if (postLink.reason === 'varias_lojas') return 'A marca tem mais de uma loja com o cardápio ligado: por enquanto, o post sai sem o link.';
+  if (postLink.reason === 'outra_plataforma') return 'A loja recebe os pedidos online por outra plataforma (em Links e cupons): o post sai sem o link do cardápio do Regem.';
   return 'Sem o cardápio do Regem ligado a uma loja desta marca, o post sai sem o link.';
 }
 
