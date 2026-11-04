@@ -64,7 +64,8 @@ export interface FuncionarioDef {
  * (`worker/escrita-do-crm.service.ts`). O Social media (A6, Z6) entrou com o eval das sugestões de resposta às
  * avaliações, antes da rotina que o chama: o texto que vai ao eval fica preso à versão na trava; a rota dele só entra
  * depois da rodada do eval com modelo de verdade, e até lá nenhuma chamada sai. Os posts dele (`social.post`, A6, Z6,
- * os posts) entram do mesmo jeito: o prompt e o eval antes da rotina; a rota da tarefa `social_post`, depois da rodada.
+ * os posts) entram do mesmo jeito: o prompt e o eval antes da rotina; a rota da tarefa `social_post` entrou depois das
+ * duas rodadas, na migration 0116.
  */
 export const PROMPTS: PromptDef[] = [
   PROMPT_EXPLICAR_RESULTADOS,

@@ -297,6 +297,17 @@ O que mudou entre as rodadas:
 
 O Haiku 5.5 não serve aqui: em todas as rodadas reprovou num grupo que exige todos (na 1ª e na 2ª, citou "minutos" num prazo de entrega que ninguém confirmou). Tokens da 3ª rodada do Sonnet: 81 mil de entrada e 4,9 mil de saída, cerca de US$ 0,23 (perto de US$ 0,009 por avaliação). As rodadas do dia somaram cerca de US$ 0,73, pelos preços publicados. A rota de modelo da tarefa entrou com a nota da 3ª rodada (migration 0084); a confirmação roda quando o workspace voltar, antes de a função ser ligada em alguma empresa.
 
+### O Social media nos posts (04/11/2026)
+
+As rodadas pagas do `social_post` (o portão da função, A6-12), com o gasto autorizado pelo dono ("pode", com a conta de cerca de US$ 0,50 a 0,70 nas duas rodadas), na chave do workspace de testes. O mesmo modelo e as mesmas opções das rotas no ar, **Sonnet 5.5, esforço `low`, `AI_INFERENCE_GEO=us`**, e o **Haiku 5.5** junto, por um centavo a mais por rodada, para saber se ele serve de modelo econômico aqui. O prompt é o `social.post` que está no ar, sem mudança.
+
+| Rodada | Sonnet 5.5 | Haiku 5.5 |
+| --- | --- | --- |
+| 1ª | **21 de 21, aprovado** | 20 de 21 (0,9524, no limiar): no `sem_link`, o Instagram da batata citou "link" num post sem link |
+| Confirmação | **21 de 21, aprovado** | 19 de 21, reprovado: no `sem_link`, os dois casos citaram "link" (o Instagram da batata e a Página do combo) |
+
+O Haiku 5.5 não serve aqui: as três falhas são a mesma, citar o link que o post não tem. Em produção a conferência (`postDaResposta`) barra esse post, e o dia ficaria sem sugestão. Tokens de cada rodada do Sonnet: 64 mil de entrada e 4,2 mil de saída, cerca de US$ 0,19 (perto de US$ 0,009 por post). As duas rodadas somaram cerca de US$ 0,40 com o Haiku, pelos preços publicados. A rota de modelo da tarefa entrou com a nota das duas rodadas (migration 0116), sem modelo econômico; ligar os posts numa empresa (as funções `posts_sugeridos` e `social_write`) é decisão do dono.
+
 ## O que ainda falta
 
 - Dividir as instruções das tarefas de chamada única para o cache valer entre empresas quando houver volume (hoje o cache fica só no laço da Conversa e do Estrategista).
