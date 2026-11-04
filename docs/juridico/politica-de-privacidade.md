@@ -32,6 +32,7 @@ Encarregado pelo tratamento de dados pessoais: **Rodrigo de Oliveira**, pelo e-m
 | --- | --- |
 | **Cadastro:** nome, e-mail, telefone, cargo; dados da empresa (razão social, CNPJ, endereço) | Você |
 | **Acesso e segurança:** senha (guardada só como resumo criptográfico), segundo fator, sessões, endereço IP, data e hora de acesso, aparelho e navegador | Gerados pelo uso |
+| **Aceite dos Termos:** a versão que você aceitou, o dia e a hora, onde (o aviso, a tela do aceite, o cadastro ou o convite) e o aparelho, sem o endereço IP | Gerados pelo uso |
 | **Chaves de acesso** (quando a função for ligada): a chave pública, o gerenciador que a guarda, se ela sincroniza, quando foi criada e o último uso, com o aparelho. A biometria (digital, rosto) não sai do aparelho e o Liame não a recebe | O seu aparelho, quando você cria a chave, e o uso |
 | **Recuperação da conta do Dono** (quando a função for ligada): o documento com foto (RG ou CNH), enviado só pelo pedido na entrada, para a DMS conferir quem pede; guardado à parte, lacrado, e apagado 30 dias depois da decisão | Quem pede |
 | **Quando o Dono não está mais** (quando a função for ligada): o documento com foto de quem pede e o documento da empresa que mostra quem a representa (contrato social, alteração ou certidão da Junta), enviados só pelo pedido em Pessoas e acessos, para a DMS conferir; guardados à parte, lacrados, e apagados 30 dias depois da decisão | Quem pede |
@@ -231,6 +232,7 @@ A lista atualizada de fornecedores fica nesta seção, em [agencialiame.com/priv
 | Posts da marca, quando a função de posts for ligada (a foto escolhida, o recorte para o Instagram, o texto de cada rede, a hora, quem montou, a situação em cada rede e, do post publicado, o identificador e o endereço dele na rede) | enquanto a marca existir; o arquivo do recorte é de passagem e sai do armazenamento assim que o post sai ou não sai |
 | Chaves de acesso, quando a função for ligada (a chave pública, o gerenciador, se sincroniza, quando foi criada e o último uso, com o aparelho) | enquanto a chave existir; tirar a chave a apaga |
 | Documentos da recuperação da conta do Dono e do pedido da propriedade à DMS, quando essas funções forem ligadas (guardados à parte, lacrados) | 30 dias depois da decisão |
+| Aceites dos Termos | enquanto a sua conta existir; o registro do aceite fica na auditoria por 5 anos |
 | Auditoria de ações | 5 anos, com proteção contra alteração |
 | Registro de incidentes de segurança | no mínimo 5 anos (Resolução CD/ANPD nº 15/2024, art. 10) |
 | Cópias de segurança | até 35 dias; os dados pessoais nelas ficam cifrados com uma chave por empresa cliente |

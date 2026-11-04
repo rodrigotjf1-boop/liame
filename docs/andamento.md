@@ -1047,6 +1047,7 @@ Falta da W3: o fim (parte 4) — o que acontece quando a assinatura termina (can
 - **"Termos e privacidade" em Segurança da conta**: o que vale hoje (com o texto), o último aceite (o dia, a hora e onde), o que vem (avisado quando, "Falta o seu aceite" ou "Aceitos", e "Ver o que muda", a mesma gaveta da faixa, com o aceite) e as versões, cada uma com o selo e "O que mudou";
 - **testes:** `apps/web/test/termos.spec.ts` ganhou as frases do cartão (a versão escrita, o dia do aviso em Brasília, o aceite e o selo de cada versão, com o "valeu até"); o roteiro de navegador (fora do repositório) ganhou o cadastro sem sessão e o cartão antes e depois dos aceites, inclusive aceitar pelo cartão: 12 cenários, 53 execuções em 1440, 1024, 768 e 375 px, claro e escuro, todas verdes.
 - **falta:** só o texto da Política sobre o aceite (o aparelho que o aceite guarda; pendência do dono desde a 14a); com ele aprovado, a distribuição liga `termos_novos` e declara a primeira versão.
+- **03/11/2026, à noite:** o dono aprovou o texto do aceite (Política 4 e 9, e a frase dos Termos 15 sobre a tela do dia). Falta ligar a função `termos_novos` e declarar a primeira versão, decisão do dono; antes, a Política e os Termos no site precisam ser reimportados.
 
 ## Hub DMS · F2 (o Liame na credencial nova)
 

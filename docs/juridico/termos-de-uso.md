@@ -149,7 +149,7 @@ Podemos suspender ou encerrar a conta, com aviso sempre que possível, se houver
 
 ## 15. Mudanças nestes Termos
 
-Podemos atualizar estes Termos. Mudanças relevantes são avisadas por e-mail e no Liame com pelo menos **30 dias** de antecedência. Se não concordar, você pode cancelar sem multa antes de a mudança valer.
+Podemos atualizar estes Termos. Mudanças relevantes são avisadas por e-mail e no Liame com pelo menos **30 dias** de antecedência, e, no dia, quem não aceitou vê a tela do aceite antes das outras. Se não concordar, você pode cancelar sem multa antes de a mudança valer.
 
 ## 16. Lei e foro
 
