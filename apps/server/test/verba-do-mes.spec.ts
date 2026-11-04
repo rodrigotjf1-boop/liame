@@ -1,6 +1,21 @@
 import type { PolicyDocument } from '@liame/contracts';
 import { describe, expect, it } from 'vitest';
-import { aoCentavo, cabeNoMes, type ContaDeAnuncio, contaDoMes, diasEntre, fraseDeNaoCaber, gastoDeCadaDia, linhaDaConta, mesDe, nomeDoMes } from '../src/actions/verba-do-mes.js';
+import {
+  aoCentavo,
+  cabeNoMes,
+  type ContaDeAnuncio,
+  contaDoMes,
+  diasEntre,
+  erroDaDivisao,
+  fraseDeNaoCaber,
+  fraseDeNaoCaberNaParte,
+  gastoDeCadaDia,
+  linhaDaConta,
+  mesDe,
+  nomeDoMes,
+  partesDaColuna,
+  somaDasPartes,
+} from '../src/actions/verba-do-mes.js';
 import { type LoadedPolicy, PLATFORM_POLICY } from '../src/policy/engine.js';
 import { comTetoDaVerba, regrasDaVerba, temOTetoDaVerba, tetoDaVerba } from '../src/policy/teto-da-verba.js';
 import { reais } from '../src/results/atencao-ciclo.js';
@@ -10,7 +25,8 @@ import { menosDias } from '../src/results/fora-do-normal.js';
 // gastam; o pedido que faz o gasto subir só passa se couber na previsão de fechamento. Aqui: o calendário do mês, a
 // conta de cada conta de anúncio (lida hoje, atrasada, nunca lida), a soma por plataforma, o gasto de cada dia (o
 // desenho "o mês, dia a dia"), o que pesa hoje, a
-// conferência do pedido, a frase da recusa e o teto por campanha na política.
+// conferência do pedido, a frase da recusa e o teto por campanha na política. A4 · X9 (D-A4-36 e D-A4-37): a divisão
+// do teto do mês por plataforma (a coluna, a conferência da divisão pedida e a frase da recusa pela parte).
 
 const REAL = 1_000_000n;
 const nbsp = (s: string) => s.replaceAll('R$ ', `R$${String.fromCharCode(160)}`);
@@ -286,5 +302,44 @@ describe('o teto por campanha na política', () => {
     expect(regrasDaVerba([PLATFORM_POLICY], 'meta_ads')).toEqual({ change_percent_max: 10, rate_limit: { max: 3, window_minutes: 60 } });
     // Num provedor sem essas regras, a tela não cita número nenhum.
     expect(regrasDaVerba([PLATFORM_POLICY], 'sandbox')).toEqual({ change_percent_max: null, rate_limit: null });
+  });
+});
+
+describe('a verba dividida por plataforma (D-A4-36 e D-A4-37)', () => {
+  it('a coluna: o objeto com micros inteiros positivos vira a divisão; o resto é "sem divisão", nunca metade dela', () => {
+    expect(partesDaColuna({ meta_ads: 3_700_000_000, google_ads: 1_800_000_000 })).toEqual(new Map([['meta_ads', 3_700n * REAL], ['google_ads', 1_800n * REAL]]));
+    for (const ruim of [null, undefined, {}, [], 'meta_ads', { meta_ads: 0 }, { meta_ads: -1 }, { meta_ads: 1.5 }, { meta_ads: '100' }, { meta_ads: 1_000_000, google_ads: null }]) {
+      expect(partesDaColuna(ruim), JSON.stringify(ruim)).toBeNull();
+    }
+    expect(somaDasPartes(partesDaColuna({ meta_ads: 3_700_000_000, google_ads: 1_800_000_000 })!)).toBe(5_500n * REAL);
+  });
+
+  it('a divisão pedida: uma parte para cada plataforma conectada, sem repetir nem sobrar, e a soma igual ao teto do mês', () => {
+    const meta = { provider: 'meta_ads', micros: 3_700_000_000 };
+    const google = { provider: 'google_ads', micros: 1_800_000_000 };
+    const ambas = ['meta_ads', 'google_ads'];
+    expect(erroDaDivisao([meta, google], ambas, 5_500_000_000)).toBeNull();
+    expect(erroDaDivisao([meta], ['meta_ads'], 3_700_000_000)).toBeNull();
+    expect(erroDaDivisao([meta, google], [], 5_500_000_000)).toEqual({ path: 'platform_parts', message: 'Nenhuma plataforma de anúncio está conectada: não há o que dividir.' });
+    expect(erroDaDivisao([meta, meta], ambas, 7_400_000_000)).toEqual({ path: 'platform_parts', message: 'A parte da Meta aparece duas vezes.' });
+    expect(erroDaDivisao([meta, google], ['meta_ads'], 5_500_000_000)).toEqual({ path: 'platform_parts', message: 'A empresa não tem conta de anúncio do Google conectada.' });
+    expect(erroDaDivisao([google], ambas, 1_800_000_000)).toEqual({ path: 'platform_parts', message: 'Falta a parte da Meta: cada plataforma conectada ganha uma parte.' });
+    expect(erroDaDivisao([meta, google], ambas, 5_500_000_001)).toEqual({ path: 'month_micros', message: 'Com a divisão por plataforma, o teto do mês é a soma das partes.' });
+  });
+
+  it('a recusa pela parte diz os números que decidem e quem pode mudar a divisão', () => {
+    const base = { hoje: '2026-09-29', contas: [conta({ gastoPorDia: gastos('2026-09-01', '2026-09-28', 100n * REAL) })] };
+    const c = contaDoMes({ ...base, pesamPorDia: 4n * REAL, teto: 3_012n * REAL });
+    expect(fraseDeNaoCaberNaParte(c, 6n * REAL, reais, 'meta_ads')).toBe(
+      nbsp(
+        'Não cabe na parte da Meta: o pedido acrescenta R$ 6,00 até o fim do mês, e sobram R$ 4,00. No ritmo atual, o gasto da Meta em setembro fecha em R$ 3.000,00, mais R$ 8,00 de aumentos pedidos ou feitos hoje, e a parte da Meta é de R$ 3.012,00. O Dono ou um Administrador pode mudar a divisão em Verba do mês.',
+      ),
+    );
+    const acima = contaDoMes({ ...base, pesamPorDia: 0n, teto: 2_900n * REAL });
+    expect(fraseDeNaoCaberNaParte(acima, 0n, reais, 'google_ads')).toBe(
+      nbsp(
+        'Não cabe na parte do Google: setembro já passa dela em R$ 100,00. No ritmo atual, o gasto do Google em setembro fecha em R$ 3.000,00, e a parte do Google é de R$ 2.900,00. O Dono ou um Administrador pode mudar a divisão em Verba do mês.',
+      ),
+    );
   });
 });

@@ -441,7 +441,7 @@ export class ActionService {
              mode = ${mode}, policy_decision = ${JSON.stringify(decision)}::jsonb, status = ${status}, status_reason = ${reason}, updated_at = now()
        where id = ${id} and tenant_id = ${alvo.tenantId}`);
     if (status !== 'sombra') {
-      await this.budget.reserve(tx, { tenantId: alvo.tenantId, brandId: row.brand_id, actionId: id, amountMicros: plan.reserveMicros, sobeOGasto: sobeOGasto(connector, plan) });
+      await this.budget.reserve(tx, { tenantId: alvo.tenantId, brandId: row.brand_id, actionId: id, amountMicros: plan.reserveMicros, sobeOGasto: sobeOGasto(connector, plan), provider: connector.provider });
     }
     await advance(tx, { tenantId: alvo.tenantId, kind: 'acao', subjectId: id, ...flowAfterRequest(status, mode, decision, plan.reserveMicros) });
     await writeAudit(tx, {
@@ -644,7 +644,7 @@ export class ActionService {
     }
     if (status !== 'sombra') {
       await inSpan('orcamento.reservar', { 'liame.action_id': id }, () =>
-        this.budget.reserve(tx, { tenantId, brandId, actionId: id, amountMicros: plan.reserveMicros, sobeOGasto: sobeOGasto(connector, plan) }),
+        this.budget.reserve(tx, { tenantId, brandId, actionId: id, amountMicros: plan.reserveMicros, sobeOGasto: sobeOGasto(connector, plan), provider: connector.provider }),
       );
     }
     await advance(tx, { tenantId, kind: 'acao', subjectId: id, ...flowAfterRequest(status, mode, decision, plan.reserveMicros) });
@@ -746,7 +746,7 @@ export class ActionService {
              shadow_decision_id = ${recomendacao}, updated_at = now()
        where id = ${id} and tenant_id = ${tenantId}`);
     if (status !== 'sombra') {
-      await this.budget.reserve(tx, { tenantId, brandId: row.brand_id, actionId: id, amountMicros: plan.reserveMicros, sobeOGasto: sobeOGasto(connector, plan) });
+      await this.budget.reserve(tx, { tenantId, brandId: row.brand_id, actionId: id, amountMicros: plan.reserveMicros, sobeOGasto: sobeOGasto(connector, plan), provider: connector.provider });
     }
     await advance(tx, { tenantId, kind: 'acao', subjectId: id, ...flowAfterRequest(status, mode, decision, plan.reserveMicros) });
     auditDetail({
@@ -793,7 +793,7 @@ export class ActionService {
              before_state = ${JSON.stringify(read.state)}::jsonb, before_version = ${read.version},
              desired_state = ${JSON.stringify(plan.desiredState)}::jsonb, plan_hash = ${planHash}, updated_at = now()
        where id = ${row.id} and tenant_id = ${tenantId}`);
-    await this.budget.reserve(tx, { tenantId, brandId: row.brand_id, actionId: row.id, amountMicros: plan.reserveMicros, sobeOGasto: sobeOGasto(connector, plan) });
+    await this.budget.reserve(tx, { tenantId, brandId: row.brand_id, actionId: row.id, amountMicros: plan.reserveMicros, sobeOGasto: sobeOGasto(connector, plan), provider: connector.provider });
     return planHash;
   }
 

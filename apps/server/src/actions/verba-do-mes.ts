@@ -248,3 +248,66 @@ export function fraseDeNaoCaber(c: ContaDoMes, acrescenta: bigint, reais: (micro
   if (c.sobra < 0n) return `Não cabe na verba de ${mes}: o mês já passa do teto em ${reais(-c.sobra)}. ${conta}`;
   return `Não cabe na verba de ${mes}: o pedido acrescenta ${reais(acrescenta)} até o fim do mês, e sobram ${reais(c.sobra)}. ${conta}`;
 }
+
+// ------------------------------------------------------------------ a verba por plataforma (A4, X9; D-A4-36 e D-A4-37)
+
+/** "da Meta", "do Google": a preposição vai com o nome (V121). */
+export const DA_PLATAFORMA: Readonly<Record<string, string>> = { meta_ads: 'da Meta', google_ads: 'do Google' };
+const daPlataforma = (provider: string): string => DA_PLATAFORMA[provider] ?? `da plataforma ${provider}`;
+
+/** A parte de cada plataforma, como a coluna `budget_policy.platform_parts` guarda: `{ provedor: micros }`. */
+export type PartesDaVerba = ReadonlyMap<string, bigint>;
+
+/**
+ * Lê a coluna `platform_parts` (um objeto `{ provedor: micros }`). Nula, vazia ou com um valor que não é inteiro
+ * positivo: sem divisão (nulo), e não uma divisão pela metade.
+ */
+export function partesDaColuna(valor: unknown): PartesDaVerba | null {
+  if (valor === null || typeof valor !== 'object' || Array.isArray(valor)) return null;
+  const partes = new Map<string, bigint>();
+  for (const [provider, micros] of Object.entries(valor as Record<string, unknown>)) {
+    if (typeof micros !== 'number' || !Number.isSafeInteger(micros) || micros <= 0) return null;
+    partes.set(provider, BigInt(micros));
+  }
+  return partes.size ? partes : null;
+}
+
+/** A soma das partes: com a divisão, é o teto do mês (D-A4-36). */
+export const somaDasPartes = (partes: PartesDaVerba): bigint => [...partes.values()].reduce((s, v) => s + v, 0n);
+
+/**
+ * Confere a divisão pedida (D-A4-36): uma parte para cada plataforma de anúncio conectada, sem repetir e sem
+ * plataforma de fora, e a soma igual ao teto do mês. Devolve o problema em palavras (e o campo), ou nulo.
+ */
+export function erroDaDivisao(
+  partes: ReadonlyArray<{ provider: string; micros: number }>,
+  conectadas: readonly string[],
+  tetoDoMes: number,
+): { path: string; message: string } | null {
+  if (!conectadas.length) return { path: 'platform_parts', message: 'Nenhuma plataforma de anúncio está conectada: não há o que dividir.' };
+  const vistas = new Set<string>();
+  for (const p of partes) {
+    if (vistas.has(p.provider)) return { path: 'platform_parts', message: `A parte ${daPlataforma(p.provider)} aparece duas vezes.` };
+    vistas.add(p.provider);
+    if (!conectadas.includes(p.provider)) return { path: 'platform_parts', message: `A empresa não tem conta de anúncio ${daPlataforma(p.provider)} conectada.` };
+  }
+  const falta = conectadas.filter((c) => !vistas.has(c));
+  if (falta.length) return { path: 'platform_parts', message: `Falta a parte ${falta.map(daPlataforma).join(' e a ')}: cada plataforma conectada ganha uma parte.` };
+  const soma = partes.reduce((s, p) => s + p.micros, 0);
+  if (soma !== tetoDoMes) return { path: 'month_micros', message: 'Com a divisão por plataforma, o teto do mês é a soma das partes.' };
+  return null;
+}
+
+/**
+ * Por que o pedido não cabe na parte da plataforma (D-A4-37), com os números que decidem. `c` é a conta do mês só da
+ * plataforma, com a parte no lugar do teto.
+ */
+export function fraseDeNaoCaberNaParte(c: ContaDoMes, acrescenta: bigint, reais: (micros: bigint) => string, provider: string): string {
+  const da = daPlataforma(provider);
+  if (c.teto === null || c.sobra === null) return `A empresa ainda não definiu a parte ${da}.`;
+  const mes = nomeDoMes(c.mes.periodo);
+  const comHoje = c.pesam > 0n ? `, mais ${reais(c.pesam)} de aumentos pedidos ou feitos hoje` : '';
+  const conta = `No ritmo atual, o gasto ${da} em ${mes} fecha em ${reais(c.previsto)}${comHoje}, e a parte ${da} é de ${reais(c.teto)}. O Dono ou um Administrador pode mudar a divisão em Verba do mês.`;
+  if (c.sobra < 0n) return `Não cabe na parte ${da}: ${mes} já passa dela em ${reais(-c.sobra)}. ${conta}`;
+  return `Não cabe na parte ${da}: o pedido acrescenta ${reais(acrescenta)} até o fim do mês, e sobram ${reais(c.sobra)}. ${conta}`;
+}

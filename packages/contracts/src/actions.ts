@@ -399,6 +399,22 @@ const Dia = z.iso.date();
 export const BudgetLimitsRequest = z.strictObject({
   month_micros: z.int().min(1_000_000, { error: 'O teto do mês começa em R$ 1,00' }).max(Number.MAX_SAFE_INTEGER),
   campaign_daily_micros: z.int().min(1_000_000, { error: 'O teto por campanha começa em R$ 1,00' }).max(Number.MAX_SAFE_INTEGER),
+  /**
+   * A divisão do teto do mês por plataforma (D-A4-36), com a função `verba_por_plataforma` ligada para a empresa.
+   * Ausente: a divisão fica como está (com divisão, `month_micros` precisa ser a soma das partes). Nulo: tira a divisão.
+   * Lista: a divisão nova, com uma parte para cada plataforma de anúncio conectada, e `month_micros` igual à soma delas.
+   */
+  platform_parts: z
+    .array(
+      z.strictObject({
+        provider: z.enum(['meta_ads', 'google_ads']),
+        micros: z.int().min(1_000_000, { error: 'A parte de cada plataforma começa em R$ 1,00' }).max(Number.MAX_SAFE_INTEGER),
+      }),
+    )
+    .min(1)
+    .max(8)
+    .nullable()
+    .optional(),
 });
 export type BudgetLimitsRequest = z.infer<typeof BudgetLimitsRequest>;
 
@@ -425,6 +441,13 @@ export const BudgetMonthPlatform = z.strictObject({
    * confere). Com `false`, o Liame só lê a plataforma nesta empresa. Opcional: a resposta de antes de 09/10/2026 não traz.
    */
   writes: z.boolean().optional(),
+  /**
+   * A parte desta plataforma no teto do mês (D-A4-36), quando a empresa dividiu o teto; nula sem divisão ou quando a
+   * plataforma ficou fora dela (conectada depois). `pending_micros`: os aumentos e as retomadas de hoje nesta plataforma,
+   * até o fim do mês. `remaining_micros`: parte − previsão − `pending_micros` (negativo quando a plataforma passa da
+   * parte). Opcional: a resposta de antes de 04/11/2026 não traz.
+   */
+  part: z.strictObject({ micros: Micros, pending_micros: Micros, remaining_micros: z.int() }).nullable().optional(),
 });
 export type BudgetMonthPlatform = z.infer<typeof BudgetMonthPlatform>;
 
@@ -525,6 +548,17 @@ export const BudgetMonthResponse = z.strictObject({
     /** Quem definiu os limites por último, e quando. */
     set_by: z.strictObject({ id: z.uuid(), name: z.string() }).nullable(),
     set_at: z.iso.datetime().nullable(),
+    /**
+     * A divisão do teto do mês por plataforma (D-A4-36): a parte de cada uma, cuja soma é `month_micros`; nula sem
+     * divisão. `provider`: `meta_ads` ou `google_ads` (a lista pode crescer). Opcional: a resposta de antes de 04/11/2026
+     * não traz.
+     */
+    platform_parts: z
+      .array(z.strictObject({ provider: z.string().regex(/^[a-z_]{2,30}$/), micros: Micros }))
+      .nullable()
+      .optional(),
+    /** A função `verba_por_plataforma` está ligada para a empresa (a tela oferece dividir). Opcional, como a de cima. */
+    platform_parts_enabled: z.boolean().optional(),
   }),
   /** O que sobra do teto do mês: teto − previsão − aumentos de hoje. Negativo quando o mês passa do teto; nulo sem teto. */
   remaining_micros: z.int().nullable(),

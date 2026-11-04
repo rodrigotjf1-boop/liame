@@ -37151,6 +37151,34 @@
                           ],
                           "format": "date-time",
                           "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+                        },
+                        "platform_parts": {
+                          "type": [
+                            "array",
+                            "null"
+                          ],
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "provider": {
+                                "type": "string",
+                                "pattern": "^[a-z_]{2,30}$"
+                              },
+                              "micros": {
+                                "type": "integer",
+                                "minimum": 0,
+                                "maximum": 9007199254740991
+                              }
+                            },
+                            "required": [
+                              "provider",
+                              "micros"
+                            ],
+                            "additionalProperties": false
+                          }
+                        },
+                        "platform_parts_enabled": {
+                          "type": "boolean"
                         }
                       },
                       "required": [
@@ -37226,6 +37254,35 @@
                           },
                           "writes": {
                             "type": "boolean"
+                          },
+                          "part": {
+                            "type": [
+                              "object",
+                              "null"
+                            ],
+                            "properties": {
+                              "micros": {
+                                "type": "integer",
+                                "minimum": 0,
+                                "maximum": 9007199254740991
+                              },
+                              "pending_micros": {
+                                "type": "integer",
+                                "minimum": 0,
+                                "maximum": 9007199254740991
+                              },
+                              "remaining_micros": {
+                                "type": "integer",
+                                "minimum": -9007199254740991,
+                                "maximum": 9007199254740991
+                              }
+                            },
+                            "required": [
+                              "micros",
+                              "pending_micros",
+                              "remaining_micros"
+                            ],
+                            "additionalProperties": false
                           }
                         },
                         "required": [
@@ -37685,6 +37742,36 @@
                     "type": "integer",
                     "minimum": 1000000,
                     "maximum": 9007199254740991
+                  },
+                  "platform_parts": {
+                    "minItems": 1,
+                    "maxItems": 8,
+                    "type": [
+                      "array",
+                      "null"
+                    ],
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "provider": {
+                          "type": "string",
+                          "enum": [
+                            "meta_ads",
+                            "google_ads"
+                          ]
+                        },
+                        "micros": {
+                          "type": "integer",
+                          "minimum": 1000000,
+                          "maximum": 9007199254740991
+                        }
+                      },
+                      "required": [
+                        "provider",
+                        "micros"
+                      ],
+                      "additionalProperties": false
+                    }
                   }
                 },
                 "required": [
@@ -37819,6 +37906,34 @@
                           ],
                           "format": "date-time",
                           "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+                        },
+                        "platform_parts": {
+                          "type": [
+                            "array",
+                            "null"
+                          ],
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "provider": {
+                                "type": "string",
+                                "pattern": "^[a-z_]{2,30}$"
+                              },
+                              "micros": {
+                                "type": "integer",
+                                "minimum": 0,
+                                "maximum": 9007199254740991
+                              }
+                            },
+                            "required": [
+                              "provider",
+                              "micros"
+                            ],
+                            "additionalProperties": false
+                          }
+                        },
+                        "platform_parts_enabled": {
+                          "type": "boolean"
                         }
                       },
                       "required": [
@@ -37894,6 +38009,35 @@
                           },
                           "writes": {
                             "type": "boolean"
+                          },
+                          "part": {
+                            "type": [
+                              "object",
+                              "null"
+                            ],
+                            "properties": {
+                              "micros": {
+                                "type": "integer",
+                                "minimum": 0,
+                                "maximum": 9007199254740991
+                              },
+                              "pending_micros": {
+                                "type": "integer",
+                                "minimum": 0,
+                                "maximum": 9007199254740991
+                              },
+                              "remaining_micros": {
+                                "type": "integer",
+                                "minimum": -9007199254740991,
+                                "maximum": 9007199254740991
+                              }
+                            },
+                            "required": [
+                              "micros",
+                              "pending_micros",
+                              "remaining_micros"
+                            ],
+                            "additionalProperties": false
                           }
                         },
                         "required": [

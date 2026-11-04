@@ -218,7 +218,8 @@ export async function ligarFlagDaEmpresa(
     | 'cobranca'
     | 'social_write'
     | 'resumo_das_pessoas'
-    | 'escolha_de_modelo',
+    | 'escolha_de_modelo'
+    | 'verba_por_plataforma',
   tenantId: string,
   valor: boolean,
 ): Promise<void> {
