@@ -289,6 +289,33 @@ export class LifecyclePurgeService {
     });
   }
 
+  /**
+   * Uma marca só, agora (o fim da assinatura, A7, W3, parte 4a; D-A7-106): como a arquivada, as fotos saem do
+   * armazenamento antes e, se ele não as apagou, a marca fica para a vez seguinte; depois, a marca e o que é dela, em
+   * cascata. A chave da empresa continua (as outras marcas seguem nela). Quem chama já decidiu que é a hora; aqui só
+   * confere a trava legal. Devolve se apagou.
+   */
+  async purgeBrand(tenantId: string, brandId: string): Promise<boolean> {
+    const fotos = await withSystem(this.db, (tx) =>
+      tx.execute<{ n: number }>(sql`select count(*)::int as n from liame.brand_photo where brand_id = ${brandId} and tenant_id = ${tenantId}`),
+    );
+    if ((fotos.rows[0]?.n ?? 0) > 0) {
+      try {
+        await this.armazem.apagarPrefixo(prefixoDaMarca(tenantId, brandId));
+      } catch (err) {
+        this.logger.warn(`apagamento da marca ${brandId}: o armazenamento não apagou as fotos; fica para a vez seguinte (${err instanceof Error ? err.message : String(err)})`);
+        return false;
+      }
+    }
+    return withSystem(this.db, async (tx) => {
+      const r = await tx.execute<{ id: string }>(sql`
+        delete from liame.brand b where b.id = ${brandId} and b.tenant_id = ${tenantId} and ${noHold('b')} returning b.id`);
+      if (!r.rows.length) return false;
+      await this.auditPurge(tx, tenantId, { marca_sem_assinatura: 1 });
+      return true;
+    });
+  }
+
   /** Empresas no fim da graça, sem `legal_hold`. */
   async purgeTenants(scope: PurgeScope = {}): Promise<PurgeCertificate[]> {
     const due = await withSystem(this.db, (tx) =>

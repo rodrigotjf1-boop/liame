@@ -8,6 +8,13 @@
 export const DIA_DAS_ACOES_PARADAS = 10;
 /** O 30º dia: a conta é suspensa (Termos 10.4). */
 export const DIA_DA_SUSPENSAO = 30;
+/**
+ * O 60º dia de atraso (o 30º da suspensão): a assinatura termina sozinha, e os dados da marca são apagados nesse dia
+ * (Termos 11.2; A7, W3, parte 4a; D-A7-106).
+ */
+export const DIA_DO_APAGAMENTO_NO_ATRASO = 60;
+/** Os dias para exportar depois do fim da assinatura paga; depois, os dados da marca são apagados (Termos 11.2). */
+export const DIAS_PARA_EXPORTAR = 30;
 /** A fatura do período seguinte nasce 5 dias antes do vencimento: o e-mail do PIX leva o QR Code (D-A7-17). */
 export const DIAS_DA_FATURA_ANTES = 5;
 /** A desistência com a devolução integral: até o 7º dia depois do primeiro pagamento (Termos 11.1; D-A7-19). */
