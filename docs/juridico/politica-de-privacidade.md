@@ -1,6 +1,6 @@
 # Política de Privacidade do Liame
 
-**Versão 0.3 · texto de publicação durante a fase de lançamento · [PREENCHER: data de publicação]**
+**Versão 0.3 · texto de publicação durante a fase de lançamento · em vigor a partir de 07/12/2026**
 
 Esta Política explica, em linguagem simples, quais dados pessoais o **Liame** trata, para quê, com quem compartilha, por quanto tempo guarda e como você exerce os seus direitos, conforme a **Lei Geral de Proteção de Dados** (Lei nº 13.709/2018, "LGPD").
 

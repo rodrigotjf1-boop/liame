@@ -1,6 +1,6 @@
 # Termos de Uso do Liame
 
-**Versão 0.3 · texto de publicação durante a fase de lançamento · [PREENCHER: data de publicação]**
+**Versão 0.3 · texto de publicação durante a fase de lançamento · em vigor a partir de 07/12/2026**
 
 Estes Termos regem o uso do **Liame**, uma plataforma de marketing em que cada assistente de inteligência artificial trabalha como um funcionário de uma agência. Leia com atenção: ao criar a conta ou usar o Liame, você concorda com estes Termos, com a [Política de Privacidade](politica-de-privacidade.md) e com o [Contrato de Tratamento de Dados](contrato-de-operador.md), que faz parte destes Termos.
 
