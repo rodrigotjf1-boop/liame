@@ -1,6 +1,6 @@
 # Contrato de Tratamento de Dados Pessoais (Liame)
 
-**Versão 0.3 · texto de publicação durante a fase de lançamento · [PREENCHER: data de publicação]**
+**Versão 0.3 · texto de publicação durante a fase de lançamento · em vigor a partir de 07/12/2026**
 
 Este Contrato faz parte dos [Termos de Uso do Liame](termos-de-uso.md) e regula o tratamento de dados pessoais que o Liame realiza **em nome do Cliente**, conforme o art. 39 da Lei nº 13.709/2018 (LGPD).
 
