@@ -4,7 +4,9 @@ import { sql } from 'drizzle-orm';
 import { writeAudit } from '../audit/audit.js';
 import { protocoloDaDesistencia } from './confirmacao-da-desistencia.js';
 import {
+  DIA_DO_APAGAMENTO_NO_ATRASO,
   DIAS_DA_FATURA_ANTES,
+  DIAS_PARA_EXPORTAR,
   DIAS_PARA_O_PRIMEIRO_PAGAMENTO,
   diaDoMes,
   diaNoFuso,
@@ -27,7 +29,14 @@ import {
 export const FLAG_COBRANCA = 'cobranca';
 
 export type Forma = 'cartao' | 'pix' | 'pix_automatico';
-export type MotivoDoFim = 'cancelada' | 'desistencia' | 'nao_paga' | 'substituida';
+export type MotivoDoFim = 'cancelada' | 'desistencia' | 'nao_paga' | 'substituida' | 'atraso';
+
+/**
+ * Os fins que marcam o dia do apagamento (A7, W3, parte 4a; D-A7-106): a assinatura paga que o Dono cancelou, a
+ * desistência em 7 dias e a que terminou no 60º dia de atraso. A que nunca teve o primeiro pagamento (`nao_paga`) e a
+ * trocada por outra (`substituida`) não apagam nada.
+ */
+export const FINS_QUE_APAGAM: readonly MotivoDoFim[] = ['cancelada', 'desistencia', 'atraso'];
 
 /** Quantos períodos a rotina anda numa vez só (o worker parado por meses não trava a assinatura num laço sem fim). */
 const PERIODOS_POR_VEZ = 24;
@@ -158,13 +167,32 @@ async function cancelarFaturas(tx: Tx, assinaturaId: string, agora: Date, filtro
   return r.rowCount ?? 0;
 }
 
-/** Encerra a assinatura agora, com o porquê, e cancela as faturas em aberto. A parada da cobrança dela sai junto. */
+/**
+ * Encerra a assinatura agora, com o porquê, e cancela as faturas em aberto. A parada da cobrança dela sai junto.
+ * A assinatura paga que termina por um dos `FINS_QUE_APAGAM` ganha o dia do apagamento (D-A7-106): o mais cedo entre o
+ * fim + 30 dias e o 60º dia de atraso da mensalidade mais antiga em aberto, no calendário da empresa. O atraso é lido
+ * antes de as faturas serem canceladas, porque depois ele se perde.
+ */
 export async function encerrar(tx: Tx, assinaturaId: string, motivo: MotivoDoFim, agora: Date): Promise<void> {
+  const quando = agora.toISOString();
+  const atraso = await tx.execute<{ dia: string | null }>(sql`
+    select (min(i.due_date) + ${DIA_DO_APAGAMENTO_NO_ATRASO}::int)::text as dia
+      from liame.billing_invoice i
+      join liame.subscription s on s.id = i.subscription_id
+      join liame.organization o on o.id = s.tenant_id
+     where i.subscription_id = ${assinaturaId} and i.kind = 'mensalidade' and i.status = 'aberta'
+       and i.due_date < (${quando}::timestamptz at time zone o.timezone)::date`);
+  const diaPeloAtraso = atraso.rows[0]?.dia ?? null;
+  const apaga = FINS_QUE_APAGAM.includes(motivo);
   await cancelarFaturas(tx, assinaturaId, agora);
   await tx.execute(sql`
-    update liame.subscription
-       set status = 'encerrada', end_reason = ${motivo}, ended_at = ${agora.toISOString()}::timestamptz, updated_at = now()
-     where id = ${assinaturaId} and status <> 'encerrada'`);
+    update liame.subscription s
+       set status = 'encerrada', end_reason = ${motivo}, ended_at = ${quando}::timestamptz, updated_at = now(),
+           purge_on = case when ${apaga} and s.first_paid_at is not null
+                           then least((${quando}::timestamptz at time zone o.timezone)::date + ${DIAS_PARA_EXPORTAR}::int, ${diaPeloAtraso}::date)
+                      end
+      from liame.organization o
+     where o.id = s.tenant_id and s.id = ${assinaturaId} and s.status <> 'encerrada'`);
   await tx.execute(sql`
     update liame.kill_switch set deactivated_at = ${agora.toISOString()}::timestamptz
      where subscription_id = ${assinaturaId} and deactivated_at is null`);
@@ -302,6 +330,7 @@ export type VezDaAssinatura =
   | 'esperando_o_primeiro_pagamento'
   | 'nao_paga'
   | 'cancelada'
+  | 'atraso'
   | 'conferida';
 
 /**
@@ -364,7 +393,15 @@ export async function vezDaAssinatura(tx: Tx, assinaturaId: string, agora: Date)
     await garantirMensalidade(tx, s, fim, proximoVencimento(fim, dia), proximo ?? plano, hoje);
   }
 
-  const depois = situacaoPeloAtraso(await vencimentoEmAberto(tx, s.id, hoje), hoje);
+  const vencido = await vencimentoEmAberto(tx, s.id, hoje);
+  // No 60º dia de atraso (o 30º da suspensão), a assinatura termina sozinha, e o apagamento fica para hoje (Termos 11.2;
+  // D-A7-106): o `encerrar` lê o atraso antes de cancelar as faturas.
+  if (vencido !== null && diasEntre(vencido, hoje) >= DIA_DO_APAGAMENTO_NO_ATRASO) {
+    await encerrar(tx, s.id, 'atraso', agora);
+    await auditarDaRotina(tx, s, 'cobranca.encerrar', { status: s.status }, { status: 'encerrada', motivo: 'atraso', vencimento: vencido });
+    return 'atraso';
+  }
+  const depois = situacaoPeloAtraso(vencido, hoje);
   await tx.execute(sql`update liame.subscription set status = ${depois}, next_check_at = ${amanha}, updated_at = now() where id = ${s.id}`);
   if (depois !== s.status) await auditarDaRotina(tx, s, 'cobranca.situacao', { status: s.status }, { status: depois });
   // No 10º dia de atraso, as ações da marca param; em dia de novo, voltam (D-A7-6).

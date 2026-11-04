@@ -89,6 +89,7 @@ import { EventsLoopService } from './events-loop.service.js';
 import { INBOX_HANDLERS, type InboxHandler, InboxProcessor } from './inbox-processor.js';
 import { PedidoDeMensagemService } from '../mensageria/pedido-de-mensagem.service.js';
 import { ModeloDoCrmService } from './modelo-do-crm.service.js';
+import { FimDaAssinaturaService } from './fim-da-assinatura.service.js';
 import { LifecyclePurgeService } from './lifecycle-purge.service.js';
 import { OutboxPublisher } from './outbox-publisher.js';
 import { QueueService } from './queue.service.js';
@@ -240,6 +241,8 @@ import { WebhookDeliverer } from './webhook-deliverer.js';
     AvisosDosTermosService,
     // A cobrança do mês por e-mail, com o código do PIX (A7; D-A7-44). Só com a função ligada e o Asaas configurado.
     CobrancasDoMesService,
+    // O apagamento no fim da assinatura (A7, W3, parte 4a; D-A7-106). Só com a função `cobranca` ligada.
+    FimDaAssinaturaService,
     // O resumo da semana do que cada pessoa fez, ao Dono (A7, W8; D-A7-53). Só com a função ligada.
     ResumoDasPessoasService,
     // O PIX pelo Asaas (A7, W2a): a cobrança de cada fatura que nasce, criada no Asaas. Sem a chave do Asaas, nada roda.
