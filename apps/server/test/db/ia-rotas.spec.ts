@@ -15,7 +15,8 @@ import { ownerQuery } from '../helpers/api.js';
 import { hasDb, OWNER_URL } from './env.js';
 
 // As rotas de modelo que a distribuição publica (migration 0046, as cinco tarefas da A3; 0051, o Criativo de texto; 0061, o
-// funcionário de CRM e mensageria; 0084, o Social media nas respostas às avaliações): uma
+// funcionário de CRM e mensageria; 0084, o Social media nas respostas às avaliações; 0113, a versão 2 com o Haiku 5.5 como
+// modelo econômico do Compliance, do Pesquisador e do Criativo de texto): uma
 // por tarefa de IA do código, com o modelo que passou no eval da tarefa. No banco de teste a linha da distribuição pode
 // estar em três situações: ativa (banco novo), aposentada (outro arquivo a tirou do caminho para usar o modelo simulado)
 // ou rascunho (a migration achou uma rota de teste ativa na tarefa e não a derrubou). Em produção não há rota de teste:
@@ -42,12 +43,16 @@ type Rota = {
   publicada: boolean;
 };
 
-describe.skipIf(!hasDb)('rotas de modelo da distribuição (A3, I3; A4, X6; A5, Y6; A6, Z6; migrations 0046, 0051, 0061 e 0084) e o preço novo do Sonnet (0083)', () => {
+// As tarefas em que o Haiku 5.5 passou nas duas rodadas (28/10 e 03/11/2026) e virou o modelo econômico (migration 0113).
+const COM_ECONOMICO = new Set([TAREFA_REVISAO, TAREFA_PESQUISADOR, TAREFA_CRIATIVO_TEXTO]);
+
+describe.skipIf(!hasDb)('rotas de modelo da distribuição (A3, I3; A4, X6; A5, Y6; A6, Z6; migrations 0046, 0051, 0061, 0084 e 0113) e o preço novo do Sonnet (0083)', () => {
+  /** A versão mais nova da distribuição em cada tarefa (a 0113 aposenta a 1 e põe a 2 nas tarefas com o econômico). */
   const rotas = () =>
     ownerQuery<Rota>(
-      `select task, status, version, purpose, provider, model, effort, max_output_tokens, timeout_ms, max_cost_usd_micros::int as max_cost, fallback, economy_model,
-              eval_threshold::float8 as eval_threshold, eval_score::float8 as eval_score, deployed_at is not null as publicada
-         from liame.ai_model_route where ${DA_DISTRIBUICAO} order by task`,
+      `select distinct on (task) task, status, version, purpose, provider, model, effort, max_output_tokens, timeout_ms, max_cost_usd_micros::int as max_cost,
+              fallback, economy_model, eval_threshold::float8 as eval_threshold, eval_score::float8 as eval_score, deployed_at is not null as publicada
+         from liame.ai_model_route where ${DA_DISTRIBUICAO} order by task, version desc`,
     );
 
   beforeAll(async () => {
@@ -61,7 +66,9 @@ describe.skipIf(!hasDb)('rotas de modelo da distribuição (A3, I3; A4, X6; A5, 
       [TAREFA_REVISAO, TAREFA_CONVERSA, TAREFA_CRIATIVO_TEXTO, TAREFA_CRM_MENSAGEM, TAREFA_ESTRATEGISTA, TAREFA_EXPLICAR_RESULTADOS, TAREFA_PESQUISADOR, TAREFA_SOCIAL_RESPOSTA].sort(),
     );
     for (const x of r) {
-      expect(x).toMatchObject({ version: 1, provider: 'anthropic', model: 'claude-sonnet-5-5', effort: 'low', fallback: [], economy_model: null, eval_threshold: 0.95 });
+      expect(x).toMatchObject({ provider: 'anthropic', model: 'claude-sonnet-5-5', effort: 'low', fallback: [], eval_threshold: 0.95 });
+      if (COM_ECONOMICO.has(x.task) && x.version === 2) expect(x.economy_model).toBe('claude-haiku-5-5');
+      else expect(x).toMatchObject({ version: 1, economy_model: null });
       // A que entrou valendo tem a data da publicação; o rascunho, não.
       expect(['ativa', 'aposentada', 'rascunho']).toContain(x.status);
       expect(x.publicada).toBe(x.status !== 'rascunho');
@@ -96,17 +103,47 @@ describe.skipIf(!hasDb)('rotas de modelo da distribuição (A3, I3; A4, X6; A5, 
 
   it('a migration é idempotente: rodar de novo não duplica a rota nem reativa a que saiu do caminho', async () => {
     const antes = await ownerQuery<{ task: string; status: string }>(`select task, status from liame.ai_model_route where ${DA_DISTRIBUICAO} order by task`);
-    for (const arquivo of ['0046_rotas_de_modelo.sql', '0051_rota_do_criativo.sql', '0061_rota_do_crm.sql', '0084_rota_do_social.sql']) {
+    for (const arquivo of ['0046_rotas_de_modelo.sql', '0051_rota_do_criativo.sql', '0061_rota_do_crm.sql', '0084_rota_do_social.sql', '0113_haiku_economico.sql']) {
       const sql = readFileSync(resolve(MIGRATIONS, arquivo), 'utf8');
       await ownerQuery(sql);
       await ownerQuery(sql);
     }
     const depois = await ownerQuery<{ task: string; status: string }>(`select task, status from liame.ai_model_route where ${DA_DISTRIBUICAO} order by task`);
     expect(depois.map((x) => x.task)).toEqual(antes.map((x) => x.task));
-    expect(depois).toHaveLength(8);
+    expect(new Set(depois.map((x) => x.task)).size).toBe(8);
     // Nunca duas ativas na mesma tarefa (o índice único garante; aqui fica dito).
     const ativas = await ownerQuery<{ task: string; n: number }>(`select task, count(*)::int as n from liame.ai_model_route where status = 'ativa' group by task having count(*) > 1`);
     expect(ativas).toEqual([]);
+  });
+
+  it('o Haiku 5.5 é o modelo econômico só do Compliance, do Pesquisador e do Criativo de texto, com preço e só nos Estados Unidos (migration 0113)', async () => {
+    const versoes = await ownerQuery<{ task: string; version: number; status: string; economy_model: string | null; created_by: string }>(
+      `select task, version, status, economy_model, created_by from liame.ai_model_route where ${DA_DISTRIBUICAO} order by task, version`,
+    );
+    const da = (task: string) => versoes.filter((v) => v.task === task);
+    for (const task of new Set(versoes.map((v) => v.task))) {
+      const vs = da(task);
+      if (!COM_ECONOMICO.has(task)) {
+        // As outras tarefas seguem só com a versão 1, sem econômico (o Haiku reprovou nelas em 28/10).
+        expect(vs.map((v) => [v.version, v.economy_model])).toEqual([[1, null]]);
+        continue;
+      }
+      const v2 = vs.find((v) => v.version === 2);
+      if (!v2) {
+        // Banco em que a versão 1 já tinha saído do caminho (um teste a aposentou antes): a 0113 não mexe.
+        expect(vs[0]!.status).not.toBe('ativa');
+        continue;
+      }
+      expect(v2).toMatchObject({ economy_model: 'claude-haiku-5-5', created_by: 'distribuição: evals de 28/10 e 03/11/2026 (migration 0113)' });
+      // A versão 1 saiu do caminho: nunca duas valendo.
+      expect(vs.find((v) => v.version === 1)!.status).toBe('aposentada');
+    }
+    // O gateway só chama o econômico com preço cadastrado e que rode só nos Estados Unidos (D-A3-13).
+    expect(aceitaGeo('anthropic', 'claude-haiku-5-5')).toBe(true);
+    const [preco] = await ownerQuery<{ n: number }>(
+      `select count(*)::int as n from liame.ai_model_price where provider = 'anthropic' and model = 'claude-haiku-5-5' and valid_from <= (now() at time zone 'UTC')::date`,
+    );
+    expect(preco!.n).toBeGreaterThan(0);
   });
 
   it('a flag do funcionário de CRM e mensageria nasce desligada para todos, e não é flag de escrita (migration 0061)', async () => {

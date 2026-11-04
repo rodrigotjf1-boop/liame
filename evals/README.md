@@ -257,6 +257,26 @@ O que sai daí:
 
 Tokens: o Opus, 1,07 milhão de entrada (640 mil lidos do cache) e 57 mil de saída; o Haiku, 1,11 milhão de entrada (670 mil lidos do cache) e 101 mil de saída. Nas tarefas de chamada única, a entrada contou igual nos dois (e perto da do Sonnet em 04/10/2026); o Haiku escreveu quase o dobro. Com a prova de 2 casos do Haiku antes da rodada, o dia somou cerca de US$ 3,53, pelos preços publicados. Na mesma entrega, a tabela de preços ganhou o preço novo da leitura do cache do Sonnet 5.5 (0,05× a entrada; migration 0083).
 
+### A segunda rodada: o Haiku nas três tarefas e o Opus na conversa (03/11/2026)
+
+A regra acima ("uma rodada só não mede a variação"), com o gasto autorizado pelo dono ("pode rodar os dois"). As mesmas opções de 28/10/2026 (**esforço `low`, `AI_INFERENCE_GEO=us`**), os mesmos prompts e as mesmas réguas, numa chave nova da distribuição, num workspace só de testes com teto próprio de US$ 20 por mês.
+
+| Tarefa | Modelo | 28/10/2026 | 03/11/2026 | Custo da rodada |
+| --- | --- | --- | --- | --- |
+| `compliance_revisao` | Haiku 5.5 | 24 de 25 | 24 de 25, aprovado (o mesmo `ref-plano-pauta`, `clareza` sem motivo) | US$ 0,0069 |
+| `pesquisador_pagina` | Haiku 5.5 | 12 de 12 | 12 de 12, aprovado | US$ 0,0028 |
+| `criativo_texto` | Haiku 5.5 | 25 de 25 | 25 de 25, aprovado | US$ 0,0162 |
+| `conversa_lia` | Opus 5.5 | 23 de 24 | 22 de 24, **reprovado** | US$ 0,7323 (sem o cache seriam US$ 2,37) |
+
+O que reprovou no Opus, na conversa: perguntado por um número que os dados não trazem (`numero-sem-dado`), respondeu sem dizer que não tinha o dado; e, com o Google lido há dias (`google-dado-velho`), usou o número velho como se fosse de agora. O grupo `numero` exige todos os casos.
+
+O que sai daí:
+
+- **Modelo econômico:** o Haiku 5.5 passou nas duas rodadas das três tarefas e virou o econômico delas (migration 0113: a versão 2 de cada rota, igual à 1 e com o Haiku como econômico). Ele só atende a empresa que passou de 80% do teto de gasto de IA; abaixo disso, nada muda.
+- **Catálogo do Pro:** o Opus 5.5 não passou nas duas rodadas da conversa e fica fora; o catálogo segue vazio, e o Pro mostra só o automático (o Sonnet 5.5).
+
+Tokens: o Haiku, 159 mil de entrada e 15 mil de saída nas três tarefas; o Opus, 470 mil de entrada (408 mil lidos do cache) e 14 mil de saída. A rodada inteira custou US$ 0,76.
+
 ### O Social media nas respostas às avaliações (29/10/2026)
 
 A primeira rodada paga do `social_resposta` (o portão da função, A6-12), com o gasto autorizado pelo dono (a conta: cerca de US$ 0,22 por rodada com o Sonnet; até cerca de US$ 1 com ajuste e confirmação). O mesmo modelo e as mesmas opções das rotas no ar, **Sonnet 5.5, esforço `low`, `AI_INFERENCE_GEO=us`**, e o **Haiku 5.5** junto, por um centavo a mais por rodada, para saber se ele serve de modelo econômico aqui.
