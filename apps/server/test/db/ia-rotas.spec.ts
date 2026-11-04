@@ -10,13 +10,13 @@ import { TAREFA_EXPLICAR_RESULTADOS } from '../../src/ai/explicar/prompt.js';
 import { aceitaGeo } from '../../src/ai/modelos.js';
 import { TAREFA_PESQUISADOR } from '../../src/ai/pesquisador/prompt.js';
 import { TAREFA_REVISAO } from '../../src/ai/revisor/prompt.js';
-import { TAREFA_SOCIAL_RESPOSTA } from '../../src/ai/social/prompt.js';
+import { TAREFA_SOCIAL_POST, TAREFA_SOCIAL_RESPOSTA } from '../../src/ai/social/prompt.js';
 import { ownerQuery } from '../helpers/api.js';
 import { hasDb, OWNER_URL } from './env.js';
 
 // As rotas de modelo que a distribuição publica (migration 0046, as cinco tarefas da A3; 0051, o Criativo de texto; 0061, o
 // funcionário de CRM e mensageria; 0084, o Social media nas respostas às avaliações; 0113, a versão 2 com o Haiku 5.5 como
-// modelo econômico do Compliance, do Pesquisador e do Criativo de texto): uma
+// modelo econômico do Compliance, do Pesquisador e do Criativo de texto; 0116, o Social media nos posts): uma
 // por tarefa de IA do código, com o modelo que passou no eval da tarefa. No banco de teste a linha da distribuição pode
 // estar em três situações: ativa (banco novo), aposentada (outro arquivo a tirou do caminho para usar o modelo simulado)
 // ou rascunho (a migration achou uma rota de teste ativa na tarefa e não a derrubou). Em produção não há rota de teste:
@@ -46,7 +46,7 @@ type Rota = {
 // As tarefas em que o Haiku 5.5 passou nas duas rodadas (28/10 e 03/11/2026) e virou o modelo econômico (migration 0113).
 const COM_ECONOMICO = new Set([TAREFA_REVISAO, TAREFA_PESQUISADOR, TAREFA_CRIATIVO_TEXTO]);
 
-describe.skipIf(!hasDb)('rotas de modelo da distribuição (A3, I3; A4, X6; A5, Y6; A6, Z6; migrations 0046, 0051, 0061, 0084 e 0113) e o preço novo do Sonnet (0083)', () => {
+describe.skipIf(!hasDb)('rotas de modelo da distribuição (A3, I3; A4, X6; A5, Y6; A6, Z6; migrations 0046, 0051, 0061, 0084, 0113 e 0116) e o preço novo do Sonnet (0083)', () => {
   /** A versão mais nova da distribuição em cada tarefa (a 0113 aposenta a 1 e põe a 2 nas tarefas com o econômico). */
   const rotas = () =>
     ownerQuery<Rota>(
@@ -63,7 +63,7 @@ describe.skipIf(!hasDb)('rotas de modelo da distribuição (A3, I3; A4, X6; A5, 
     const r = await rotas();
     // As tarefas são as do código: tarefa nova sem rota, ou rota de tarefa que não existe, aparece aqui.
     expect(r.map((x) => x.task)).toEqual(
-      [TAREFA_REVISAO, TAREFA_CONVERSA, TAREFA_CRIATIVO_TEXTO, TAREFA_CRM_MENSAGEM, TAREFA_ESTRATEGISTA, TAREFA_EXPLICAR_RESULTADOS, TAREFA_PESQUISADOR, TAREFA_SOCIAL_RESPOSTA].sort(),
+      [TAREFA_REVISAO, TAREFA_CONVERSA, TAREFA_CRIATIVO_TEXTO, TAREFA_CRM_MENSAGEM, TAREFA_ESTRATEGISTA, TAREFA_EXPLICAR_RESULTADOS, TAREFA_PESQUISADOR, TAREFA_SOCIAL_POST, TAREFA_SOCIAL_RESPOSTA].sort(),
     );
     for (const x of r) {
       expect(x).toMatchObject({ provider: 'anthropic', model: 'claude-sonnet-5-5', effort: 'low', fallback: [], eval_threshold: 0.95 });
@@ -76,7 +76,8 @@ describe.skipIf(!hasDb)('rotas de modelo da distribuição (A3, I3; A4, X6; A5, 
       expect(x.eval_score).toBeGreaterThanOrEqual(x.eval_threshold);
       // D-A3-13: só entra em rota o modelo que aceita rodar só nos Estados Unidos (o gateway não chamaria outro).
       expect(aceitaGeo(x.provider, x.model)).toBe(true);
-      // O da rodada do eval de cada tarefa: 2.000 nas da A3, A4 e A5; 1.500 nas sugestões de resposta (uma ou duas, curtas).
+      // O da rodada do eval de cada tarefa: 2.000 nas da A3, A4 e A5; 1.500 nas sugestões de resposta (uma ou duas, curtas)
+      // e nos posts (o texto de cada canal e a foto).
       expect(x.max_output_tokens).toBeGreaterThanOrEqual(1500);
       expect(x.timeout_ms).toBeGreaterThanOrEqual(30_000);
       expect(x.max_cost).toBeGreaterThan(0);
@@ -90,6 +91,9 @@ describe.skipIf(!hasDb)('rotas de modelo da distribuição (A3, I3; A4, X6; A5, 
       [TAREFA_CRM_MENSAGEM]: 'texto',
       // E o Social media: a resposta pública a uma avaliação, na voz da marca.
       [TAREFA_SOCIAL_RESPOSTA]: 'texto',
+      // E nos posts: o texto do Instagram e o da Página, na voz da marca (migration 0116, sem modelo econômico: o Haiku 5.5
+      // reprovou na segunda rodada).
+      [TAREFA_SOCIAL_POST]: 'texto',
       [TAREFA_ESTRATEGISTA]: 'analise',
       [TAREFA_EXPLICAR_RESULTADOS]: 'analise',
       [TAREFA_PESQUISADOR]: 'analise',
@@ -103,14 +107,14 @@ describe.skipIf(!hasDb)('rotas de modelo da distribuição (A3, I3; A4, X6; A5, 
 
   it('a migration é idempotente: rodar de novo não duplica a rota nem reativa a que saiu do caminho', async () => {
     const antes = await ownerQuery<{ task: string; status: string }>(`select task, status from liame.ai_model_route where ${DA_DISTRIBUICAO} order by task`);
-    for (const arquivo of ['0046_rotas_de_modelo.sql', '0051_rota_do_criativo.sql', '0061_rota_do_crm.sql', '0084_rota_do_social.sql', '0113_haiku_economico.sql']) {
+    for (const arquivo of ['0046_rotas_de_modelo.sql', '0051_rota_do_criativo.sql', '0061_rota_do_crm.sql', '0084_rota_do_social.sql', '0113_haiku_economico.sql', '0116_rota_dos_posts.sql']) {
       const sql = readFileSync(resolve(MIGRATIONS, arquivo), 'utf8');
       await ownerQuery(sql);
       await ownerQuery(sql);
     }
     const depois = await ownerQuery<{ task: string; status: string }>(`select task, status from liame.ai_model_route where ${DA_DISTRIBUICAO} order by task`);
     expect(depois.map((x) => x.task)).toEqual(antes.map((x) => x.task));
-    expect(new Set(depois.map((x) => x.task)).size).toBe(8);
+    expect(new Set(depois.map((x) => x.task)).size).toBe(9);
     // Nunca duas ativas na mesma tarefa (o índice único garante; aqui fica dito).
     const ativas = await ownerQuery<{ task: string; n: number }>(`select task, count(*)::int as n from liame.ai_model_route where status = 'ativa' group by task having count(*) > 1`);
     expect(ativas).toEqual([]);
