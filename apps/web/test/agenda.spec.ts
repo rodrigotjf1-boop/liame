@@ -593,6 +593,9 @@ describe('o link do post (Z7, parte a; D-A6-46 a D-A6-48)', () => {
     expect(dicaDoLinkDoPost(undefined)).toBe('O link do post entra no fim, com o código só deste post.');
     expect(dicaDoLinkDoPost({ ok: false, reason: 'varias_lojas' })).toBe('A marca tem mais de uma loja com o cardápio ligado: por enquanto, o post sai sem o link.');
     expect(dicaDoLinkDoPost({ ok: false, reason: 'sem_cardapio' })).toBe('Sem o cardápio do Regem ligado a uma loja desta marca, o post sai sem o link.');
+    expect(dicaDoLinkDoPost({ ok: false, reason: 'outra_plataforma' })).toBe(
+      'A loja recebe os pedidos online por outra plataforma (em Links e cupons): o post sai sem o link do cardápio do Regem.',
+    );
     expect(dicaDoTexto('facebook', { ok: true, reason: null })).toBe('O texto que sai na Página, com a foto. O link do post entra no fim, com o código só deste post.');
     expect(dicaDoTexto('instagram', { ok: true, reason: null })).not.toContain('link do post');
     expect(motivoDe('link_do_post', 7)).toBe('Pelo link de um post');

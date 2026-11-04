@@ -74,7 +74,7 @@ const emFrase = (partes: string[]) => (partes.length > 1 ? `${partes.slice(0, -1
 function pedidosPeloLink(post: PostResponse, pacote: boolean, saiuHoje: string | null): PedidosDoPost {
   const p = post.link_orders ?? null;
   if (!post.link || !p) {
-    return { tipo: 'sem-link', texto: `${pacote ? 'Este pacote saiu' : 'Este post saiu'} sem o link do cardápio: nenhum pedido pelo link. A marca precisa de uma loja só com o cardápio ligado.` };
+    return { tipo: 'sem-link', texto: `${pacote ? 'Este pacote saiu' : 'Este post saiu'} sem o link do cardápio: nenhum pedido pelo link.` };
   }
   const comAnuncio = p.with_ad_orders;
   const anuncio = comAnuncio

@@ -12,6 +12,8 @@ import { hasDb } from './env.js';
 //     resposta, o link marcado como de post, sem campanha, e fora da tela Links;
 //   - o pacote: o link da bio, com o texto como veio;
 //   - sem link: só o Instagram; a marca sem loja com cardápio; a marca com duas lojas (e a Agenda diz o porquê);
+//   - a loja que recebe os pedidos online por outra plataforma (o Anota AI): sem link; com o Regem informado, com link
+//     (ERR-201);
 //   - o limite da Página conta o link;
 //   - as travas do banco: link de post com campanha (ou anúncio) e link de campanha preso a post são recusados (V119).
 // A atribuição do clique no link do post (D-A6-48) está nos casos de referência (`test/db/atribuicao.spec.ts`).
@@ -114,6 +116,25 @@ describe.skipIf(!hasDb)('o link do post (A6 · Z7, parte a)', () => {
     expect([r2.link, r2.channels[0].text]).toEqual([null, TEXTO_PAGINA]);
     expect(await linksDe(duas)).toEqual([]);
   }, 120_000);
+
+  it('a loja com outra plataforma de pedidos (o Anota AI): o post sai sem o link do Regem; com o Regem informado, com o link', async () => {
+    const e = await empresaComCanais(api, 'Casa Brasa Anota');
+    const loja = await lojaComCardapio(e, 'Loja Centro', CARDAPIO);
+    await ownerQuery(`update liame.unit set order_platform = 'anotaai' where id = $1`, [loja.unitId]);
+    const foto = await fotoPronta(e);
+    expect((await agenda(e)).body.post_link).toEqual({ ok: false, reason: 'outra_plataforma' });
+    const r1 = (await novo(e, foto.id, [{ channel: 'facebook', text: TEXTO_PAGINA }])).body;
+    expect([r1.link, r1.channels[0].text]).toEqual([null, TEXTO_PAGINA]);
+    expect(await linksDe(e)).toEqual([]);
+    const [ev] = await ownerQuery<{ after: Record<string, unknown> }>(`select after from liame.audit_event where tenant_id = $1 and action = 'posts.criar'`, [e.tenantId]);
+    expect(ev!.after.link_do_post).toBe('outra_plataforma');
+
+    // A loja que diz receber pelo cardápio do Regem: o link volta.
+    await ownerQuery(`update liame.unit set order_platform = 'regem' where id = $1`, [loja.unitId]);
+    expect((await agenda(e)).body.post_link).toEqual({ ok: true, reason: null });
+    const r2 = (await novo(e, foto.id, [{ channel: 'facebook', text: TEXTO_PAGINA }])).body;
+    expect(r2.link).toBe(esperado(e, r2.id, 'facebook'));
+  }, 90_000);
 
   it('o limite da Página conta o link: o texto que cabe sozinho e não cabe com o link é recusado, sem gravar nada', async () => {
     const e = await empresaComCanais(api, 'Casa Brasa Link Limite');
