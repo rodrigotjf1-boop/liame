@@ -257,6 +257,7 @@ describe.skipIf(!hasDb)('a verba do mês: o teto conta o gasto inteiro (A4 · X4
       // A divisão por plataforma (D-A4-36): nenhuma, e a função desligada para a empresa.
       platform_parts: null,
       platform_parts_enabled: false,
+      plan_parts: null,
     });
     expect(v.remaining_micros).toBe(5_500 * REAL - previstoNormal());
     // O teto por campanha é uma versão nova da política da empresa: a regra do teto no fim, a outra regra como estava.
@@ -409,6 +410,34 @@ describe.skipIf(!hasDb)('a verba do mês: o teto conta o gasto inteiro (A4 · X4
       expect((await verba()).limits).toMatchObject({ platform_parts: null, platform_parts_enabled: false });
 
       await ligarFlagDaEmpresa(api, 'verba_por_plataforma', e.tenantId, true);
+      // A sugestão do plano do trimestre (D-A4-38): sem plano aprovado, nenhuma; com ele, a verba que ele propõe por
+      // plataforma, em micros (o plano guarda reais inteiros); o plano esperando a decisão não conta.
+      expect((await verba()).limits.plan_parts).toBeNull();
+      const plano = async (status: string, meta: number, google: number) => {
+        const id = randomUUID();
+        await ownerQuery(
+          `insert into liame.plan (id, tenant_id, brand_id, kind, title, status, version, expires_at) values ($1, $2, $3, 'noventa_dias', 'Plano do trimestre', $4, 1, now() + interval '3 days')`,
+          [id, e.tenantId, e.brandId, status],
+        );
+        await ownerQuery(
+          `insert into liame.plan_version (id, tenant_id, plan_id, version, content, risk, content_hash, author) values ($1, $2, $3, 1, $4::jsonb, 'baixo', $5, 'estrategista')`,
+          [randomUUID(), e.tenantId, id, JSON.stringify({ kind: 'noventa_dias', budget: { today: { meta: 2_610, google: 300 }, proposal: { meta, google } } }), 'b'.repeat(64)],
+        );
+      };
+      await plano('aprovado', 3_920, 1_390);
+      await plano('pendente', 1_000, 1_000);
+      expect((await verba()).limits.plan_parts).toEqual([
+        { provider: 'meta_ads', micros: 3_920 * REAL },
+        { provider: 'google_ads', micros: 1_390 * REAL },
+      ]);
+      // Quem só acompanha a verba não recebe a sugestão (ela é do formulário de quem muda os limites).
+      await ownerQuery(`insert into liame.role_permission (tenant_id, role_key, permission) select $1, 'dono', p from unnest(array['empresa.ver', 'marcas.ver', 'campanhas.ver']) as p`, [e.tenantId]);
+      try {
+        expect((await verba()).limits.plan_parts).toBeNull();
+      } finally {
+        await ownerQuery(`delete from liame.role_permission where tenant_id = $1`, [e.tenantId]);
+      }
+
       // O que não entra: falta o Google, a Meta repetida e a soma diferente do teto do mês.
       const falta = await dividir([partes[0]!]);
       expect([falta.status, falta.body.errors]).toEqual([400, [{ path: 'platform_parts', message: 'Falta a parte do Google: cada plataforma conectada ganha uma parte.' }]]);

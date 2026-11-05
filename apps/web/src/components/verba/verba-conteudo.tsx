@@ -21,6 +21,8 @@ import type { AvisoDaVerba, TelaDaVerba } from './textos';
 // desenhado igual no teste e no navegador. No Lite, o que é do Pro fica a um "Ver detalhes" (nada some).
 // O cartão do mês leva os desenhos do protótipo `mockups/prototipo-verba-graficos.html` (aprovado em 07/10/2026): o
 // selo, "O mês, dia a dia" e "Onde o gasto foi"; a barra do teto só entra quando a resposta não traz o gasto de cada dia.
+// A divisão do teto por plataforma (A4 · X9; P36, aprovado em 04/11/2026): o bloco no cartão dos limites, a marca da
+// parte em "Onde o gasto foi", a coluna da parte no Pro, a faixa de cada plataforma que passa da parte e o formulário.
 
 type Props = {
   tela: TelaDaVerba;
@@ -32,14 +34,36 @@ type Props = {
   /** Quem vê as campanhas em Resultados (`vendas.ver`). */
   podeVerResultados: boolean;
   editando: boolean;
+  /** O formulário abriu pelo "Dividir por plataforma" ou pelo "Mudar a divisão": já com a chave ligada. */
+  dividindo?: boolean;
   aoEditar: () => void;
+  /** Abre o formulário já dividindo (D-A4-36). */
+  aoDividir?: () => void;
   aoCancelar: () => void;
   aoSalvar: (corpo: BudgetLimitsRequest) => Promise<Problema | null>;
   /** O botão "Definir os limites" / "Mudar os limites": o foco volta para ele depois de salvar ou cancelar. */
   botaoEditar?: Ref<HTMLButtonElement>;
 };
 
-function AcaoDoAviso({ a, podeVerContas, podeVerResultados }: { a: AvisoDaVerba; podeVerContas: boolean; podeVerResultados: boolean }) {
+function AcaoDoAviso({
+  a,
+  podeVerContas,
+  podeVerResultados,
+  aoDividir,
+}: {
+  a: AvisoDaVerba;
+  podeVerContas: boolean;
+  podeVerResultados: boolean;
+  /** Só para quem muda os limites: o "Mudar a divisão" da faixa da parte. */
+  aoDividir: (() => void) | null;
+}) {
+  if (a.acao === 'divisao' && aoDividir) {
+    return (
+      <button className="btn" type="button" onClick={aoDividir}>
+        Mudar a divisão
+      </button>
+    );
+  }
   if (a.acao === 'contas' && podeVerContas) {
     return (
       <Link className="btn" href="/contas">
@@ -57,11 +81,25 @@ function AcaoDoAviso({ a, podeVerContas, podeVerResultados }: { a: AvisoDaVerba;
   return null;
 }
 
-export function VerbaConteudo({ tela, limites, podeDefinir, podeVerContas, podeVerResultados, editando, aoEditar, aoCancelar, aoSalvar, botaoEditar }: Props) {
+export function VerbaConteudo({
+  tela,
+  limites,
+  podeDefinir,
+  podeVerContas,
+  podeVerResultados,
+  editando,
+  dividindo = false,
+  aoEditar,
+  aoDividir,
+  aoCancelar,
+  aoSalvar,
+  botaoEditar,
+}: Props) {
   const fontes = useFontes(tela.fontes);
   const doMes = useDetalhes();
   const dasMudancas = useDetalhes();
-  const { heroi: h, desenhos: d, plataformas: p, limites: l, mudancas: m } = tela;
+  const { heroi: h, desenhos: d, plataformas: p, limites: l, mudancas: m, divisao } = tela;
+  const dividirAqui = podeDefinir && tela.formDaDivisao && aoDividir ? aoDividir : null;
   const numero = (texto: Parameters<typeof TextoComNumeros>[0]['texto']) => <TextoComNumeros texto={texto} lista={tela.fontes} aoTocar={fontes.mostrar} />;
   const tres = (gasto: string, ritmo: string, previsto: string) => (
     <>
@@ -82,7 +120,7 @@ export function VerbaConteudo({ tela, limites, podeDefinir, podeVerContas, podeV
       {tela.avisos.length > 0 && (
         <div className="verba-avisos">
           {tela.avisos.map((a) => (
-            <Faixa key={a.chave} tipo={a.tipo} icone={<Icone nome={a.icone} />} titulo={a.titulo} texto={a.texto} acao={<AcaoDoAviso a={a} podeVerContas={podeVerContas} podeVerResultados={podeVerResultados} />} />
+            <Faixa key={a.chave} tipo={a.tipo} icone={<Icone nome={a.icone} />} titulo={a.titulo} texto={a.texto} acao={<AcaoDoAviso a={a} podeVerContas={podeVerContas} podeVerResultados={podeVerResultados} aoDividir={dividirAqui} />} />
           ))}
         </div>
       )}
@@ -128,7 +166,7 @@ export function VerbaConteudo({ tela, limites, podeDefinir, podeVerContas, podeV
               </div>
             ))}
           </div>
-          {d.onde.length > 0 && <OndeOGastoFoi plataformas={d.onde} />}
+          {d.onde.length > 0 && <OndeOGastoFoi plataformas={d.onde} mes={tela.mes} />}
           {!doMes.pro && <BotaoDetalhes aberto={doMes.aberto} controla="verba-pro" aoAlternar={doMes.alternar} />}
           {/* O bloco existe sempre (é o alvo do "Ver detalhes"); fechado, fica oculto, como nos cartões de Resultados. */}
           <div className="res-pro" id="verba-pro" hidden={!doMes.mostraPro}>
@@ -149,6 +187,11 @@ export function VerbaConteudo({ tela, limites, podeDefinir, podeVerContas, podeV
                         <th scope="col" className="n">
                           Previsão do mês
                         </th>
+                        {p.comParte && (
+                          <th scope="col" className="n">
+                            Parte
+                          </th>
+                        )}
                       </tr>
                     </thead>
                     <tbody>
@@ -159,6 +202,11 @@ export function VerbaConteudo({ tela, limites, podeDefinir, podeVerContas, podeV
                             {linha.nota && <span className="sub">{linha.nota}</span>}
                           </th>
                           {tres(linha.gasto, linha.ritmo, linha.previsto)}
+                          {p.comParte && (
+                            <td className="n num" data-rot="Parte">
+                              {linha.parte}
+                            </td>
+                          )}
                         </tr>
                       ))}
                     </tbody>
@@ -166,6 +214,11 @@ export function VerbaConteudo({ tela, limites, podeDefinir, podeVerContas, podeV
                       <tr>
                         <th scope="row">Total</th>
                         {tres(p.total.gasto, p.total.ritmo, p.total.previsto)}
+                        {p.comParte && (
+                          <td className="n num" data-rot="Parte">
+                            {p.total.parte}
+                          </td>
+                        )}
                       </tr>
                     </tfoot>
                   </table>
@@ -194,7 +247,7 @@ export function VerbaConteudo({ tela, limites, podeDefinir, podeVerContas, podeV
         <div className="limites-grade">
           <div className="limites-lado">
             {editando ? (
-              <FormLimites limites={l} atuais={limites} aoSalvar={aoSalvar} aoCancelar={aoCancelar} />
+              <FormLimites limites={l} atuais={limites} divisao={tela.formDaDivisao} comecarDividindo={dividindo} aoSalvar={aoSalvar} aoCancelar={aoCancelar} />
             ) : (
               <>
                 <div className="limites-dois">
@@ -202,7 +255,9 @@ export function VerbaConteudo({ tela, limites, podeDefinir, podeVerContas, podeV
                     <p className="limite-rot">Teto do mês</p>
                     {l.mes ? <p className="limite-val">{l.mes}</p> : <p className="limite-val limite-val--falta">Ainda não definido</p>}
                     <p className="limite-sub">
-                      Tudo o que a empresa pode gastar em anúncios por mês, na Meta e no Google. Vale para cada mês, até {podeDefinir ? 'você' : 'a empresa'} mudar.
+                      {divisao?.dividida
+                        ? `A soma das partes de cada plataforma, abaixo. Vale para cada mês, até ${podeDefinir ? 'você' : 'a empresa'} mudar.`
+                        : `Tudo o que a empresa pode gastar em anúncios por mês, na Meta e no Google. Vale para cada mês, até ${podeDefinir ? 'você' : 'a empresa'} mudar.`}
                     </p>
                   </div>
                   <div className="limite">
@@ -211,6 +266,46 @@ export function VerbaConteudo({ tela, limites, podeDefinir, podeVerContas, podeV
                     <p className="limite-sub">A maior verba diária que um aumento pode deixar numa campanha ou num conjunto. Reduzir é sempre permitido.</p>
                   </div>
                 </div>
+                {divisao && (
+                  <div className="limite limite-divisao">
+                    {divisao.dividida ? (
+                      <>
+                        <p className="limite-rot">Divisão por plataforma</p>
+                        <ul className="limite-divisao-lista">
+                          {divisao.linhas.map((x) => (
+                            <li key={x.provider}>
+                              <span className={x.classe ? `plat plat--${x.classe}` : 'plat'}>{x.nome}</span>
+                              <b className="limite-divisao-val">{x.parte}</b>
+                              <span className={`st st--${x.selo.classe}`}>
+                                <span className="dot" />
+                                {x.selo.rotulo}
+                              </span>
+                            </li>
+                          ))}
+                        </ul>
+                        {divisao.notas.map((n) => (
+                          <p className="limite-sub" key={n}>
+                            {n}
+                          </p>
+                        ))}
+                      </>
+                    ) : (
+                      <>
+                        <div className="limite-divisao-cab">
+                          <p className="limite-rot">Divisão por plataforma</p>
+                          {divisao.podeDividir && aoDividir && (
+                            <button className="btn btn--sm" type="button" onClick={aoDividir}>
+                              <Icone nome="sliders" pequeno />
+                              Dividir por plataforma
+                            </button>
+                          )}
+                        </div>
+                        <p className="limite-divisao-nao">Não dividido</p>
+                        <p className="limite-sub">{divisao.texto}</p>
+                      </>
+                    )}
+                  </div>
+                )}
                 {l.definidos ? (
                   l.quem && <p className="eixo-nota">{l.quem}</p>
                 ) : (

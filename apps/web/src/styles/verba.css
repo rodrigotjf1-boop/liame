@@ -121,6 +121,39 @@
 .regras-liame li { display: flex; gap: var(--sp-2); }
 .regras-liame .ic { flex: none; width: 15px; height: 15px; margin-top: 3px; color: var(--success); }
 
+/* A verba dividida por plataforma (A4 · X9; P36, aprovado em 04/11/2026). O cartão dos limites: o bloco da divisão. */
+.limite-divisao { gap: var(--sp-2); }
+.limite-divisao-cab { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--sp-2) var(--sp-3); }
+.limite-divisao-nao { font-size: var(--text-md); font-weight: 600; }
+.limite-divisao-lista { display: grid; gap: var(--sp-2); margin: 0; padding: 0; list-style: none; }
+.limite-divisao-lista li { display: flex; flex-wrap: wrap; align-items: center; gap: 4px var(--sp-3); min-width: 0; }
+.limite-divisao-lista .plat { min-width: 6.4rem; justify-content: flex-start; }
+.limite-divisao-val { font-family: var(--font-mono); font-size: var(--text-lg); font-weight: 600; }
+/* "Onde o gasto foi": a marca da parte de cada plataforma, na mesma régua das barras. */
+.vb-plats--partes > li { row-gap: 4px; }
+.vb-trilho .vb-marca-parte { position: absolute; top: -5px; bottom: -5px; z-index: 2; width: 0; border-left: 2px solid var(--text); }
+.vb-trilho .vb-marca-parte::after { content: ""; position: absolute; inset: 0 -7px; }
+.vb-trilho--acima .previsto { background: repeating-linear-gradient(135deg, var(--danger) 0 3px, transparent 3px 6px); opacity: .8; }
+.vb-situacao-parte { grid-column: 2 / -1; display: flex; flex-wrap: wrap; align-items: center; gap: 4px var(--sp-2); margin: 0; font-size: var(--text-xs); color: var(--text-muted); }
+.vb-situacao-parte .st { flex: none; }
+.vb-leg-partes { margin-top: 2px; }
+/* O formulário dos limites: a chave "Dividir por plataforma" e uma parte para cada plataforma. */
+.limites-chave-linha { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-2) var(--sp-3); }
+.limites-chave-linha .campo-dica { flex: 1 1 14rem; min-width: 0; }
+.limites-form .pd-valor:has(input[readonly]) { background: var(--bg-subtle); border-style: dashed; }
+.limites-partes { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--sp-3) var(--sp-4); min-width: 0; margin: 0; padding: var(--sp-3) var(--sp-4) var(--sp-4); border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface-2); }
+.limites-partes legend { padding: 0 6px; font-size: var(--text-sm); font-weight: 600; }
+.limites-partes > :not(.campo) { grid-column: 1 / -1; }
+.limites-partes .campo { min-width: 0; }
+.limites-partes .pd-valor { width: 100%; max-width: 14rem; background: var(--surface); }
+.limites-abaixo { display: flex; gap: 6px; margin: 2px 0 0; font-size: var(--text-xs); color: var(--text); }
+.limites-abaixo .ic { flex: none; width: 14px; height: 14px; margin-top: 1px; color: var(--warning); }
+.limites-soma { font-size: var(--text-sm); color: var(--text-muted); }
+.limites-soma b { font-family: var(--font-mono); font-weight: 600; color: var(--text); }
+.limites-sugestao { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-2) var(--sp-3); padding: var(--sp-3); border-radius: var(--radius); background: var(--ai-soft); font-size: var(--text-sm); }
+.limites-sugestao > .ic { flex: none; width: 16px; height: 16px; color: var(--text-muted); }
+.limites-sugestao p { flex: 1 1 16rem; min-width: 0; margin: 0; }
+
 /* O campo de valor em reais e o aviso do que falta (as mesmas peças do pedido de mudança, no protótipo P9). */
 .pd-valor { display: flex; align-items: center; min-height: 40px; width: 11rem; max-width: 100%; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface-2); }
 .pd-valor:focus-within { border-color: var(--foco); box-shadow: var(--focus-ring); }
@@ -182,4 +215,12 @@
   .verba .tabela--pilha tr > th { grid-column: 1 / -1; order: -1; }
   .verba .tabela--pilha tr > td.larga { grid-column: 1 / -1; }
   .verba .tabela--pilha td::before { content: attr(data-rot); display: block; margin-bottom: 1px; font-family: var(--font-sans); font-size: var(--text-xs); font-weight: 400; letter-spacing: 0; color: var(--text-muted); }
+}
+
+/* A verba dividida por plataforma no estreito: a frase de cada plataforma embaixo da barra, e uma parte por linha. */
+@container pagina (max-width: 599px) {
+  .vb-situacao-parte { grid-column: 1 / -1; grid-row: 3; }
+  /* O valor e a parte ("R$ 158,13" e "de R$ 2.000,00") um embaixo do outro: juntos, empurravam o nome da plataforma. */
+  .vb-plats--partes .vb-valor { flex-direction: column; align-items: flex-end; gap: 0; }
+  .limites-partes { grid-template-columns: minmax(0, 1fr); padding: var(--sp-3); }
 }

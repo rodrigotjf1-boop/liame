@@ -2,6 +2,7 @@ import type { BudgetMonthResponse } from '@liame/contracts';
 import { plataforma } from '@/components/contas/textos';
 import { diaMes, somarDias } from '@/components/resultados/textos';
 import { reaisDeMicros } from '@/lib/formato';
+import { partesDaVerba } from './divisao';
 import { naFrase } from './nomes';
 import type { MesDaVerba } from './textos';
 
@@ -222,31 +223,54 @@ export type PlataformaDesenhada = {
   /** A largura da hachura: o que a previsão soma ao gasto. */
   aMais: number;
   valor: string;
-  /** "68% do gasto"; nulo enquanto o mês não tem gasto. */
+  /** "68% do gasto" ("de R$ 3.700,00" com a divisão); nulo enquanto o mês não tem gasto. */
   parte: string | null;
   rotulo: string;
   dicaGasto: string;
   dicaPrevisto: string;
+  /**
+   * Com a divisão por plataforma (D-A4-39): onde fica a marca da parte, na mesma régua (de 0 a 100); o selo, a frase
+   * curta e se a previsão passa da parte. Nulos (e falso) sem divisão ou na plataforma sem parte.
+   */
+  marca: number | null;
+  dicaParte: string | null;
+  selo: { classe: string; rotulo: string } | null;
+  frase: string | null;
+  acima: boolean;
 };
 
-/** Uma barra por plataforma, na mesma régua (que começa no zero): cheio até o último dia lido, hachura a previsão. */
+/**
+ * Uma barra por plataforma, na mesma régua (que começa no zero): cheio até o último dia lido, hachura a previsão. Com a
+ * divisão (D-A4-39), a previsão inclui o que pesa hoje na plataforma, e a marca da parte entra na mesma régua.
+ */
 export function ondeOGastoFoi(v: Verba, mes: MesDaVerba): PlataformaDesenhada[] {
-  const maior = Math.max(0, ...v.platforms.map((p) => Math.max(p.forecast_micros, p.spend_micros)));
+  const partes = new Map((partesDaVerba(v) ?? []).map((x) => [x.provider, x]));
+  const fimDe = (p: Verba['platforms'][number]): number => partes.get(p.provider)?.fimMicros ?? p.forecast_micros;
+  const maior = Math.max(0, ...v.platforms.map((p) => Math.max(fimDe(p), p.spend_micros, partes.get(p.provider)?.parteMicros ?? 0)));
   return v.platforms.map((p) => {
     const { nome, classe } = plataforma(p.provider);
-    const parte = v.spend_micros > 0 ? `${Math.round((p.spend_micros / v.spend_micros) * 100)}% do gasto` : null;
+    const x = partes.get(p.provider);
+    const fim = fimDe(p);
+    const parte = x ? `de ${x.parte}` : v.spend_micros > 0 ? `${Math.round((p.spend_micros / v.spend_micros) * 100)}% do gasto` : null;
     const ate = p.read_through ? `até ${diaMes(p.read_through)}` : 'ainda sem leitura';
     return {
       provider: p.provider,
       nome,
       classe,
       gasto: maior ? p2((p.spend_micros / maior) * 100) : 0,
-      aMais: maior ? p2((Math.max(0, p.forecast_micros - p.spend_micros) / maior) * 100) : 0,
+      aMais: maior ? p2((Math.max(0, fim - p.spend_micros) / maior) * 100) : 0,
       valor: reais(p.spend_micros),
       parte,
-      rotulo: `${nome}: ${reais(p.spend_micros)} ${ate}${parte ? `, ${parte} do mês` : ''}. Previsão de fechamento: ${reais(p.forecast_micros)}.`,
+      rotulo: x
+        ? `${nome}: ${reais(p.spend_micros)} ${ate}, de uma parte de ${x.parte}. Previsão de fechamento: ${reais(fim)}. ${x.selo.rotulo}.`
+        : `${nome}: ${reais(p.spend_micros)} ${ate}${parte ? `, ${parte} do mês` : ''}. Previsão de fechamento: ${reais(p.forecast_micros)}.`,
       dicaGasto: dica(reais(p.spend_micros), `${nome} · gasto ${ate}`),
-      dicaPrevisto: dica(reais(p.forecast_micros), `${nome} · previsto até o dia ${mes.ultimoDia}`),
+      dicaPrevisto: dica(reais(fim), `${nome} · previsto até o dia ${mes.ultimoDia}`),
+      marca: x && maior ? p2((x.parteMicros / maior) * 100) : null,
+      dicaParte: x ? dica(x.parte, `a parte ${naFrase(p.provider).da} no mês`) : null,
+      selo: x?.selo ?? null,
+      frase: x?.frase ?? null,
+      acima: x?.acima ?? false,
     };
   });
 }

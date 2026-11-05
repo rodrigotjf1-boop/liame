@@ -5,6 +5,18 @@ import { Fontes, type LinhaDeFonte, type Num, type Texto } from '@/components/re
 import type { NomeIcone } from '@/components/ui/icone';
 import type { Problema } from '@/lib/api';
 import { reaisDeMicros } from '@/lib/formato';
+import {
+  avisosDaDivisao,
+  type DivisaoNosLimites,
+  divisaoInicial,
+  divisaoNosLimites,
+  type PlataformaDoForm,
+  partesDaVerba,
+  plataformasDoForm,
+  type SugestaoDoPlano,
+  sugestaoDoPlano,
+  temDivisao,
+} from './divisao';
 import { type DesenhosDaVerba, desenhosDaVerba } from './graficos';
 import { naFrase } from './nomes';
 
@@ -14,7 +26,7 @@ import { naFrase } from './nomes';
 // calculado de novo, fora as porcentagens da barra, o dia em que a previsão passa do teto e a média por dia. Os
 // desenhos do cartão do mês (o mês dia a dia, o selo e o gasto por plataforma) ficam em `graficos.ts`.
 // Funções puras: o "agora" entra como parâmetro (LIC-006). Listas que crescem chegam como texto (V23): valor novo
-// tem saída.
+// tem saída. A divisão do teto por plataforma (A4 · X9; P36, aprovado em 04/11/2026) fica em `divisao.ts`.
 
 type Verba = BudgetMonthResponse;
 
@@ -79,8 +91,8 @@ export type AvisoDaVerba = {
   icone: NomeIcone;
   titulo: string;
   texto: string;
-  /** O botão da faixa: abrir Contas conectadas ou as campanhas (Resultados). */
-  acao: 'contas' | 'campanhas' | null;
+  /** O botão da faixa: abrir Contas conectadas, as campanhas (Resultados) ou o formulário da divisão (D-A4-39). */
+  acao: 'contas' | 'campanhas' | 'divisao' | null;
 };
 
 /**
@@ -144,6 +156,8 @@ export function avisosDaVerba(v: Verba, agora: Date): AvisoDaVerba[] {
       acao: 'campanhas',
     });
   }
+  // Cada plataforma que passa da parte dela (D-A4-39), logo depois do teto do mês.
+  avisos.push(...avisosDaDivisao(v, mes.nome));
   for (const o of v.overspend) avisos.push({ chave: `gasto-${o.action_id}`, tipo: 'atencao', icone: 'alert', titulo: o.title, texto: `${o.detail} ${o.action}`, acao: null });
   return avisos;
 }
@@ -260,8 +274,15 @@ export function heroiDaVerba(v: Verba, fontes: Fontes, agora: Date): HeroiDaVerb
   };
 }
 
-export type LinhaDaPlataforma = { provider: string; nome: string; classe: string; nota: string | null; gasto: string; ritmo: string; previsto: string };
-export type PlataformasDaVerba = { legenda: string; linhas: LinhaDaPlataforma[]; total: { gasto: string; ritmo: string; previsto: string }; nota: string };
+export type LinhaDaPlataforma = { provider: string; nome: string; classe: string; nota: string | null; gasto: string; ritmo: string; previsto: string; parte: string | null };
+export type PlataformasDaVerba = {
+  legenda: string;
+  linhas: LinhaDaPlataforma[];
+  total: { gasto: string; ritmo: string; previsto: string; parte: string | null };
+  nota: string;
+  /** Com a divisão (D-A4-39), a tabela ganha a coluna da parte. */
+  comParte: boolean;
+};
 
 /**
  * "só leitura" embaixo do nome da plataforma em que o Liame não muda campanhas nesta empresa (a escrita desligada). A
@@ -285,8 +306,9 @@ function plataformasComPedido(v: Verba): string[] {
 
 /** A tabela por plataforma (Pro, ou "Ver detalhes" no Lite), com o total. */
 export function plataformasDaVerba(v: Verba): PlataformasDaVerba {
+  const comParte = partesDaVerba(v) !== null;
   return {
-    legenda: `Gasto de ${mesDaVerba(v).nome} por plataforma: até ontem, ritmo por dia e previsão de fechamento`,
+    legenda: `Gasto de ${mesDaVerba(v).nome} por plataforma: até ontem, ritmo por dia${comParte ? ', previsão de fechamento e a parte de cada uma' : ' e previsão de fechamento'}`,
     linhas: v.platforms.map((p) => ({
       provider: p.provider,
       ...plataforma(p.provider),
@@ -294,9 +316,16 @@ export function plataformasDaVerba(v: Verba): PlataformasDaVerba {
       gasto: reais(p.spend_micros),
       ritmo: reais(p.daily_micros),
       previsto: reais(p.forecast_micros),
+      parte: comParte ? (p.part ? reais(p.part.micros) : 'sem parte') : null,
     })),
-    total: { gasto: reais(v.spend_micros), ritmo: reais(v.daily_micros), previsto: reais(v.forecast_micros) },
+    total: {
+      gasto: reais(v.spend_micros),
+      ritmo: reais(v.daily_micros),
+      previsto: reais(v.forecast_micros),
+      parte: comParte && v.limits.month_micros !== null ? reais(v.limits.month_micros) : null,
+    },
     nota: 'O teto conta tudo o que as contas conectadas gastam, e não só o que o Liame mudou. O ritmo é a média dos últimos 7 dias completos. A Meta e o Google são lidos uma vez por dia, de manhã: o gasto de hoje entra amanhã.',
+    comParte,
   };
 }
 
@@ -384,23 +413,63 @@ export function reaisDigitados(texto: string): number | null {
   return Number(inteiro) * 1_000_000 + Number(centavos.padEnd(2, '0')) * 10_000;
 }
 
-export type CampoDosLimites = 'mes' | 'campanha';
+/** O campo com o problema: o teto do mês, o da campanha, a parte de uma plataforma (`parte:meta_ads`) ou as partes. */
+export type CampoDosLimites = 'mes' | 'campanha' | 'partes' | `parte:${string}`;
 export type LimitesConferidos = { ok: true; corpo: BudgetLimitsRequest } | { ok: false; erro: string; campo: CampoDosLimites };
 
-/** Confere o formulário dos limites antes de enviar: os dois valores, em reais, e o da campanha (por dia) dentro do mês. */
-export function conferirLimites(campos: { mes: string; campanha: string }): LimitesConferidos {
-  const mes = reaisDigitados(campos.mes);
-  if (mes === null || mes < 1_000_000) return { ok: false, erro: 'Digite o teto do mês em reais, como 5.500,00.', campo: 'mes' };
+/**
+ * A divisão no formulário (D-A4-36), com a função ligada: `dividir` é a chave; `partes`, o que foi digitado em cada
+ * plataforma; `tinha`, a empresa já tinha dividido (desligar a chave tira a divisão).
+ */
+export type DivisaoDigitada = { dividir: boolean; partes: Array<{ provider: string; texto: string }>; tinha: boolean };
+
+/** A soma das partes digitadas, em micros; nula enquanto alguma não é um valor de pelo menos R$ 1,00. */
+export function somaDigitada(partes: ReadonlyArray<{ texto: string }>): number | null {
+  let soma = 0;
+  for (const p of partes) {
+    const v = reaisDigitados(p.texto);
+    if (v === null || v < 1_000_000) return null;
+    soma += v;
+  }
+  return partes.length ? soma : null;
+}
+
+/**
+ * Confere o formulário dos limites antes de enviar: os dois valores, em reais, e o da campanha (por dia) dentro do mês.
+ * Com a divisão ligada, o teto do mês é a soma das partes, e cada parte é um valor em reais. Sem `divisao` (a função
+ * desligada), o corpo não fala da divisão; com a chave desligada e a divisão de antes, o corpo a tira (`null`).
+ */
+export function conferirLimites(campos: { mes: string; campanha: string; divisao?: DivisaoDigitada | null }): LimitesConferidos {
+  const d = campos.divisao;
+  let mes: number | null;
+  let partes: BudgetLimitsRequest['platform_parts'];
+  if (d?.dividir) {
+    const valores: Array<{ provider: 'meta_ads' | 'google_ads'; micros: number }> = [];
+    for (const p of d.partes) {
+      const v = reaisDigitados(p.texto);
+      if (v === null || v < 1_000_000) return { ok: false, erro: `Digite a parte ${naFrase(p.provider).da} em reais, como 3.700,00.`, campo: `parte:${p.provider}` };
+      valores.push({ provider: p.provider as 'meta_ads' | 'google_ads', micros: v });
+    }
+    mes = valores.reduce((s, p) => s + p.micros, 0);
+    partes = valores;
+  } else {
+    mes = reaisDigitados(campos.mes);
+    if (mes === null || mes < 1_000_000) return { ok: false, erro: 'Digite o teto do mês em reais, como 5.500,00.', campo: 'mes' };
+    partes = d?.tinha ? null : undefined;
+  }
   const campanha = reaisDigitados(campos.campanha);
   if (campanha === null || campanha < 1_000_000) return { ok: false, erro: 'Digite o teto por campanha em reais, como 80,00.', campo: 'campanha' };
   if (campanha > mes) return { ok: false, erro: 'O teto por campanha é por dia e não pode passar do teto do mês.', campo: 'campanha' };
-  return { ok: true, corpo: { month_micros: mes, campaign_daily_micros: campanha } };
+  return { ok: true, corpo: { month_micros: mes, campaign_daily_micros: campanha, ...(partes === undefined ? {} : { platform_parts: partes }) } };
 }
 
 /** A recusa do servidor ao salvar os limites, em palavras, e o campo a que ela se refere (quando há). */
 export function erroAoSalvarLimites(p: Problema): { erro: string; campo: CampoDosLimites | null } {
   const doCampo = p.errors?.[0];
-  if (doCampo) return { erro: doCampo.message, campo: doCampo.path.includes('month') ? 'mes' : doCampo.path.includes('campaign') ? 'campanha' : null };
+  if (doCampo) {
+    const campo = doCampo.path.includes('month') ? 'mes' : doCampo.path.includes('campaign') ? 'campanha' : doCampo.path.includes('platform_parts') ? 'partes' : null;
+    return { erro: doCampo.message, campo };
+  }
   if (p.status === 403) return { erro: 'Só o Dono e o Administrador mudam os limites.', campo: null };
   const texto = p.detail ?? p.title;
   return { erro: p.status >= 500 && p.trace_id ? `${texto} Código de rastreio: ${p.trace_id}` : texto, campo: null };
@@ -590,9 +659,24 @@ export type TelaDaVerba = {
   fontes: LinhaDeFonte[];
   /** Nenhuma conta de anúncio conectada: a tela explica e leva a Contas conectadas. */
   semContas: boolean;
+  /** O bloco "Divisão por plataforma" do cartão dos limites (D-A4-36); nulo com a função desligada. */
+  divisao: DivisaoNosLimites | null;
+  /** O que o formulário precisa para dividir; nulo com a função desligada. */
+  formDaDivisao: FormDaDivisao | null;
 };
 
-export function telaDaVerba(v: Verba, agora: Date): TelaDaVerba {
+export type FormDaDivisao = {
+  plataformas: PlataformaDoForm[];
+  /** A divisão com que a chave liga (a de agora, ou o teto dividido como o gasto), em micros. */
+  inicial: Record<string, number>;
+  /** A empresa já dividiu. */
+  dividida: boolean;
+  tetoDeHoje: number | null;
+  sugestao: SugestaoDoPlano | null;
+  nomeDoMes: string;
+};
+
+export function telaDaVerba(v: Verba, agora: Date, podeDefinir = false): TelaDaVerba {
   const fontes = new Fontes();
   const heroi = heroiDaVerba(v, fontes, agora);
   const semContas = v.platforms.length === 0;
@@ -609,6 +693,18 @@ export function telaDaVerba(v: Verba, agora: Date): TelaDaVerba {
     // Sem conta conectada, o cartão do mês não aparece: não há número na tela para dizer de onde veio.
     fontes: semContas ? [] : fontes.lista,
     semContas,
+    divisao: divisaoNosLimites(v, podeDefinir),
+    formDaDivisao:
+      v.limits.platform_parts_enabled === true && !semContas
+        ? {
+            plataformas: plataformasDoForm(v, mes.nome, mes.ate),
+            inicial: divisaoInicial(v),
+            dividida: temDivisao(v),
+            tetoDeHoje: v.limits.month_micros,
+            sugestao: sugestaoDoPlano(v),
+            nomeDoMes: mes.nome,
+          }
+        : null,
   };
 }
 

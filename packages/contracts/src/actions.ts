@@ -559,6 +559,15 @@ export const BudgetMonthResponse = z.strictObject({
       .optional(),
     /** A função `verba_por_plataforma` está ligada para a empresa (a tela oferece dividir). Opcional, como a de cima. */
     platform_parts_enabled: z.boolean().optional(),
+    /**
+     * A divisão que o plano do trimestre aprovado mais recente propõe (D-A4-38): a verba de cada plataforma por mês, para
+     * o formulário oferecer "Usar a divisão do plano". Só para quem muda os limites, com a função ligada; nula sem plano
+     * aprovado. Opcional, como as de cima.
+     */
+    plan_parts: z
+      .array(z.strictObject({ provider: z.string().regex(/^[a-z_]{2,30}$/), micros: Micros }))
+      .nullable()
+      .optional(),
   }),
   /** O que sobra do teto do mês: teto − previsão − aumentos de hoje. Negativo quando o mês passa do teto; nulo sem teto. */
   remaining_micros: z.int().nullable(),

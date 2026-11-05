@@ -124,26 +124,56 @@ export function GraficoDoMes({ mes }: { mes: MesDesenhado }) {
   );
 }
 
-/** "Onde o gasto foi": uma barra por plataforma, na mesma régua, com o valor e a parte do gasto escritos ao lado. */
-export function OndeOGastoFoi({ plataformas }: { plataformas: PlataformaDesenhada[] }) {
+/**
+ * "Onde o gasto foi": uma barra por plataforma, na mesma régua, com o valor e a parte do gasto escritos ao lado. Com a
+ * divisão por plataforma (P36, D-A4-39), a marca da parte de cada uma na barra, o selo e a frase curta embaixo.
+ */
+export function OndeOGastoFoi({ plataformas, mes }: { plataformas: PlataformaDesenhada[]; mes: { ultimoDia: number } }) {
+  const comParte = plataformas.some((p) => p.marca !== null);
   return (
     <div className="vb-onde">
       <h3>Onde o gasto foi</h3>
-      <ul className="vb-plats">
+      <ul className={comParte ? 'vb-plats vb-plats--partes' : 'vb-plats'}>
         {plataformas.map((p) => (
           <li key={p.provider}>
             <span className={p.classe ? `plat plat--${p.classe}` : 'plat'}>{p.nome}</span>
-            <div className="vb-trilho" role="img" aria-label={p.rotulo}>
+            <div className={p.acima ? 'vb-trilho vb-trilho--acima' : 'vb-trilho'} role="img" aria-label={p.rotulo}>
               <span className="gasto" style={{ width: `${p.gasto}%` }} data-dica={p.dicaGasto} />
               {p.aMais > 0 && <span className="previsto" style={{ left: `calc(${p.gasto}% + 2px)`, width: `max(0px, calc(${p.aMais}% - 2px))` }} data-dica={p.dicaPrevisto} />}
+              {p.marca !== null && <span className="vb-marca-parte" style={{ left: `${p.marca}%` }} data-dica={p.dicaParte ?? undefined} />}
             </div>
             <p className="vb-valor">
               <b>{p.valor}</b>
               {p.parte && <span>{p.parte}</span>}
             </p>
+            {p.selo && p.frase && (
+              <p className="vb-situacao-parte">
+                <span className={`st st--${p.selo.classe}`}>
+                  <span className="dot" />
+                  {p.selo.rotulo}
+                </span>
+                <span>{p.frase}</span>
+              </p>
+            )}
           </li>
         ))}
       </ul>
+      {comParte && (
+        <p className="mes-leg vb-leg-partes" aria-hidden="true">
+          <span>
+            <i className="lg-lido" />
+            Gasto até ontem
+          </span>
+          <span>
+            <i className="lg-prev" />
+            Previsto até o dia {mes.ultimoDia}
+          </span>
+          <span>
+            <i className="lg-teto" />
+            Parte da plataforma
+          </span>
+        </p>
+      )}
     </div>
   );
 }
