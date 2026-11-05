@@ -554,7 +554,9 @@ export class EquipeService {
     const rede = await tx.execute(sql`
       select 1 from liame.connected_account a
        where a.brand_id = ${brandId} and a.provider in ${CANAIS_DO_POST.map((c) => PROVEDOR_DO_CANAL[c])} and ${contaConectada('a')} limit 1`);
-    const foto = await tx.execute(sql`select 1 from liame.brand_photo f where f.brand_id = ${brandId} and f.status = 'pronta' and f.removed_at is null limit 1`);
+    const foto = await tx.execute(
+      sql`select 1 from liame.brand_photo f where f.brand_id = ${brandId} and f.status = 'pronta' and f.removed_at is null and f.kind = 'foto_produto' limit 1`,
+    );
     const hoje = diaNoFuso(agora, fuso);
     const pauta = await itensDaPauta(tx, tenantId, brandId, hoje, somarDias(hoje, 14));
     const fila = (

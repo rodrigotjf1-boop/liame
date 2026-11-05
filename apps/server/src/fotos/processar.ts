@@ -129,3 +129,36 @@ export async function processarFoto(entrada: Buffer, carregar: () => Promise<Sha
     };
   });
 }
+
+/**
+ * A capa do vídeo (A6 · Z10; D-A6-70): um quadro que a tela tira do próprio vídeo (o do meio, por padrão) e manda como
+ * imagem. Vira só a miniatura da grade, sem o mínimo de 600 px da foto (o quadro de um vídeo em 480p é legítimo) e sem
+ * os dados do arquivo. Recusa com `RecusaDaFoto` o que não é imagem; sem o sharp, `SemSharp`.
+ */
+export async function processarCapa(entrada: Buffer, carregar: () => Promise<Sharp> = carregarSharp): Promise<ImagemGravada> {
+  const tipo = tipoPeloConteudo(entrada);
+  if (tipo === 'heic') throw new RecusaDaFoto('heic');
+  if (tipo === 'outro') throw new RecusaDaFoto('formato');
+  const sharp = await carregar();
+  return naVez(async () => {
+    const abrir = () => sharp(entrada, { failOn: 'error', limitInputPixels: L.maxLongSide * L.maxLongSide });
+    let meta: Metadata;
+    try {
+      meta = await abrir().metadata();
+    } catch {
+      throw new RecusaDaFoto('nao_abre');
+    }
+    if (meta.format !== tipo) throw new RecusaDaFoto('nao_abre');
+    try {
+      const mini = await abrir()
+        .rotate()
+        .resize({ width: LADO_DA_MINIATURA, height: LADO_DA_MINIATURA, fit: 'outside', withoutEnlargement: true })
+        .flatten({ background: '#ffffff' })
+        .jpeg({ quality: 78, mozjpeg: true })
+        .toBuffer({ resolveWithObject: true });
+      return { bytes: mini.data, largura: mini.info.width, altura: mini.info.height };
+    } catch {
+      throw new RecusaDaFoto('nao_abre');
+    }
+  });
+}

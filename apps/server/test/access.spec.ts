@@ -81,7 +81,7 @@ describe('A1-4: toda rota declara o acesso e nega sem sessão', () => {
     }
   });
 
-  it('fora da transação da requisição só rodam as rotas revisadas: as que esperam um modelo de IA (A3, I4 e I10), a que lê o objeto na plataforma de anúncio (A4, X8), as duas que leem as conversões da conta no Google (A5, Y1), o começo de uma conexão (o pedido empurrado do RegemCast, Hub DMS B1), o envio de uma foto (A6, Z4), o PIX de uma fatura (A7, W2a), o logo da agência e o relatório que ela manda ao cliente (A7, W7)', () => {
+  it('fora da transação da requisição só rodam as rotas revisadas: as que esperam um modelo de IA (A3, I4 e I10), a que lê o objeto na plataforma de anúncio (A4, X8), as duas que leem as conversões da conta no Google (A5, Y1), o começo de uma conexão (o pedido empurrado do RegemCast, Hub DMS B1), o envio de uma foto (A6, Z4), o PIX de uma fatura (A7, W2a), o logo da agência e o relatório que ela manda ao cliente (A7, W7), a conferência e a capa do vídeo das Fotos (A6, Z10)', () => {
     const semTransacao = listRoutes(api.app)
       .filter((r) => r.semTransacao)
       .map((r) => `${r.method} ${r.path}`)
@@ -109,6 +109,10 @@ describe('A1-4: toda rota declara o acesso e nega sem sessão', () => {
     // `GET /v1/billing/invoices/:id/pix` (A7, W2a): lê e reserva a fatura numa transação curta, com a empresa no contexto
     // da RLS; procura e cria no Asaas o cliente e a cobrança, e lê o QR Code, sem transação aberta; e grava a referência
     // da cobrança noutra transação curta. Sem auditoria: só lê e liga a fatura à cobrança dela (nenhum dinheiro muda).
+    // As duas do vídeo nas Fotos (A6, Z10, parte 1): `POST /v1/brand-photos/:id/video` lê a linha numa transação curta,
+    // o tamanho e o cabeçalho do vídeo no armazenamento sem transação aberta, e marca o vídeo pronto com o evento de
+    // auditoria (manual) noutra transação curta (o recusado sai da lista, sem auditoria, como a foto que falha).
+    // `PUT /v1/brand-photos/:id/cover`: o caminho do logo, para a capa do vídeo (a miniatura, com a auditoria manual).
     expect(semTransacao).toEqual([
       'GET /v1/actions/options',
       'GET /v1/agency-logos/:arquivo',
@@ -123,9 +127,11 @@ describe('A1-4: toda rota declara o acesso e nega sem sessão', () => {
       'POST /v1/ai/explain/attention',
       'POST /v1/ai/explain/results',
       'POST /v1/brand-photos',
+      'POST /v1/brand-photos/:id/video',
       'POST /v1/connections',
       'POST /v1/conversations/messages',
       'PUT /v1/agency/brand/logo',
+      'PUT /v1/brand-photos/:id/cover',
       'PUT /v1/conversions/google/destination',
     ]);
   });

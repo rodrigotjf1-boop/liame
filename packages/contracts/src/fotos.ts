@@ -25,6 +25,50 @@ export const BRAND_PHOTO_LIMITS = {
   descriptionMax: 120,
 } as const;
 
+/**
+ * Os limites do vídeo das Fotos (A6 · Z10; D-A6-68, aprovada pelo dono em 04/11/2026): MP4 ou MOV, de 3 a 90 segundos
+ * (os 90 s são o máximo do Reels da Página: um arquivo só serve para os dois Reels, o TikTok e o YouTube Shorts), até
+ * 300 MB, com até 1.920 px de largura (a do Reels). O vídeo vai como a loja gravou: em H.264 ou HEVC, com o áudio em AAC.
+ */
+export const BRAND_VIDEO_LIMITS = {
+  maxBytes: 300 * 1024 * 1024,
+  minDurationMs: 3_000,
+  maxDurationMs: 90_000,
+  maxWidth: 1920,
+  /** Quanto vale o endereço de envio direto (o bucket recusa assinatura com mais de 10 minutos). */
+  uploadSeconds: 600,
+} as const;
+
+/** Os formatos do vídeo: o tipo que o navegador manda no envio (e que vai na assinatura). */
+export const BrandVideoMediaType = z.enum(['video/mp4', 'video/quicktime']);
+
+/** Pedir o envio de um vídeo (com a função `videos` ligada): o servidor guarda o pedido e devolve o endereço de envio. */
+export const CreateBrandVideoRequest = z.strictObject({
+  brand_id: z.uuid(),
+  media_type: BrandVideoMediaType,
+  /**
+   * O tamanho exato do arquivo, em bytes (até 300 MB): entra na assinatura do endereço de envio, e o armazenamento
+   * recusa o arquivo de outro tamanho. Conferido de novo quando o envio termina.
+   */
+  bytes: z.int().min(1).max(BRAND_VIDEO_LIMITS.maxBytes),
+});
+export type CreateBrandVideoRequest = z.infer<typeof CreateBrandVideoRequest>;
+
+/**
+ * O endereço de envio direto: o navegador manda o arquivo (com exatamente os `bytes` do pedido) com `PUT` e o cabeçalho
+ * `content-type` como está aqui, até `expires_at`; depois, pede a conferência (`POST /v1/brand-photos/{id}/video`).
+ */
+export const BrandVideoUploadResponse = z.strictObject({
+  id: z.uuid(),
+  upload: z.strictObject({
+    url: z.string().min(1),
+    method: z.string().regex(/^[A-Z]{3,6}$/),
+    headers: z.strictObject({ 'content-type': z.string().min(1) }),
+    expires_at: z.iso.datetime(),
+  }),
+});
+export type BrandVideoUploadResponse = z.infer<typeof BrandVideoUploadResponse>;
+
 export const BrandPhotosQuery = z.strictObject({ brand_id: z.uuid() });
 export type BrandPhotosQuery = z.infer<typeof BrandPhotosQuery>;
 
@@ -58,6 +102,22 @@ export const BrandPhoto = z.strictObject({
   url: z.string().min(1),
   thumbnail_url: z.string().min(1),
   urls_expire_at: z.iso.datetime(),
+  /**
+   * O que é (A6 · Z10): `foto_produto` ou `video` (a lista pode crescer). No vídeo, `url` é o do arquivo, e
+   * `thumbnail_url` o da capa (um quadro do vídeo; o do próprio arquivo enquanto a capa não chega). Opcional: a resposta
+   * de antes de 05/11/2026 não traz.
+   */
+  kind: Slug.optional(),
+  /** O vídeo: a duração, o formato, se tem som e se a capa já chegou; nulo na foto. Opcional, como o de cima. */
+  video: z
+    .strictObject({
+      duration_ms: z.int().min(1),
+      media_type: z.string().min(1),
+      has_audio: z.boolean(),
+      has_cover: z.boolean(),
+    })
+    .nullable()
+    .optional(),
 });
 export type BrandPhoto = z.infer<typeof BrandPhoto>;
 
@@ -69,6 +129,8 @@ export const BrandPhotosResponse = z.strictObject({
   can_manage: z.boolean(),
   /** Os produtos de Minha marca, na ordem de lá: as opções do campo "Produto". */
   products: z.array(z.string()),
+  /** A função `videos` está ligada para a empresa: a tela aceita vídeo (A6 · Z10). Opcional: a resposta de antes não traz. */
+  videos_enabled: z.boolean().optional(),
   /** As fotos da marca, a mais nova primeiro (até 500). */
   items: z.array(BrandPhoto),
 });

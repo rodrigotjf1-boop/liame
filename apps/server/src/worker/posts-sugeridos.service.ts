@@ -342,6 +342,7 @@ export class PostsSugeridosService {
       await tx.execute<{ id: string; product: string | null; description: string }>(sql`
         select id, product, description from liame.brand_photo
          where tenant_id = ${alvo.tenantId} and brand_id = ${s.brand_id} and status = 'pronta' and removed_at is null
+           and kind = 'foto_produto'
          order by created_at desc, id desc
          limit ${FOTOS_NO_PEDIDO}`)
     ).rows;

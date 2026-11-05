@@ -8,6 +8,11 @@ import { type JobScope, tenantFilter } from './outbox-publisher.js';
 
 /** O envio que não terminou em 15 minutos é limpo: a linha `enviando` que ficou para trás (a rota caiu no meio). */
 export const ENVIO_ABANDONADO_MIN = 15;
+/**
+ * O envio do vídeo (A6 · Z10) tem 2 horas: o arquivo de até 300 MB vai do navegador ao armazenamento, e numa conexão
+ * lenta demora; o endereço de envio vale 10 minutos para começar, e o envio que começou termina depois disso.
+ */
+export const ENVIO_DO_VIDEO_ABANDONADO_MIN = 120;
 
 function mensagem(err: unknown): string {
   return err instanceof Error ? err.message : String(err);
@@ -32,10 +37,13 @@ export class FotosLoop {
     if (!this.database || !this.armazem.disponivel) return [];
     const db = this.database.db;
     const abandonado = new Date(agora.getTime() - ENVIO_ABANDONADO_MIN * 60_000).toISOString();
+    const videoAbandonado = new Date(agora.getTime() - ENVIO_DO_VIDEO_ABANDONADO_MIN * 60_000).toISOString();
     const devidas = await withSystem(db, (tx) =>
       tx.execute<{ id: string; object_key: string }>(sql`
         select id, object_key from liame.brand_photo
-         where (removed_at is not null or (status = 'enviando' and created_at < ${abandonado})) ${tenantFilter(scope, sql`tenant_id`)}
+         where (removed_at is not null
+                or (status = 'enviando' and created_at < case when kind = 'video' then ${videoAbandonado}::timestamptz else ${abandonado}::timestamptz end))
+           ${tenantFilter(scope, sql`tenant_id`)}
          order by updated_at, id
          limit ${limite}`),
     );

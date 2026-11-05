@@ -1,5 +1,15 @@
-import { BrandPhoto, BrandPhotosQuery, BrandPhotosResponse, BrandPhotoUploadQuery, ProblemDetails, ResourceId, UpdateBrandPhotoRequest } from '@liame/contracts';
-import { Body, Controller, Delete, Get, HttpCode, Param, Patch, Post, Query, Req } from '@nestjs/common';
+import {
+  BrandPhoto,
+  BrandPhotosQuery,
+  BrandPhotosResponse,
+  BrandPhotoUploadQuery,
+  BrandVideoUploadResponse,
+  CreateBrandVideoRequest,
+  ProblemDetails,
+  ResourceId,
+  UpdateBrandPhotoRequest,
+} from '@liame/contracts';
+import { Body, Controller, Delete, Get, HttpCode, Param, Patch, Post, Put, Query, Req } from '@nestjs/common';
 import {
   ApiBadGatewayResponse,
   ApiBadRequestResponse,
@@ -22,7 +32,7 @@ import { Auditar } from '../audit/auditar.js';
 import { Auth, Permissao } from '../auth/access.js';
 import type { AuthContext } from '../context/request-context.js';
 import { SemTransacao } from '../context/sem-transacao.js';
-import { ACAO_ENVIAR, FotosService, RECURSO } from './fotos.service.js';
+import { ACAO_CAPA, ACAO_ENVIAR, ACAO_VIDEO_CONCLUIR, FotosService, RECURSO } from './fotos.service.js';
 
 // Fotos dos produtos (A6, Z4; ADR-021; protótipo P20, aprovado em 21/10/2026). A tela Fotos: a lista, enviar uma foto
 // (o arquivo cru no corpo, um por pedido), mudar o produto ou o que aparece nela, e apagar. Nada vai para rede
@@ -30,6 +40,9 @@ import { ACAO_ENVIAR, FotosService, RECURSO } from './fotos.service.js';
 
 const GRAVA_NO_ARMAZEM =
   'grava a foto no armazenamento de imagens (S3) depois de conferir e regravar o arquivo: o banco em transações curtas, antes e depois, e o envio do arquivo sem transação aberta';
+const LE_O_VIDEO =
+  'lê o cabeçalho do vídeo no armazenamento (S3) para conferir o arquivo: o banco em transações curtas, antes e depois, e a leitura sem transação aberta';
+const GRAVA_A_CAPA = 'grava a capa do vídeo no armazenamento (S3) depois de conferir e regravar a imagem: o banco em transações curtas, antes e depois';
 
 @ApiTags('fotos')
 @ApiCookieAuth('liame_sessao')
@@ -76,6 +89,73 @@ export class FotosController {
   @ApiServiceUnavailableResponse({ standardSchema: ProblemDetails })
   enviar(@Auth() auth: AuthContext, @Query({ schema: BrandPhotoUploadQuery }) query: BrandPhotoUploadQuery, @Req() req: { body?: unknown }): Promise<BrandPhoto> {
     return this.fotos.enviar(auth, query.brand_id, req.body);
+  }
+
+  // ------------------------------------------------------------------ o vídeo (A6 · Z10, parte 1; P37)
+
+  @Post('videos')
+  @HttpCode(201)
+  @Permissao('fotos.enviar')
+  @Auditar('fotos.video_pedir', { recurso: RECURSO })
+  @ApiOperation({
+    summary: 'Pedir o envio de um vídeo',
+    description:
+      'Com as funções `fotos` e `videos` ligadas (409 `funcao-desligada`): guarda o pedido e devolve o endereço de envio direto ao armazenamento, que vale 10 minutos. O navegador manda o arquivo (MP4 ou MOV, até 300 MB, com exatamente os `bytes` do pedido: o tipo e o tamanho entram na assinatura, e o armazenamento recusa outro) com o método e o `content-type` da resposta, sem passar pelo servidor do Liame, e depois pede a conferência (`POST /v1/brand-photos/{id}/video`). O envio que não for concluído sai sozinho em até 2 horas. Sem o armazenamento na nuvem, 503 `videos-indisponiveis`.',
+  })
+  @ApiCreatedResponse({ standardSchema: BrandVideoUploadResponse })
+  @ApiBadRequestResponse({ standardSchema: ProblemDetails })
+  @ApiForbiddenResponse({ standardSchema: ProblemDetails })
+  @ApiNotFoundResponse({ standardSchema: ProblemDetails })
+  @ApiConflictResponse({ standardSchema: ProblemDetails })
+  @ApiServiceUnavailableResponse({ standardSchema: ProblemDetails })
+  pedirEnvioDeVideo(@Auth() auth: AuthContext, @Body({ schema: CreateBrandVideoRequest }) body: CreateBrandVideoRequest): Promise<BrandVideoUploadResponse> {
+    return this.fotos.pedirEnvioDeVideo(auth, body);
+  }
+
+  @Post(':id/video')
+  @HttpCode(200)
+  @Permissao('fotos.enviar')
+  @SemTransacao(LE_O_VIDEO)
+  @Auditar(ACAO_VIDEO_CONCLUIR, { manual: true, recurso: RECURSO })
+  @ApiOperation({
+    summary: 'Conferir o vídeo enviado',
+    description:
+      'Confere o vídeo que chegou ao armazenamento pelo cabeçalho do arquivo, sem baixá-lo inteiro: até 300 MB (422 `video-grande-demais`), MP4 ou MOV que abre (422 `video-nao-abre`), H.264 ou HEVC com o som em AAC (422 `video-codec`), de 3 a 90 segundos (422 `video-curto`, `video-longo`) e até 1080p, 1.920 px no lado maior (422 `video-resolucao`). Recusado, o vídeo sai da lista. Pronto, devolve o vídeo como a lista mostra; pedir de novo o que já ficou pronto devolve o mesmo. O arquivo que ainda não chegou responde 409 `video-nao-chegou`; a leitura que falha, 502 `video-nao-conferido`.',
+  })
+  @ApiOkResponse({ standardSchema: BrandPhoto })
+  @ApiForbiddenResponse({ standardSchema: ProblemDetails })
+  @ApiNotFoundResponse({ standardSchema: ProblemDetails })
+  @ApiConflictResponse({ standardSchema: ProblemDetails })
+  @ApiUnprocessableEntityResponse({ standardSchema: ProblemDetails })
+  @ApiBadGatewayResponse({ standardSchema: ProblemDetails })
+  @ApiServiceUnavailableResponse({ standardSchema: ProblemDetails })
+  concluirVideo(@Auth() auth: AuthContext, @Param('id', { schema: ResourceId }) id: string): Promise<BrandPhoto> {
+    return this.fotos.concluirVideo(auth, id);
+  }
+
+  @Put(':id/cover')
+  @HttpCode(200)
+  @Permissao('fotos.enviar')
+  @SemTransacao(GRAVA_A_CAPA)
+  @Auditar(ACAO_CAPA, { manual: true, recurso: RECURSO })
+  @ApiConsumes('image/jpeg', 'image/png', 'image/webp')
+  @ApiBody({ description: 'A imagem da capa (um quadro do vídeo), crua.', schema: { type: 'string', format: 'binary' } })
+  @ApiOperation({
+    summary: 'Gravar a capa do vídeo',
+    description:
+      'Um quadro do próprio vídeo (D-A6-70), que a tela tira e manda como imagem (JPEG, PNG ou WebP, até 10 MB): vira a miniatura da grade. Só no vídeo pronto (404 `foto-nao-encontrada`). A imagem que não abre responde 422.',
+  })
+  @ApiOkResponse({ standardSchema: BrandPhoto })
+  @ApiBadRequestResponse({ standardSchema: ProblemDetails })
+  @ApiForbiddenResponse({ standardSchema: ProblemDetails })
+  @ApiNotFoundResponse({ standardSchema: ProblemDetails })
+  @ApiConflictResponse({ standardSchema: ProblemDetails })
+  @ApiPayloadTooLargeResponse({ standardSchema: ProblemDetails })
+  @ApiUnprocessableEntityResponse({ standardSchema: ProblemDetails })
+  @ApiBadGatewayResponse({ standardSchema: ProblemDetails })
+  @ApiServiceUnavailableResponse({ standardSchema: ProblemDetails })
+  gravarCapa(@Auth() auth: AuthContext, @Param('id', { schema: ResourceId }) id: string, @Req() req: { body?: unknown }): Promise<BrandPhoto> {
+    return this.fotos.gravarCapa(auth, id, req.body);
   }
 
   @Patch(':id')

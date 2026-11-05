@@ -5,7 +5,13 @@ import { APP_CONFIG, type AppConfig } from './config.js';
 import { HubDms } from './connectors/dms/hub.js';
 import { ProblemDetailsFilter } from './errors/problem.filter.js';
 import { issuesToErrors, ValidationProblem } from './errors/problems.js';
-import { leitorDaFoto, ROTA_DO_DOCUMENTO_DA_RECUPERACAO, ROTA_DO_LOGO_DA_AGENCIA, ROTA_DOS_DOCUMENTOS_DA_PROPRIEDADE } from './fotos/leitor-da-foto.js';
+import {
+  leitorDaFoto,
+  ROTA_DA_CAPA_DO_VIDEO,
+  ROTA_DO_DOCUMENTO_DA_RECUPERACAO,
+  ROTA_DO_LOGO_DA_AGENCIA,
+  ROTA_DOS_DOCUMENTOS_DA_PROPRIEDADE,
+} from './fotos/leitor-da-foto.js';
 import { applyHttpSecurity } from './http-security.js';
 import { leitorDoCorpoSemCompressao } from './leitor-do-corpo.js';
 import { API_PREFIX, API_PREFIX_EXCLUDE } from './setup-constants.js';
@@ -24,6 +30,9 @@ export function configureApp(app: INestApplication): void {
   app.use(leitorDaFoto(ROTA_DO_DOCUMENTO_DA_RECUPERACAO.limite, ROTA_DO_DOCUMENTO_DA_RECUPERACAO));
   // E os documentos do pedido da propriedade à DMS (A7, W8, parte 6a), um por vez, até 10 MB cada.
   app.use(leitorDaFoto(ROTA_DOS_DOCUMENTOS_DA_PROPRIEDADE.limite, ROTA_DOS_DOCUMENTOS_DA_PROPRIEDADE));
+  // E a capa do vídeo das Fotos (A6 · Z10, parte 1), um quadro do vídeo, até 10 MB. O vídeo em si não passa por aqui:
+  // vai do navegador direto ao armazenamento.
+  app.use(leitorDaFoto(ROTA_DA_CAPA_DO_VIDEO.limite, ROTA_DA_CAPA_DO_VIDEO));
   // O JSON e o formulário sem descompressão: corpo comprimido recebe 415 (o boletim do Node de 21/10/2026, LIC-451).
   leitorDoCorpoSemCompressao(app);
   app.setGlobalPrefix(API_PREFIX, { exclude: API_PREFIX_EXCLUDE });

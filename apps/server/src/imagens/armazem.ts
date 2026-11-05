@@ -1,4 +1,4 @@
-import { mkdir, readdir, readFile, rm, unlink, writeFile } from 'node:fs/promises';
+import { mkdir, open, readdir, readFile, rm, stat, unlink, writeFile } from 'node:fs/promises';
 import { dirname, join, resolve, sep } from 'node:path';
 import { z } from 'zod';
 
@@ -26,6 +26,26 @@ export interface ArmazemDeImagens {
   enderecoDeLeitura(chave: string, segundos: number, baixarComo?: string): Promise<string>;
   /** Os bytes da imagem guardada (o recorte do post do Instagram sai da cópia da foto). */
   ler(chave: string): Promise<Buffer>;
+  /**
+   * O endereço de ENVIO direto do vídeo (A6 · Z10): o navegador manda o arquivo ao armazenamento, sem passar pelo
+   * servidor do Liame, com o `tipo` (Content-Type) e o tamanho (`bytes`, o Content-Length) que vão na assinatura: o
+   * armazenamento recusa outro tipo ou outro tamanho. Vale `segundos`. Nulo onde o envio direto não existe (o disco do
+   * desenvolvimento, ou o S3 sem o assinador do envio); nos testes, a memória devolve um endereço de mentira.
+   */
+  enderecoDeEnvio(chave: string, tipo: string, bytes: number, segundos: number): Promise<string | null>;
+  /** O tamanho do objeto em bytes; nulo quando ele não existe (o envio que não chegou). */
+  tamanho(chave: string): Promise<number | null>;
+  /** Os bytes de `inicio` a `fim` (inclusive) do objeto: a leitura do cabeçalho do vídeo, aos pedaços. */
+  lerTrecho(chave: string, inicio: number, fim: number): Promise<Buffer>;
+}
+
+/** O maior trecho que o servidor lê de uma vez (o cabeçalho do vídeo de 90 s cabe com folga). */
+export const MAIOR_TRECHO_BYTES = 8 * 1024 * 1024;
+
+function exigirTrecho(inicio: number, fim: number): void {
+  if (!Number.isSafeInteger(inicio) || !Number.isSafeInteger(fim) || inicio < 0 || fim < inicio || fim - inicio + 1 > MAIOR_TRECHO_BYTES) {
+    throw new Error('armazenamento de imagens: trecho fora do desenho');
+  }
 }
 
 /** A função de imagem está indisponível (produção sem o bucket). */
@@ -59,7 +79,8 @@ function exigirNome(nome: string | undefined): void {
 export const MAIOR_LEITURA_BYTES = 20 * 1024 * 1024;
 
 // As chaves que o Liame grava e os prefixos que apaga. A foto das Fotos (`t/{empresa}/b/{marca}/foto_produto/{id}.jpg`)
-// e a miniatura dela; o recorte do post do Instagram (`t/{empresa}/b/{marca}/post/{post}-instagram.jpg`, A6 · Z5b); o
+// e a miniatura dela; o vídeo das Fotos (`t/{empresa}/b/{marca}/video/{id}.mp4` ou `.mov`, A6 · Z10) e a capa dele
+// (`{id}-mini.jpg`); o recorte do post do Instagram (`t/{empresa}/b/{marca}/post/{post}-instagram.jpg`, A6 · Z5b); o
 // logo da agência (`t/{agência}/agencia/logo/{id}.jpg`, A7 · W7, parte 3). Conferidas parte por parte antes de qualquer
 // gravação, leitura ou apagamento: nada fora do desenho chega ao disco ou ao bucket.
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
@@ -80,7 +101,14 @@ function chaveValida(chave: string): boolean {
   if (p.length === 5) return p[2] === 'agencia' && p[3] === 'logo' && ehUuid(p[1] ?? '') && ehUuid(semFinal(p[4] ?? '', ['.jpg']));
   if (p.length !== 6 || p[2] !== 'b') return false;
   const arquivo = p[5] ?? '';
-  const id = p[4] === 'foto_produto' ? semFinal(arquivo, ['-mini.jpg', '.jpg']) : p[4] === 'post' ? semFinal(arquivo, ['-instagram.jpg']) : '';
+  const id =
+    p[4] === 'foto_produto'
+      ? semFinal(arquivo, ['-mini.jpg', '.jpg'])
+      : p[4] === 'video'
+        ? semFinal(arquivo, ['-mini.jpg', '.mp4', '.mov'])
+        : p[4] === 'post'
+          ? semFinal(arquivo, ['-instagram.jpg'])
+          : '';
   return ehUuid(p[1] ?? '') && ehUuid(p[3] ?? '') && ehUuid(id);
 }
 
@@ -146,6 +174,33 @@ export class ArmazemNaMemoria implements ArmazemDeImagens {
     exigirNome(baixarComo);
     return `memoria://imagens/${chave}?valido=${segundos}${baixarComo ? `&baixar=${baixarComo}` : ''}`;
   }
+
+  /** Nos testes, o envio é de mentira: quem testa grava o arquivo com `chegou` (como o navegador faria). */
+  async enderecoDeEnvio(chave: string, tipo: string, bytes: number, segundos: number): Promise<string | null> {
+    exigirChave(chave);
+    return `memoria://envio/${chave}?tipo=${encodeURIComponent(tipo)}&bytes=${bytes}&valido=${segundos}`;
+  }
+
+  /** O arquivo que o navegador mandou pelo endereço de envio (nos testes). */
+  chegou(chave: string, bytes: Buffer): void {
+    exigirChave(chave);
+    this.objetos.set(chave, Buffer.from(bytes));
+  }
+
+  async tamanho(chave: string): Promise<number | null> {
+    exigirChave(chave);
+    if (this.falhar.ler) throw new FalhaDoArmazem('memória: falha simulada ao ler');
+    return this.objetos.get(chave)?.length ?? null;
+  }
+
+  async lerTrecho(chave: string, inicio: number, fim: number): Promise<Buffer> {
+    exigirChave(chave);
+    exigirTrecho(inicio, fim);
+    if (this.falhar.ler) throw new FalhaDoArmazem('memória: falha simulada ao ler');
+    const bytes = this.objetos.get(chave);
+    if (!bytes) throw new FalhaDoArmazem('memória: a chave não tem arquivo', true);
+    return Buffer.from(bytes.subarray(inicio, fim + 1));
+  }
 }
 
 /** No desenvolvimento: uma pasta fora do git. O endereço de leitura é a própria imagem (`data:`), sem rota nova. */
@@ -198,6 +253,41 @@ export class ArmazemNoDisco implements ArmazemDeImagens {
       throw new FalhaDoArmazem(`disco: ${codigo ?? 'erro'}`, codigo === 'ENOENT');
     }
   }
+
+  /** No desenvolvimento não há envio direto: o vídeo precisa do bucket. */
+  async enderecoDeEnvio(chave: string): Promise<string | null> {
+    exigirChave(chave);
+    return null;
+  }
+
+  async tamanho(chave: string): Promise<number | null> {
+    exigirChave(chave);
+    try {
+      return (await stat(this.caminho(chave))).size;
+    } catch (e) {
+      if ((e as NodeJS.ErrnoException).code === 'ENOENT') return null;
+      throw new FalhaDoArmazem(`disco: ${(e as NodeJS.ErrnoException).code ?? 'erro'}`);
+    }
+  }
+
+  async lerTrecho(chave: string, inicio: number, fim: number): Promise<Buffer> {
+    exigirChave(chave);
+    exigirTrecho(inicio, fim);
+    let arquivo;
+    try {
+      arquivo = await open(this.caminho(chave), 'r');
+    } catch (e) {
+      const codigo = (e as NodeJS.ErrnoException).code;
+      throw new FalhaDoArmazem(`disco: ${codigo ?? 'erro'}`, codigo === 'ENOENT');
+    }
+    try {
+      const destino = Buffer.alloc(fim - inicio + 1);
+      const { bytesRead } = await arquivo.read(destino, 0, destino.length, inicio);
+      return destino.subarray(0, bytesRead);
+    } finally {
+      await arquivo.close();
+    }
+  }
 }
 
 /** Em produção sem o bucket: indisponível. */
@@ -219,19 +309,37 @@ export class ArmazemFechado implements ArmazemDeImagens {
   ler(): Promise<Buffer> {
     return Promise.reject(new ArmazemIndisponivel());
   }
+  enderecoDeEnvio(): Promise<string | null> {
+    return Promise.reject(new ArmazemIndisponivel());
+  }
+  tamanho(): Promise<number | null> {
+    return Promise.reject(new ArmazemIndisponivel());
+  }
+  lerTrecho(): Promise<Buffer> {
+    return Promise.reject(new ArmazemIndisponivel());
+  }
 }
 
 /** O que o adaptador do S3 usa do SDK: os comandos, o cliente e o assinador (trocáveis nos testes). */
 export interface SdkDoS3 {
-  PutObjectCommand: new (input: { Bucket: string; Key: string; Body: Buffer; ContentType: string; CacheControl: string }) => unknown;
+  PutObjectCommand: new (input: { Bucket: string; Key: string; Body?: Buffer; ContentType: string; CacheControl?: string; ContentLength?: number }) => unknown;
   DeleteObjectsCommand: new (input: { Bucket: string; Delete: { Objects: Array<{ Key: string }>; Quiet: boolean } }) => unknown;
   ListObjectsV2Command: new (input: { Bucket: string; Prefix: string; ContinuationToken?: string; MaxKeys: number }) => unknown;
-  GetObjectCommand: new (input: { Bucket: string; Key: string; ResponseContentDisposition?: string }) => unknown;
+  GetObjectCommand: new (input: { Bucket: string; Key: string; ResponseContentDisposition?: string; Range?: string }) => unknown;
+  HeadObjectCommand: new (input: { Bucket: string; Key: string }) => unknown;
 }
 export interface ClienteDoS3 {
   send(comando: unknown): Promise<unknown>;
 }
 export type AssinadorDoS3 = (cliente: ClienteDoS3, comando: unknown, segundos: number) => Promise<string>;
+
+/**
+ * Assina o envio direto (PUT) do navegador ao bucket (A6 · Z10). Usa um cliente próprio, que só calcula o checksum
+ * do corpo quando a operação exige: o cliente padrão do SDK põe na URL o CRC32 do corpo VAZIO (o do momento da
+ * assinatura), e o S3 recusaria o vídeo que chega. E assina o `content-type` (o SDK só assina o `host` e o
+ * `content-length`): o arquivo de outro tipo não entra.
+ */
+export type AssinadorDoEnvio = (comando: unknown, segundos: number) => Promise<string>;
 
 /** O nome do erro do SDK, sem a mensagem inteira (que pode trazer o endereço do pedido). */
 function nomeDoErro(e: unknown): string {
@@ -254,14 +362,27 @@ export class ArmazemS3 implements ArmazemDeImagens {
     private readonly cliente: ClienteDoS3,
     private readonly assinar: AssinadorDoS3,
     private readonly bucket: string,
+    /** Sem ele, não há envio direto (`enderecoDeEnvio` devolve nulo): nunca um endereço que o S3 recusaria. */
+    private readonly assinarEnvio: AssinadorDoEnvio | null = null,
   ) {}
 
-  static async criar(regiao: string, bucket: string): Promise<ArmazemS3> {
+  /**
+   * O de produção. `credenciais` só nos testes (a assinatura sem rede); em produção, as do ambiente (o usuário
+   * `liame-sistema`).
+   */
+  static async criar(regiao: string, bucket: string, credenciais?: { accessKeyId: string; secretAccessKey: string }): Promise<ArmazemS3> {
     const s3 = await import('@aws-sdk/client-s3');
     const { getSignedUrl } = await import('@aws-sdk/s3-request-presigner');
-    const cliente = new s3.S3Client({ region: regiao });
+    const cliente = new s3.S3Client({ region: regiao, ...(credenciais ? { credentials: credenciais } : {}) });
     const assinar: AssinadorDoS3 = (c, comando, segundos) => getSignedUrl(c as never, comando as never, { expiresIn: segundos });
-    return new ArmazemS3(s3 as unknown as SdkDoS3, cliente, assinar, bucket);
+    const clienteDoEnvio = new s3.S3Client({
+      region: regiao,
+      requestChecksumCalculation: 'WHEN_REQUIRED',
+      ...(credenciais ? { credentials: credenciais } : {}),
+    });
+    const assinarEnvio: AssinadorDoEnvio = (comando, segundos) =>
+      getSignedUrl(clienteDoEnvio, comando as never, { expiresIn: segundos, signableHeaders: new Set(['content-type']) });
+    return new ArmazemS3(s3 as unknown as SdkDoS3, cliente, assinar, bucket, assinarEnvio);
   }
 
   private async enviar(comando: unknown): Promise<unknown> {
@@ -340,6 +461,59 @@ export class ArmazemS3 implements ArmazemDeImagens {
       throw new FalhaDoArmazem(`S3: ${nomeDoErro(e)}`);
     }
     if (bytes.byteLength > MAIOR_LEITURA_BYTES) throw new FalhaDoArmazem('S3: a imagem passa do tamanho que o servidor lê');
+    return Buffer.from(bytes);
+  }
+
+  /**
+   * O envio direto do vídeo (A6 · Z10): um PUT assinado, com o Content-Type e o Content-Length na assinatura (o
+   * navegador manda os mesmos), pelo assinador do envio (sem o checksum do corpo vazio, ERR-203). O bucket aceita o envio do app pela regra de CORS dele (configuração do bucket, fora do código).
+   */
+  async enderecoDeEnvio(chave: string, tipo: string, bytes: number, segundos: number): Promise<string | null> {
+    exigirChave(chave);
+    if (!this.assinarEnvio) return null;
+    if (!Number.isInteger(bytes) || bytes < 1) throw new Error('armazenamento de imagens: tamanho fora do desenho');
+    // O tipo e o tamanho entram na assinatura: o navegador manda o arquivo com os dois exatamente assim.
+    const comando = new this.sdk.PutObjectCommand({ Bucket: this.bucket, Key: chave, ContentType: tipo, ContentLength: bytes });
+    try {
+      return await this.assinarEnvio(comando, segundos);
+    } catch (e) {
+      throw new FalhaDoArmazem(`S3: ${nomeDoErro(e)}`);
+    }
+  }
+
+  async tamanho(chave: string): Promise<number | null> {
+    exigirChave(chave);
+    let r: { ContentLength?: number } | undefined;
+    try {
+      r = (await this.cliente.send(new this.sdk.HeadObjectCommand({ Bucket: this.bucket, Key: chave }))) as typeof r;
+    } catch (e) {
+      const nome = nomeDoErro(e);
+      // O HEAD do objeto que não existe volta sem corpo: o SDK diz `NotFound` (404).
+      if (nome.startsWith('NotFound') || nome.startsWith('NoSuchKey') || nome.endsWith('(404)')) return null;
+      throw new FalhaDoArmazem(`S3: ${nome}`);
+    }
+    return typeof r?.ContentLength === 'number' ? r.ContentLength : null;
+  }
+
+  async lerTrecho(chave: string, inicio: number, fim: number): Promise<Buffer> {
+    exigirChave(chave);
+    exigirTrecho(inicio, fim);
+    let r: { Body?: { transformToByteArray?: () => Promise<Uint8Array> } } | undefined;
+    try {
+      r = (await this.cliente.send(new this.sdk.GetObjectCommand({ Bucket: this.bucket, Key: chave, Range: `bytes=${inicio}-${fim}` }))) as typeof r;
+    } catch (e) {
+      const nome = nomeDoErro(e);
+      throw new FalhaDoArmazem(`S3: ${nome}`, nome.startsWith('NoSuchKey'));
+    }
+    const corpo = r?.Body;
+    if (!corpo?.transformToByteArray) throw new FalhaDoArmazem('S3: a resposta veio sem o trecho');
+    let bytes: Uint8Array;
+    try {
+      bytes = await corpo.transformToByteArray();
+    } catch (e) {
+      throw new FalhaDoArmazem(`S3: ${nomeDoErro(e)}`);
+    }
+    if (bytes.byteLength > MAIOR_TRECHO_BYTES) throw new FalhaDoArmazem('S3: o trecho passa do que o servidor lê');
     return Buffer.from(bytes);
   }
 }
