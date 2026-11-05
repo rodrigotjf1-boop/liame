@@ -6,10 +6,27 @@ import { Icone } from '@/components/ui/icone';
 import { useDialogo } from '@/components/ui/use-dialogo';
 import { api, chamar, mensagemDe, type Problema } from '@/lib/api';
 import { disparar } from '@/lib/disparar';
-import { DESCRICAO_MAX, medidas, mudancas, NOTA_DE_NITIDEZ, nomeDoProduto, notaDoRecorte, quemEnviou } from './textos';
+import { TelaDoVideo } from './tela-do-video';
+import {
+  canaisDoVideo,
+  DESCRICAO_MAX,
+  deitado,
+  duracaoPorExtenso,
+  ehVideo,
+  medidas,
+  medidasDoVideo,
+  mudancas,
+  NOTA_DE_NITIDEZ,
+  NOTA_DEITADO,
+  nomeDoProduto,
+  notaDoRecorte,
+  quemEnviou,
+} from './textos';
 
 // Uma foto (P20, gaveta à direita): a foto inteira, as notas para o Instagram, o produto (os de Minha marca, ou "Sem
 // produto"), o que aparece nela (opcional), as medidas e quem enviou. Quem envia muda e apaga; quem só vê, vê.
+// O vídeo (A6 · Z10, parte 2; P37): o vídeo para assistir, a nota de deitado, o mesmo produto e "o que aparece", onde
+// ele pode sair, a duração, as medidas como a loja gravou e quem enviou.
 
 type Props = {
   foto: BrandPhoto;
@@ -41,7 +58,9 @@ export function GavetaFoto({ foto, produtos, podeMudar, apagando, agora, reserva
   const [erro, setErro] = useState<{ texto: string; produto: boolean } | null>(null);
   const [enviando, setEnviando] = useState(false);
   const nome = nomeDoProduto(foto.product);
-  const recorte = notaDoRecorte(foto.instagram_crop);
+  const video = ehVideo(foto);
+  const recorte = video ? null : notaDoRecorte(foto.instagram_crop);
+  const ehDeitado = video && deitado(foto);
   const foraDaMarca = foto.product !== null && !produtos.includes(foto.product);
 
   // O erro aparece no começo da gaveta: ela rola até ele.
@@ -76,8 +95,16 @@ export function GavetaFoto({ foto, produtos, podeMudar, apagando, agora, reserva
 
   const fatos: [string, string][] = [
     ...(podeMudar ? [] : ([['Produto', nome], ...(foto.description ? [['O que aparece', foto.description]] : [])] as [string, string][])),
-    ['Medidas', medidas(foto)],
-    ['Enviada', quemEnviou(foto, agora)],
+    ...((video
+      ? [
+          ...(foto.video ? [['Duração', duracaoPorExtenso(foto.video.duration_ms)]] : []),
+          ['Medidas', medidasDoVideo(foto)],
+          ['Enviado', quemEnviou(foto, agora)],
+        ]
+      : [
+          ['Medidas', medidas(foto)],
+          ['Enviada', quemEnviou(foto, agora)],
+        ]) as [string, string][]),
   ];
 
   return (
@@ -96,7 +123,7 @@ export function GavetaFoto({ foto, produtos, podeMudar, apagando, agora, reserva
       <form className="dialogo-form" onSubmit={(e) => disparar(salvar(e))} noValidate>
         <div className="dialogo-cab">
           <div className="dlg-titulo">
-            <p className="rotulo-marca">Foto</p>
+            <p className="rotulo-marca">{video ? 'Vídeo' : 'Foto'}</p>
             <h2 id={`${ids}-t`}>{nome}</h2>
           </div>
           <button className="btn btn--icon btn--ghost" type="button" ref={fecharBt} onClick={fechar} aria-label="Fechar" disabled={enviando}>
@@ -110,7 +137,17 @@ export function GavetaFoto({ foto, produtos, podeMudar, apagando, agora, reserva
               <span>{erro.texto}</span>
             </p>
           )}
-          <img className="ft-ver" src={foto.url} alt={foto.description || `Foto do produto: ${nome}`} referrerPolicy="no-referrer" onError={aoFalharImagem} />
+          {video ? (
+            <TelaDoVideo foto={foto} aoFalhar={aoFalharImagem} />
+          ) : (
+            <img className="ft-ver" src={foto.url} alt={foto.description || `Foto do produto: ${nome}`} referrerPolicy="no-referrer" onError={aoFalharImagem} />
+          )}
+          {ehDeitado && (
+            <p className="ft-nota ft-nota--aviso">
+              <Icone nome="alert" pequeno />
+              <span>{NOTA_DEITADO}</span>
+            </p>
+          )}
           {recorte && (
             <p className="ft-nota">
               <Icone nome="info" pequeno />
@@ -154,7 +191,7 @@ export function GavetaFoto({ foto, produtos, podeMudar, apagando, agora, reserva
               </div>
               <div className="campo">
                 <label htmlFor={`${ids}-desc`}>
-                  O que aparece na foto <span className="campo-dica">(opcional)</span>
+                  {video ? 'O que aparece no vídeo' : 'O que aparece na foto'} <span className="campo-dica">(opcional)</span>
                 </label>
                 <textarea
                   className="input"
@@ -172,6 +209,23 @@ export function GavetaFoto({ foto, produtos, podeMudar, apagando, agora, reserva
               </div>
             </>
           )}
+          {video && (
+            <section aria-labelledby={`${ids}-canais`}>
+              <h3 className="rotulo-marca" id={`${ids}-canais`}>
+                Onde pode sair
+              </h3>
+              <ul className="ft-canais">
+                {canaisDoVideo(ehDeitado).map((c) => (
+                  <li key={c.canal} className={c.tipo === 'voce' ? 'ft-canal-voce' : undefined}>
+                    <Icone nome={c.tipo === 'voce' ? 'arrow-right' : 'check-circle'} pequeno />
+                    <span>
+                      <b>{c.canal}</b>: {c.detalhe}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          )}
           <dl className="ft-fatos">
             {fatos.map(([t, d]) => (
               <div key={t}>
@@ -186,7 +240,7 @@ export function GavetaFoto({ foto, produtos, podeMudar, apagando, agora, reserva
             <>
               <button className="btn btn--perigo" type="button" onClick={aoPedirApagar} aria-haspopup="dialog" aria-expanded={apagando} disabled={enviando}>
                 <Icone nome="trash" />
-                Apagar foto
+                {video ? 'Apagar vídeo' : 'Apagar foto'}
               </button>
               <span className="spacer" />
               <button className="btn" type="button" onClick={fechar} disabled={enviando}>

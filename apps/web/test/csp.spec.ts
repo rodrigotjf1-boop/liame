@@ -81,7 +81,7 @@ describe('CSP do web', () => {
     expect(await hashDeScript(SCRIPT_TEMA)).toBe(esperado);
   });
 
-  it('as fotos (ADR-021): a origem do bucket entra só no img-src, só com o bucket no ambiente e no formato do S3', async () => {
+  it('as fotos e os vídeos (ADR-021; A6 · Z10): a origem do bucket entra no img-src, no media-src e no connect-src das telas do app, só com o bucket no ambiente e no formato do S3', async () => {
     const BUCKET = 'liame-imagens-123456789012-sa-east-1-an';
     const origem = origemDasImagens({ IMAGENS_BUCKET: BUCKET });
     expect(origem).toBe(`https://${BUCKET}.s3.sa-east-1.amazonaws.com`);
@@ -93,14 +93,37 @@ describe('CSP do web', () => {
     expect(origemDasImagens({ IMAGENS_BUCKET: BUCKET, AWS_REGION: 'sa-east-1; img-src *' })).toBeNull();
     const hashTema = await hashDeScript(SCRIPT_TEMA);
     const d = diretivas(cspComNonce({ ...base, imagens: origem, nonce: 'n', hashTema }));
-    essencial(d);
+    essencial({ ...d, 'connect-src': d['connect-src']?.filter((v) => v !== origem) ?? [] });
     // Nas telas do app, a API também entra no img-src: o logo público da agência no relatório do dono (A7, W7, parte 5a).
     expect(d['img-src']).toEqual(["'self'", 'blob:', 'data:', base.api, origem]);
-    // Nenhuma outra diretiva ganha a origem do bucket; e sem ela, o img-src fica como era.
-    expect(Object.entries(d).filter(([nome, valores]) => nome !== 'img-src' && valores.includes(origem ?? ''))).toEqual([]);
-    expect(diretivas(cspComNonce({ ...base, nonce: 'n', hashTema }))['img-src']).toEqual(["'self'", 'blob:', 'data:', base.api]);
-    // As telas de entrada não mostram imagem da API.
+    // O vídeo toca do bucket e, antes do envio, do próprio arquivo; e vai do navegador direto ao bucket.
+    expect(d['media-src']).toEqual(["'self'", 'blob:', origem]);
+    expect(d['connect-src']).toEqual(["'self'", base.api, origem]);
+    // Nenhuma outra diretiva ganha a origem do bucket; e sem ela, as três ficam como eram.
+    expect(Object.entries(d).filter(([nome, valores]) => !['img-src', 'media-src', 'connect-src'].includes(nome) && valores.includes(origem ?? ''))).toEqual([]);
+    const sem = diretivas(cspComNonce({ ...base, nonce: 'n', hashTema }));
+    expect(sem['img-src']).toEqual(["'self'", 'blob:', 'data:', base.api]);
+    expect(sem['media-src']).toEqual(["'self'", 'blob:']);
+    expect(sem['connect-src']).toEqual(["'self'", base.api]);
+    // As telas de entrada não mostram imagem da API nem vídeo do bucket.
     expect(diretivas(cspPublica(base))['img-src']).toEqual(["'self'", 'blob:', 'data:']);
+    expect(diretivas(cspPublica(base))['media-src']).toEqual(["'self'", 'blob:']);
+  });
+
+  it('o S3 local do roteiro do vídeo (A6 · Z10): só com a API nesta máquina e só um endereço desta máquina', () => {
+    const local = 'http://localhost:3101';
+    expect(origemDasImagens({ IMAGENS_S3_ENDPOINT: 'http://127.0.0.1:5005' }, local)).toBe('http://127.0.0.1:5005');
+    expect(origemDasImagens({ IMAGENS_S3_ENDPOINT: 'http://localhost:5005' }, 'http://127.0.0.1:3101')).toBe('http://localhost:5005');
+    // Fora do formato, nada entra (e o bucket do ambiente não é usado no lugar).
+    for (const ruim of ['https://127.0.0.1:5005', 'http://evil.example:5005', 'http://127.0.0.1:5005 https://evil.example', 'http://127.0.0.1']) {
+      expect(origemDasImagens({ IMAGENS_S3_ENDPOINT: ruim, IMAGENS_BUCKET: 'liame-imagens-teste' }, local), ruim).toBeNull();
+    }
+    // Com a API pública (produção), o endereço local não vale: fica a origem do bucket.
+    for (const publica of ['https://api.agencialiame.com', '', 'http://localhost.evil.example:3101']) {
+      expect(origemDasImagens({ IMAGENS_S3_ENDPOINT: 'http://127.0.0.1:5005', IMAGENS_BUCKET: 'liame-imagens-teste' }, publica), publica).toBe(
+        'https://liame-imagens-teste.s3.sa-east-1.amazonaws.com',
+      );
+    }
   });
 
   it('rota pública: exata, com ou sem barra no fim; o resto cai na regra com nonce', () => {

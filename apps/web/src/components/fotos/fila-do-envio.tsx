@@ -1,9 +1,10 @@
 import type { RefObject } from 'react';
 import { Icone, type NomeIcone } from '@/components/ui/icone';
-import { AVISO_DE_NITIDEZ, type Fase, FALHA_DE_CONEXAO, RECUSA, type Recusa, terminou, tituloDoEnvio } from './textos';
+import { AVISO_DE_NITIDEZ, AVISO_DEITADO, CONFERINDO_O_VIDEO, type Fase, FALHA_DE_CONEXAO, RECUSA, type Recusa, terminou, tituloDoEnvio } from './textos';
 
 // A lista do envio (P20): cada arquivo com a barra e o que aconteceu com ele (entrou; entrou com aviso; não entrou,
 // com o motivo; não foi, com "Tentar de novo"). Fica no topo da tela até a pessoa fechar.
+// O vídeo (A6 · Z10, parte 2; P37): a conferência do vídeo, o aviso de deitado e "Entrou: 18 segundos, em pé.".
 
 export type ItemDoEnvio = {
   id: string;
@@ -13,8 +14,12 @@ export type ItemDoEnvio = {
   recusa?: Recusa;
   /** O que a pessoa lê quando o envio não foi (a conexão caiu, o servidor não guardou, com o código de rastreio). */
   falha?: string;
-  /** A prévia do próprio arquivo (endereço `blob:` do navegador); nulo quando não é imagem. */
+  /** A prévia do próprio arquivo (endereço `blob:` do navegador); nulo quando não há. No vídeo, o arquivo inteiro. */
   previa: string | null;
+  /** É vídeo (o envio vai direto ao armazenamento). */
+  video?: boolean;
+  /** No vídeo que entrou: "Entrou: 18 segundos, em pé." (com a duração que o servidor leu). */
+  texto?: string;
 };
 
 type Props = {
@@ -55,17 +60,17 @@ function Linha({ item, aoTentarDeNovo }: { item: ItemDoEnvio; aoTentarDeNovo: (i
     meio = (
       <>
         <Barra nome={item.nome} pct={100} />
-        <Situacao texto="Conferindo a foto…" />
+        <Situacao texto={item.video ? CONFERINDO_O_VIDEO : 'Conferindo a foto…'} />
       </>
     );
-  else if (item.fase === 'recusada') meio = <Situacao tipo="perigo" icone="ban" texto={RECUSA[item.recusa ?? 'nao_abre']} />;
+  else if (item.fase === 'recusada') meio = <Situacao tipo="perigo" icone="ban" texto={RECUSA[item.recusa ?? (item.video ? 'nao_abre_video' : 'nao_abre')]} />;
   else if (item.fase === 'falhou') meio = <Situacao tipo="perigo" icone="alert-circle" texto={item.falha ?? FALHA_DE_CONEXAO} />;
-  else if (item.fase === 'aviso') meio = <Situacao tipo="aviso" icone="alert" texto={AVISO_DE_NITIDEZ} />;
-  else meio = <Situacao tipo="ok" icone="check-circle" texto="Entrou." />;
+  else if (item.fase === 'aviso') meio = <Situacao tipo="aviso" icone="alert" texto={item.video ? AVISO_DEITADO : AVISO_DE_NITIDEZ} />;
+  else meio = <Situacao tipo="ok" icone="check-circle" texto={item.texto ?? 'Entrou.'} />;
   return (
     <li className="ft-fila-item">
       <span className="ft-fila-mini" aria-hidden="true">
-        {item.previa ? <img src={item.previa} alt="" /> : <Icone nome="file" />}
+        {item.previa && !item.video ? <img src={item.previa} alt="" /> : <Icone nome={item.video ? 'video' : 'file'} />}
       </span>
       <span className="ft-fila-txt">
         <span className="ft-fila-nome">{item.nome}</span>
@@ -89,7 +94,10 @@ export function FilaDoEnvio({ itens, tituloRef, aoTentarDeNovo, aoFechar }: Prop
     <section className="ft-fila" aria-labelledby="ft-fila-t">
       <div className="ft-fila-cab">
         <h2 id="ft-fila-t" tabIndex={-1} ref={tituloRef}>
-          {tituloDoEnvio(fases)}
+          {tituloDoEnvio(
+            fases,
+            itens.map((i) => Boolean(i.video)),
+          )}
         </h2>
         {fases.every(terminou) && (
           <button className="btn btn--sm btn--ghost" type="button" data-ft-limpar onClick={aoFechar}>

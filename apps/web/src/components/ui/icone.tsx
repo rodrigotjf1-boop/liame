@@ -281,6 +281,13 @@ const DESENHOS = {
     </>
   ),
   play: <path d="m6 3 14 9-14 9V3z" />,
+  // O vídeo das Fotos (A6 · Z10; P37, o mesmo desenho do protótipo).
+  video: (
+    <>
+      <path d="m16 13 5.2 3.5a.5.5 0 0 0 .8-.4V7.9a.5.5 0 0 0-.8-.4L16 10.5" />
+      <rect x="2" y="6" width="14" height="12" rx="2" />
+    </>
+  ),
   stop: <rect width="12" height="12" x="6" y="6" rx="2" />,
   image: (
     <>

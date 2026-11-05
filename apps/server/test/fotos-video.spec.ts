@@ -1,7 +1,7 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { lerCabecalhoDoVideo, VideoIlegivel } from '../src/fotos/cabecalho-do-video.js';
 import { chaveDaFoto, chaveDaMiniatura, chaveDoVideo, conferirVideo, medidasNoReels, RECUSAS_DO_VIDEO } from '../src/fotos/conferencia.js';
-import { ArmazemFechado, ArmazemIndisponivel, ArmazemNaMemoria, ArmazemNoDisco, ArmazemS3, type SdkDoS3 } from '../src/imagens/armazem.js';
+import { ArmazemFechado, ArmazemIndisponivel, ArmazemNaMemoria, ArmazemNoDisco, ArmazemS3, criarArmazem, type SdkDoS3 } from '../src/imagens/armazem.js';
 import { caixa, faixa, ftyp, leitorDe, mdat64, videoDeMentira } from './helpers/video-de-mentira.js';
 
 // A6 · Z10, parte 1 (D-A6-68): o cabeçalho do vídeo que a loja envia, lido aos pedaços (a `moov` antes ou depois dos
@@ -149,6 +149,31 @@ describe('o envio direto no S3 de verdade (o SDK e a assinatura, sem rede)', () 
     expect(new URL(await a.enderecoDeLeitura(chave, 300)).searchParams.get('X-Amz-SignedHeaders')).toBe('host');
     await expect(a.enderecoDeEnvio(chave, 'video/mp4', 0, 600)).rejects.toThrow('tamanho fora do desenho');
     await expect(a.enderecoDeEnvio(`t/${E}/b/${M}/video/${ID}.webm`, 'video/webm', 10, 600)).rejects.toThrow('chave fora do formato');
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  it('o S3 local do desenvolvimento (o imitador do roteiro de navegador): o endereço vai a ele, com o bucket no caminho; em produção, o servidor não sobe', async () => {
+    const BUCKET = 'liame-imagens-local';
+    await expect(criarArmazem({ NODE_ENV: 'production', IMAGENS_BUCKET: BUCKET, IMAGENS_S3_ENDPOINT: 'http://127.0.0.1:5005' })).rejects.toThrow('IMAGENS_S3_ENDPOINT não vale');
+    // Só um endereço desta máquina, sem https nem outro host.
+    for (const fora of ['https://127.0.0.1:5005', 'http://s3.exemplo.com:5005', 'http://127.0.0.1']) {
+      await expect(criarArmazem({ NODE_ENV: 'development', IMAGENS_ARMAZEM: 's3', IMAGENS_BUCKET: BUCKET, IMAGENS_S3_ENDPOINT: fora }), fora).rejects.toThrow();
+    }
+    // As credenciais de mentira do imitador vêm do ambiente, como as de produção (sem rede: só a assinatura).
+    const ID_DE_TESTE = 'teste-id';
+    const VALOR_DE_TESTE = 'teste-valor';
+    vi.stubEnv('AWS_ACCESS_KEY_ID', ID_DE_TESTE);
+    vi.stubEnv('AWS_SECRET_ACCESS_KEY', VALOR_DE_TESTE);
+    const a = await criarArmazem({ NODE_ENV: 'development', IMAGENS_ARMAZEM: 's3', IMAGENS_BUCKET: BUCKET, IMAGENS_S3_ENDPOINT: 'http://127.0.0.1:5005' });
+    const chave = chaveDoVideo(E, M, ID, 'video/mp4');
+    const url = new URL((await a.enderecoDeEnvio(chave, 'video/mp4', 10, 600)) ?? 'sem:endereco');
+    expect(url.origin).toBe('http://127.0.0.1:5005');
+    expect(url.pathname).toBe(`/${BUCKET}/${chave}`);
+    expect(url.searchParams.get('X-Amz-SignedHeaders')).toBe('content-length;content-type;host');
+    expect(new URL(await a.enderecoDeLeitura(chave, 300)).origin).toBe('http://127.0.0.1:5005');
   });
 
   it('sem o assinador do envio (o S3 montado de outro jeito) e no disco do desenvolvimento, não há envio direto; fechado, indisponível', async () => {

@@ -11,12 +11,14 @@ import { disparar } from '@/lib/disparar';
 
 type Props = {
   id: string;
+  /** É vídeo (A6 · Z10): as mesmas regras, com as palavras do vídeo (P37). */
+  video?: boolean;
   /** Apagou (ou ela já não estava mais aqui): a tela tira a foto da lista. */
   aoApagar: (jaTinhaSaido: boolean) => void;
   aoFechar: () => void;
 };
 
-export function DialogoApagarFoto({ id, aoApagar, aoFechar }: Props) {
+export function DialogoApagarFoto({ id, video = false, aoApagar, aoFechar }: Props) {
   const ids = useId();
   const cancelar = useRef<HTMLButtonElement>(null);
   const { ref, fechar, devolverFoco } = useDialogo({ focoInicial: cancelar });
@@ -54,7 +56,7 @@ export function DialogoApagarFoto({ id, aoApagar, aoFechar }: Props) {
     >
       <div className="dialogo-form">
         <div className="dialogo-cab">
-          <h2 id={`${ids}-t`}>Apagar esta foto?</h2>
+          <h2 id={`${ids}-t`}>{video ? 'Apagar este vídeo?' : 'Apagar esta foto?'}</h2>
           <button className="btn btn--icon btn--ghost" type="button" onClick={fechar} aria-label="Fechar" disabled={enviando}>
             <Icone nome="x" />
           </button>
@@ -66,7 +68,7 @@ export function DialogoApagarFoto({ id, aoApagar, aoFechar }: Props) {
               <span>{erro}</span>
             </p>
           )}
-          <p id={`${ids}-d`}>Ela sai do Liame de vez. O que já foi publicado nas redes não muda.</p>
+          <p id={`${ids}-d`}>{video ? 'Ele' : 'Ela'} sai do Liame de vez. O que já foi publicado nas redes não muda.</p>
         </div>
         <div className="dialogo-acoes">
           <button className="btn" type="button" ref={cancelar} onClick={fechar} disabled={enviando}>
@@ -74,7 +76,7 @@ export function DialogoApagarFoto({ id, aoApagar, aoFechar }: Props) {
           </button>
           <button className="btn btn--perigo-cheio" type="button" onClick={() => disparar(apagar())} disabled={enviando}>
             <Icone nome="trash" />
-            {enviando ? 'Apagando…' : 'Apagar foto'}
+            {enviando ? 'Apagando…' : video ? 'Apagar vídeo' : 'Apagar foto'}
           </button>
         </div>
       </div>

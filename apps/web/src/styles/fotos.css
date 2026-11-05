@@ -66,3 +66,33 @@
 .ft-vazio .ft-info { font-size: var(--text-sm); }
 .ft-vazio-ic { width: 56px; height: 56px; display: grid; place-items: center; border-radius: 16px; background: var(--primary-soft); color: var(--link); }
 .ft-vazio-ic .ic { width: 26px; height: 26px; }
+/* ===== A6 · Z10 · O vídeo nas Fotos (protótipo P37, aprovado em 04/11/2026) ===== */
+/* O filtro por tipo, acima dos produtos. */
+.ft-tela .ft-tipo { max-width: 100%; margin-bottom: var(--sp-3); }
+.ft-tela .ft-tipo button:disabled { opacity: .5; cursor: default; }
+/* O vídeo na grade: a capa (ou o primeiro quadro), o botão de tocar e a duração no canto. */
+.ft-midia { position: relative; }
+.ft-img video { display: block; width: 100%; height: 100%; object-fit: cover; pointer-events: none; }
+.ft-play { position: absolute; inset: 0; z-index: 1; margin: auto; width: 40px; height: 40px; display: grid; place-items: center; border-radius: var(--radius-full); background: color-mix(in srgb, var(--text) 62%, transparent); color: var(--surface); pointer-events: none; }
+.ft-play .ic { width: 18px; height: 18px; margin-left: 2px; fill: currentColor; }
+.ft-dur { position: absolute; right: 6px; bottom: 6px; z-index: 1; padding: 1px 6px; border-radius: var(--radius-sm); background: color-mix(in srgb, var(--text) 74%, transparent); color: var(--surface); font-family: var(--font-mono); font-size: 11px; font-weight: 600; line-height: 1.5; }
+.ft-leg .ft-selo-linha { display: flex; flex-wrap: wrap; gap: 4px; }
+.ft-selo-linha .st .ic { width: 12px; height: 12px; }
+/* O vídeo na gaveta: em pé (9:16) ou deitado (16:9), com o botão por cima e a barra do que já tocou. */
+.ft-tela-caixa { display: grid; gap: var(--sp-2); min-width: 0; }
+.ft-video { position: relative; width: min(100%, 240px); aspect-ratio: 9 / 16; max-width: 100%; margin: 0 auto; overflow: hidden; border-radius: var(--radius); background: var(--bg-subtle); }
+.ft-video--deitado { width: 100%; aspect-ratio: 16 / 9; }
+.ft-video video { display: block; width: 100%; height: 100%; object-fit: contain; background: var(--bg-subtle); }
+.ft-tocar { position: absolute; inset: 0; z-index: 2; margin: auto; width: 52px; height: 52px; display: grid; place-items: center; border: 0; border-radius: var(--radius-full); background: color-mix(in srgb, var(--text) 62%, transparent); color: var(--surface); cursor: pointer; }
+.ft-tocar:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+.ft-tocar .ic { width: 22px; height: 22px; fill: currentColor; }
+.ft-tocar[aria-pressed="true"] { opacity: .35; }
+.ft-progresso { position: absolute; left: 0; right: 0; bottom: 0; z-index: 2; height: 4px; background: color-mix(in srgb, var(--text) 30%, transparent); pointer-events: none; }
+.ft-progresso span { display: block; height: 100%; background: var(--surface); }
+/* Onde o vídeo pode sair. */
+.ft-gaveta section { display: grid; gap: var(--sp-2); min-width: 0; }
+.ft-canais { display: grid; gap: 6px; margin: 0; padding: 0; list-style: none; font-size: var(--text-sm); }
+.ft-canais li { display: flex; gap: var(--sp-2); min-width: 0; }
+.ft-canais .ic { flex: none; margin-top: 2px; color: var(--success); }
+.ft-canais .ft-canal-voce .ic { color: var(--text-muted); }
+.ft-canais span { min-width: 0; overflow-wrap: anywhere; }
