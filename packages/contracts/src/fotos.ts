@@ -28,13 +28,17 @@ export const BRAND_PHOTO_LIMITS = {
 /**
  * Os limites do vídeo das Fotos (A6 · Z10; D-A6-68, aprovada pelo dono em 04/11/2026): MP4 ou MOV, de 3 a 90 segundos
  * (os 90 s são o máximo do Reels da Página: um arquivo só serve para os dois Reels, o TikTok e o YouTube Shorts), até
- * 300 MB, com até 1.920 px de largura (a do Reels). O vídeo vai como a loja gravou: em H.264 ou HEVC, com o áudio em AAC.
+ * 300 MB. O 4K do celular entra (até 4.096 px no lado maior): a redução para os 1.920 px do Reels é feita quando o
+ * vídeo vai à Meta (parte 3). O vídeo vai como a loja gravou: em H.264 ou HEVC, com o áudio em AAC.
  */
 export const BRAND_VIDEO_LIMITS = {
   maxBytes: 300 * 1024 * 1024,
   minDurationMs: 3_000,
   maxDurationMs: 90_000,
-  maxWidth: 1920,
+  /** O lado maior que entra em Fotos (o 4K do celular). */
+  maxLongSide: 4096,
+  /** O lado maior do Reels: o vídeo maior que isso vai reduzido, na mesma proporção (D-A6-68). */
+  reelsLongSide: 1920,
   /** Quanto vale o endereço de envio direto (o bucket recusa assinatura com mais de 10 minutos). */
   uploadSeconds: 600,
 } as const;
@@ -82,7 +86,11 @@ export const BrandPhoto = z.strictObject({
   product: z.string().nullable(),
   /** O que aparece na foto, escrito por uma pessoa da empresa; vazio quando ninguém escreveu. */
   description: z.string(),
-  /** As medidas e o tamanho da cópia guardada. */
+  /**
+   * As medidas com que a mídia vai aos posts: a da cópia guardada da foto; no vídeo, a do Reels (o vídeo maior que
+   * 1.920 px no lado maior vai reduzido, na mesma proporção; as medidas gravadas ficam em `video`). E o tamanho do
+   * arquivo guardado (no vídeo, o arquivo como a loja gravou).
+   */
   width: z.int().min(1).max(BRAND_PHOTO_LIMITS.storedLongSide),
   height: z.int().min(1).max(BRAND_PHOTO_LIMITS.storedLongSide),
   bytes: z.int().min(1),
@@ -108,9 +116,14 @@ export const BrandPhoto = z.strictObject({
    * de antes de 05/11/2026 não traz.
    */
   kind: Slug.optional(),
-  /** O vídeo: a duração, o formato, se tem som e se a capa já chegou; nulo na foto. Opcional, como o de cima. */
+  /**
+   * O vídeo: as medidas como a loja gravou (até o 4K, na orientação em que ele aparece), a duração, o formato, se tem
+   * som e se a capa já chegou; nulo na foto. Opcional, como o de cima.
+   */
   video: z
     .strictObject({
+      width: z.int().min(1).max(BRAND_VIDEO_LIMITS.maxLongSide),
+      height: z.int().min(1).max(BRAND_VIDEO_LIMITS.maxLongSide),
       duration_ms: z.int().min(1),
       media_type: z.string().min(1),
       has_audio: z.boolean(),

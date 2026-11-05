@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { lerCabecalhoDoVideo, VideoIlegivel } from '../src/fotos/cabecalho-do-video.js';
-import { chaveDaFoto, chaveDaMiniatura, chaveDoVideo, conferirVideo, RECUSAS_DO_VIDEO } from '../src/fotos/conferencia.js';
+import { chaveDaFoto, chaveDaMiniatura, chaveDoVideo, conferirVideo, medidasNoReels, RECUSAS_DO_VIDEO } from '../src/fotos/conferencia.js';
 import { ArmazemFechado, ArmazemIndisponivel, ArmazemNaMemoria, ArmazemNoDisco, ArmazemS3, type SdkDoS3 } from '../src/imagens/armazem.js';
 import { caixa, faixa, ftyp, leitorDe, mdat64, videoDeMentira } from './helpers/video-de-mentira.js';
 
@@ -66,12 +66,15 @@ describe('o cabeçalho do vídeo', () => {
 describe('a conferência do vídeo (D-A6-68)', () => {
   const base = { duracaoMs: 30_000, largura: 1080, altura: 1920, codec: 'avc1', temAudio: true, codecDoAudio: 'mp4a' };
 
-  it('o que entra: até 90 s, até 1080p nos dois lados, H.264 ou HEVC, com ou sem som; o deitado também', () => {
+  it('o que entra: até 90 s, até o 4K (4.096 px no lado maior), H.264 ou HEVC, com ou sem som; o deitado também', () => {
     expect(conferirVideo(base, 50_000_000)).toBeNull();
     expect(conferirVideo({ ...base, duracaoMs: 90_000 }, 1)).toBeNull();
     expect(conferirVideo({ ...base, duracaoMs: 3_000 }, 1)).toBeNull();
     expect(conferirVideo({ ...base, codec: 'hev1', temAudio: false, codecDoAudio: null }, 1)).toBeNull();
     expect(conferirVideo({ ...base, largura: 1920, altura: 1080 }, 1)).toBeNull();
+    // O 4K do celular entra (D-A6-68): a redução para o Reels é feita quando o vídeo vai à Meta.
+    expect(conferirVideo({ ...base, largura: 2160, altura: 3840 }, 1)).toBeNull();
+    expect(conferirVideo({ ...base, largura: 4096, altura: 2160 }, 1)).toBeNull();
     expect(conferirVideo(base, 300 * 1024 * 1024)).toBeNull();
   });
 
@@ -81,8 +84,8 @@ describe('a conferência do vídeo (D-A6-68)', () => {
     expect(conferirVideo({ ...base, codecDoAudio: 'Opus' }, 1)).toBe('codec');
     expect(conferirVideo({ ...base, duracaoMs: 2_999 }, 1)).toBe('curto');
     expect(conferirVideo({ ...base, duracaoMs: 90_001 }, 1)).toBe('longo');
-    expect(conferirVideo({ ...base, largura: 2160, altura: 3840 }, 1)).toBe('resolucao');
-    expect(conferirVideo({ ...base, largura: 1440, altura: 2560 }, 1)).toBe('resolucao');
+    expect(conferirVideo({ ...base, largura: 4320, altura: 7680 }, 1)).toBe('resolucao');
+    expect(conferirVideo({ ...base, largura: 2160, altura: 4097 }, 1)).toBe('resolucao');
     expect(conferirVideo({ ...base, largura: 0 }, 1)).toBe('nao_abre');
   });
 
@@ -90,8 +93,19 @@ describe('a conferência do vídeo (D-A6-68)', () => {
     expect(RECUSAS_DO_VIDEO.longo.detail).toBe('Passa de 90 segundos, o máximo para sair também como Reels na Página do Facebook. Corte no celular e envie de novo.');
     expect(RECUSAS_DO_VIDEO.grande.detail).toBe('Passa de 300 MB, o máximo do Reels. Grave em 1080p (não em 4K) ou corte no celular.');
     expect(RECUSAS_DO_VIDEO.curto.detail).toBe('Tem menos de 3 segundos, o mínimo do Reels.');
-    expect(RECUSAS_DO_VIDEO.resolucao.detail).toBe('Passa de 1080p (1.920 px no lado maior), o máximo do Reels. Grave em 1080p (não em 4K) e envie de novo.');
+    expect(RECUSAS_DO_VIDEO.resolucao.detail).toBe('Passa de 4K (4.096 px no lado maior). Grave em 4K ou menos e envie de novo.');
     expect(new Set(Object.values(RECUSAS_DO_VIDEO).map((r) => r.code)).size).toBe(Object.keys(RECUSAS_DO_VIDEO).length);
+  });
+
+  it('as medidas no Reels: o que passa de 1.920 px no lado maior é reduzido na mesma proporção, com os lados pares; o resto fica', () => {
+    expect(medidasNoReels(1080, 1920)).toEqual({ largura: 1080, altura: 1920 });
+    expect(medidasNoReels(720, 1280)).toEqual({ largura: 720, altura: 1280 });
+    expect(medidasNoReels(2160, 3840)).toEqual({ largura: 1080, altura: 1920 });
+    expect(medidasNoReels(3840, 2160)).toEqual({ largura: 1920, altura: 1080 });
+    expect(medidasNoReels(1440, 2560)).toEqual({ largura: 1080, altura: 1920 });
+    expect(medidasNoReels(4096, 2160)).toEqual({ largura: 1920, altura: 1012 });
+    expect(medidasNoReels(2000, 3000)).toEqual({ largura: 1280, altura: 1920 });
+    expect(medidasNoReels(2161, 3840)).toEqual({ largura: 1080, altura: 1920 });
   });
 });
 

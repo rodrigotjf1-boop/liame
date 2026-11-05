@@ -158,6 +158,13 @@ describe.skipIf(!hasDb)('O vídeo nas Fotos: o envio direto, a conferência, a c
     expect(mov.resposta.status, JSON.stringify(mov.resposta.body)).toBe(200);
     expect(mov.chave.endsWith('.mov')).toBe(true);
     expect(mov.resposta.body).toMatchObject({ video: { duration_ms: 8_000, media_type: 'video/quicktime', has_audio: false } });
+    // O 4K do celular entra (D-A6-68): no topo, as medidas com que ele vai ao Reels (reduzido a 1.920 px no lado maior,
+    // o que a parte 3 faz antes de mandar à Meta); no bloco do vídeo, as que a loja gravou (e a linha guarda essas).
+    const quatroK = await enviarVideo(e, videoDeMentira({ largura: 2160, altura: 3840 }));
+    expect(quatroK.resposta.status, JSON.stringify(quatroK.resposta.body)).toBe(200);
+    expect(BrandPhoto.parse(quatroK.resposta.body)).toMatchObject({ width: 1080, height: 1920, orientation: 'vertical', video: { width: 2160, height: 3840 } });
+    const [gravado] = await ownerQuery<{ width: number; height: number }>(`select width, height from liame.brand_photo where id = $1`, [quatroK.id]);
+    expect(gravado).toEqual({ width: 2160, height: 3840 });
   }, 60_000);
 
   it('a capa: um quadro do vídeo vira a miniatura, com auditoria; só no vídeo pronto; apagar leva o vídeo e a capa', async () => {
@@ -193,12 +200,12 @@ describe.skipIf(!hasDb)('O vídeo nas Fotos: o envio direto, a conferência, a c
     expect(armazem.objetos.has(chaveDaMiniatura(chave))).toBe(false);
   }, 60_000);
 
-  it('recusa com o motivo da tela e tira o vídeo da lista: longo, curto, 4K, codec, o que não é vídeo e acima de 300 MB', async () => {
+  it('recusa com o motivo da tela e tira o vídeo da lista: longo, curto, 8K, codec, o que não é vídeo e acima de 300 MB', async () => {
     const e = await empresa('Casa Brasa Recusa Video');
     const casos: Array<[Buffer, string]> = [
       [videoDeMentira({ segundos: 91 }), 'video-longo'],
       [videoDeMentira({ segundos: 2 }), 'video-curto'],
-      [videoDeMentira({ largura: 2160, altura: 3840 }), 'video-resolucao'],
+      [videoDeMentira({ largura: 4320, altura: 7680 }), 'video-resolucao'],
       [videoDeMentira({ codec: 'vp09' }), 'video-codec'],
       [await jpeg(1080, 1920), 'video-nao-abre'],
     ];
@@ -297,12 +304,16 @@ describe.skipIf(!hasDb)('O vídeo nas Fotos: o envio direto, a conferência, a c
     expect(await inserir(base('video'))).toBe('passou');
     expect(await inserir({ kind: 'video', status: 'enviando', media_type: 'video/quicktime', bytes: 5 })).toBe('passou');
     expect(await inserir({ ...base('video'), bytes: 300 * 1024 * 1024 })).toBe('passou');
+    expect(await inserir({ ...base('video'), width: 2160, height: 4096 })).toBe('passou');
     const recusas: Array<[string, Record<string, unknown>, string]> = [
       ['outro tipo', { ...base('video'), kind: 'audio' }, 'brand_photo_kind_check'],
       ['vídeo acima de 300 MB', { ...base('video'), bytes: 300 * 1024 * 1024 + 1 }, 'brand_photo_bytes_check'],
       ['foto acima de 10 MB', { ...base('foto_produto'), bytes: 10 * 1024 * 1024 + 1 }, 'brand_photo_bytes_check'],
       ['formato fora da lista', { ...base('video'), media_type: 'video/webm' }, 'brand_photo_media_type_check'],
       ['duração zero', { ...base('video'), duration_ms: 0 }, 'brand_photo_duracao_check'],
+      ['vídeo acima do 4K', { ...base('video'), height: 4097 }, 'brand_photo_height_check'],
+      ['vídeo acima do 4K deitado', { ...base('video'), width: 4097, height: 2160 }, 'brand_photo_width_check'],
+      ['foto acima da cópia', { ...base('foto_produto'), width: 2049 }, 'brand_photo_width_check'],
       ['vídeo sem formato', { ...base('video'), media_type: null }, 'brand_photo_tipo_check'],
       ['vídeo pronto sem duração', { ...base('video'), duration_ms: null }, 'brand_photo_tipo_check'],
       ['vídeo pronto sem medidas', { ...base('video'), width: null }, 'brand_photo_tipo_check'],

@@ -118,8 +118,8 @@ export const RECUSAS_DO_VIDEO: Record<MotivoDaRecusaDoVideo, { code: string; tit
   },
   resolucao: {
     code: 'video-resolucao',
-    title: 'Resolução acima do Reels',
-    detail: `Passa de 1080p (${V.maxWidth.toLocaleString('pt-BR')} px no lado maior), o máximo do Reels. Grave em 1080p (não em 4K) e envie de novo.`,
+    title: 'Resolução acima do 4K',
+    detail: `Passa de 4K (${V.maxLongSide.toLocaleString('pt-BR')} px no lado maior). Grave em 4K ou menos e envie de novo.`,
   },
 };
 
@@ -128,8 +128,9 @@ const CODECS_DE_VIDEO = new Set(['avc1', 'avc3', 'hvc1', 'hev1']);
 const CODECS_DE_AUDIO = new Set(['mp4a']);
 
 /**
- * Confere o vídeo pelo cabeçalho e pelo tamanho guardado: o tamanho, o codec, a duração e a resolução (até 1080p nos
- * dois lados). O vídeo deitado entra (com aviso na tela, D-A6-68).
+ * Confere o vídeo pelo cabeçalho e pelo tamanho guardado: o tamanho, o codec, a duração e a resolução (até o 4K; a
+ * redução para os 1.920 px do Reels é feita quando o vídeo vai à Meta, D-A6-68). O vídeo deitado entra (com aviso na
+ * tela).
  */
 export function conferirVideo(
   c: { duracaoMs: number; largura: number; altura: number; codec: string; temAudio: boolean; codecDoAudio: string | null },
@@ -140,8 +141,21 @@ export function conferirVideo(
   if (!CODECS_DE_VIDEO.has(c.codec) || (c.temAudio && !CODECS_DE_AUDIO.has(c.codecDoAudio ?? ''))) return 'codec';
   if (c.duracaoMs < V.minDurationMs) return 'curto';
   if (c.duracaoMs > V.maxDurationMs) return 'longo';
-  if (Math.max(c.largura, c.altura) > V.maxWidth) return 'resolucao';
+  if (Math.max(c.largura, c.altura) > V.maxLongSide) return 'resolucao';
   return null;
+}
+
+/**
+ * As medidas com que o vídeo vai ao Reels (D-A6-68): o maior que 1.920 px no lado maior é reduzido na mesma proporção,
+ * com cada lado em número par (o H.264 e o HEVC pedem); o que cabe fica como está. A lista mostra estas medidas, e a
+ * parte 3 reduz o arquivo para elas antes de mandar à Meta.
+ */
+export function medidasNoReels(largura: number, altura: number): { largura: number; altura: number } {
+  const maior = Math.max(largura, altura);
+  if (maior <= V.reelsLongSide) return { largura, altura };
+  const escala = V.reelsLongSide / maior;
+  const par = (n: number) => Math.max(2, 2 * Math.round((n * escala) / 2));
+  return { largura: par(largura), altura: par(altura) };
 }
 
 export function prefixoDaMarca(tenantId: string, brandId: string): string {

@@ -120,7 +120,7 @@ export class FotosController {
   @ApiOperation({
     summary: 'Conferir o vídeo enviado',
     description:
-      'Confere o vídeo que chegou ao armazenamento pelo cabeçalho do arquivo, sem baixá-lo inteiro: até 300 MB (422 `video-grande-demais`), MP4 ou MOV que abre (422 `video-nao-abre`), H.264 ou HEVC com o som em AAC (422 `video-codec`), de 3 a 90 segundos (422 `video-curto`, `video-longo`) e até 1080p, 1.920 px no lado maior (422 `video-resolucao`). Recusado, o vídeo sai da lista. Pronto, devolve o vídeo como a lista mostra; pedir de novo o que já ficou pronto devolve o mesmo. O arquivo que ainda não chegou responde 409 `video-nao-chegou`; a leitura que falha, 502 `video-nao-conferido`.',
+      'Confere o vídeo que chegou ao armazenamento pelo cabeçalho do arquivo, sem baixá-lo inteiro: até 300 MB (422 `video-grande-demais`), MP4 ou MOV que abre (422 `video-nao-abre`), H.264 ou HEVC com o som em AAC (422 `video-codec`), de 3 a 90 segundos (422 `video-curto`, `video-longo`) e até o 4K, 4.096 px no lado maior (422 `video-resolucao`; a redução para os 1.920 px do Reels é feita quando o vídeo vai à Meta). Recusado, o vídeo sai da lista. Pronto, devolve o vídeo como a lista mostra; pedir de novo o que já ficou pronto devolve o mesmo. O arquivo que ainda não chegou responde 409 `video-nao-chegou`; a leitura que falha, 502 `video-nao-conferido`.',
   })
   @ApiOkResponse({ standardSchema: BrandPhoto })
   @ApiForbiddenResponse({ standardSchema: ProblemDetails })

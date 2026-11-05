@@ -26,6 +26,7 @@ import {
   chaveDoVideo,
   conferirVideo,
   estreitaParaOInstagram,
+  medidasNoReels,
   type MotivoDaRecusaDoVideo,
   orientacao,
   RECUSAS,
@@ -41,7 +42,7 @@ import { type FotoProcessada, processarCapa, processarFoto, RecusaDaFoto, SemSha
 // linha. Com a função `fotos` desligada, a lista vem vazia e enviar e mudar respondem 409; apagar sempre vale.
 // O vídeo (A6 · Z10, parte 1; D-A6-67 e D-A6-68), com a função `videos` ligada: o navegador manda o arquivo direto
 // ao armazenamento (o endereço de envio assinado); o Liame confere o cabeçalho (MP4 ou MOV, de 3 a 90 s, até 300 MB,
-// até 1080p, H.264 ou HEVC com o som em AAC) e só então o vídeo fica pronto; a capa é um quadro que a tela tira dele.
+// até o 4K, H.264 ou HEVC com o som em AAC) e só então o vídeo fica pronto; a capa é um quadro que a tela tira dele.
 
 export const FLAG_FOTOS = 'fotos';
 export const FLAG_VIDEOS = 'videos';
@@ -171,15 +172,17 @@ export class FotosService {
       if (err instanceof ArmazemIndisponivel) throw indisponivel();
       throw err;
     }
+    // As medidas com que a mídia vai aos posts: a da cópia da foto; a do Reels no vídeo (o 4K vai reduzido, D-A6-68).
+    const nosPosts = video ? medidasNoReels(l.width, l.height) : { largura: l.width, altura: l.height };
     return {
       id: l.id,
       brand_id: l.brand_id,
       product: l.product,
       description: l.description,
-      width: l.width,
-      height: l.height,
+      width: nosPosts.largura,
+      height: nosPosts.altura,
       bytes: l.bytes,
-      orientation: orientacao(l.width, l.height),
+      orientation: orientacao(nosPosts.largura, nosPosts.altura),
       // Um vídeo vai como a loja gravou (o Reels não recorta): sem o aviso de nitidez nem o recorte da foto.
       narrow_for_instagram: video ? false : estreitaParaOInstagram(l.width),
       instagram_crop: video ? 'nenhum' : recorteDoInstagram(l.width, l.height),
@@ -191,7 +194,14 @@ export class FotosService {
       kind: l.kind,
       video:
         video && l.duration_ms !== null && l.media_type !== null
-          ? { duration_ms: l.duration_ms, media_type: l.media_type, has_audio: l.has_audio === true, has_cover: l.has_cover }
+          ? {
+              width: l.width,
+              height: l.height,
+              duration_ms: l.duration_ms,
+              media_type: l.media_type,
+              has_audio: l.has_audio === true,
+              has_cover: l.has_cover,
+            }
           : null,
     };
   }
