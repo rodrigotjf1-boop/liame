@@ -185,6 +185,7 @@ Para desligar, `--desligar` no lugar de `--ligar` (a regra da empresa é apagada
 | `IMAGENS_ARMAZEM` | `s3` em produção (outro valor recusa subir), `disco` no desenvolvimento, `memoria` nos testes | pelo `NODE_ENV` |
 | `IMAGENS_BUCKET` **P** | O bucket privado em `sa-east-1` (o nome leva o número da conta: fica só no ambiente, nunca no repositório). Sem ele, em produção, a função de imagem fica indisponível e o resto não muda | — |
 | `IMAGENS_PASTA_LOCAL` | Só desenvolvimento: a pasta das imagens (fora do git) | `.liame-imagens-locais` |
+| `IMAGENS_S3_ENDPOINT` | Só desenvolvimento (A6 · Z10): um S3 local, só um endereço desta máquina (`http://127.0.0.1:<porta>`), para o roteiro de navegador do vídeo, que o envia direto ao armazenamento (o disco não recebe esse envio). Vai na API (com `IMAGENS_ARMAZEM=s3`) e no web (a CSP aceita a origem só com a API também nesta máquina). Em produção, a API não sobe com ela | — |
 
 A credencial é a do usuário `liame-sistema` (`AWS_ACCESS_KEY_ID` e `AWS_SECRET_ACCESS_KEY`, seção "Cofre") e a região, `AWS_REGION`. A API grava e assina a leitura (5 minutos); o worker apaga (a rotina `fotos` e o expurgo).
 
@@ -212,6 +213,21 @@ A credencial é a do usuário `liame-sistema` (`AWS_ACCESS_KEY_ID` e `AWS_SECRET
   ]
 }
 ```
+
+**O vídeo das Fotos (A6 · Z10, parte 2):** o navegador manda o vídeo direto ao bucket, pelo endereço que a API assina (PUT, com o `content-type` e o tamanho na assinatura; vale 10 minutos, dentro da política do bucket). Para o navegador poder mandar, o bucket precisa de uma regra de CORS (no console do S3, na aba Permissões do bucket, em "Compartilhamento de recursos de origem cruzada (CORS)") que libera só o PUT, só da origem do web:
+
+```json
+[
+  {
+    "AllowedOrigins": ["https://app.agencialiame.com"],
+    "AllowedMethods": ["PUT"],
+    "AllowedHeaders": ["content-type"],
+    "MaxAgeSeconds": 3000
+  }
+]
+```
+
+Mostrar as fotos e tocar o vídeo não precisa de CORS (a tela usa o endereço assinado, sem ler os bytes). A política `liame-sistema-s3-imagens` já cobre o vídeo (`t/*`; o vídeo fica em `t/{empresa}/b/{marca}/video/`). No web, a mesma `IMAGENS_BUCKET` põe a origem do bucket também no `media-src` e no `connect-src` da CSP das telas do app. **Situação (05/11/2026): a regra de CORS ainda não existe** (o dono cria, com o passo a passo, antes do primeiro envio de verdade; sem ela, o envio do vídeo cai com "Não foi", e nada mais muda).
 
 ## IA (A3, ADR-006)
 

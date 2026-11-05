@@ -41,8 +41,12 @@ const ENDERECO_LOCAL = /^http:\/\/(127\.0\.0\.1|localhost):\d{2,5}$/;
  * também nesta máquina (`api` em localhost): o roteiro roda o build de produção do web, e em produção a API é a pública.
  */
 export function origemDasImagens(ambiente: Readonly<Record<string, string | undefined>>, api = ''): string | null {
+  // A expressão é ancorada, sem repetição aninhada (tempo linear), e os dois textos passam antes pelo teto de 64
+  // caracteres (ERR-040, V41).
+  const curto = (s: string) => s.length <= 64;
+  // nosemgrep: ajinabraham.njsscan.dos.regex_dos.regex_dos
   const local = (ambiente['IMAGENS_S3_ENDPOINT'] ?? '').trim();
-  if (local && ENDERECO_LOCAL.test(api)) return ENDERECO_LOCAL.test(local) ? local : null;
+  if (local && curto(api) && ENDERECO_LOCAL.test(api)) return curto(local) && ENDERECO_LOCAL.test(local) ? local : null;
   const bucket = (ambiente['IMAGENS_BUCKET'] ?? '').trim();
   const regiao = (ambiente['AWS_REGION'] ?? '').trim() || 'sa-east-1';
   if (!NOME_DO_BUCKET.test(bucket) || !REGIAO.test(regiao)) return null;
