@@ -37179,6 +37179,31 @@
                         },
                         "platform_parts_enabled": {
                           "type": "boolean"
+                        },
+                        "plan_parts": {
+                          "type": [
+                            "array",
+                            "null"
+                          ],
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "provider": {
+                                "type": "string",
+                                "pattern": "^[a-z_]{2,30}$"
+                              },
+                              "micros": {
+                                "type": "integer",
+                                "minimum": 0,
+                                "maximum": 9007199254740991
+                              }
+                            },
+                            "required": [
+                              "provider",
+                              "micros"
+                            ],
+                            "additionalProperties": false
+                          }
                         }
                       },
                       "required": [
@@ -37934,6 +37959,31 @@
                         },
                         "platform_parts_enabled": {
                           "type": "boolean"
+                        },
+                        "plan_parts": {
+                          "type": [
+                            "array",
+                            "null"
+                          ],
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "provider": {
+                                "type": "string",
+                                "pattern": "^[a-z_]{2,30}$"
+                              },
+                              "micros": {
+                                "type": "integer",
+                                "minimum": 0,
+                                "maximum": 9007199254740991
+                              }
+                            },
+                            "required": [
+                              "provider",
+                              "micros"
+                            ],
+                            "additionalProperties": false
+                          }
                         }
                       },
                       "required": [

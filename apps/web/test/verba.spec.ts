@@ -7,6 +7,16 @@ import { textoDe } from '@/components/resultados/textos';
 import { Fontes, textoCorrido } from '@/components/resumo/textos';
 import { itensVisiveis, NAVEGACAO, temModos, tituloDa } from '@/components/shell/navegacao';
 import { Icone } from '@/components/ui/icone';
+import {
+  abaixoDoGasto,
+  divisaoInicial,
+  divisaoNosLimites,
+  partesDaVerba,
+  plataformasDoForm,
+  situacaoDaParte,
+  sugestaoDoPlano,
+  textoDaSoma,
+} from '@/components/verba/divisao';
 import { desenhosDaVerba, diasLidos, mesDesenhado, ondeOGastoFoi, passoDaGrade, reaisCurtos, vereditoDaVerba } from '@/components/verba/graficos';
 import {
   avisosDaVerba,
@@ -283,10 +293,20 @@ describe('Verba do mês: o cartão do mês', () => {
     const p = plataformasDaVerba(verba());
     expect(p.legenda).toBe('Gasto de setembro por plataforma: até ontem, ritmo por dia e previsão de fechamento');
     expect(p.linhas).toEqual([
-      { provider: 'meta_ads', nome: 'Meta Ads', classe: 'meta', nota: null, gasto: nbsp('R$ 3.381,20'), ritmo: nbsp('R$ 120,76'), previsto: nbsp('R$ 3.622,72') },
-      { provider: 'google_ads', nome: 'Google Ads', classe: 'google', nota: 'só leitura: o Liame ainda não muda campanhas do Google', gasto: nbsp('R$ 1.578,80'), ritmo: nbsp('R$ 52,71'), previsto: nbsp('R$ 1.684,22') },
+      { provider: 'meta_ads', nome: 'Meta Ads', classe: 'meta', nota: null, gasto: nbsp('R$ 3.381,20'), ritmo: nbsp('R$ 120,76'), previsto: nbsp('R$ 3.622,72'), parte: null },
+      {
+        provider: 'google_ads',
+        nome: 'Google Ads',
+        classe: 'google',
+        nota: 'só leitura: o Liame ainda não muda campanhas do Google',
+        gasto: nbsp('R$ 1.578,80'),
+        ritmo: nbsp('R$ 52,71'),
+        previsto: nbsp('R$ 1.684,22'),
+        parte: null,
+      },
     ]);
-    expect(p.total).toEqual({ gasto: nbsp('R$ 4.960,00'), ritmo: nbsp('R$ 173,47'), previsto: nbsp('R$ 5.306,94') });
+    expect(p.total).toEqual({ gasto: nbsp('R$ 4.960,00'), ritmo: nbsp('R$ 173,47'), previsto: nbsp('R$ 5.306,94'), parte: null });
+    expect(p.comParte).toBe(false);
   });
 });
 
@@ -545,6 +565,12 @@ describe('Verba do mês: os desenhos', () => {
       rotulo: nbsp('Meta Ads: R$ 3.381,20 até 28/09, 68% do gasto do mês. Previsão de fechamento: R$ 3.622,72.'),
       dicaGasto: nbsp('R$ 3.381,20|Meta Ads · gasto até 28/09'),
       dicaPrevisto: nbsp('R$ 3.622,72|Meta Ads · previsto até o dia 30'),
+      // Sem a divisão por plataforma (P36), nenhuma marca de parte, selo ou frase.
+      marca: null,
+      dicaParte: null,
+      selo: null,
+      frase: null,
+      acima: false,
     });
     expect(google).toMatchObject({ nome: 'Google Ads', classe: 'google', gasto: 43.58, aMais: 2.91, parte: '32% do gasto' });
     // Sem gasto no mês não há parte a dizer; a conta nunca lida diz isso no lugar da data.
@@ -1110,5 +1136,221 @@ describe('Verba do mês: onde o Liame muda campanhas (A5 · Y3)', () => {
     expect(texto(atrasada('meta_ads', false))).not.toContain('pedido novo');
     // Sem o servidor dizer, vale o de sempre (a Meta com a frase).
     expect(texto(atrasada('meta_ads', undefined))).toContain('um pedido novo continua lendo a campanha na Meta na hora.');
+  });
+});
+
+describe('Verba do mês: a divisão por plataforma (A4 · X9; P36, D-A4-36 a D-A4-39)', () => {
+  /** Setembro com o teto dividido: a parte de cada plataforma e o que sobra nela (parte − previsão − o que pesa hoje). */
+  const dividida = (meta: number, google: number, over: { pendenteMeta?: number; sem?: string } = {}) => {
+    const parte = (provider: string, reais: number, previsto: number, pendente = 0) =>
+      over.sem === provider ? null : { micros: r(reais), pending_micros: pendente, remaining_micros: r(reais) - previsto - pendente };
+    return verba(
+      {
+        platforms: [
+          plataformaDoMes('meta_ads', { part: parte('meta_ads', meta, r(3622.72), over.pendenteMeta ?? 0) }),
+          plataformaDoMes('google_ads', { part: parte('google_ads', google, r(1684.22)) }),
+        ],
+      },
+      {
+        month_micros: r(meta + google),
+        platform_parts: [
+          { provider: 'meta_ads', micros: r(meta) },
+          { provider: 'google_ads', micros: r(google) },
+        ].filter((p) => p.provider !== over.sem),
+        platform_parts_enabled: true,
+      },
+    );
+  };
+
+  it('a situação de cada plataforma: cabe, perto (sobra abaixo de 2% da parte), passa e já passou', () => {
+    expect(situacaoDaParte(r(3381.2), r(3700), r(77.28))).toBe('cabe');
+    expect(situacaoDaParte(r(3381.2), r(3650), r(27.28))).toBe('perto');
+    expect(situacaoDaParte(r(3381.2), r(3500), -r(122.72))).toBe('passa');
+    expect(situacaoDaParte(r(3381.2), r(3300), -r(322.72))).toBe('passou');
+  });
+
+  it('a parte de cada plataforma e a frase curta: sem divisão, ou com a função desligada, nada', () => {
+    expect(partesDaVerba(verba())).toBeNull();
+    expect(partesDaVerba(verba({}, { platform_parts: [{ provider: 'meta_ads', micros: r(3700) }], platform_parts_enabled: false }))).toBeNull();
+    const [meta, google] = partesDaVerba(dividida(3700, 1800))!;
+    expect(meta).toMatchObject({ provider: 'meta_ads', parte: nbsp('R$ 3.700,00'), situacao: 'cabe', selo: { classe: 'concluido', rotulo: 'Cabe na parte' }, acima: false, escreve: true });
+    expect(meta!.frase).toBe(nbsp('No ritmo atual, fecha em R$ 3.622,72: sobram R$ 77,28.'));
+    expect(google).toMatchObject({ situacao: 'cabe', escreve: false });
+    // Passa: na Meta, o Liame nega o aumento; no Google, só acompanha.
+    expect(partesDaVerba(dividida(3500, 2000))![0]!.frase).toBe(nbsp('No ritmo atual, fecha em R$ 3.622,72: R$ 122,72 além da parte. Aumentar e retomar na Meta ficam negados.'));
+    expect(partesDaVerba(dividida(3900, 1600))![1]!.frase).toBe(nbsp('No ritmo atual, fecha em R$ 1.684,22: R$ 84,22 além da parte. O Liame só acompanha o Google.'));
+    expect(partesDaVerba(dividida(3300, 2200))![0]!.frase).toBe(nbsp('Já gastou R$ 81,20 além da parte. Aumentar e retomar na Meta ficam negados.'));
+    // O que pesa hoje na plataforma entra na previsão dela.
+    expect(partesDaVerba(dividida(3700, 1800, { pendenteMeta: r(100) }))![0]).toMatchObject({ situacao: 'passa', fimMicros: r(3722.72) });
+  });
+
+  it('a faixa de cada plataforma que passa da parte: vermelha na Meta (a trava), amarela no Google (só acompanha), com "Mudar a divisão"', () => {
+    expect(avisosDaVerba(dividida(3700, 1800), AGORA)).toEqual([]);
+    expect(avisosDaVerba(dividida(3500, 2000), AGORA)).toEqual([
+      {
+        chave: 'parte-meta_ads',
+        tipo: 'perigo',
+        icone: 'alert',
+        titulo: 'No ritmo atual, a Meta passa da parte dela no dia 29',
+        texto: nbsp('A Meta fecha setembro em R$ 3.622,72, e a parte dela é de R$ 3.500,00. Aumentar e retomar campanhas da Meta ficam negados; reduzir e pausar, o Liame sempre aceita. O total do mês ainda cabe no teto.'),
+        acao: 'divisao',
+      },
+    ]);
+    expect(avisosDaVerba(dividida(3900, 1600), AGORA)).toEqual([
+      {
+        chave: 'parte-google_ads',
+        tipo: 'atencao',
+        icone: 'alert',
+        titulo: 'No ritmo atual, o Google passa da parte dele no dia 29',
+        texto: nbsp('O Google fecha setembro em R$ 1.684,22, e a parte dele é de R$ 1.600,00. O Liame ainda não muda campanhas do Google: para gastar menos lá, ajuste no Google, ou mude a divisão. O total do mês ainda cabe no teto.'),
+        acao: 'divisao',
+      },
+    ]);
+    expect(avisosDaVerba(dividida(3300, 2200), AGORA)[0]!.titulo).toBe('A Meta já passou da parte dela em setembro');
+  });
+
+  it('o bloco no cartão dos limites: com a função desligada, nada; sem divisão, o convite (só para quem muda os limites); dividida, as partes e as notas', () => {
+    expect(divisaoNosLimites(verba(), true)).toBeNull();
+    const ligada = verba({}, { platform_parts: null, platform_parts_enabled: true });
+    expect(divisaoNosLimites(ligada, true)).toEqual({
+      dividida: false,
+      texto: 'O teto do mês vale para a Meta e o Google juntos. Se quiser, diga quanto vai para cada plataforma: o Liame passa a negar o aumento que fizer uma delas passar da parte dela.',
+      podeDividir: true,
+    });
+    expect(divisaoNosLimites(ligada, false)).toMatchObject({ dividida: false, podeDividir: false });
+    expect(divisaoNosLimites(verba({}, { month_micros: null, platform_parts_enabled: true }), true)).toMatchObject({ podeDividir: false });
+    expect(divisaoNosLimites(dividida(3500, 2000), true)).toEqual({
+      dividida: true,
+      linhas: [
+        { provider: 'meta_ads', nome: 'Meta Ads', classe: 'meta', parte: nbsp('R$ 3.500,00'), selo: { classe: 'perigo', rotulo: 'Passa da parte' } },
+        { provider: 'google_ads', nome: 'Google Ads', classe: 'google', parte: nbsp('R$ 2.000,00'), selo: { classe: 'concluido', rotulo: 'Cabe na parte' } },
+      ],
+      notas: [
+        'A soma é o teto do mês. Aumentar ou retomar numa plataforma que passaria da parte dela fica negado, mesmo com o total cabendo.',
+        'O Liame ainda não muda campanhas do Google: a parte dele é acompanhada.',
+        'As plataformas que você conectar depois, como o TikTok Ads, entram aqui quando o Liame passar a ler o gasto delas.',
+      ],
+    });
+    // A plataforma conectada depois da divisão aparece sem parte, com o que fazer.
+    expect((divisaoNosLimites(dividida(3700, 1800, { sem: 'google_ads' }), true) as { notas: string[] }).notas).toContain(
+      'O Google foi conectado depois da divisão e ainda não tem parte: mude a divisão para incluir.',
+    );
+  });
+
+  it('a tabela por plataforma ganha a coluna da parte; "Onde o gasto foi" ganha a marca da parte na mesma régua', () => {
+    const p = plataformasDaVerba(dividida(3700, 1800));
+    expect([p.comParte, p.legenda]).toEqual([true, 'Gasto de setembro por plataforma: até ontem, ritmo por dia, previsão de fechamento e a parte de cada uma']);
+    expect(p.linhas.map((l) => l.parte)).toEqual([nbsp('R$ 3.700,00'), nbsp('R$ 1.800,00')]);
+    expect(p.total.parte).toBe(nbsp('R$ 5.500,00'));
+    const v = dividida(3700, 1800);
+    const [meta, google] = ondeOGastoFoi(v, mesDaVerba(v));
+    // A régua vai até a maior entre o gasto, a previsão e a parte: a parte da Meta (R$ 3.700,00).
+    expect(meta).toMatchObject({ marca: 100, gasto: 91.38, parte: nbsp('de R$ 3.700,00'), selo: { rotulo: 'Cabe na parte' }, acima: false });
+    expect(meta!.rotulo).toBe(nbsp('Meta Ads: R$ 3.381,20 até 28/09, de uma parte de R$ 3.700,00. Previsão de fechamento: R$ 3.622,72. Cabe na parte.'));
+    expect(meta!.dicaParte).toBe(nbsp('R$ 3.700,00|a parte da Meta no mês'));
+    expect(google).toMatchObject({ marca: 48.65, parte: nbsp('de R$ 1.800,00') });
+    expect(ondeOGastoFoi(dividida(3500, 2000), mesDaVerba(v))[0]!.acima).toBe(true);
+  });
+
+  it('o formulário: a divisão com que a chave liga, a soma, o aviso abaixo do gasto e a sugestão do plano', () => {
+    // Sem divisão: o teto de hoje (R$ 5.500,00) dividido como o gasto do mês, em centenas, com o resto no Google.
+    expect(divisaoInicial(verba({}, { platform_parts_enabled: true }))).toEqual({ meta_ads: r(3700), google_ads: r(1800) });
+    // Sem teto: a previsão arredondada para cima, em centenas (R$ 5.400,00).
+    expect(divisaoInicial(semTeto())).toEqual({ meta_ads: r(3700), google_ads: r(1700) });
+    // Com divisão: a de agora.
+    expect(divisaoInicial(dividida(3500, 2000))).toEqual({ meta_ads: r(3500), google_ads: r(2000) });
+    expect(textoDaSoma(null, r(5500))).toEqual({ valor: null, resto: 'Soma: digite a parte de cada plataforma.' });
+    expect(textoDaSoma(r(5600), r(5500))).toEqual({ valor: nbsp('R$ 5.600,00'), resto: nbsp('É o teto do mês (hoje, R$ 5.500,00).') });
+    expect(textoDaSoma(r(5500), r(5500))).toEqual({ valor: nbsp('R$ 5.500,00'), resto: 'É o teto do mês.' });
+    const [meta, google] = plataformasDoForm(verba(), 'setembro', '28/09');
+    expect(meta).toEqual({ provider: 'meta_ads', nome: 'Meta Ads', classe: 'meta', dica: nbsp('Gastou R$ 3.381,20 até 28/09; no ritmo atual, fecha setembro em R$ 3.622,72.'), gastoMicros: r(3381.2), escreve: true });
+    expect(abaixoDoGasto(meta!, r(3000), 'setembro')).toBe('Abaixo do que a Meta já gastou em setembro: até o fim do mês, fica acima da parte dela, e aumentar e retomar na Meta ficam negados.');
+    expect(abaixoDoGasto(google!, r(1000), 'setembro')).toBe('Abaixo do que o Google já gastou em setembro: até o fim do mês, fica acima da parte dele.');
+    expect([abaixoDoGasto(meta!, r(3700), 'setembro'), abaixoDoGasto(meta!, null, 'setembro')]).toEqual([null, null]);
+    expect(sugestaoDoPlano(verba())).toBeNull();
+    expect(
+      sugestaoDoPlano(
+        verba({}, {
+          plan_parts: [
+            { provider: 'meta_ads', micros: r(3920) },
+            { provider: 'google_ads', micros: r(1390) },
+          ],
+        }),
+      ),
+    ).toEqual({ texto: nbsp('O plano do trimestre que você aprovou sugere R$ 3.920,00 para a Meta e R$ 1.390,00 para o Google, por mês.'), valores: { meta_ads: r(3920), google_ads: r(1390) } });
+  });
+
+  it('conferir antes de enviar: com a chave ligada, o teto é a soma das partes; desligada com a divisão de antes, ela sai; sem a função, o corpo não fala dela', () => {
+    const partes = (meta: string, google: string) => [
+      { provider: 'meta_ads', texto: meta },
+      { provider: 'google_ads', texto: google },
+    ];
+    expect(conferirLimites({ mes: '', campanha: '80', divisao: { dividir: true, partes: partes('3.700', '1.800,00'), tinha: false } })).toEqual({
+      ok: true,
+      corpo: {
+        month_micros: r(5500),
+        campaign_daily_micros: r(80),
+        platform_parts: [
+          { provider: 'meta_ads', micros: r(3700) },
+          { provider: 'google_ads', micros: r(1800) },
+        ],
+      },
+    });
+    expect(conferirLimites({ mes: '', campanha: '80', divisao: { dividir: true, partes: partes('3.700', ''), tinha: false } })).toEqual({
+      ok: false,
+      erro: 'Digite a parte do Google em reais, como 3.700,00.',
+      campo: 'parte:google_ads',
+    });
+    expect(conferirLimites({ mes: '5.500', campanha: '80', divisao: { dividir: false, partes: partes('', ''), tinha: true } })).toEqual({
+      ok: true,
+      corpo: { month_micros: r(5500), campaign_daily_micros: r(80), platform_parts: null },
+    });
+    expect(conferirLimites({ mes: '5.500', campanha: '80', divisao: { dividir: false, partes: [], tinha: false } })).toEqual({ ok: true, corpo: { month_micros: r(5500), campaign_daily_micros: r(80) } });
+    expect(conferirLimites({ mes: '5.500', campanha: '80', divisao: null })).toEqual({ ok: true, corpo: { month_micros: r(5500), campaign_daily_micros: r(80) } });
+    // O teto por campanha não passa da soma.
+    expect(conferirLimites({ mes: '', campanha: '9.000', divisao: { dividir: true, partes: partes('3.700', '1.800'), tinha: false } })).toMatchObject({ ok: false, campo: 'campanha' });
+    // A recusa do servidor sobre as partes vai para o primeiro campo das partes.
+    expect(erroAoSalvarLimites({ status: 400, title: 'Dados inválidos', errors: [{ path: 'platform_parts', message: 'A parte da Meta aparece duas vezes.' }] } as never)).toEqual({
+      erro: 'A parte da Meta aparece duas vezes.',
+      campo: 'partes',
+    });
+  });
+
+  it('a tela: o bloco da divisão no cartão dos limites, a coluna da parte no Pro e o "Mudar a divisão" na faixa (só para quem muda os limites)', () => {
+    const desenhar = (v: BudgetMonthResponse, podeDefinir = true, modo: 'lite' | 'pro' = 'pro') =>
+      renderToStaticMarkup(
+        createElement(ModoProvider, {
+          inicial: modo,
+          children: createElement(VerbaConteudo, {
+            tela: telaDaVerba(v, AGORA, podeDefinir),
+            limites: { mes: v.limits.month_micros, campanha: v.limits.campaign_daily_micros },
+            podeDefinir,
+            podeVerContas: true,
+            podeVerResultados: true,
+            editando: false,
+            aoEditar: () => {},
+            aoDividir: () => {},
+            aoCancelar: () => {},
+            aoSalvar: async () => null,
+          }),
+        }),
+      );
+    // A função desligada: a tela de antes.
+    expect(desenhar(verba())).not.toContain('Divisão por plataforma');
+    const convite = desenhar(verba({}, { platform_parts: null, platform_parts_enabled: true }));
+    expect(convite).toContain('<p class="limite-divisao-nao">Não dividido</p>');
+    expect(convite).toContain('Dividir por plataforma');
+    expect(desenhar(verba({}, { platform_parts: null, platform_parts_enabled: true }), false)).not.toContain('Dividir por plataforma</button>');
+    const html = desenhar(dividida(3500, 2000));
+    expect(html).toContain('A soma das partes de cada plataforma, abaixo. Vale para cada mês, até você mudar.');
+    expect(html).toContain('<b class="limite-divisao-val">' + nbsp('R$ 3.500,00') + '</b>');
+    expect(html).toContain('<span class="st st--perigo"><span class="dot"></span>Passa da parte</span>');
+    expect(html).toContain('No ritmo atual, a Meta passa da parte dela no dia 29');
+    expect(html).toContain('Mudar a divisão');
+    expect(html).toContain('vb-marca-parte');
+    expect(html).toContain('vb-trilho vb-trilho--acima');
+    expect(html).toContain('<th scope="col" class="n">Parte</th>');
+    // Quem só acompanha vê a faixa, mas sem o botão.
+    expect(desenhar(dividida(3500, 2000), false)).not.toContain('Mudar a divisão');
   });
 });

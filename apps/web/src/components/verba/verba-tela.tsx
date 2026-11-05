@@ -31,6 +31,8 @@ export function VerbaTela() {
   const [carga, setCarga] = useState<Carga>({ tipo: 'carregando' });
   const [tentativa, setTentativa] = useState(0);
   const [editando, setEditando] = useState(false);
+  /** O formulário abriu pelo "Dividir por plataforma" ou pelo "Mudar a divisão" (já com a chave ligada). */
+  const [dividindo, setDividindo] = useState(false);
   /** O que recebe o foco depois do próximo desenho: o título (depois de "Tentar de novo") ou o botão dos limites. */
   const focar = useRef<'titulo' | 'botao' | null>(null);
   // Só a resposta mais nova vale (salvar os limites no meio de uma leitura não volta os números de antes).
@@ -61,7 +63,7 @@ export function VerbaTela() {
     alvo?.focus({ preventScroll: true });
   }, [carga, editando]);
 
-  const tela = useMemo(() => (carga.tipo === 'ok' ? telaDaVerba(carga.dados, agora) : null), [carga, agora]);
+  const tela = useMemo(() => (carga.tipo === 'ok' ? telaDaVerba(carga.dados, agora, podeDefinir) : null), [carga, agora, podeDefinir]);
 
   if (!podeVer) {
     return (
@@ -80,6 +82,7 @@ export function VerbaTela() {
   function fecharOFormulario() {
     focar.current = 'botao';
     setEditando(false);
+    setDividindo(false);
   }
 
   async function salvar(corpo: BudgetLimitsRequest): Promise<Problema | null> {
@@ -125,7 +128,12 @@ export function VerbaTela() {
         podeVerContas={pode('contas.ver')}
         podeVerResultados={pode('vendas.ver')}
         editando={editando}
+        dividindo={dividindo}
         aoEditar={() => setEditando(true)}
+        aoDividir={() => {
+          setDividindo(true);
+          setEditando(true);
+        }}
         aoCancelar={fecharOFormulario}
         aoSalvar={salvar}
         botaoEditar={botaoEditar}

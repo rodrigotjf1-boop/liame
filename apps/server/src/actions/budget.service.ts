@@ -173,6 +173,31 @@ export class BudgetService {
       values (${uuidv7()}, ${input.tenantId}, ${input.brandId}, ${period}, ${input.actionId}, 'reserva', ${input.amountMicros})`);
   }
 
+  /**
+   * A divisão que o plano do trimestre aprovado mais recente da empresa propõe (D-A4-38): a verba da Meta e a do Google
+   * por mês (em reais inteiros no plano), em micros. Nula sem plano aprovado ou com a proposta sem valor.
+   */
+  private async divisaoDoPlano(tx: Tx, tenantId: string): Promise<Array<{ provider: string; micros: number }> | null> {
+    const r = await tx.execute<{ meta: unknown; google: unknown }>(sql`
+      select v.content->'budget'->'proposal'->'meta' as meta, v.content->'budget'->'proposal'->'google' as google
+        from liame.plan p
+        join liame.plan_version v on v.plan_id = p.id and v.version = p.version and v.tenant_id = p.tenant_id
+       where p.tenant_id = ${tenantId} and p.kind = 'noventa_dias' and p.status = 'aprovado'
+       order by p.updated_at desc, p.id desc
+       limit 1`);
+    const linha = r.rows[0];
+    if (!linha) return null;
+    const emMicros = (reais: unknown): number | null => (typeof reais === 'number' && Number.isSafeInteger(reais) && reais >= 0 ? reais * 1_000_000 : null);
+    const meta = emMicros(linha.meta);
+    const google = emMicros(linha.google);
+    if (meta === null || google === null) return null;
+    const partes = [
+      { provider: 'meta_ads', micros: meta },
+      { provider: 'google_ads', micros: google },
+    ].filter((p) => p.micros > 0);
+    return partes.length ? partes : null;
+  }
+
   /** A função da divisão por plataforma está ligada para a empresa (D-A4-36)? */
   private divisaoLigada(tenantId: string): Promise<boolean> {
     return this.flags.isEnabled(FLAG_DA_DIVISAO, this.flags.context({ tenantId }));
@@ -306,6 +331,8 @@ export class BudgetService {
               .map(([provider, micros]) => ({ provider, micros: Number(micros) }))
           : null,
         platform_parts_enabled: divisaoLigada,
+        // A sugestão do plano do trimestre (D-A4-38): só no formulário de quem muda os limites.
+        plan_parts: divisaoLigada && auth.permissions.has('orcamento.gerenciar') ? await this.divisaoDoPlano(tx, tenantId) : null,
       },
       remaining_micros: conta.sobra === null ? null : Number(conta.sobra),
       platforms: conta.plataformas.map((p) => ({
