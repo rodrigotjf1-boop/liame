@@ -229,7 +229,8 @@ export class PostsService {
 
     const f = await tx.execute<{ id: string; sha256: string; width: number; height: number }>(sql`
       select id, sha256, width, height from liame.brand_photo
-       where id = ${body.photo_id} and tenant_id = ${quem.tenantId} and brand_id = ${body.brand_id} and status = 'pronta' and removed_at is null`);
+       where id = ${body.photo_id} and tenant_id = ${quem.tenantId} and brand_id = ${body.brand_id} and status = 'pronta' and removed_at is null
+         and kind = 'foto_produto'`);
     const foto = f.rows[0];
     if (!foto) throw recusa('foto-fora-da-marca', 'Foto não encontrada', 'A foto não está nas Fotos desta marca (ou ainda não terminou de chegar).', 'photo_id');
     const comInstagram = canais.includes('instagram');

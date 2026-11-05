@@ -1,4 +1,4 @@
-import { BRAND_PHOTO_LIMITS as L } from '@liame/contracts';
+import { BRAND_PHOTO_LIMITS as L, BRAND_VIDEO_LIMITS as V } from '@liame/contracts';
 
 // A conferência da foto que a empresa envia (ADR-021, item 3; protótipo P20). Funções puras: o serviço, a rotina e os
 // testes usam as mesmas. Os textos das recusas são os do P20 (a tela mostra "Não entrou: …" com o `detail`).
@@ -79,8 +79,83 @@ export function chaveDoRecorteDoPost(tenantId: string, brandId: string, postId: 
   return `${prefixoDaMarca(tenantId, brandId)}post/${postId}-instagram.jpg`;
 }
 
+/**
+ * A chave da miniatura da foto, ou da capa do vídeo (A6 · Z10): `{id}-mini.jpg`, ao lado do arquivo. A rotina de
+ * limpeza apaga o arquivo e esta chave juntos.
+ */
 export function chaveDaMiniatura(chave: string): string {
-  return chave.endsWith('.jpg') ? `${chave.slice(0, -'.jpg'.length)}-mini.jpg` : `${chave}-mini`;
+  for (const final of ['.jpg', '.mp4', '.mov']) if (chave.endsWith(final)) return `${chave.slice(0, -final.length)}-mini.jpg`;
+  return `${chave}-mini`;
+}
+
+// ------------------------------------------------------------------ o vídeo (A6 · Z10, parte 1; D-A6-68)
+
+/** A chave do vídeo no armazenamento: `video/{id}.mp4` ou `.mov`, ao lado das fotos da marca. */
+export function chaveDoVideo(tenantId: string, brandId: string, id: string, tipo: 'video/mp4' | 'video/quicktime'): string {
+  return `${prefixoDaMarca(tenantId, brandId)}video/${id}.${tipo === 'video/quicktime' ? 'mov' : 'mp4'}`;
+}
+
+/** Por que o vídeo não entrou: o `code` vai no problema (422), e o `detail` é o texto da tela (o do P37). */
+export type MotivoDaRecusaDoVideo = 'formato' | 'grande' | 'nao_abre' | 'longo' | 'curto' | 'codec' | 'resolucao';
+export const RECUSAS_DO_VIDEO: Record<MotivoDaRecusaDoVideo, { code: string; title: string; detail: string }> = {
+  formato: { code: 'video-formato', title: 'Formato não aceito', detail: 'Vídeo só em MP4 ou MOV.' },
+  grande: {
+    code: 'video-grande-demais',
+    title: 'Vídeo grande demais',
+    detail: `Passa de ${V.maxBytes / (1024 * 1024)} MB, o máximo do Reels. Grave em 1080p (não em 4K) ou corte no celular.`,
+  },
+  nao_abre: { code: 'video-nao-abre', title: 'O arquivo não abre', detail: 'O arquivo não abre como vídeo.' },
+  longo: {
+    code: 'video-longo',
+    title: 'Vídeo longo demais',
+    detail: `Passa de ${V.maxDurationMs / 1000} segundos, o máximo para sair também como Reels na Página do Facebook. Corte no celular e envie de novo.`,
+  },
+  curto: { code: 'video-curto', title: 'Vídeo curto demais', detail: `Tem menos de ${V.minDurationMs / 1000} segundos, o mínimo do Reels.` },
+  codec: {
+    code: 'video-codec',
+    title: 'Formato de vídeo não aceito',
+    detail: 'O vídeo precisa estar em H.264 ou HEVC, com o som em AAC, como o celular grava. Envie o arquivo original do celular.',
+  },
+  resolucao: {
+    code: 'video-resolucao',
+    title: 'Resolução acima do 4K',
+    detail: `Passa de 4K (${V.maxLongSide.toLocaleString('pt-BR')} px no lado maior). Grave em 4K ou menos e envie de novo.`,
+  },
+};
+
+/** Os codecs de vídeo (H.264 e HEVC) e de áudio (AAC) que o Reels aceita. */
+const CODECS_DE_VIDEO = new Set(['avc1', 'avc3', 'hvc1', 'hev1']);
+const CODECS_DE_AUDIO = new Set(['mp4a']);
+
+/**
+ * Confere o vídeo pelo cabeçalho e pelo tamanho guardado: o tamanho, o codec, a duração e a resolução (até o 4K; a
+ * redução para os 1.920 px do Reels é feita quando o vídeo vai à Meta, D-A6-68). O vídeo deitado entra (com aviso na
+ * tela).
+ */
+export function conferirVideo(
+  c: { duracaoMs: number; largura: number; altura: number; codec: string; temAudio: boolean; codecDoAudio: string | null },
+  bytes: number,
+): MotivoDaRecusaDoVideo | null {
+  if (bytes > V.maxBytes) return 'grande';
+  if (!Number.isInteger(c.largura) || !Number.isInteger(c.altura) || c.largura < 1 || c.altura < 1) return 'nao_abre';
+  if (!CODECS_DE_VIDEO.has(c.codec) || (c.temAudio && !CODECS_DE_AUDIO.has(c.codecDoAudio ?? ''))) return 'codec';
+  if (c.duracaoMs < V.minDurationMs) return 'curto';
+  if (c.duracaoMs > V.maxDurationMs) return 'longo';
+  if (Math.max(c.largura, c.altura) > V.maxLongSide) return 'resolucao';
+  return null;
+}
+
+/**
+ * As medidas com que o vídeo vai ao Reels (D-A6-68): o maior que 1.920 px no lado maior é reduzido na mesma proporção,
+ * com cada lado em número par (o H.264 e o HEVC pedem); o que cabe fica como está. A lista mostra estas medidas, e a
+ * parte 3 reduz o arquivo para elas antes de mandar à Meta.
+ */
+export function medidasNoReels(largura: number, altura: number): { largura: number; altura: number } {
+  const maior = Math.max(largura, altura);
+  if (maior <= V.reelsLongSide) return { largura, altura };
+  const escala = V.reelsLongSide / maior;
+  const par = (n: number) => Math.max(2, 2 * Math.round((n * escala) / 2));
+  return { largura: par(largura), altura: par(altura) };
 }
 
 export function prefixoDaMarca(tenantId: string, brandId: string): string {

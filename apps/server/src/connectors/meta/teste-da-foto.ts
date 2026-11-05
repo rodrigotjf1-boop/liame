@@ -90,7 +90,7 @@ export async function testarFotoNaMeta(deps: DepsDoTeste, p: PedidoDoTeste): Pro
     for (const l of c.rows) conexoes.push({ id: l.id, segredo: await deps.vault.readSecret(tx, l.credential_secret_id) });
     const f = await tx.execute<{ id: string; object_key: string; width: number; height: number }>(sql`
       select id, object_key, width, height from liame.brand_photo
-       where tenant_id = ${p.tenantId} and status = 'pronta' and removed_at is null
+       where tenant_id = ${p.tenantId} and status = 'pronta' and removed_at is null and kind = 'foto_produto'
          ${p.fotoId ? sql`and id = ${p.fotoId}` : sql``}
        order by created_at desc, id desc
        limit 50`);

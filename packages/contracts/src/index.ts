@@ -478,10 +478,14 @@ export {
 } from './pecas.js';
 export {
   BRAND_PHOTO_LIMITS,
+  BRAND_VIDEO_LIMITS,
   BrandPhoto,
   BrandPhotosQuery,
   BrandPhotosResponse,
   BrandPhotoUploadQuery,
+  BrandVideoMediaType,
+  BrandVideoUploadResponse,
+  CreateBrandVideoRequest,
   UpdateBrandPhotoRequest,
 } from './fotos.js';
 export {

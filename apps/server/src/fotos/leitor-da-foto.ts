@@ -38,6 +38,18 @@ export const ROTA_DO_LOGO_DA_AGENCIA: RotaDoArquivo = {
   interrompido: 'O logo não chegou inteiro. Tente de novo.',
 };
 
+/** A capa do vídeo das Fotos (A6 · Z10, parte 1): um quadro do vídeo que a tela tira, até 10 MB, como a foto. */
+export const ROTA_DA_CAPA_DO_VIDEO: RotaDoArquivo = {
+  metodo: 'PUT',
+  // Expressão fixa (V116): o prefixo `v1` escrito, como o `API_PREFIX`.
+  caminho: /^\/v1\/brand-photos\/[0-9a-f-]{36}\/cover$/,
+  limite: BRAND_PHOTO_LIMITS.maxBytes,
+  grande: 'Capa grande demais',
+  passa: 'Passa de 10 MB.',
+  semCompressao: 'Envie a capa sem compressão.',
+  interrompido: 'A capa não chegou inteira. Tente de novo.',
+};
+
 /** O documento com foto do pedido de recuperação da conta (A7, W8, parte 4a), até 10 MB. */
 export const ROTA_DO_DOCUMENTO_DA_RECUPERACAO: RotaDoArquivo = {
   metodo: 'POST',
