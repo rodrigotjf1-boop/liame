@@ -7,11 +7,12 @@ import { SCRIPT_TEMA } from './lib/tema';
 // aos próprios scripts; a página precisa ser renderizada a cada acesso (layout do app: `instant = false`
 // e `connection()`). Rota nova fica, por padrão, com a regra rígida.
 // As fotos dos produtos vêm do bucket do S3 (ADR-021): a origem dele é lida do ambiente do servidor na subida (o
-// objeto `process.env` inteiro, que o build não troca por valor fixo), e entra só no `img-src`.
+// objeto `process.env` inteiro, que o build não troca por valor fixo), e entra no `img-src`; o vídeo das Fotos (A6 ·
+// Z10), também no `media-src` (tocar) e no `connect-src` (o envio direto do navegador ao bucket).
 
 const isDev = process.env.NODE_ENV !== 'production';
 const api = new URL(process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001').origin;
-const imagens = origemDasImagens(process.env);
+const imagens = origemDasImagens(process.env, api);
 let hashTema: Promise<string> | undefined;
 
 export async function proxy(request: NextRequest) {

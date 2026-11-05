@@ -12,25 +12,37 @@ import { disparar } from '@/lib/disparar';
 import { useSessao } from '@/lib/sessao';
 import { CartaoFoto } from './cartao-foto';
 import { DialogoApagarFoto } from './dialogo-apagar-foto';
-import { enviarFoto, hashDoArquivo, medirImagem } from './enviar';
+import { concluirOVideo, enviarCapa, enviarFoto, hashDoArquivo, medirImagem, medirVideo, pedirEnvioDoVideo, quadroDoMeio, subirOVideo } from './enviar';
 import { FilaDoEnvio, type ItemDoEnvio } from './fila-do-envio';
 import { GavetaFoto } from './gaveta-foto';
 import {
-  ACEITA,
+  aceita,
   conferirArquivo,
+  conferirArquivoDeVideo,
   conferirMedidas,
+  conferirOVideo,
   contagens,
+  deitado,
+  doTipo,
   ENVIOS_JUNTOS,
+  ehArquivoDeVideo,
+  ehVideo,
   enderecosVencendo,
+  entrouOVideo,
   FALHA_DE_CONEXAO,
   foraDoLote,
   grupos,
+  INFO_COM_VIDEO,
   INFO_DO_ENVIO,
   nomeDoProduto,
   POR_VEZ,
+  quantosNaGrade,
+  type Recusa,
   recusaDoCodigo,
   resumoDoEnvio,
+  rotulosDoTipo,
   terminou,
+  type TipoNaGrade,
   visiveis,
 } from './textos';
 
@@ -39,6 +51,13 @@ import {
 // para a tela), com a lista do envio; a gaveta da foto (o produto, o que aparece nela, apagar). Quem tem `fotos.ver`
 // vê; quem tem `fotos.enviar` (o Dono, o Administrador e o Gestor; D-A6-19) envia, muda e apaga. A função `fotos`
 // nasce desligada: desligada, a tela diz isso e não envia nada.
+// O vídeo (A6 · Z10, parte 2; mockups/prototipo-video-fotos.html, P37 aprovado em 04/11/2026), com a função `videos`
+// ligada: "Enviar fotos e vídeos", o vídeo direto ao armazenamento (com a conferência do servidor e a capa), o filtro
+// Tudo, Fotos e Vídeos, e o vídeo na grade e na gaveta.
+
+type Medidas = { duracaoMs: number; largura: number; altura: number };
+/** O arquivo de cada item da lista; no vídeo, também onde o envio parou (a nova tentativa recomeça dali). */
+type Guardado = { arquivo: File; hash: string | null; deNovo: boolean; medidas?: Medidas | null; videoId?: string; subiu?: boolean };
 
 type Carga = { tipo: 'carregando' } | { tipo: 'ok'; dados: BrandPhotosResponse } | { tipo: 'erro'; problema: Problema };
 type Foco = { tipo: 'titulo' } | { tipo: 'fila' } | { tipo: 'foto'; indice: number };
@@ -60,6 +79,7 @@ export function FotosTela() {
   const [carga, setCarga] = useState<Carga>({ tipo: 'carregando' });
   const [tentativa, setTentativa] = useState(0);
   const [filtro, setFiltro] = useState('todas');
+  const [tipo, setTipo] = useState<TipoNaGrade>('tudo');
   const [fila, setFila] = useState<ItemDoEnvio[]>([]);
   const [aberta, setAberta] = useState<string | null>(null);
   const [apagar, setApagar] = useState<string | null>(null);
@@ -74,7 +94,7 @@ export function FotosTela() {
   // O envio: a lista espelhada num ref (o envio que termina lê a lista de agora), os arquivos por item, os hashes do que
   // já foi (a mesma foto não vai duas vezes) e quantos envios estão no ar.
   const filaRef = useRef<ItemDoEnvio[]>([]);
-  const arquivos = useRef(new Map<string, { arquivo: File; hash: string | null; deNovo: boolean }>());
+  const arquivos = useRef(new Map<string, Guardado>());
   const hashes = useRef(new Set<string>());
   const noAr = useRef(0);
   const montada = useRef(true);
@@ -107,6 +127,7 @@ export function FotosTela() {
     setAberta(null);
     setApagar(null);
     setFiltro('todas');
+    setTipo('tudo');
     disparar(
       chamar(() => api.GET('/v1/brand-photos', { params: { query: { brand_id: marca } } })).then((r) => {
         if (id !== seq.current) return;
@@ -175,7 +196,12 @@ export function FotosTela() {
     }
     if (anunciado.current) return;
     anunciado.current = true;
-    setAnuncio(resumoDoEnvio(fila.map((i) => i.fase)));
+    setAnuncio(
+      resumoDoEnvio(
+        fila.map((i) => i.fase),
+        fila.map((i) => Boolean(i.video)),
+      ),
+    );
   }, [fila]);
 
   // As prévias (endereços `blob:`) saem com a tela.
@@ -196,6 +222,67 @@ export function FotosTela() {
     setCarga((c) => (c.tipo === 'ok' && c.dados.brand_id === foto.brand_id ? { ...c, dados: { ...c.dados, items: [foto, ...c.dados.items.filter((f) => f.id !== foto.id)] } } : c));
   }, []);
 
+  /**
+   * Um vídeo da lista (A6 · Z10, parte 2): confere pelo próprio vídeo, pede o envio, manda o arquivo ao armazenamento,
+   * pede a conferência do servidor e manda a capa. A nova tentativa recomeça de onde parou: o vídeo que já subiu só é
+   * conferido de novo.
+   */
+  const enviarUmVideo = useCallback(
+    async (id: string) => {
+      const guardado = arquivos.current.get(id);
+      const item = filaRef.current.find((i) => i.id === id);
+      const destino = marcaDoEnvio.current;
+      if (!guardado || !item || !destino) return;
+      const recusar = (recusa: Recusa) => {
+        arquivos.current.delete(id);
+        mudarItem(id, { fase: 'recusada', recusa });
+      };
+      const falhar = (p: Problema) => mudarItem(id, { fase: 'falhou', falha: p.status === 0 ? FALHA_DE_CONEXAO : `Não foi: ${mensagemDe(p)}` });
+      /** O problema do servidor: a recusa com o motivo da tela, a função desligada ou a falha com "Tentar de novo". */
+      const doServidor = (p: Problema) => {
+        const recusa = recusaDoCodigo(p.code);
+        if (recusa === 'desligada') {
+          recusar('video_desligado');
+          disparar(reler());
+          return;
+        }
+        if (recusa) return recusar(recusa);
+        falhar(p);
+      };
+      mudarItem(id, { fase: 'enviando', pct: 0, falha: undefined });
+      if (guardado.medidas === undefined) guardado.medidas = item.previa ? await medirVideo(item.previa) : null;
+      const recusa = conferirOVideo(guardado.medidas ?? { duracaoMs: null, largura: 0, altura: 0 });
+      if (recusa) return recusar(recusa);
+      if (!guardado.subiu || !guardado.videoId) {
+        const pedido = await pedirEnvioDoVideo(destino, guardado.arquivo);
+        if (!pedido.ok) return doServidor(pedido.problema);
+        guardado.videoId = pedido.data.id;
+        const subiu = await subirOVideo(pedido.data.upload, guardado.arquivo, (pct) => mudarItem(id, pct >= 100 ? { fase: 'conferindo', pct: 100 } : { fase: 'enviando', pct }));
+        if (!subiu.ok) return falhar(subiu.problema);
+        guardado.subiu = true;
+      }
+      mudarItem(id, { fase: 'conferindo', pct: 100 });
+      const conferido = await concluirOVideo(guardado.videoId);
+      if (!conferido.ok) {
+        // O arquivo não chegou ao armazenamento: a nova tentativa manda de novo.
+        if (conferido.problema.code === 'video-nao-chegou') guardado.subiu = false;
+        return doServidor(conferido.problema);
+      }
+      let video = conferido.data;
+      // A capa: um quadro do meio do próprio arquivo (D-A6-70). Sem ela (o navegador não tirou), o vídeo entra igual.
+      const quadro = item.previa ? await quadroDoMeio(item.previa) : null;
+      if (quadro) {
+        const comCapa = await enviarCapa(video.id, quadro);
+        if (comCapa.ok) video = comCapa.data;
+      }
+      arquivos.current.delete(id);
+      const ehDeitado = deitado(video);
+      mudarItem(id, { fase: ehDeitado ? 'aviso' : 'ok', pct: 100, texto: ehDeitado || !video.video ? undefined : entrouOVideo(video.video.duration_ms) });
+      entrou(video);
+    },
+    [entrou, mudarItem, reler],
+  );
+
   /** Um arquivo da lista: confere as medidas e a repetida, envia e diz o que aconteceu. */
   const enviarUm = useCallback(
     async (id: string) => {
@@ -203,6 +290,7 @@ export function FotosTela() {
       const item = filaRef.current.find((i) => i.id === id);
       const destino = marcaDoEnvio.current;
       if (!guardado || !item || !destino) return;
+      if (item.video) return enviarUmVideo(id);
       mudarItem(id, { fase: 'enviando', pct: 0, falha: undefined });
       const { largura, altura } = item.previa ? await medirImagem(item.previa) : { largura: 0, altura: 0 };
       const medida = conferirMedidas(largura, altura);
@@ -241,7 +329,7 @@ export function FotosTela() {
       if (guardado.hash) hashes.current.delete(guardado.hash);
       mudarItem(id, { fase: 'falhou', falha: r.problema.status === 0 ? FALHA_DE_CONEXAO : `Não foi: ${mensagemDe(r.problema)}` });
     },
-    [entrou, mudarItem, reler],
+    [entrou, enviarUmVideo, mudarItem, reler],
   );
 
   /** Põe no ar os próximos da lista, dois por vez (o servidor regrava duas fotos por vez). */
@@ -262,6 +350,7 @@ export function FotosTela() {
 
   const dados = carga.tipo === 'ok' ? carga.dados : null;
   const podeEnviar = Boolean(dados?.enabled && dados.can_manage);
+  const podeVideo = Boolean(podeEnviar && dados?.videos_enabled);
 
   const receber = useCallback(
     (lista: File[]) => {
@@ -271,6 +360,13 @@ export function FotosTela() {
       if (sobra) avisar(foraDoLote(sobra));
       const novos: ItemDoEnvio[] = lista.slice(0, POR_VEZ).map((arquivo) => {
         const id = `e${++seqDoArquivo.current}`;
+        // O vídeo, com a função ligada (sem ela, ele cai na conferência da foto: "só JPEG, PNG ou WebP").
+        if (podeVideo && ehArquivoDeVideo(arquivo)) {
+          const recusaDoVideo = conferirArquivoDeVideo(arquivo);
+          if (recusaDoVideo) return { id, nome: arquivo.name, fase: 'recusada', recusa: recusaDoVideo, pct: 0, previa: null, video: true };
+          arquivos.current.set(id, { arquivo, hash: null, deNovo: false });
+          return { id, nome: arquivo.name, fase: 'na_fila', pct: 0, previa: URL.createObjectURL(arquivo), video: true };
+        }
         const recusa = conferirArquivo(arquivo);
         if (recusa) return { id, nome: arquivo.name, fase: 'recusada', recusa, pct: 0, previa: null };
         arquivos.current.set(id, { arquivo, hash: null, deNovo: false });
@@ -282,7 +378,7 @@ export function FotosTela() {
       });
       andar();
     },
-    [andar, avisar, marca, mudarFila, podeEnviar],
+    [andar, avisar, marca, mudarFila, podeEnviar, podeVideo],
   );
 
   function tentarDeNovo(id: string) {
@@ -329,8 +425,12 @@ export function FotosTela() {
   const nomeDaMarca = marcas?.find((m) => m.id === marca)?.name ?? 'sua marca';
   const lista = grupos(fotos, dados?.products ?? []);
   const filtroValido = filtro === 'todas' || lista.includes(filtro) ? filtro : 'todas';
-  const vistas = visiveis(fotos, filtroValido);
+  const vistas = doTipo(visiveis(fotos, filtroValido), tipo);
   const c = contagens(fotos);
+  // O filtro por tipo (P37): com a função de vídeo ligada, ou com vídeo na lista (a função desligada depois).
+  const comVideos = Boolean(dados?.videos_enabled) || fotos.some(ehVideo);
+  const info = podeVideo ? INFO_COM_VIDEO : INFO_DO_ENVIO;
+  const textoDoBotao = podeVideo ? 'Enviar fotos e vídeos' : 'Enviar fotos';
   const fotoAberta = aberta ? (fotos.find((f) => f.id === aberta) ?? null) : null;
 
   function abrir(id: string) {
@@ -409,10 +509,10 @@ export function FotosTela() {
             {dados.can_manage ? (
               <>
                 <p>Envie as fotos de verdade dos seus produtos. Dá para arrastar para cá.</p>
-                <p className="ft-info">{INFO_DO_ENVIO}</p>
+                <p className="ft-info">{info}</p>
                 <button className="btn btn--primary" type="button" data-ft-enviar="vazio" onClick={() => seletor.current?.click()}>
                   <Icone nome="upload" />
-                  Enviar fotos
+                  {textoDoBotao}
                 </button>
               </>
             ) : (
@@ -421,6 +521,26 @@ export function FotosTela() {
           </div>
         ) : (
           <>
+            {comVideos && (
+              <div className="seg ft-tipo" role="group" aria-label="Mostrar">
+                {rotulosDoTipo(fotos).map(([t, rotulo]) => (
+                  <button
+                    key={t}
+                    type="button"
+                    data-ft-tipo={t}
+                    aria-pressed={tipo === t}
+                    // Sem nenhum do tipo, o botão não tem o que mostrar.
+                    disabled={t !== 'tudo' && doTipo(fotos, t).length === 0}
+                    onClick={() => {
+                      setTipo(t);
+                      setAnuncio(quantosNaGrade(doTipo(visiveis(fotos, filtroValido), t)));
+                    }}
+                  >
+                    {rotulo}
+                  </button>
+                ))}
+              </div>
+            )}
             {lista.length > 1 && (
               <div className="filtros" role="group" aria-label="Filtrar por produto">
                 {[['todas', 'Todas'] as const, ...lista.map((g) => [g, nomeDoProduto(g || null)] as const)].map(([v, rotulo]) => (
@@ -431,8 +551,7 @@ export function FotosTela() {
                     aria-pressed={filtroValido === v}
                     onClick={() => {
                       setFiltro(v);
-                      const n = visiveis(fotos, v).length;
-                      setAnuncio(`${n} ${n === 1 ? 'foto' : 'fotos'}`);
+                      setAnuncio(quantosNaGrade(doTipo(visiveis(fotos, v), tipo)));
                     }}
                   >
                     {rotulo} <span className="num">{c.get(v) ?? 0}</span>
@@ -441,7 +560,7 @@ export function FotosTela() {
               </div>
             )}
             <h2 className="sr-only" id="ft-grade-t">
-              {vistas.length} {vistas.length === 1 ? 'foto' : 'fotos'}
+              {quantosNaGrade(vistas)}
             </h2>
             <ul className="ft-grade" aria-labelledby="ft-grade-t" ref={grade}>
               {vistas.map((f) => (
@@ -485,8 +604,12 @@ export function FotosTela() {
             <h1 id="h-fotos" ref={titulo} tabIndex={-1}>
               Fotos
             </h1>
-            <p>As fotos de verdade dos produtos da {nomeDaMarca}, como são. Os posts usam só estas fotos.</p>
-            {podeEnviar && tem && <p className="ft-info">{INFO_DO_ENVIO}</p>}
+            <p>
+              {dados?.videos_enabled
+                ? `As fotos e os vídeos de verdade dos produtos da ${nomeDaMarca}, como são. Os posts usam só estes.`
+                : `As fotos de verdade dos produtos da ${nomeDaMarca}, como são. Os posts usam só estas fotos.`}
+            </p>
+            {podeEnviar && tem && <p className="ft-info">{info}</p>}
           </div>
           <div className="cab-acoes">
             {marcas && marcas.length > 1 && (
@@ -504,7 +627,7 @@ export function FotosTela() {
             {podeEnviar && tem && (
               <button className="btn btn--primary" type="button" data-ft-enviar="cab" onClick={() => seletor.current?.click()}>
                 <Icone nome="upload" />
-                Enviar fotos
+                {textoDoBotao}
               </button>
             )}
           </div>
@@ -512,7 +635,7 @@ export function FotosTela() {
         <input
           ref={seletor}
           type="file"
-          accept={ACEITA}
+          accept={aceita(podeVideo)}
           multiple
           hidden
           onChange={(e) => {
@@ -548,7 +671,7 @@ export function FotosTela() {
           reserva={titulo}
           aoSalvar={(nova, mudou) => {
             if (mudou) setCarga((cg) => (cg.tipo === 'ok' ? { ...cg, dados: { ...cg.dados, items: cg.dados.items.map((f) => (f.id === nova.id ? nova : f)) } } : cg));
-            avisar(mudou ? 'Foto salva.' : 'Nada mudou.');
+            avisar(mudou ? (ehVideo(nova) ? 'Vídeo salvo.' : 'Foto salva.') : 'Nada mudou.');
           }}
           aoPedirApagar={() => setApagar(fotoAberta.id)}
           aoMudarLa={(p) => {
@@ -566,13 +689,16 @@ export function FotosTela() {
         <DialogoApagarFoto
           key={`apagar-${apagar}`}
           id={apagar}
+          video={fotos.some((f) => f.id === apagar && ehVideo(f))}
           aoApagar={(jaTinhaSaido) => {
             const indice = vistas.findIndex((f) => f.id === apagar);
+            const eraVideo = fotos.some((f) => f.id === apagar && ehVideo(f));
             setCarga((cg) => (cg.tipo === 'ok' ? { ...cg, dados: { ...cg.dados, items: cg.dados.items.filter((f) => f.id !== apagar) } } : cg));
             setApagar(null);
             setAberta(null);
             focar.current = { tipo: 'foto', indice: Math.max(indice, 0) };
-            avisar(jaTinhaSaido ? 'Esta foto já não estava mais aqui.' : 'Foto apagada.');
+            if (eraVideo) avisar(jaTinhaSaido ? 'Este vídeo já não estava mais aqui.' : 'Vídeo apagado.');
+            else avisar(jaTinhaSaido ? 'Esta foto já não estava mais aqui.' : 'Foto apagada.');
           }}
           aoFechar={() => setApagar(null)}
         />

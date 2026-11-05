@@ -30,14 +30,19 @@ type Base = { isDev: boolean; api: string; imagens?: string | null };
 
 const NOME_DO_BUCKET = /^[a-z0-9][a-z0-9-]{1,61}[a-z0-9]$/;
 const REGIAO = /^[a-z]{2}-[a-z]+-\d$/;
+const ENDERECO_LOCAL = /^http:\/\/(127\.0\.0\.1|localhost):\d{2,5}$/;
 
 /**
  * A origem das fotos dos produtos (A6 · Z4; ADR-021): o bucket privado do S3, que a tela lê por endereço assinado de 5
  * minutos. O nome do bucket tem o número da conta: vem do ambiente quando o servidor do web sobe (`IMAGENS_BUCKET`, o
  * mesmo da API), nunca do repositório. Sem o bucket, ou com o nome fora do formato, nenhuma origem a mais. A região é a
  * da API (São Paulo, se não vier).
+ * O S3 local do roteiro de navegador do vídeo (A6 · Z10; `IMAGENS_S3_ENDPOINT`, o mesmo da API) só vale com a API
+ * também nesta máquina (`api` em localhost): o roteiro roda o build de produção do web, e em produção a API é a pública.
  */
-export function origemDasImagens(ambiente: Readonly<Record<string, string | undefined>>): string | null {
+export function origemDasImagens(ambiente: Readonly<Record<string, string | undefined>>, api = ''): string | null {
+  const local = (ambiente['IMAGENS_S3_ENDPOINT'] ?? '').trim();
+  if (local && ENDERECO_LOCAL.test(api)) return ENDERECO_LOCAL.test(local) ? local : null;
   const bucket = (ambiente['IMAGENS_BUCKET'] ?? '').trim();
   const regiao = (ambiente['AWS_REGION'] ?? '').trim() || 'sa-east-1';
   if (!NOME_DO_BUCKET.test(bucket) || !REGIAO.test(regiao)) return null;
@@ -52,8 +57,11 @@ function diretivas({ isDev, api, imagens }: Base, scriptSrc: string, imagemDaApi
     "style-src 'self' 'unsafe-inline'",
     // A API só entra no img-src das telas do app: o logo público da agência no relatório do dono (A7, W7, parte 5a).
     `img-src 'self' blob: data:${imagemDaApi ? ` ${api}` : ''}${imagens ? ` ${imagens}` : ''}`,
+    // O vídeo das Fotos (A6 · Z10): toca do bucket (endereço assinado) e, antes do envio, do próprio arquivo (`blob:`).
+    `media-src 'self' blob:${imagens ? ` ${imagens}` : ''}`,
     "font-src 'self'",
-    `connect-src 'self' ${api}${isDev ? ' ws:' : ''}`,
+    // O vídeo vai do navegador direto ao bucket (o endereço de envio assinado), sem passar pela API.
+    `connect-src 'self' ${api}${imagens ? ` ${imagens}` : ''}${isDev ? ' ws:' : ''}`,
     "worker-src 'self' blob:",
     "object-src 'none'",
     "base-uri 'self'",

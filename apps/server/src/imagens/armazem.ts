@@ -368,18 +368,21 @@ export class ArmazemS3 implements ArmazemDeImagens {
 
   /**
    * O de produção. `credenciais` só nos testes (a assinatura sem rede); em produção, as do ambiente (o usuário
-   * `liame-sistema`).
+   * `liame-sistema`). `endereco`: um S3 local, só no desenvolvimento (o roteiro de navegador do vídeo; `criarArmazem`
+   * recusa em produção), com o bucket no caminho.
    */
-  static async criar(regiao: string, bucket: string, credenciais?: { accessKeyId: string; secretAccessKey: string }): Promise<ArmazemS3> {
+  static async criar(
+    regiao: string,
+    bucket: string,
+    credenciais?: { accessKeyId: string; secretAccessKey: string },
+    endereco?: string,
+  ): Promise<ArmazemS3> {
     const s3 = await import('@aws-sdk/client-s3');
     const { getSignedUrl } = await import('@aws-sdk/s3-request-presigner');
-    const cliente = new s3.S3Client({ region: regiao, ...(credenciais ? { credentials: credenciais } : {}) });
+    const comum = { region: regiao, ...(credenciais ? { credentials: credenciais } : {}), ...(endereco ? { endpoint: endereco, forcePathStyle: true } : {}) };
+    const cliente = new s3.S3Client(comum);
     const assinar: AssinadorDoS3 = (c, comando, segundos) => getSignedUrl(c as never, comando as never, { expiresIn: segundos });
-    const clienteDoEnvio = new s3.S3Client({
-      region: regiao,
-      requestChecksumCalculation: 'WHEN_REQUIRED',
-      ...(credenciais ? { credentials: credenciais } : {}),
-    });
+    const clienteDoEnvio = new s3.S3Client({ ...comum, requestChecksumCalculation: 'WHEN_REQUIRED' });
     const assinarEnvio: AssinadorDoEnvio = (comando, segundos) =>
       getSignedUrl(clienteDoEnvio, comando as never, { expiresIn: segundos, signableHeaders: new Set(['content-type']) });
     return new ArmazemS3(s3 as unknown as SdkDoS3, cliente, assinar, bucket, assinarEnvio);
@@ -526,14 +529,23 @@ const Env = z.object({
   IMAGENS_BUCKET: z.string().regex(/^[a-z0-9][a-z0-9-]{1,61}[a-z0-9]$/).optional(),
   /** A pasta do disco no desenvolvimento (fora do git). */
   IMAGENS_PASTA_LOCAL: z.string().min(1).optional(),
+  /**
+   * Um S3 local (o imitador do roteiro de navegador do vídeo, A6 · Z10), só no desenvolvimento: o vídeo vai do
+   * navegador direto ao armazenamento, e o disco não recebe esse envio. Em produção, o servidor não sobe com ele.
+   */
+  IMAGENS_S3_ENDPOINT: z
+    .string()
+    .regex(/^http:\/\/(127\.0\.0\.1|localhost):\d{2,5}$/)
+    .optional(),
   AWS_REGION: z.string().regex(/^[a-z]{2}-[a-z]+-\d$/).default('sa-east-1'),
 });
 
 /** Monta o armazenamento a partir do ambiente. Em produção, só o S3 (ou indisponível, sem o bucket). */
 export async function criarArmazem(source: NodeJS.ProcessEnv = process.env): Promise<ArmazemDeImagens> {
   const env = Env.parse(source);
+  if (env.IMAGENS_S3_ENDPOINT && env.NODE_ENV === 'production') throw new Error('config: em produção, IMAGENS_S3_ENDPOINT não vale (o S3 local é do desenvolvimento)');
   const tipo = env.IMAGENS_ARMAZEM ?? (env.NODE_ENV === 'production' ? 's3' : env.NODE_ENV === 'test' ? 'memoria' : 'disco');
-  if (tipo === 's3') return env.IMAGENS_BUCKET ? ArmazemS3.criar(env.AWS_REGION, env.IMAGENS_BUCKET) : new ArmazemFechado();
+  if (tipo === 's3') return env.IMAGENS_BUCKET ? ArmazemS3.criar(env.AWS_REGION, env.IMAGENS_BUCKET, undefined, env.IMAGENS_S3_ENDPOINT) : new ArmazemFechado();
   if (env.NODE_ENV === 'production') throw new Error('config: em produção, IMAGENS_ARMAZEM só pode ser s3 (ADR-021)');
   if (tipo === 'disco') return new ArmazemNoDisco(resolve(env.IMAGENS_PASTA_LOCAL ?? join(process.cwd(), '.liame-imagens-locais')));
   return new ArmazemNaMemoria();
