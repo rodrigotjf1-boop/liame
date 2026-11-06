@@ -109,7 +109,7 @@ O Liame aplica regras automáticas (e, quando ligado, o funcionário de Complian
 
 9.3. Você pode usar livremente, no seu negócio, os textos e as peças que os funcionários criam para você. Como são gerados por IA, não garantimos que sejam exclusivos nem que não se pareçam com conteúdos de terceiros. Confira marcas, imagens e alegações antes de publicar.
 
-9.4. **Fotos que você envia.** Ao enviar uma foto ao Liame (a dos seus produtos, para os posts), você declara que tem o direito de usá-la e que ela não mostra pessoas que dê para reconhecer sem a autorização delas, e responde por isso. O Liame guarda uma cópia sem os dados do aparelho (como a localização), usa a foto só para prestar o serviço, não gera imagem nova a partir dela e a apaga quando alguém da sua empresa apagar ou quando a marca for apagada.
+9.4. **Fotos e vídeos que você envia.** Ao enviar uma foto ou um vídeo ao Liame (os da sua marca, para os posts), você declara que tem o direito de usá-los e que eles não mostram pessoas que dê para reconhecer, nem a voz delas, sem a autorização delas, e responde por isso. Da foto, o Liame guarda uma cópia sem os dados do aparelho (como a localização); o vídeo fica como você gravou, com o que o aparelho põe dentro do arquivo. O Liame usa a foto e o vídeo só para prestar o serviço, não gera imagem nem vídeo novo a partir deles (a capa do vídeo é um quadro dele mesmo) e os apaga quando alguém da sua empresa apagar ou quando a marca for apagada.
 
 ## 10. Planos, pagamento e reajuste
 
