@@ -7,23 +7,33 @@ import { contaConectada } from '../connections/conectada.js';
 import type { CredencialGuardada } from '../connections/oauth.js';
 import { type ClienteConector, ErroConector } from '../connectors/cliente-http.js';
 import {
+  CODIGOS_DO_VIDEO_RECUSADO,
   CONTEINER_EM_PREPARO,
   COTA_DE_POSTS,
+  comoSaiNaPagina,
   ESPERA_DO_CONTEINER_MS,
+  enderecoDoEnvioNaPagina,
   enderecoDoPost,
   enderecoNaPagina,
   FLAG_DOS_POSTS,
   fotoJaNaPagina,
   idDaResposta,
   idDoPostDaPagina,
+  idDoVideoNaPagina,
   limiteDePosts,
   MAIOR_FOTO_DA_PAGINA_BYTES,
+  PREPARO_DO_VIDEO_MS,
   postJaPublicado,
+  REELS_DA_PAGINA,
+  RUPLOAD_OFICIAL,
   type SituacaoDoConteiner,
   situacaoDoConteiner,
+  situacaoDoVideoNaPagina,
   tokenDaPagina,
+  VIDEO_EM_PREPARO,
+  videoJaNaPagina,
 } from '../connectors/meta/publicacao.js';
-import { chaveDoRecorteDoPost, recorteDoInstagram } from '../fotos/conferencia.js';
+import { chaveDaMiniatura, chaveDoRecorteDoPost, recorteDoInstagram } from '../fotos/conferencia.js';
 import { VALIDADE_DO_ENDERECO_S } from '../fotos/fotos.service.js';
 import { type ArmazemDeImagens, FalhaDoArmazem } from '../imagens/armazem.js';
 import {
@@ -107,13 +117,19 @@ export type DependenciasDoPost = {
   recortar?: (bytes: Buffer, posicao: number) => Promise<Buffer | null>;
   /** Quanto esperar depois de criar o contêiner para a primeira conferência (os testes zeram). */
   esperaDoConteinerMs?: number;
+  /** Endereço do envio do vídeo à Página (o `rupload` oficial em produção; A6, Z10). */
+  ruploadUrl?: string;
 };
 
 /**
  * As capacidades da Meta que o post usa, no registro: publicar no Instagram e ler o que foi publicado lá (0087); a lista
- * das Páginas da autorização (0085); publicar a foto na Página e ler as fotos e o post dela (0088).
+ * das Páginas da autorização (0085); publicar a foto na Página e ler as fotos e o post dela (0088); e o vídeo na Página
+ * (0120): o Reels, o vídeo comum e a situação do vídeo.
  */
-export type CapacidadeDoPost = 'instagram_publish' | 'instagram_media' | 'pages' | 'pagina_publish' | 'pagina_media';
+export type CapacidadeDoPost = 'instagram_publish' | 'instagram_media' | 'pages' | 'pagina_publish' | 'pagina_media' | 'pagina_reels' | 'pagina_video' | 'pagina_video_media';
+
+/** Quanto vale o endereço do vídeo e da capa que a Meta busca: o máximo que o bucket aceita (10 minutos), com folga. */
+const VALIDADE_DO_VIDEO_S = 590;
 
 /** Depois de criar o contêiner, quanto esperar até a primeira conferência: a foto pequena costuma ficar pronta em segundos. */
 const PRIMEIRA_CONFERENCIA_MS = 5_000;
@@ -156,22 +172,44 @@ const NAO_ACHOU = (c: CanalDoPost) => `${A_REDE[c]} não achou este post para ap
 const SEM_O_POST = (c: CanalDoPost) => `O Liame não achou este post ${NO_CANAL[c]} para apagar. Confira ${NO_CANAL[c]} e apague por lá, se ele ainda estiver no ar.`;
 const PAGINA_FORA_AO_APAGAR = `A autorização da Meta não alcança mais esta Página. Conecte a Meta de novo em Contas conectadas, ou apague direto na Página. ${CONTINUA.facebook}`;
 
+// O vídeo (A6, Z10, parte 3a; D-A6-69): o que não sai, e onde.
+const VIDEO_RECUSADO = (c: CanalDoPost) => `${c === 'instagram' ? 'O Instagram' : 'A Página do Facebook'} não aceitou o vídeo deste post. ${NAO_SAIU[c]} Faça um post novo com outro vídeo.`;
+const VIDEO_SUMIU = (c: CanalDoPost) => `O arquivo do vídeo deste post não está mais guardado no Liame. ${NAO_SAIU[c]} Faça um post novo.`;
 /**
- * O motivo de o canal não ter saído pede um post novo, e "Tentar de novo" não adianta (A6, Z5d; D-A6-54): a foto que a
- * rede recusou, o arquivo da foto que não está mais guardado, a foto grande demais para a Página e a tentativa que não deu
- * para conferir (tentar de novo poderia publicar duas vezes). Os outros (a autorização, a permissão, a Página fora da
- * autorização, a trava, a rede que não aceitou) podem passar.
+ * A Meta não terminou o vídeo em 5 minutos (D-A6-69). No Instagram, nada saiu (o Liame só publica o contêiner pronto); na
+ * Página, a Meta já recebeu o vídeo e pode publicá-lo sozinha depois: "Tentar de novo" confere antes de mandar de novo.
+ */
+const SEM_PREPARO: Record<CanalDoPost, string> = {
+  instagram: `A Meta não terminou de preparar o vídeo em 5 minutos. ${NAO_SAIU.instagram} Use "Tentar de novo".`,
+  facebook:
+    'A Meta não terminou de publicar o vídeo na Página do Facebook em 5 minutos: ele pode aparecer lá daqui a pouco. Use "Tentar de novo": o Liame confere na Página antes de mandar de novo.',
+};
+
+/**
+ * O motivo de o canal não ter saído pede um post novo, e "Tentar de novo" não adianta (A6, Z5d; D-A6-54): a foto (ou o
+ * vídeo) que a rede recusou, o arquivo que não está mais guardado, a foto grande demais para a Página e a tentativa que não
+ * deu para conferir (tentar de novo poderia publicar duas vezes). Os outros (a autorização, a permissão, a Página fora da
+ * autorização, a trava, a rede que não aceitou, a Meta que não terminou o vídeo a tempo) podem passar.
  */
 export function pedeUmPostNovo(erro: string | null): boolean {
   if (!erro) return false;
-  return erro === FOTO_GRANDE || erro === SEM_CONFERIR || CANAIS_DO_POST.some((c) => erro === FOTO_RECUSADA(c) || erro === SEM_ARQUIVO(c));
+  return (
+    erro === FOTO_GRANDE ||
+    erro === SEM_CONFERIR ||
+    CANAIS_DO_POST.some((c) => erro === FOTO_RECUSADA(c) || erro === SEM_ARQUIVO(c) || erro === VIDEO_RECUSADO(c) || erro === VIDEO_SUMIU(c))
+  );
+}
+
+/** O canal não saiu porque a Meta não terminou o vídeo a tempo (A6, Z10; D-A6-69): "Tentar de novo" vale mesmo sem nenhum canal no ar. */
+export function naoTerminouDePreparar(erro: string | null): boolean {
+  return erro !== null && CANAIS_DO_POST.some((c) => erro === SEM_PREPARO[c]);
 }
 
 type LinhaDoPost = {
   id: string;
   brand_id: string;
   photo_id: string | null;
-  photo_sha256: string;
+  photo_sha256: string | null;
   foto_pronta: boolean | null;
   foto_chave: string | null;
   foto_largura: number | null;
@@ -183,15 +221,33 @@ type LinhaDoPost = {
   created_at: Date;
   version: number;
   fuso: string | null;
+  // O post com vídeo (A6, Z10, parte 3a).
+  media: string;
+  video_pronto: boolean | null;
+  video_duracao: number | null;
+  video_tem_capa: boolean | null;
+  video_capa_versao: number | null;
+  cover_photo_id: string | null;
+  cover_sha256: string | null;
+  cover_version: number | null;
+  capa_foto_pronta: boolean | null;
+  capa_foto_chave: string | null;
 };
 type LinhaDoCanal = { channel: string; conta: string | null; body: string; status: string };
 
-/** O post como o trilho o vê, com o que só a execução usa (o arquivo da foto e quando o post nasceu). */
+/**
+ * O vídeo do post como a execução o usa (A6, Z10): o arquivo, as medidas, a duração e a capa (o arquivo da capa presa no
+ * pedido, ou o quadro do meio, em milissegundos, para o Instagram escolher).
+ */
+export type VideoLido = { chave: string; largura: number; altura: number; bytes: number; duracaoMs: number; capa: { chave: string } | { meioMs: number } };
+
+/** O post como o trilho o vê, com o que só a execução usa (o arquivo da foto, ou do vídeo, e quando o post nasceu). */
 export type PostLido = {
   estado: EstadoDoPost;
   versao: number;
   marca: string;
   foto: { chave: string; largura: number; altura: number; bytes: number } | null;
+  video: VideoLido | null;
   criadoEm: Date;
   recorteGuardado: string | null;
 };
@@ -205,10 +261,14 @@ export async function lerEstadoDoPost(tx: Tx, tenantId: string, resourceId: stri
   const p = await tx.execute<LinhaDoPost>(sql`
     select p.id, p.brand_id, p.photo_id, p.photo_sha256, (f.status = 'pronta' and f.removed_at is null and f.sha256 = p.photo_sha256) as foto_pronta,
            f.object_key as foto_chave, f.width as foto_largura, f.height as foto_altura, f.bytes as foto_bytes,
-           p.crop_pos, p.instagram_object_key, p.publish_at, p.created_at, p.version, o.timezone as fuso
+           p.crop_pos, p.instagram_object_key, p.publish_at, p.created_at, p.version, o.timezone as fuso,
+           p.media, (f.kind = 'video' and f.status = 'pronta' and f.removed_at is null) as video_pronto, f.duration_ms as video_duracao,
+           f.has_cover as video_tem_capa, f.cover_version as video_capa_versao, p.cover_photo_id, p.cover_sha256, p.cover_version,
+           (cf.status = 'pronta' and cf.removed_at is null and cf.sha256 = p.cover_sha256) as capa_foto_pronta, cf.object_key as capa_foto_chave
       from liame.social_post p
       join liame.organization o on o.id = p.tenant_id
       left join liame.brand_photo f on f.id = p.photo_id
+      left join liame.brand_photo cf on cf.id = p.cover_photo_id and cf.kind = 'foto_produto'
      where p.id = ${id} and p.tenant_id = ${tenantId}`);
   const post = p.rows[0];
   if (!post) return null;
@@ -227,12 +287,15 @@ export async function lerEstadoDoPost(tx: Tx, tenantId: string, resourceId: stri
   const pronta = Boolean(post.photo_id && post.foto_pronta);
   const estado: EstadoDoPost = {
     post: post.id,
-    foto: pronta && post.photo_id ? { id: post.photo_id, sha256: post.photo_sha256 } : null,
+    foto: pronta && post.photo_id && post.photo_sha256 ? { id: post.photo_id, sha256: post.photo_sha256 } : null,
     recorte: post.crop_pos,
     hora: hora.toISOString(),
     hora_local: horaLocal(hora, fuso),
     canais: c.rows.filter((l) => ehCanal(l.channel)).map((l) => ({ canal: l.channel as CanalDoPost, conta: l.conta, texto: l.body, situacao: l.status as SituacaoDoCanal })),
   };
+  // O post com vídeo (A6, Z10, parte 3a): a chave `video` só existe nele, e o de foto segue com o estado de antes.
+  const video = post.media === 'video' ? videoDoPost(post) : null;
+  if (post.media === 'video') estado.video = video ? { id: post.photo_id!, capa: video.capaNoEstado } : null;
   return {
     estado,
     versao: post.version,
@@ -241,9 +304,30 @@ export async function lerEstadoDoPost(tx: Tx, tenantId: string, resourceId: stri
       pronta && post.foto_chave && post.foto_largura && post.foto_altura
         ? { chave: post.foto_chave, largura: post.foto_largura, altura: post.foto_altura, bytes: Number(post.foto_bytes ?? 0) }
         : null,
+    video: video?.lido ?? null,
     criadoEm: new Date(post.created_at),
     recorteGuardado: post.instagram_object_key,
   };
+}
+
+/**
+ * O vídeo do post e a capa presa no pedido (D-A6-70): a foto da capa, se ainda é a mesma (pelo resumo do arquivo); a capa
+ * do próprio vídeo, se a versão é a mesma; sem capa presa, o quadro do meio. A capa que mudou (ou a foto dela que foi
+ * apagada) fica nula no estado: o post não sai. Nulo quando o vídeo não está pronto (apagado).
+ */
+function videoDoPost(post: LinhaDoPost): { capaNoEstado: string | null; lido: VideoLido | null } | null {
+  if (!post.photo_id || !post.video_pronto || !post.foto_chave || !post.foto_largura || !post.foto_altura || !post.video_duracao) return null;
+  const base = { chave: post.foto_chave, largura: post.foto_largura, altura: post.foto_altura, bytes: Number(post.foto_bytes ?? 0), duracaoMs: post.video_duracao };
+  if (post.cover_sha256) {
+    // A foto da capa (a coluna do id fica nula quando a foto é apagada; o resumo fica, e a capa conta como mudada).
+    if (!post.cover_photo_id || !post.capa_foto_pronta || !post.capa_foto_chave) return { capaNoEstado: null, lido: null };
+    return { capaNoEstado: `foto:${post.cover_photo_id}`, lido: { ...base, capa: { chave: post.capa_foto_chave } } };
+  }
+  if (post.cover_version !== null) {
+    if (!post.video_tem_capa || post.video_capa_versao !== post.cover_version) return { capaNoEstado: null, lido: null };
+    return { capaNoEstado: `capa:${post.cover_version}`, lido: { ...base, capa: { chave: chaveDaMiniatura(post.foto_chave) } } };
+  }
+  return { capaNoEstado: 'meio', lido: { ...base, capa: { meioMs: Math.round(post.video_duracao / 2) } } };
 }
 
 /** O canal não sai: a frase vai para a pessoa (o pedido termina como "falhou", com ela). */
@@ -425,7 +509,7 @@ export class PostPublicacaoConnector implements Connector {
   private async publicado(tx: Tx, ref: ResourceRef, post: PostLido, canal: string, externo: string | null, permalink: string | null, deps: DependenciasDoPost): Promise<void> {
     await tx.execute(sql`
       update liame.social_post_channel
-         set status = 'publicado', external_id = ${externo}, permalink = ${permalink}, error = null,
+         set status = 'publicado', external_id = ${externo}, permalink = ${permalink}, error = null, preparing_since = null,
              published_at = coalesce(published_at, now()), attempted_at = coalesce(attempted_at, now()), updated_at = now(),
              -- A primeira leitura dos números, uma hora depois de sair (A6, Z7, parte c; D-A6-51).
              metrics_next_at = coalesce(metrics_next_at, now() + make_interval(mins => ${PRIMEIRA_LEITURA_MIN}))
@@ -436,7 +520,7 @@ export class PostPublicacaoConnector implements Connector {
   private async naoSaiu(tx: Tx, ref: ResourceRef, post: PostLido, canal: string, motivo: string, deps: DependenciasDoPost): Promise<void> {
     await tx.execute(sql`
       update liame.social_post_channel
-         set status = 'falhou', error = ${motivo.slice(0, 500)}, attempted_at = coalesce(attempted_at, now()), updated_at = now()
+         set status = 'falhou', error = ${motivo.slice(0, 500)}, attempted_at = coalesce(attempted_at, now()), preparing_since = null, updated_at = now()
        where id = ${canal}`);
     await this.limparRecorte(tx, ref, post, deps);
   }
@@ -456,12 +540,13 @@ export class PostPublicacaoConnector implements Connector {
       if (jaSaiu) return await this.publicado(tx, ref, post, canal.id, jaSaiu.id, jaSaiu.permalink, deps);
 
       // 2. O contêiner da tentativa anterior, antes de criar outro.
+      const recusada = post.video ? VIDEO_RECUSADO('instagram') : FOTO_RECUSADA('instagram');
       if (canal.container_id) {
         const situacao = await this.situacao(g, canal.container_id);
         if (situacao === 'publicado') return await this.publicado(tx, ref, post, canal.id, null, null, deps);
         if (situacao === 'pronto') return await this.publicarNoInstagram(tx, ref, post, canal.id, canal.container_id, g);
-        if (situacao === 'processando') throw emPreparo();
-        if (situacao === 'erro') throw new CanalNaoSaiu(FOTO_RECUSADA('instagram'));
+        if (situacao === 'processando') throw post.video ? await this.preparoDoVideo(tx, canal.id, 'instagram') : emPreparo();
+        if (situacao === 'erro') throw new CanalNaoSaiu(recusada);
         // Vencido (passou de 24 horas) ou sem situação conhecida: um contêiner novo.
       }
 
@@ -471,21 +556,26 @@ export class PostPublicacaoConnector implements Connector {
         throw new ErroConector('limite', META, `o Instagram chegou a ${limite.usados} de ${limite.total} posts pela API nas últimas 24 horas`, null, ESPERA_DA_COTA_MS, COTA_DE_POSTS);
       }
 
-      // 4. O contêiner: a foto (recortada, se não cabe no Instagram) e a legenda. A Meta busca a imagem na hora.
-      const imagem = await this.imagemDoInstagram(tx, ref, post, deps);
-      const conteiner = idDaResposta(await this.chamar<unknown>(g, 'POST', `${ig}/media`, 'instagram_publish', { corpo: { image_url: imagem, caption: canal.body }, custo: 3 }));
+      // 4. O contêiner: a foto (recortada, se não cabe no Instagram) e a legenda; ou o vídeo como Reels (A6, Z10), com a
+      // capa. A Meta busca a imagem na hora; o vídeo, ela prepara antes de deixar publicar.
+      const corpo = post.video
+        ? await this.reelsDoInstagram(post.video, canal.body, deps)
+        : { image_url: await this.imagemDoInstagram(tx, ref, post, deps), caption: canal.body };
+      const conteiner = idDaResposta(await this.chamar<unknown>(g, 'POST', `${ig}/media`, 'instagram_publish', { corpo, custo: 3 }));
       if (!conteiner) throw new CanalNaoSaiu(NAO_ACEITOU('instagram'));
+      // O preparo do vídeo começa a contar aqui (D-A6-69: até 5 minutos); a foto não tem esse prazo.
       await tx.execute(sql`
         update liame.social_post_channel
-           set container_id = ${conteiner}, status = 'publicando', attempted_at = now(), error = null, updated_at = now()
+           set container_id = ${conteiner}, status = 'publicando', attempted_at = now(), error = null, updated_at = now(),
+               preparing_since = ${post.video ? sql`now()` : sql`null`}
          where id = ${canal.id}`);
       await esperar(deps.esperaDoConteinerMs ?? PRIMEIRA_CONFERENCIA_MS);
       const situacao = await this.situacao(g, conteiner);
       if (situacao === 'pronto') return await this.publicarNoInstagram(tx, ref, post, canal.id, conteiner, g);
       if (situacao === 'publicado') return await this.publicado(tx, ref, post, canal.id, null, null, deps);
-      if (situacao === 'erro') throw new CanalNaoSaiu(FOTO_RECUSADA('instagram'));
-      // Ainda preparando a foto (ou sem situação conhecida logo depois de criar): o pedido espera um minuto.
-      throw emPreparo();
+      if (situacao === 'erro') throw new CanalNaoSaiu(recusada);
+      // Ainda preparando a foto ou o vídeo (ou sem situação conhecida logo depois de criar): o pedido espera um minuto.
+      throw post.video ? await this.preparoDoVideo(tx, canal.id, 'instagram') : emPreparo();
     } catch (err) {
       return await this.recusaDoCanal(tx, ref, post, 'instagram', canal.id, err, deps);
     }
@@ -503,7 +593,9 @@ export class PostPublicacaoConnector implements Connector {
       publicado = await this.chamar<unknown>(g, 'POST', `${g.conta}/media_publish`, 'instagram_publish', { corpo: { creation_id: conteiner }, custo: 3 });
     } catch (err) {
       // "A mídia ainda não está pronta" (código 9007): espera, como o contêiner que prepara a foto (base §2.2, [NC]).
-      if (err instanceof ErroConector && err.tipo === 'definitivo' && err.codigoProvider === '9007') throw emPreparo();
+      if (err instanceof ErroConector && err.tipo === 'definitivo' && err.codigoProvider === '9007') {
+        throw post.video ? await this.preparoDoVideo(tx, canal, 'instagram') : emPreparo();
+      }
       throw err;
     }
     const id = idDaResposta(publicado);
@@ -542,6 +634,43 @@ export class PostPublicacaoConnector implements Connector {
     }
   }
 
+  /**
+   * O contêiner do Reels (A6, Z10, parte 3a; a referência de `/{ig-user-id}/media`, conferida em 06/11/2026): o vídeo
+   * como a loja gravou (`video_url`, o endereço assinado que a Meta busca), a legenda, no Feed e na aba Reels
+   * (`share_to_feed`), e a capa presa no pedido: a imagem (`cover_url`, JPEG) ou o quadro do meio (`thumb_offset`, em
+   * milissegundos).
+   */
+  private async reelsDoInstagram(video: VideoLido, legenda: string, deps: DependenciasDoPost): Promise<Record<string, string>> {
+    try {
+      const corpo: Record<string, string> = {
+        media_type: 'REELS',
+        video_url: await deps.armazem.enderecoDeLeitura(video.chave, VALIDADE_DO_VIDEO_S),
+        caption: legenda,
+        share_to_feed: 'true',
+      };
+      if ('chave' in video.capa) corpo.cover_url = await deps.armazem.enderecoDeLeitura(video.capa.chave, VALIDADE_DO_VIDEO_S);
+      else corpo.thumb_offset = String(video.capa.meioMs);
+      return corpo;
+    } catch (err) {
+      if (err instanceof FalhaDoArmazem && err.semArquivo) throw new CanalNaoSaiu(VIDEO_SUMIU('instagram'));
+      throw err;
+    }
+  }
+
+  /**
+   * A Meta ainda prepara o vídeo (D-A6-69): conta desde quando, no relógio do banco. Até 5 minutos, o pedido espera um
+   * minuto (o adiamento do vídeo, que o executor não dobra nem conta); depois disso, o canal não sai nesta tentativa, com
+   * a frase do "Tentar de novo". Devolve o erro para quem chama lançar.
+   */
+  private async preparoDoVideo(tx: Tx, canal: string, qual: CanalDoPost): Promise<Error> {
+    const r = await tx.execute<{ passou: boolean | null }>(sql`
+      update liame.social_post_channel set preparing_since = coalesce(preparing_since, now()), updated_at = now()
+       where id = ${canal}
+      returning (now() - preparing_since) >= make_interval(secs => ${PREPARO_DO_VIDEO_MS / 1000}) as passou`);
+    if (r.rows[0]?.passou) return new CanalNaoSaiu(SEM_PREPARO[qual]);
+    return emPreparoDoVideo();
+  }
+
   /** O recorte sai assim que o Instagram buscou a imagem (o post publicado, ou o canal que não sai). */
   private async limparRecorte(tx: Tx, ref: ResourceRef, post: PostLido, deps: DependenciasDoPost): Promise<void> {
     const chave = post.recorteGuardado;
@@ -564,7 +693,7 @@ export class PostPublicacaoConnector implements Connector {
     if (canal.status === 'publicado') return;
     try {
       const pagina = canal.external_id;
-      const versoes = await this.versoes(deps, ['pages', 'pagina_publish', 'pagina_media']);
+      const versoes = await this.versoes(deps, post.video ? ['pages', 'pagina_reels', 'pagina_video', 'pagina_video_media'] : ['pages', 'pagina_publish', 'pagina_media']);
       // O token da Página, pela lista das Páginas da autorização (com as tarefas de quem autorizou).
       const daAutorizacao: Graph = { deps, conta: pagina, token: await this.token(tx, canal.credential_secret_id, deps), versoes };
       const contas = await this.chamar<unknown>(daAutorizacao, 'GET', 'me/accounts', 'pages', { params: { fields: 'id,access_token,tasks', limit: '100' } });
@@ -572,6 +701,8 @@ export class PostPublicacaoConnector implements Connector {
       if (!daPagina) throw new CanalNaoSaiu(PAGINA_FORA);
       if (!daPagina.podePublicar) throw new CanalNaoSaiu(SEM_PERMISSAO.facebook);
       const g: Graph = { deps, conta: pagina, token: daPagina.token, versoes };
+      // O vídeo (A6, Z10, parte 3a) tem o caminho dele: Reels, ou vídeo comum.
+      if (post.video) return await this.videoNaPagina(tx, ref, post, post.video, canal, g);
 
       // 1. A tentativa anterior pode ter publicado sem a resposta chegar: a foto já está na Página?
       let fotos: unknown = null;
@@ -619,6 +750,144 @@ export class PostPublicacaoConnector implements Connector {
       }
       return await this.recusaDoCanal(tx, ref, post, 'facebook', canal.id, err, deps);
     }
+  }
+
+  // ---- O vídeo na Página (A6, Z10, parte 3a; D-A6-69) ----------------------------------------------------------------
+
+  /**
+   * O vídeo na Página do Facebook (o "Reels Publishing" da Video API e a referência de `/{page-id}/videos`, conferidos em
+   * 06/11/2026). Em pé, a partir de 540 × 960, Reels: o começo (`POST /{page-id}/video_reels` com `upload_phase=start`,
+   * que devolve o id do vídeo), o envio pelo `rupload` com o endereço assinado no cabeçalho `file_url` (a Meta busca o
+   * arquivo) e o fim (`upload_phase=finish`, `video_state=PUBLISHED` e a legenda em `description`). Deitado, ou menor,
+   * vídeo comum: `POST /{page-id}/videos` com `file_url` e `description`. Uma vez só: o id do vídeo fica no canal assim
+   * que a Meta o devolve, e a tentativa seguinte confere a situação dele (`GET /{video-id}?fields=status`) antes de mandar
+   * de novo; o vídeo comum que saiu sem a resposta chegar é achado entre os vídeos da Página, pela legenda. A Meta publica
+   * sozinha depois de preparar: o Liame confere uma vez por minuto, por até 5 minutos. O Reels conta no limite de 30 por
+   * Página em 24 horas, que o Liame também conta (a Meta pede).
+   */
+  private async videoNaPagina(tx: Tx, ref: ResourceRef, post: PostLido, video: VideoLido, canal: CanalLido, g: Graph): Promise<void> {
+    const pagina = canal.external_id;
+    try {
+      // 1. A tentativa anterior: o vídeo dela já saiu, ainda prepara, ou a Meta recusou?
+      if (canal.container_id) {
+        const situacao = situacaoDoVideoNaPagina(await this.chamar<unknown>(g, 'GET', canal.container_id, 'pagina_video_media', { params: { fields: 'status' } }));
+        if (situacao === 'publicado') return await this.videoPublicadoNaPagina(tx, ref, post, canal.id, canal.container_id, g);
+        if (situacao === 'processando') throw await this.preparoDoVideo(tx, canal.id, 'facebook');
+        if (situacao === 'erro') throw new CanalNaoSaiu(VIDEO_RECUSADO('facebook'));
+        // Sem saber o que houve com ele, mandar de novo pode publicar duas vezes.
+        if (situacao === 'desconhecida') throw new CanalNaoSaiu(SEM_CONFERIR);
+        // Vencido: a sessão de envio passou do prazo sem publicar; uma nova.
+      }
+      const como = comoSaiNaPagina(video.largura, video.altura);
+      let videoId: string | null = null;
+      if (como === 'video') {
+        // 2. O vídeo comum que saiu sem a resposta chegar (a mesma legenda desde a criação do post): é o desta tentativa.
+        const recentes = await this.chamar<unknown>(g, 'GET', `${pagina}/videos`, 'pagina_video_media', { params: { fields: 'id,description,created_time', limit: String(RECENTES) } });
+        videoId = videoJaNaPagina(recentes, canal.body, post.criadoEm);
+        if (videoId) {
+          await this.guardarOVideo(tx, canal.id, videoId);
+        } else {
+          const r = await this.chamar<unknown>(g, 'POST', `${pagina}/videos`, 'pagina_video', { corpo: { file_url: await this.enderecoDoVideo(video.chave, g.deps), description: canal.body }, custo: 3 });
+          videoId = idDoVideoNaPagina(r);
+          if (!videoId) throw new CanalNaoSaiu(NAO_ACEITOU('facebook'));
+          await this.guardarOVideo(tx, canal.id, videoId);
+        }
+      } else {
+        // 3. O limite do Reels: 30 por Página em 24 horas (os do Liame nesta Página; a Meta também recusa).
+        const n = await this.videosNaPaginaEm24h(tx, ref.tenantId, pagina);
+        if (n >= REELS_DA_PAGINA.porDia) {
+          throw new ErroConector('limite', META, `a Página chegou a ${n} vídeos pelo Liame nas últimas 24 horas`, null, ESPERA_DA_COTA_MS, COTA_DE_POSTS);
+        }
+        const arquivo = await this.enderecoDoVideo(video.chave, g.deps);
+        const inicio = await this.chamar<{ upload_url?: unknown }>(g, 'POST', `${pagina}/video_reels`, 'pagina_reels', { corpo: { upload_phase: 'start' }, custo: 3 });
+        videoId = idDoVideoNaPagina(inicio);
+        if (!videoId) throw new CanalNaoSaiu(NAO_ACEITOU('facebook'));
+        await this.guardarOVideo(tx, canal.id, videoId);
+        await this.enviarAoRupload(g, enderecoDoEnvioNaPagina(inicio?.upload_url, g.deps.ruploadUrl ?? RUPLOAD_OFICIAL, videoId), arquivo);
+        await this.chamar<unknown>(g, 'POST', `${pagina}/video_reels`, 'pagina_reels', {
+          corpo: { upload_phase: 'finish', video_id: videoId, video_state: 'PUBLISHED', description: canal.body },
+          custo: 3,
+        });
+      }
+      // 4. A Meta prepara e publica sozinha: uma conferência logo depois; ainda não saiu, o pedido espera um minuto.
+      await esperar(g.deps.esperaDoConteinerMs ?? PRIMEIRA_CONFERENCIA_MS);
+      const situacao = situacaoDoVideoNaPagina(await this.chamar<unknown>(g, 'GET', videoId, 'pagina_video_media', { params: { fields: 'status' } }));
+      if (situacao === 'publicado') return await this.videoPublicadoNaPagina(tx, ref, post, canal.id, videoId, g);
+      if (situacao === 'erro') throw new CanalNaoSaiu(VIDEO_RECUSADO('facebook'));
+      throw await this.preparoDoVideo(tx, canal.id, 'facebook');
+    } catch (err) {
+      // A Página recusa o vídeo fora do que o Reels aceita (a proporção, a resolução, a duração, os quadros por segundo).
+      if (err instanceof ErroConector && err.tipo === 'definitivo' && CODIGOS_DO_VIDEO_RECUSADO.has(err.codigoProvider ?? '')) {
+        this.logger.warn(`post ${post.estado.post}: a Página recusou o vídeo (código ${err.codigoProvider}): ${err.message}`);
+        throw new CanalNaoSaiu(VIDEO_RECUSADO('facebook'));
+      }
+      throw err;
+    }
+  }
+
+  /** O endereço assinado do vídeo que a Meta busca (10 minutos, com folga), ou o canal que não sai sem o arquivo. */
+  private async enderecoDoVideo(chave: string, deps: DependenciasDoPost): Promise<string> {
+    try {
+      return await deps.armazem.enderecoDeLeitura(chave, VALIDADE_DO_VIDEO_S);
+    } catch (err) {
+      if (err instanceof FalhaDoArmazem && err.semArquivo) throw new CanalNaoSaiu(VIDEO_SUMIU('facebook'));
+      throw err;
+    }
+  }
+
+  /** O id do vídeo na Página fica no canal assim que a Meta o devolve: é por ele que a tentativa seguinte confere. */
+  private async guardarOVideo(tx: Tx, canal: string, videoId: string): Promise<void> {
+    await tx.execute(sql`
+      update liame.social_post_channel
+         set container_id = ${videoId}, status = 'publicando', attempted_at = now(), error = null, updated_at = now(),
+             preparing_since = coalesce(preparing_since, now())
+       where id = ${canal}`);
+  }
+
+  /**
+   * O arquivo vai à Meta pelo `rupload`, com o token da Página (`Authorization: OAuth`) e o endereço assinado em
+   * `file_url`: ela busca o vídeo (a opção do arquivo hospedado). Sem corpo; a resposta é `{"success": true}`.
+   */
+  private async enviarAoRupload(g: Graph, endereco: string, arquivo: string): Promise<void> {
+    const versao = g.versoes.pagina_reels;
+    if (!versao) throw new Error('post nas redes: a versão de pagina_reels não foi lida');
+    const r = await g.deps.cliente().requisitar<{ success?: unknown } | null>({
+      provider: META,
+      conta: g.conta,
+      url: endereco,
+      metodo: 'POST',
+      endpoint: 'pagina_reels',
+      apiVersion: versao,
+      cabecalhos: { authorization: `OAuth ${g.token}`, file_url: arquivo },
+      custo: 3,
+    });
+    if (r.corpo?.success !== true) throw new CanalNaoSaiu(NAO_ACEITOU('facebook'));
+  }
+
+  /** Quantos vídeos o Liame publicou nesta Página nas últimas 24 horas (o limite do Reels é por Página; os do Liame contam). */
+  private async videosNaPaginaEm24h(tx: Tx, tenantId: string, pagina: string): Promise<number> {
+    const r = await tx.execute<{ n: number }>(sql`
+      select count(*)::int as n
+        from liame.social_post_channel ch
+        join liame.social_post p on p.id = ch.post_id and p.tenant_id = ch.tenant_id
+        join liame.connected_account a on a.id = ch.connected_account_id and a.tenant_id = ch.tenant_id
+       where ch.tenant_id = ${tenantId} and ch.channel = 'facebook' and p.media = 'video' and a.external_id = ${pagina}
+         and ch.published_at > now() - interval '24 hours'`);
+    return r.rows[0]?.n ?? 0;
+  }
+
+  /** O vídeo saiu na Página: o id dele e o endereço (só para a Agenda: se a leitura falhar, ele saiu do mesmo jeito). */
+  private async videoPublicadoNaPagina(tx: Tx, ref: ResourceRef, post: PostLido, canal: string, videoId: string, g: Graph): Promise<void> {
+    let permalink: string | null = null;
+    try {
+      const r = await this.chamar<{ permalink_url?: unknown }>(g, 'GET', videoId, 'pagina_video_media', { params: { fields: 'permalink_url' } });
+      // O endereço do vídeo pode vir sem o domínio (`/{página}/videos/{id}/`).
+      const v = r?.permalink_url;
+      permalink = enderecoNaPagina(typeof v === 'string' && v.startsWith('/') ? `https://www.facebook.com${v}` : v);
+    } catch (err) {
+      if (!(err instanceof ErroConector)) throw err;
+    }
+    await this.publicado(tx, ref, post, canal, videoId, permalink, g.deps);
   }
 
   // ---- Apagar das redes (A6, Z5d, parte 6; D-A6-57) -----------------------------------------------------------------
@@ -752,6 +1021,11 @@ const recusado = (mensagem: string): ApplyResult => ({ ok: false, reason: 'recus
 /** O contêiner ainda prepara a foto: o pedido espera um minuto (a Meta recomenda conferir uma vez por minuto). */
 function emPreparo(): ErroConector {
   return new ErroConector('limite', META, 'o Instagram ainda prepara a foto do post', null, ESPERA_DO_CONTEINER_MS, CONTEINER_EM_PREPARO);
+}
+
+/** A Meta ainda prepara (ou publica) o vídeo: o pedido espera um minuto, sem dobrar e sem contar (A6, Z10; D-A6-69). */
+function emPreparoDoVideo(): ErroConector {
+  return new ErroConector('limite', META, 'a Meta ainda prepara o vídeo do post', null, ESPERA_DO_CONTEINER_MS, VIDEO_EM_PREPARO);
 }
 
 /**

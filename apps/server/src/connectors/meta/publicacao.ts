@@ -329,3 +329,120 @@ export function fotoJaNaPagina(resposta: unknown, legenda: string, desde: Date):
   }
   return null;
 }
+
+// O vídeo como Reels (A6 · Z10, parte 3a; D-A6-68 e D-A6-69; conferido nas páginas oficiais em 06/11/2026: a referência
+// de `/{ig-user-id}/media` do Instagram, com as especificações do Reels, e o "Reels Publishing" da Video API, v27.0).
+
+/**
+ * O que o Reels do Instagram aceita do arquivo: até 1.920 colunas (a largura, em px) e até 25 Mbps. O vídeo que passa disso
+ * (o 4K do celular) é reduzido pelo servidor antes de sair (D-A6-68), o que ainda não existe: até lá, o post com ele no
+ * Instagram é recusado ao montar.
+ */
+export const REELS_DO_INSTAGRAM = { maiorLargura: 1920, maiorTaxaBps: 25_000_000 } as const;
+
+/**
+ * O Reels da Página do Facebook: em pé, a partir de 540 × 960 (o código 1363127 recusa abaixo disso), e até 30 publicados
+ * pela API em 24 horas, por Página (janela móvel; a Meta pede que o app também conte). O vídeo deitado, ou menor que isso,
+ * sai como vídeo comum (D-A6-69).
+ */
+export const REELS_DA_PAGINA = { menorLargura: 540, menorAltura: 960, porDia: 30 } as const;
+
+/** Por quanto tempo o Liame espera a Meta preparar o vídeo, conferindo uma vez por minuto (D-A6-69). */
+export const PREPARO_DO_VIDEO_MS = 5 * 60_000;
+
+/**
+ * O código do adiamento enquanto a Meta prepara (ou publica) o vídeo: o executor confere de novo em 1 minuto, sem dobrar
+ * a espera e sem contar como tentativa; quem encerra, em 5 minutos, é a publicação (D-A6-69).
+ */
+export const VIDEO_EM_PREPARO = 'video_em_preparo';
+
+/** O endereço do envio do vídeo à Página do Facebook (o `rupload`), fora da Graph API. */
+export const RUPLOAD_OFICIAL = 'https://rupload.facebook.com';
+
+/** A capa do Reels do Instagram (`cover_url`): JPEG até 8 MB (a especificação da capa, na mesma página). */
+export const CAPA_DO_REELS_BYTES = 8 * 1024 * 1024;
+
+/** A taxa média do arquivo, em bits por segundo (o som junto); sem a duração, infinita. */
+export function taxaDoVideo(bytes: number, duracaoMs: number): number {
+  if (!(duracaoMs > 0)) return Number.POSITIVE_INFINITY;
+  return (bytes * 8) / (duracaoMs / 1000);
+}
+
+/** O vídeo vai ao Reels do Instagram como está (a largura e a taxa no limite)? */
+export function cabeNoReelsDoInstagram(largura: number, bytes: number, duracaoMs: number): boolean {
+  return largura > 0 && largura <= REELS_DO_INSTAGRAM.maiorLargura && taxaDoVideo(bytes, duracaoMs) <= REELS_DO_INSTAGRAM.maiorTaxaBps;
+}
+
+/** Como o vídeo sai na Página: Reels, em pé e a partir de 540 × 960; vídeo comum, deitado ou menor (D-A6-69). */
+export type ComoSaiNaPagina = 'reels' | 'video';
+
+export function comoSaiNaPagina(largura: number, altura: number): ComoSaiNaPagina {
+  if (largura > altura) return 'video';
+  return largura >= REELS_DA_PAGINA.menorLargura && altura >= REELS_DA_PAGINA.menorAltura ? 'reels' : 'video';
+}
+
+/** A situação do vídeo na Página: publicado, a Meta ainda prepara, recusado, vencido ou fora do formato conhecido. */
+export type SituacaoDoVideoNaPagina = 'publicado' | 'processando' | 'erro' | 'vencido' | 'desconhecida';
+
+const fase = (v: unknown): Record<string, unknown> | null => (v && typeof v === 'object' ? (v as Record<string, unknown>) : null);
+
+/**
+ * A situação pela resposta de `GET /{video-id}?fields=status`: `video_status` (`uploading`, `upload_complete`,
+ * `processing`, `ready`, `error`, `upload_failed`, `expired`) e as fases (`processing_phase`, `publishing_phase`, cada uma
+ * com `status`: `not_started`, `in_progress`, `complete` ou `completed`, `error`; a de publicar com `publish_status`:
+ * `draft`, `scheduled`, `published` ou `error`). Publicado só com a palavra da Meta; erro em qualquer fase é erro.
+ */
+export function situacaoDoVideoNaPagina(resposta: unknown): SituacaoDoVideoNaPagina {
+  const s = fase((resposta as { status?: unknown } | null)?.status);
+  if (!s) return 'desconhecida';
+  const video = s.video_status;
+  const processando = fase(s.processing_phase);
+  const publicando = fase(s.publishing_phase);
+  if (video === 'error' || video === 'upload_failed' || processando?.status === 'error' || publicando?.status === 'error' || publicando?.publish_status === 'error') return 'erro';
+  if (video === 'expired') return 'vencido';
+  if (publicando?.publish_status === 'published') return 'publicado';
+  if (typeof video === 'string') return 'processando';
+  return 'desconhecida';
+}
+
+/** O id do vídeo na Página, na resposta do começo do Reels (`video_id`) ou do vídeo comum (`id`); fora do formato, nulo. */
+export function idDoVideoNaPagina(corpo: unknown): string | null {
+  const c = corpo as { video_id?: unknown; id?: unknown } | null;
+  return idDaGraph(c?.video_id) ?? idDaGraph(c?.id);
+}
+
+/**
+ * O vídeo comum que já saiu na Página com esta legenda desde `desde`, na resposta de `GET /{página}/videos?fields=id,
+ * description,created_time` (a legenda do vídeo é a `description`; a data vem como a do Instagram, `+0000`): é como a
+ * tentativa seguinte sabe que a anterior mandou o vídeo sem a resposta ter chegado, e não manda de novo. O id, ou nulo.
+ */
+export function videoJaNaPagina(resposta: unknown, legenda: string, desde: Date): string | null {
+  const data = (resposta as { data?: unknown } | null)?.data;
+  if (!Array.isArray(data)) return null;
+  const procurada = legendaComparavel(legenda);
+  const aPartirDe = Math.floor(desde.getTime() / 1000) * 1000;
+  for (const v of data as Array<Record<string, unknown> | null>) {
+    const id = idDaGraph(v?.id);
+    if (!id || typeof v?.description !== 'string' || legendaComparavel(v.description) !== procurada) continue;
+    const quando = horaDoInstagram(v.created_time);
+    if (!Number.isNaN(quando) && quando >= aPartirDe) return id;
+  }
+  return null;
+}
+
+/** Os códigos com que a Página recusa o vídeo do Reels: a proporção, a resolução, a duração e os quadros por segundo. */
+export const CODIGOS_DO_VIDEO_RECUSADO: ReadonlySet<string> = new Set(['1363040', '1363127', '1363128', '1363129']);
+
+/**
+ * O endereço do envio do Reels da Página (`upload_url` da resposta do começo): só o do envio da Meta, para este vídeo. O
+ * que vier fora disso não é seguido; quem chama usa o endereço montado pela base conhecida.
+ */
+export function enderecoDoEnvioNaPagina(v: unknown, base: string, videoId: string): string {
+  const esperado = `${base}/video-upload/`;
+  if (typeof v === 'string' && v.length <= 300 && v.startsWith(esperado) && v.endsWith(`/${videoId}`)) {
+    const meio = v.slice(esperado.length, v.length - videoId.length);
+    // Entre a base e o id, nada ou só a versão da API (`v26.0/`).
+    if (meio === '' || /^v\d{1,3}\.\d{1,2}\/$/.test(meio)) return v;
+  }
+  return `${esperado}${videoId}`;
+}

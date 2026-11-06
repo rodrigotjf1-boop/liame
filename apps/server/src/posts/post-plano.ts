@@ -86,8 +86,15 @@ export type CanalNoEstado = z.infer<typeof CanalNoEstado>;
 /** O post como o conector o lê do banco, na hora do pedido e na da execução. */
 export const EstadoDoPost = z.object({
   post: z.string(),
-  /** A foto das Fotos (pelo resumo do arquivo guardado); nula quando ela foi apagada depois do pedido. */
+  /** A foto das Fotos (pelo resumo do arquivo guardado); nula quando ela foi apagada depois do pedido, e no post com vídeo. */
   foto: z.object({ id: z.string(), sha256: z.string() }).nullable(),
+  /**
+   * O vídeo das Fotos e vídeos (A6, Z10, parte 3a; D-A6-69 e D-A6-70), só no post com vídeo: no de foto a chave não
+   * existe, e o estado dele é o mesmo de antes (o pedido aprovado não muda de plano). O id e a capa presa na hora do
+   * pedido: `capa:<versão>` (a do próprio vídeo), `foto:<id>` (uma das Fotos) ou `meio` (sem capa gravada: o quadro do
+   * meio). Nulo quando o vídeo foi apagado; a capa nula quando ela mudou, ou a foto dela foi apagada, depois do pedido.
+   */
+  video: z.object({ id: z.string(), capa: z.string().nullable() }).nullable().optional(),
   /** A posição do recorte do Instagram (D-A6-21), de 0 a 100 ao longo do lado comprido; nula = a foto cabe inteira. */
   recorte: z.number().int().min(0).max(100).nullable(),
   /** A hora marcada, em UTC, e a mesma hora no fuso da empresa (`HH:MM`), que o plano confere com a janela. */
@@ -125,7 +132,8 @@ export function planoDoPost(before: unknown): PlanoDoPost {
   const lido = EstadoDoPost.safeParse(before);
   if (!lido.success) return { ok: false, motivo: 'Esta ferramenta é para um post do Liame.' };
   const e = lido.data;
-  if (!e.foto) return { ok: false, motivo: FOTO_APAGADA };
+  const semMidia = midiaFora(e);
+  if (semMidia) return { ok: false, motivo: semMidia };
   if (e.canais.some((c) => c.situacao !== 'aguardando')) return { ok: false, motivo: JA_SAIU };
   for (const c of e.canais) {
     if (!c.conta) return { ok: false, motivo: contaFora(c.canal) };
@@ -141,8 +149,20 @@ export function planoDoPost(before: unknown): PlanoDoPost {
 }
 
 const FOTO_APAGADA = 'A foto deste post foi apagada nas Fotos: o post não sai. Faça um post novo com outra foto.';
+const VIDEO_APAGADO = 'O vídeo deste post foi apagado em Fotos e vídeos: o post não sai. Faça um post novo com outro vídeo.';
+const CAPA_MUDOU = 'A capa do vídeo mudou depois da aprovação (ou a foto da capa foi apagada): o post não sai. Faça um post novo com a capa de agora.';
 const JA_SAIU = 'Este post já saiu, ou não sai mais: não dá para publicar de novo.';
 const SEM_O_QUE_TENTAR = 'Tentar de novo vale para o post que saiu num canal e não no outro: não há canal para tentar agora.';
+
+/**
+ * O post ainda tem o que publicar? A foto (no post de foto) ou o vídeo com a capa presa no pedido (no post com vídeo,
+ * D-A6-70: a capa que mudou depois da aprovação não sai). A frase de por que não, ou nula.
+ */
+export function midiaFora(e: EstadoDoPost): string | null {
+  if (e.video === undefined) return e.foto ? null : FOTO_APAGADA;
+  if (!e.video) return VIDEO_APAGADO;
+  return e.video.capa === null ? CAPA_MUDOU : null;
+}
 
 /**
  * "Tentar de novo" (A6, Z5d; P19, aprovado pelo dono em 21/10/2026; decisão técnica D-A6-54): o post que saiu num canal e
@@ -161,19 +181,26 @@ export const PEDIDO_AINDA_SAI: readonly string[] = ['sombra', 'aguardando_aprova
 /** O canal que não saiu: falhou, ou ficou esperando ou publicando quando o pedido terminou. */
 const CANAL_NAO_SAIU: readonly string[] = ['falhou', 'aguardando', 'publicando'];
 
-/** O canal como a nova tentativa o vê: a situação, quando saiu, e se o motivo de não ter saído pede um post novo. */
-export type CanalParaTentar = { canal: string; situacao: string; publicadoEm: Date | null; pedePostNovo: boolean };
+/**
+ * O canal como a nova tentativa o vê: a situação, quando saiu, se o motivo de não ter saído pede um post novo e, no post
+ * com vídeo (A6, Z10), se ele não saiu porque a Meta não terminou de preparar o vídeo a tempo (`semPreparo`), e quando
+ * foi a tentativa (`tentadoEm`).
+ */
+export type CanalParaTentar = { canal: string; situacao: string; publicadoEm: Date | null; pedePostNovo: boolean; semPreparo?: boolean; tentadoEm?: Date | null };
 
-/** Dá para tentar de novo (e em qual canal, até quando), ou por que não. */
+/** Dá para tentar de novo (e em quais canais, o primeiro em `canal`, até quando), ou por que não. */
 export type NovaTentativa =
-  | { ok: true; canal: string; ate: Date }
+  | { ok: true; canal: string; canais: string[]; ate: Date }
   | { ok: false; motivo: 'ainda_sai' | 'nao_tenta' | 'nao_saiu_em_nenhum' | 'ja_saiu' | 'pede_post_novo' | 'passou_o_prazo' };
 
 /**
  * Dá para "Tentar de novo" (D-A6-54)? Só quando o pedido do post (o de publicar, ou a nova tentativa anterior) terminou
  * sem sair em todos os canais (falhou, inclusive barrado), um canal saiu e o outro não, e o motivo do que não saiu pode passar
  * (a conta, a permissão, a rede fora do ar, uma trava). Vale até 24 horas depois de o post sair no outro canal. O pedido
- * cancelado, recusado ou que expirou não tenta: alguém decidiu que ele não sai. Função pura.
+ * cancelado, recusado ou que expirou não tenta: alguém decidiu que ele não sai.
+ * O vídeo que a Meta não terminou de preparar em 5 minutos (A6, Z10; D-A6-69) tenta de novo mesmo sem ter saído em
+ * nenhum canal: todos os que faltam, se nenhum deles pede um post novo, até 24 horas depois da tentativa (o preparo da
+ * Meta vence em 24 horas). Função pura.
  */
 export function novaTentativa(pedido: string | null, canais: readonly CanalParaTentar[], agora: Date): NovaTentativa {
   if (pedido && PEDIDO_AINDA_SAI.includes(pedido)) return { ok: false, motivo: 'ainda_sai' };
@@ -181,35 +208,47 @@ export function novaTentativa(pedido: string | null, canais: readonly CanalParaT
   const faltam = canais.filter((c) => CANAL_NAO_SAIU.includes(c.situacao));
   if (sairam.length > 0 && faltam.length === 0) return { ok: false, motivo: 'ja_saiu' };
   if (!pedido || !TERMINOU_SEM_SAIR.includes(pedido)) return { ok: false, motivo: 'nao_tenta' };
-  if (sairam.length === 0) return { ok: false, motivo: 'nao_saiu_em_nenhum' };
+  if (sairam.length === 0) {
+    // O vídeo sem preparo a tempo: os canais que faltam, juntos, se ao menos um parou no preparo e nenhum pede post novo.
+    if (!faltam.some((c) => c.semPreparo) || faltam.some((c) => c.pedePostNovo)) return { ok: false, motivo: 'nao_saiu_em_nenhum' };
+    const tentado = Math.min(...faltam.map((c) => c.tentadoEm?.getTime() ?? agora.getTime()));
+    const ate = new Date(tentado + HORAS_PARA_TENTAR_DE_NOVO * 3_600_000);
+    if (ate.getTime() <= agora.getTime()) return { ok: false, motivo: 'passou_o_prazo' };
+    return { ok: true, canal: faltam[0]!.canal, canais: faltam.map((c) => c.canal), ate };
+  }
   // Com dois canais e um no ar, falta um; o motivo dele decide.
   const falta = faltam[0]!;
   if (faltam.length > 1 || falta.pedePostNovo) return { ok: false, motivo: 'pede_post_novo' };
   const saiuEm = Math.min(...sairam.map((c) => c.publicadoEm?.getTime() ?? agora.getTime()));
   const ate = new Date(saiuEm + HORAS_PARA_TENTAR_DE_NOVO * 3_600_000);
   if (ate.getTime() <= agora.getTime()) return { ok: false, motivo: 'passou_o_prazo' };
-  return { ok: true, canal: falta.canal, ate };
+  return { ok: true, canal: falta.canal, canais: [falta.canal], ate };
 }
 
 /**
  * O plano da nova tentativa (a ferramenta `post_tentar_de_novo`): um canal saiu, e o que falta (que a rota pôs de volta na
- * espera) tem a conta conectada e o texto no limite; a foto ainda está nas Fotos. O estado desejado é o post com o canal
- * que faltava publicado; o texto do plano é o desse canal (as palavras proibidas da política valem de novo). A hora não é
- * conferida aqui: o pedido sai agora, dentro da janela das 8h às 22h (`quandoSai`). Função pura.
+ * espera) tem a conta conectada e o texto no limite; a foto ainda está nas Fotos. No post com vídeo que a Meta não
+ * terminou de preparar (A6, Z10; D-A6-69), também nenhum saiu e todos voltaram à espera. O estado desejado é o post com os
+ * canais que faltavam publicados; o texto do plano é o deles (as palavras proibidas da política valem de novo). A hora não
+ * é conferida aqui: o pedido sai agora, dentro da janela das 8h às 22h (`quandoSai`). Função pura.
  */
 export function planoDeTentarDeNovo(before: unknown): PlanoDoPost {
   const lido = EstadoDoPost.safeParse(before);
   if (!lido.success) return { ok: false, motivo: 'Esta ferramenta é para um post do Liame.' };
   const e = lido.data;
-  if (!e.foto) return { ok: false, motivo: FOTO_APAGADA };
+  const semMidia = midiaFora(e);
+  if (semMidia) return { ok: false, motivo: semMidia };
   const faltam = e.canais.filter((c) => c.situacao === 'aguardando');
   const sairam = e.canais.filter((c) => c.situacao === 'publicado');
-  if (sairam.length === 0 || faltam.length !== 1 || sairam.length + faltam.length !== e.canais.length) return { ok: false, motivo: SEM_O_QUE_TENTAR };
-  const c = faltam[0]!;
-  if (!c.conta) return { ok: false, motivo: contaFora(c.canal) };
-  if (c.texto.trim().length === 0) return { ok: false, motivo: `O texto ${NO_CANAL[c.canal]} está vazio.` };
-  if (c.texto.length > LIMITE_DO_TEXTO[c.canal]) return { ok: false, motivo: `O texto ${NO_CANAL[c.canal]} passa de ${LIMITE_DO_TEXTO[c.canal].toLocaleString('pt-BR')} caracteres.` };
-  return { ok: true, desejado: { ...e, canais: e.canais.map((x) => ({ ...x, situacao: 'publicado' as const })) }, texto: c.texto };
+  const umQueFalta = sairam.length > 0 && faltam.length === 1 && sairam.length + faltam.length === e.canais.length;
+  const videoSemPreparo = e.video !== undefined && sairam.length === 0 && faltam.length === e.canais.length;
+  if (!umQueFalta && !videoSemPreparo) return { ok: false, motivo: SEM_O_QUE_TENTAR };
+  for (const c of faltam) {
+    if (!c.conta) return { ok: false, motivo: contaFora(c.canal) };
+    if (c.texto.trim().length === 0) return { ok: false, motivo: `O texto ${NO_CANAL[c.canal]} está vazio.` };
+    if (c.texto.length > LIMITE_DO_TEXTO[c.canal]) return { ok: false, motivo: `O texto ${NO_CANAL[c.canal]} passa de ${LIMITE_DO_TEXTO[c.canal].toLocaleString('pt-BR')} caracteres.` };
+  }
+  return { ok: true, desejado: { ...e, canais: e.canais.map((x) => ({ ...x, situacao: 'publicado' as const })) }, texto: faltam.map((c) => c.texto).join('\n\n') };
 }
 const contaFora = (canal: CanalDoPost): string =>
   `A conta ${DO_CANAL[canal]} deste post não está conectada à marca agora: o post não sai ${NO_CANAL[canal]}. Confira em Contas conectadas.`;
@@ -273,7 +312,8 @@ export function situacaoDoApagar(pedido: string, canais: readonly string[]): Sit
 export function recusaNaHoraDeSair(e: EstadoDoPost): string | null {
   const faltam = e.canais.filter((c) => c.situacao === 'aguardando' || c.situacao === 'publicando');
   if (faltam.length === 0) return JA_SAIU;
-  if (!e.foto) return FOTO_APAGADA;
+  const semMidia = midiaFora(e);
+  if (semMidia) return semMidia;
   for (const c of faltam) if (!c.conta) return contaFora(c.canal);
   return null;
 }

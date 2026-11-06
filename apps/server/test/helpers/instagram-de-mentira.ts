@@ -45,8 +45,36 @@ export const TOKEN_DA_PAGINA = `token-da-pagina-${randomBytes(6).toString('hex')
 export type FotoNaPagina = { id: string; pagina: string; name: string; created_time: string; link: string; page_story_id: string; imagem: Buffer | null };
 
 export type PostNoInstagram = { id: string; caption: string; timestamp: string; permalink: string; conteiner: string; imagem: Buffer | null };
-export type Conteiner = { id: string; ig: string; caption: string; imagem: Buffer | null; endereco: string; status: string };
-export type ChamadaNoInstagram = { metodo: string; caminho: string; params: Record<string, string>; corpo: Record<string, unknown> | null };
+/**
+ * O contêiner do post: a foto (`image_url`) ou, no Reels (A6, Z10), o vídeo (`video_url`), com a capa (`cover_url` ou
+ * `thumb_offset`) e `share_to_feed`, como o pedido chegou.
+ */
+export type Conteiner = {
+  id: string;
+  ig: string;
+  caption: string;
+  imagem: Buffer | null;
+  endereco: string;
+  status: string;
+  tipo: 'foto' | 'REELS';
+  capa?: string | null;
+  quadro?: string | null;
+  noFeed?: string | null;
+};
+/**
+ * O vídeo na Página (A6, Z10): o Reels (o começo, o envio pelo `rupload` e o fim) ou o vídeo comum. `fase`: enviando (o
+ * Reels antes do arquivo), processando, publicado ou erro.
+ */
+export type VideoNaPagina = {
+  id: string;
+  pagina: string;
+  tipo: 'reels' | 'video';
+  description: string;
+  created_time: string;
+  arquivo: Buffer | null;
+  fase: 'enviando' | 'processando' | 'publicado' | 'erro';
+};
+export type ChamadaNoInstagram = { metodo: string; caminho: string; params: Record<string, string>; corpo: Record<string, unknown> | null; cabecalhos?: Record<string, string> };
 export type FalhaCombinada = { status: number; corpo: unknown };
 
 /** Um id numérico como os da Meta, único a cada execução (V156). */
@@ -85,7 +113,17 @@ export class InstagramDeMentira {
   semPermissaoDeNumeros = false;
   /** A autorização sem a permissão de apagar no Instagram (`instagram_manage_contents`): a recusa (#10). */
   semPermissaoDeApagar = false;
+  /** Os vídeos das Páginas (A6, Z10): o Reels e o vídeo comum. */
+  readonly videosNaPagina: VideoNaPagina[] = [];
+  /** Como o vídeo da Página fica logo depois do fim do Reels, ou da chegada do vídeo comum. */
+  videoDaPaginaAoTerminar: 'processando' | 'publicado' | 'erro' = 'publicado';
+  /** O próximo vídeo comum na Página nasce, mas a resposta não chega (a Meta responde 503 depois de criar). */
+  perderARespostaDoVideo = false;
+  /** O que a Página responde ao fim do Reels (um código de recusa do vídeo, como o 1363040 da proporção). */
+  recusaDoReels: { codigo: number; mensagem: string } | null = null;
   base = '';
+  /** O endereço do envio do vídeo à Página (o `rupload` de mentira, no mesmo servidor). */
+  rupload = '';
   private servidor: Server | null = null;
 
   async ligar(): Promise<void> {
@@ -102,6 +140,7 @@ export class InstagramDeMentira {
     await new Promise<void>((ok) => servidor.listen(0, '127.0.0.1', ok));
     this.servidor = servidor;
     this.base = `http://127.0.0.1:${(servidor.address() as AddressInfo).port}/graph`;
+    this.rupload = `http://127.0.0.1:${(servidor.address() as AddressInfo).port}/rupload`;
   }
 
   async desligar(): Promise<void> {
@@ -118,8 +157,16 @@ export class InstagramDeMentira {
     this.perderARespostaDaFoto = false;
     this.semPermissaoDeNumeros = false;
     this.semPermissaoDeApagar = false;
+    this.videoDaPaginaAoTerminar = 'publicado';
+    this.perderARespostaDoVideo = false;
+    this.recusaDoReels = null;
     this.chamadas.length = 0;
     this.defeitos.length = 0;
+  }
+
+  /** Os vídeos publicados (ou não) numa Página. */
+  videosDe(pagina: string): VideoNaPagina[] {
+    return this.videosNaPagina.filter((v) => v.pagina === pagina);
   }
 
   /** As chamadas a um caminho final (`media`, `media_publish`, `content_publishing_limit`, `status_code` para a situação). */
@@ -137,6 +184,70 @@ export class InstagramDeMentira {
     return this.fotosNaPagina.filter((f) => f.pagina === pagina);
   }
 
+  /** O envio do arquivo do Reels: o token da Página (`OAuth`), o vídeo da sessão que começou, e a Meta busca o `file_url`. */
+  private noRupload(metodo: string, caminho: string, cabecalhos: { authorization: string; file_url: string }): Resposta {
+    const videoId = caminho.split('/').filter(Boolean).at(-1) ?? '';
+    if (metodo !== 'POST') return erro(400, 100, 'Unsupported request');
+    if (cabecalhos.authorization !== `OAuth ${TOKEN_DA_PAGINA}`) return erro(401, 190, 'Invalid OAuth access token');
+    const v = this.videosNaPagina.find((x) => x.id === videoId && x.tipo === 'reels');
+    if (!v || v.fase !== 'enviando') return erro(400, 100, 'Invalid video_id');
+    const arquivo = this.buscarImagem(cabecalhos.file_url);
+    if (!arquivo) return erro(400, 6000, 'There was a problem uploading your video file');
+    v.arquivo = arquivo;
+    return { status: 200, corpo: { success: true } };
+  }
+
+  /**
+   * O vídeo na Página (o "Reels Publishing" e a referência de `/{page-id}/videos`, 06/11/2026), pelo token da Página de
+   * quem tem a tarefa de publicar: o Reels (`video_reels`, começo e fim), o vídeo comum (`videos`, com `file_url`), a lista
+   * dos vídeos, a situação e o endereço de um vídeo, e apagar. Nulo para o que não é do vídeo.
+   */
+  private videoNaPagina(metodo: string, id: string, aresta: string | undefined, params: Record<string, string>, corpo: Record<string, unknown> | null): Resposta | null {
+    const tarefas = this.paginas.get(id);
+    if (tarefas && aresta === 'video_reels' && metodo === 'POST') {
+      if (!tarefas.includes('CREATE_CONTENT')) return erro(403, 200, 'Requires the CREATE_CONTENT task on the Page');
+      if (corpo?.upload_phase === 'start') {
+        const v: VideoNaPagina = { id: idDaMeta(), pagina: id, tipo: 'reels', description: '', created_time: dataDoInstagram(new Date()), arquivo: null, fase: 'enviando' };
+        this.videosNaPagina.unshift(v);
+        return { status: 200, corpo: { video_id: v.id, upload_url: `${this.rupload}/video-upload/v26.0/${v.id}` } };
+      }
+      if (corpo?.upload_phase === 'finish') {
+        const v = this.videosNaPagina.find((x) => x.id === String(corpo.video_id ?? '') && x.pagina === id);
+        if (!v || !v.arquivo) return erro(400, 100, 'The video was not uploaded');
+        if (this.recusaDoReels) return erro(400, this.recusaDoReels.codigo, this.recusaDoReels.mensagem);
+        v.description = String(corpo.description ?? '');
+        if (corpo.video_state === 'PUBLISHED') v.fase = this.videoDaPaginaAoTerminar;
+        return { status: 200, corpo: { success: true } };
+      }
+      return erro(400, 100, '(#100) The parameter upload_phase is required');
+    }
+    if (tarefas && aresta === 'videos') {
+      if (metodo === 'GET') {
+        return { status: 200, corpo: { data: this.videosDe(id).slice(0, Number(params.limit ?? 25)).map((v) => ({ id: v.id, description: v.description, created_time: v.created_time })) } };
+      }
+      if (!tarefas.includes('CREATE_CONTENT')) return erro(403, 200, 'Requires the CREATE_CONTENT task on the Page');
+      const arquivo = this.buscarImagem(typeof corpo?.file_url === 'string' ? corpo.file_url : '');
+      if (!arquivo) return erro(400, 6000, 'There was a problem uploading your video file');
+      const v: VideoNaPagina = { id: idDaMeta(), pagina: id, tipo: 'video', description: String(corpo?.description ?? ''), created_time: dataDoInstagram(new Date()), arquivo, fase: this.videoDaPaginaAoTerminar };
+      this.videosNaPagina.unshift(v);
+      if (this.perderARespostaDoVideo) {
+        this.perderARespostaDoVideo = false;
+        return erro(503, 2, 'Service temporarily unavailable');
+      }
+      return { status: 200, corpo: { id: v.id } };
+    }
+    const v = !aresta ? this.videosNaPagina.find((x) => x.id === id) : undefined;
+    if (!v) return null;
+    if (metodo === 'GET' && params.fields === 'status') return { status: 200, corpo: { id: v.id, status: situacaoDoVideo(v.fase) } };
+    // O endereço do vídeo vem sem o domínio (o pior caso: a referência não diz).
+    if (metodo === 'GET' && params.fields === 'permalink_url') return { status: 200, corpo: { id: v.id, permalink_url: `/${v.pagina}/videos/${v.id}/` } };
+    if (metodo === 'DELETE') {
+      this.videosNaPagina.splice(this.videosNaPagina.indexOf(v), 1);
+      return { status: 200, corpo: { success: true } };
+    }
+    return null;
+  }
+
   private responder(req: IncomingMessage, texto: string): { status: number; corpo: unknown } {
     const url = new URL(req.url ?? '/', 'http://local');
     const params = Object.fromEntries(url.searchParams.entries());
@@ -149,20 +260,28 @@ export class InstagramDeMentira {
       }
     }
     const metodo = req.method ?? 'GET';
-    this.chamadas.push({ metodo, caminho: url.pathname, params, corpo });
+    const cabecalhos = { authorization: String(req.headers.authorization ?? ''), file_url: String(req.headers.file_url ?? '') };
+    this.chamadas.push({ metodo, caminho: url.pathname, params, corpo, cabecalhos });
+    // O envio do vídeo do Reels à Página (A6, Z10; o "Reels Publishing", 06/11/2026): `POST rupload.facebook.com/video-upload/
+    // {versão}/{video-id}`, com `Authorization: OAuth {token da Página}` e o endereço do arquivo em `file_url` (a Meta o busca).
+    if (url.pathname.startsWith('/rupload/')) return this.noRupload(metodo, url.pathname, cabecalhos);
     const partes = url.pathname.split('/').filter(Boolean); // graph, v26.0, id, [aresta]
     const [, , id, aresta] = partes;
     // O token vai no cabeçalho, nunca na URL; a prova do segredo do app vai junto, calculada com o token. O que é da
-    // Página (as fotos dela e o post) pede o token da Página; o resto, o da autorização.
-    const daPagina = this.paginas.has(id ?? '') || (id ?? '').includes('_');
+    // Página (as fotos dela, o post e os vídeos) pede o token da Página; o resto, o da autorização.
+    const daPagina = this.paginas.has(id ?? '') || (id ?? '').includes('_') || this.videosNaPagina.some((v) => v.id === id);
     const esperado = daPagina ? TOKEN_DA_PAGINA : TOKEN_DO_INSTAGRAM;
     if (params.access_token) this.defeitos.push('token na URL');
     if (req.headers.authorization !== `Bearer ${esperado}`) return erro(401, 190, 'Invalid OAuth access token');
     if (params.appsecret_proof !== createHmac('sha256', SEGREDO_DO_APP).update(esperado).digest('hex')) this.defeitos.push('sem a prova do segredo do app');
 
-    const final = aresta ?? (params.fields === 'status_code' ? 'status_code' : 'objeto');
+    const final = aresta ?? (params.fields === 'status_code' ? 'status_code' : params.fields === 'status' ? 'status' : 'objeto');
     const falha = this.falhas.get(final)?.shift();
     if (falha) return falha;
+
+    // O vídeo na Página (A6, Z10, parte 3a).
+    const doVideo = this.videoNaPagina(metodo, id ?? '', aresta, params, corpo);
+    if (doVideo) return doVideo;
 
     // Apagar das redes (A6, Z5d, parte 6): o post da Página (o id com `_`, pelo token dela) ou a mídia do Instagram.
     if (metodo === 'DELETE' && !aresta) {
@@ -221,11 +340,25 @@ export class InstagramDeMentira {
     }
 
     if (metodo === 'POST' && aresta === 'media') {
-      const endereco = typeof corpo?.image_url === 'string' ? corpo.image_url : '';
+      // O Reels (A6, Z10): `media_type=REELS` com `video_url`, a capa (`cover_url` ou `thumb_offset`) e `share_to_feed`.
+      const reels = corpo?.media_type === 'REELS';
+      const campo = reels ? corpo?.video_url : corpo?.image_url;
+      const endereco = typeof campo === 'string' ? campo : '';
       const imagem = this.buscarImagem(endereco);
-      // A Meta busca a imagem na hora: sem ela, o contêiner não nasce.
+      // A Meta busca a imagem (ou o vídeo) na hora: sem ela, o contêiner não nasce.
       if (!imagem) return erro(400, 9004, 'Media download has failed. The media URI doesn\'t meet our requirements.');
-      const c: Conteiner = { id: idDaMeta(), ig: id!, caption: String(corpo?.caption ?? ''), imagem, endereco, status: this.situacaoAoCriar };
+      const textoOuNulo = (v: unknown) => (typeof v === 'string' ? v : null);
+      if (reels && corpo?.cover_url !== undefined && !this.buscarImagem(String(corpo.cover_url))) return erro(400, 9004, 'Cover download has failed.');
+      const c: Conteiner = {
+        id: idDaMeta(),
+        ig: id!,
+        caption: String(corpo?.caption ?? ''),
+        imagem,
+        endereco,
+        status: this.situacaoAoCriar,
+        tipo: reels ? 'REELS' : 'foto',
+        ...(reels ? { capa: textoOuNulo(corpo?.cover_url), quadro: textoOuNulo(corpo?.thumb_offset), noFeed: textoOuNulo(corpo?.share_to_feed) } : {}),
+      };
       this.conteineres.set(c.id, c);
       return { status: 200, corpo: { id: c.id } };
     }
@@ -256,6 +389,22 @@ export class InstagramDeMentira {
       if (p) return { status: 200, corpo: { permalink: p.permalink, id: p.id } };
     }
     return erro(400, 100, `Unsupported ${metodo.toLowerCase()} request`, 33);
+  }
+}
+
+type Resposta = { status: number; corpo: unknown };
+
+/** A situação do vídeo na Página como a Meta a devolve (`GET /{video-id}?fields=status`). */
+function situacaoDoVideo(fase: VideoNaPagina['fase']): Record<string, unknown> {
+  switch (fase) {
+    case 'enviando':
+      return { video_status: 'uploading', uploading_phase: { status: 'in_progress' }, processing_phase: { status: 'not_started' }, publishing_phase: { status: 'not_started' } };
+    case 'processando':
+      return { video_status: 'processing', uploading_phase: { status: 'complete' }, processing_phase: { status: 'in_progress' }, publishing_phase: { status: 'not_started' } };
+    case 'publicado':
+      return { video_status: 'ready', uploading_phase: { status: 'complete' }, processing_phase: { status: 'complete' }, publishing_phase: { status: 'complete', publish_status: 'published' } };
+    case 'erro':
+      return { video_status: 'error', uploading_phase: { status: 'complete' }, processing_phase: { status: 'error', error: { message: 'Unsupported video' } } };
   }
 }
 

@@ -40,6 +40,8 @@ const Env = z.object({
   TERMS_URL: z.url().default('https://agencialiame.com/termos'),
   /** Endereços das plataformas: fixos em produção; fora dela, trocáveis para os testes com respostas gravadas. */
   META_GRAPH_URL: z.url().default('https://graph.facebook.com'),
+  /** O envio do vídeo à Página do Facebook (A6, Z10): o `rupload` da Meta, fora da Graph API. */
+  META_RUPLOAD_URL: z.url().default('https://rupload.facebook.com'),
   GOOGLE_ADS_URL: z.url().default('https://googleads.googleapis.com'),
   GA4_DATA_URL: z.url().default('https://analyticsdata.googleapis.com'),
   GA4_ADMIN_URL: z.url().default('https://analyticsadmin.googleapis.com'),
@@ -164,6 +166,8 @@ export type AppConfig = {
   /** Plataformas (A2): endereço de cada API e o que assina as chamadas. */
   plataformas: {
     metaGraphUrl: string;
+    /** O envio do vídeo à Página do Facebook (A6, Z10); a configuração sempre o preenche (opcional só para os testes de outras plataformas). */
+    metaRuploadUrl?: string;
     googleAdsUrl: string;
     ga4DataUrl: string;
     ga4AdminUrl: string;
@@ -252,6 +256,7 @@ export function loadConfig(source: NodeJS.ProcessEnv = process.env): AppConfig {
   if (env.REKOR_URL && !env.AUDIT_ANCHOR_SIGNING_KEY) throw new Error('config: REKOR_URL exige AUDIT_ANCHOR_SIGNING_KEY');
   const OFICIAIS: Record<string, string> = {
     META_GRAPH_URL: 'https://graph.facebook.com',
+    META_RUPLOAD_URL: 'https://rupload.facebook.com',
     GOOGLE_ADS_URL: 'https://googleads.googleapis.com',
     GA4_DATA_URL: 'https://analyticsdata.googleapis.com',
     GA4_ADMIN_URL: 'https://analyticsadmin.googleapis.com',
@@ -387,6 +392,7 @@ export function loadConfig(source: NodeJS.ProcessEnv = process.env): AppConfig {
     terms: { version: env.TERMS_VERSION ?? TERMS_VERSION_DEV, termsUrl: env.TERMS_URL, privacyUrl: env.PRIVACY_URL },
     plataformas: {
       metaGraphUrl: env.META_GRAPH_URL.replace(/\/$/, ''),
+      metaRuploadUrl: env.META_RUPLOAD_URL.replace(/\/$/, ''),
       googleAdsUrl: env.GOOGLE_ADS_URL.replace(/\/$/, ''),
       ga4DataUrl: env.GA4_DATA_URL.replace(/\/$/, ''),
       ga4AdminUrl: env.GA4_ADMIN_URL.replace(/\/$/, ''),

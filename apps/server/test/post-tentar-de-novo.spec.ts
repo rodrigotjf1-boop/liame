@@ -17,7 +17,8 @@ const pagina = (o: Partial<CanalParaTentar> = {}): CanalParaTentar => ({ canal: 
 
 describe('quando dá para tentar de novo (D-A6-54)', () => {
   it('o post que saiu num canal e não no outro: o canal que falta, até 24 horas depois de sair no outro', () => {
-    expect(novaTentativa('falhou', [ig(), pagina()], depois(1))).toEqual({ ok: true, canal: 'facebook', ate: depois(HORAS_PARA_TENTAR_DE_NOVO) });
+    // A lista dos canais que voltam (A6, Z10: no vídeo sem preparo a tempo, podem ser os dois) traz o que falta.
+    expect(novaTentativa('falhou', [ig(), pagina()], depois(1))).toEqual({ ok: true, canal: 'facebook', canais: ['facebook'], ate: depois(HORAS_PARA_TENTAR_DE_NOVO) });
     // O canal que ficou esperando ou publicando quando o pedido terminou também falta (a execução barrada por uma trava fica "falhou").
     expect(novaTentativa('falhou', [ig(), pagina({ situacao: 'aguardando' })], depois(1))).toMatchObject({ ok: true, canal: 'facebook' });
     expect(novaTentativa('falhou', [ig({ situacao: 'publicando', publicadoEm: null }), pagina({ situacao: 'publicado', publicadoEm: SAIU_EM })], depois(1))).toMatchObject({ ok: true, canal: 'instagram' });

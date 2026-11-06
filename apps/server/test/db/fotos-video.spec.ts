@@ -247,7 +247,7 @@ describe.skipIf(!hasDb)('O vídeo nas Fotos: o envio direto, a conferência, a c
     expect((await concluir(e, p.id)).status).toBe(200);
   }, 60_000);
 
-  it('a outra empresa não acha o vídeo; o novo post não aceita o vídeo no lugar da foto (o post com vídeo é a parte 3)', async () => {
+  it('a outra empresa não acha o vídeo, nem para o post dela (o post com vídeo da própria marca, parte 3a, em post-com-video.spec)', async () => {
     const e = await empresa('Casa Brasa Dona');
     const { id, resposta } = await enviarVideo(e, videoDeMentira());
     expect(resposta.status).toBe(200);
@@ -257,10 +257,12 @@ describe.skipIf(!hasDb)('O vídeo nas Fotos: o envio direto, a conferência, a c
     expect((await api.call('DELETE', `/v1/brand-photos/${id}`, { cookie: outra.cookie })).status).toBe(404);
     expect((await pedir(outra, 1000, 'video/mp4', e.brandId)).status).toBe(404);
 
-    await ligarFlagDaEmpresa(api, 'social_write', e.tenantId, true);
+    // A outra empresa, com os posts e os vídeos ligados, não monta post com o vídeo da primeira.
+    await ligarFlagDaEmpresa(api, 'social_write', outra.tenantId, true);
+    const marcaDaOutra = (await ownerQuery<{ id: string }>(`select id from liame.brand where tenant_id = $1 limit 1`, [outra.tenantId]))[0]!.id;
     const post = await api.call('POST', '/v1/posts', {
-      cookie: e.cookie,
-      body: { brand_id: e.brandId, photo_id: id, publish_at: new Date(Date.now() + 2 * 86_400_000).toISOString(), channels: [{ channel: 'instagram', text: 'O smash da sexta.' }] },
+      cookie: outra.cookie,
+      body: { brand_id: marcaDaOutra, photo_id: id, publish_at: new Date(Date.now() + 2 * 86_400_000).toISOString(), channels: [{ channel: 'instagram', text: 'O smash da sexta.' }] },
     });
     expect({ code: post.body.code, status: post.status }).toEqual({ code: 'foto-fora-da-marca', status: 422 });
   }, 60_000);

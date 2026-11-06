@@ -67,6 +67,7 @@ ser os oficiais, senão a API não sobe; fora dela, os testes apontam para uma p
 | Variável | Para quê | Padrão |
 | --- | --- | --- |
 | `META_GRAPH_URL` | Graph API / Marketing API da Meta | `https://graph.facebook.com` |
+| `META_RUPLOAD_URL` | O envio do vídeo à Página do Facebook (o Reels; A6 · Z10), fora da Graph API. Em produção, só o oficial | `https://rupload.facebook.com` |
 | `GOOGLE_ADS_URL` | Google Ads API (REST) | `https://googleads.googleapis.com` |
 | `GA4_DATA_URL` · `GA4_ADMIN_URL` | GA4 Data API e Admin API | `https://analyticsdata.googleapis.com` · `https://analyticsadmin.googleapis.com` |
 | `GOOGLE_DATA_MANAGER_URL` | Data Manager API do Google: as vendas confirmadas (A5 · Y1) | `https://datamanager.googleapis.com` |
@@ -227,7 +228,9 @@ A credencial é a do usuário `liame-sistema` (`AWS_ACCESS_KEY_ID` e `AWS_SECRET
 ]
 ```
 
-Mostrar as fotos e tocar o vídeo não precisa de CORS (a tela usa o endereço assinado, sem ler os bytes). A política `liame-sistema-s3-imagens` já cobre o vídeo (`t/*`; o vídeo fica em `t/{empresa}/b/{marca}/video/`). No web, a mesma `IMAGENS_BUCKET` põe a origem do bucket também no `media-src` e no `connect-src` da CSP das telas do app. **Situação (05/11/2026): a regra de CORS ainda não existe** (o dono cria, com o passo a passo, antes do primeiro envio de verdade; sem ela, o envio do vídeo cai com "Não foi", e nada mais muda).
+Mostrar as fotos e tocar o vídeo não precisa de CORS (a tela usa o endereço assinado, sem ler os bytes). A política `liame-sistema-s3-imagens` já cobre o vídeo (`t/*`; o vídeo fica em `t/{empresa}/b/{marca}/video/`). No web, a mesma `IMAGENS_BUCKET` põe a origem do bucket também no `media-src` e no `connect-src` da CSP das telas do app. **Situação: a regra de CORS existe desde 05/11/2026** (criada pelo dono no console, com o passo a passo, e conferida pela consulta prévia do navegador: o PUT da origem do web passa, com o `content-type` e a espera de 3.000 s; outra origem e outro método são recusados). O primeiro envio de verdade entrou no mesmo dia, na empresa do piloto.
+
+**O vídeo nos posts (A6 · Z10, parte 3a):** a Meta busca o vídeo e a capa pelo endereço assinado de leitura (590 s, dentro dos 10 minutos da política do bucket), como faz com a foto; não precisa de CORS. Na Página do Facebook, o Reels vai pelo `rupload` da Meta (`META_RUPLOAD_URL`), com o endereço do arquivo no cabeçalho `file_url`.
 
 ## IA (A3, ADR-006)
 
