@@ -340,7 +340,8 @@ type Graph = { deps: DependenciasDoPost; conta: string; token: string; versoes: 
 
 /**
  * A linha do canal e a conta dele, como a execução as lê (travada até o fim da transação). `external_id` é o da conta na
- * rede (o Instagram, a Página); `postagem`, o do post publicado nela.
+ * rede (o Instagram, a Página); `postagem`, o do post publicado nela; `tentado`, se este canal já teve uma tentativa (a
+ * hora dela fica guardada, também depois do "Tentar de novo"): sem ela, nada deste post pode estar na rede (ERR-206).
  */
 type CanalLido = {
   id: string;
@@ -351,6 +352,7 @@ type CanalLido = {
   credential_secret_id: string | null;
   conta: string;
   postagem: string | null;
+  tentado: boolean;
 };
 
 /** As situações em que o canal ainda pode sair (o que já saiu, não saiu ou foi cancelado fica como está). */
@@ -419,12 +421,27 @@ export class PostPublicacaoConnector implements Connector {
   /** O canal e a conta dele, travados até o fim da transação; nulo quando o canal (ou a conta) sumiu. */
   private async lerCanal(tx: Tx, ref: ResourceRef, post: PostLido, canal: CanalDoPost): Promise<CanalLido | null> {
     const c = await tx.execute<CanalLido>(sql`
-      select ch.id, ch.status, ch.container_id, ch.body, a.external_id, a.credential_secret_id, a.id as conta, ch.external_id as postagem
+      select ch.id, ch.status, ch.container_id, ch.body, a.external_id, a.credential_secret_id, a.id as conta, ch.external_id as postagem,
+             (ch.attempted_at is not null) as tentado
         from liame.social_post_channel ch
         join liame.connected_account a on a.id = ch.connected_account_id and a.tenant_id = ch.tenant_id
        where ch.post_id = ${post.estado.post} and ch.tenant_id = ${ref.tenantId} and ch.channel = ${canal}
        for update of ch`);
     return c.rows[0] ?? null;
+  }
+
+  /**
+   * Os posts (e os vídeos) que outros canais do Liame já guardaram como seus, nesta conta da rede: a conferência "já
+   * saiu?" pela legenda não os toma por este (ERR-206: o post de outro dia com a mesma legenda não é este).
+   */
+  private async daOutroPost(tx: Tx, tenantId: string, canal: CanalDoPost, contaNaRede: string, esteCanal: string): Promise<Set<string>> {
+    const r = await tx.execute<{ external_id: string }>(sql`
+      select ch.external_id
+        from liame.social_post_channel ch
+        join liame.connected_account a on a.id = ch.connected_account_id and a.tenant_id = ch.tenant_id
+       where ch.tenant_id = ${tenantId} and ch.channel = ${canal} and a.external_id = ${contaNaRede} and ch.id <> ${esteCanal}
+         and ch.external_id is not null and ch.updated_at > now() - interval '30 days'`);
+    return new Set(r.rows.map((l) => l.external_id));
   }
 
   /**
@@ -534,10 +551,14 @@ export class PostPublicacaoConnector implements Connector {
       const g: Graph = { deps, conta: canal.external_id, token: await this.token(tx, canal.credential_secret_id, deps), versoes: await this.versoes(deps, ['instagram_publish', 'instagram_media']) };
       const ig = canal.external_id;
 
-      // 1. A tentativa anterior pode ter publicado sem a resposta chegar: o post já está lá?
-      const recentes = await this.chamar<unknown>(g, 'GET', `${ig}/media`, 'instagram_media', { params: { fields: 'id,caption,timestamp,permalink', limit: String(RECENTES) } });
-      const jaSaiu = postJaPublicado(recentes, canal.body, post.criadoEm);
-      if (jaSaiu) return await this.publicado(tx, ref, post, canal.id, jaSaiu.id, jaSaiu.permalink, deps);
+      // 1. A tentativa anterior pode ter publicado sem a resposta chegar: o post já está lá? Só com o contêiner de uma
+      // tentativa deste post (o Liame só publica o contêiner que criou): sem ele, nada deste post está no Instagram, e o
+      // post de outro dia com a mesma legenda não conta como este; com ele, sem os que outros canais já guardaram (ERR-206).
+      if (canal.container_id) {
+        const recentes = await this.chamar<unknown>(g, 'GET', `${ig}/media`, 'instagram_media', { params: { fields: 'id,caption,timestamp,permalink', limit: String(RECENTES) } });
+        const jaSaiu = postJaPublicado(recentes, canal.body, post.criadoEm, await this.daOutroPost(tx, ref.tenantId, 'instagram', ig, canal.id));
+        if (jaSaiu) return await this.publicado(tx, ref, post, canal.id, jaSaiu.id, jaSaiu.permalink, deps);
+      }
 
       // 2. O contêiner da tentativa anterior, antes de criar outro.
       const recusada = post.video ? VIDEO_RECUSADO('instagram') : FOTO_RECUSADA('instagram');
@@ -704,18 +725,22 @@ export class PostPublicacaoConnector implements Connector {
       // O vídeo (A6, Z10, parte 3a) tem o caminho dele: Reels, ou vídeo comum.
       if (post.video) return await this.videoNaPagina(tx, ref, post, post.video, canal, g);
 
-      // 1. A tentativa anterior pode ter publicado sem a resposta chegar: a foto já está na Página?
-      let fotos: unknown = null;
-      try {
-        fotos = await this.chamar<unknown>(g, 'GET', `${pagina}/photos`, 'pagina_media', { params: { type: 'uploaded', fields: 'id,name,created_time,link,page_story_id', limit: String(RECENTES) } });
-      } catch (err) {
-        // Sem a lista (ler as fotos pede outra tarefa na Página): na primeira tentativa, publica; depois de uma
-        // tentativa sem resposta, não arrisca publicar de novo.
-        if (!(err instanceof ErroConector) || (err.tipo !== 'permissao' && err.tipo !== 'definitivo')) throw err;
-        if (canal.status === 'publicando') throw new CanalNaoSaiu(SEM_CONFERIR);
+      // 1. A tentativa anterior pode ter publicado sem a resposta chegar: a foto já está na Página? Só depois de uma
+      // tentativa deste canal (a hora dela fica guardada): sem ela, nada deste post está na Página, e o post de outro dia
+      // com a mesma legenda não conta como este; com ela, sem as fotos que outros canais já guardaram (ERR-206).
+      if (canal.tentado) {
+        let fotos: unknown = null;
+        try {
+          fotos = await this.chamar<unknown>(g, 'GET', `${pagina}/photos`, 'pagina_media', { params: { type: 'uploaded', fields: 'id,name,created_time,link,page_story_id', limit: String(RECENTES) } });
+        } catch (err) {
+          // Sem a lista (ler as fotos pede outra tarefa na Página): depois de uma tentativa sem resposta, não arrisca
+          // publicar de novo; a tentativa que terminou antes de mandar a foto, publica.
+          if (!(err instanceof ErroConector) || (err.tipo !== 'permissao' && err.tipo !== 'definitivo')) throw err;
+          if (canal.status === 'publicando') throw new CanalNaoSaiu(SEM_CONFERIR);
+        }
+        const jaSaiu = fotoJaNaPagina(fotos, canal.body, post.criadoEm, await this.daOutroPost(tx, ref.tenantId, 'facebook', pagina, canal.id));
+        if (jaSaiu) return await this.publicado(tx, ref, post, canal.id, jaSaiu.post ?? jaSaiu.id, jaSaiu.link, deps);
       }
-      const jaSaiu = fotoJaNaPagina(fotos, canal.body, post.criadoEm);
-      if (jaSaiu) return await this.publicado(tx, ref, post, canal.id, jaSaiu.post ?? jaSaiu.id, jaSaiu.link, deps);
 
       // 2. A foto inteira (a Página aceita qualquer proporção), até 4 MB, e a legenda. A tentativa fica anotada antes.
       const foto = post.foto;
@@ -782,12 +807,12 @@ export class PostPublicacaoConnector implements Connector {
       const como = comoSaiNaPagina(video.largura, video.altura);
       let videoId: string | null = null;
       if (como === 'video') {
-        // 2. O vídeo comum de uma tentativa anterior cuja resposta não chegou (o canal ficou "publicando", sem o id do
-        // vídeo): achado pela legenda, desde a criação do post. Sem tentativa anterior, nada a procurar (o post de outro
-        // dia com a mesma legenda não conta como este).
-        if (canal.status === 'publicando') {
+        // 2. O vídeo comum de uma tentativa anterior cuja resposta não chegou (a hora dela fica guardada, também depois do
+        // "Tentar de novo"; o id do vídeo, não): achado pela legenda, desde a criação do post, sem os vídeos que outros
+        // canais já guardaram. Sem tentativa anterior, nada a procurar (ERR-206).
+        if (canal.tentado) {
           const recentes = await this.chamar<unknown>(g, 'GET', `${pagina}/videos`, 'pagina_video_media', { params: { fields: 'id,description,created_time', limit: String(RECENTES) } });
-          videoId = videoJaNaPagina(recentes, canal.body, post.criadoEm);
+          videoId = videoJaNaPagina(recentes, canal.body, post.criadoEm, await this.daOutroPost(tx, ref.tenantId, 'facebook', pagina, canal.id));
           if (videoId) await this.guardarOVideo(tx, canal.id, videoId);
         }
         if (!videoId) {
@@ -988,7 +1013,8 @@ export class PostPublicacaoConnector implements Connector {
       let midia = canal.postagem;
       if (!midia) {
         const recentes = await this.chamar<unknown>(g, 'GET', `${canal.external_id}/media`, 'instagram_media', { params: { fields: 'id,caption,timestamp,permalink', limit: String(RECENTES) } });
-        midia = postJaPublicado(recentes, canal.body, post.criadoEm)?.id ?? null;
+        // Sem os posts que outros canais já guardaram: apagar o post de outro dia com a mesma legenda não pode (ERR-206).
+        midia = postJaPublicado(recentes, canal.body, post.criadoEm, await this.daOutroPost(tx, ref.tenantId, 'instagram', canal.external_id, canal.id))?.id ?? null;
         if (!midia) throw new CanalNaoApagou(SEM_O_POST('instagram'));
       }
       // Apagar usa a mesma API da publicação (a versão registrada para publicar no Instagram).
