@@ -761,7 +761,8 @@ export class PostPublicacaoConnector implements Connector {
    * arquivo) e o fim (`upload_phase=finish`, `video_state=PUBLISHED` e a legenda em `description`). Deitado, ou menor,
    * vídeo comum: `POST /{page-id}/videos` com `file_url` e `description`. Uma vez só: o id do vídeo fica no canal assim
    * que a Meta o devolve, e a tentativa seguinte confere a situação dele (`GET /{video-id}?fields=status`) antes de mandar
-   * de novo; o vídeo comum que saiu sem a resposta chegar é achado entre os vídeos da Página, pela legenda. A Meta publica
+   * de novo; o vídeo comum que saiu sem a resposta chegar (a tentativa anotada, sem o id) é achado entre os vídeos da
+   * Página, pela legenda. A Meta publica
    * sozinha depois de preparar: o Liame confere uma vez por minuto, por até 5 minutos. O Reels conta no limite de 30 por
    * Página em 24 horas, que o Liame também conta (a Meta pede).
    */
@@ -781,12 +782,20 @@ export class PostPublicacaoConnector implements Connector {
       const como = comoSaiNaPagina(video.largura, video.altura);
       let videoId: string | null = null;
       if (como === 'video') {
-        // 2. O vídeo comum que saiu sem a resposta chegar (a mesma legenda desde a criação do post): é o desta tentativa.
-        const recentes = await this.chamar<unknown>(g, 'GET', `${pagina}/videos`, 'pagina_video_media', { params: { fields: 'id,description,created_time', limit: String(RECENTES) } });
-        videoId = videoJaNaPagina(recentes, canal.body, post.criadoEm);
-        if (videoId) {
-          await this.guardarOVideo(tx, canal.id, videoId);
-        } else {
+        // 2. O vídeo comum de uma tentativa anterior cuja resposta não chegou (o canal ficou "publicando", sem o id do
+        // vídeo): achado pela legenda, desde a criação do post. Sem tentativa anterior, nada a procurar (o post de outro
+        // dia com a mesma legenda não conta como este).
+        if (canal.status === 'publicando') {
+          const recentes = await this.chamar<unknown>(g, 'GET', `${pagina}/videos`, 'pagina_video_media', { params: { fields: 'id,description,created_time', limit: String(RECENTES) } });
+          videoId = videoJaNaPagina(recentes, canal.body, post.criadoEm);
+          if (videoId) await this.guardarOVideo(tx, canal.id, videoId);
+        }
+        if (!videoId) {
+          // A tentativa fica anotada antes de mandar: a seguinte confere nos vídeos da Página.
+          await tx.execute(sql`
+            update liame.social_post_channel
+               set status = 'publicando', attempted_at = now(), error = null, updated_at = now(), preparing_since = coalesce(preparing_since, now())
+             where id = ${canal.id}`);
           const r = await this.chamar<unknown>(g, 'POST', `${pagina}/videos`, 'pagina_video', { corpo: { file_url: await this.enderecoDoVideo(video.chave, g.deps), description: canal.body }, custo: 3 });
           videoId = idDoVideoNaPagina(r);
           if (!videoId) throw new CanalNaoSaiu(NAO_ACEITOU('facebook'));

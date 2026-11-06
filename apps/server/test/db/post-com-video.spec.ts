@@ -353,6 +353,22 @@ describe.skipIf(!hasDb)('o post com vídeo (A6 · Z10, parte 3a)', () => {
     expect(await canalDe(post, 'facebook')).toMatchObject({ status: 'publicado', external_id: videos[0]!.id });
   });
 
+  it('Página: o vídeo de outro post, com a mesma legenda, não conta como este (sem tentativa anterior, nada a procurar)', async () => {
+    const e = await empresa('Brasa Video Mesma Legenda');
+    const video = await videoGuardado(e, armazem, { largura: 1920, altura: 1080 });
+    const { post, pedido } = await postAprovado(e, video.id, { canais: [{ channel: 'facebook', text: NA_PAGINA }] });
+    // Outro vídeo da Página, com a mesma legenda, publicado depois da criação deste post (o de outro dia, o repetido).
+    const antigo = { id: '90000000000001', pagina: e.pagina!.externo, tipo: 'video' as const, description: NA_PAGINA, created_time: `${new Date().toISOString().slice(0, 19)}+0000`, arquivo: null, fase: 'publicado' as const };
+    ig.videosNaPagina.unshift(antigo);
+    expect(await executar(e)).toBe(1);
+    expect((await pedidoDe(pedido)).status).toBe('executada');
+    const videos = ig.videosDe(e.pagina!.externo);
+    expect(videos).toHaveLength(2);
+    expect((await canalDe(post, 'facebook')).external_id).toBe(videos[0]!.id);
+    expect(videos[0]!.id).not.toBe(antigo.id);
+    expect(ig.chamadas.some((c) => c.metodo === 'GET' && c.caminho.endsWith('/videos'))).toBe(false);
+  });
+
   it('Página: a Meta ainda publica: espera; em 5 minutos, a frase diz que pode aparecer; "Tentar de novo" confere sem mandar de novo', async () => {
     const e = await empresa('Brasa Reels Publica Depois');
     const video = await videoGuardado(e, armazem);
