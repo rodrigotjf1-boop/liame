@@ -230,6 +230,7 @@ type LinhaDoPost = {
   cover_photo_id: string | null;
   cover_sha256: string | null;
   cover_version: number | null;
+  cover_offset_ms: number | null;
   capa_foto_pronta: boolean | null;
   capa_foto_chave: string | null;
 };
@@ -237,9 +238,9 @@ type LinhaDoCanal = { channel: string; conta: string | null; body: string; statu
 
 /**
  * O vídeo do post como a execução o usa (A6, Z10): o arquivo, as medidas, a duração e a capa (o arquivo da capa presa no
- * pedido, ou o quadro do meio, em milissegundos, para o Instagram escolher).
+ * pedido, ou o tempo do quadro, em milissegundos, para o Instagram tirar do vídeo: o escolhido no novo post ou o do meio).
  */
-export type VideoLido = { chave: string; largura: number; altura: number; bytes: number; duracaoMs: number; capa: { chave: string } | { meioMs: number } };
+export type VideoLido = { chave: string; largura: number; altura: number; bytes: number; duracaoMs: number; capa: { chave: string } | { quadroMs: number } };
 
 /** O post como o trilho o vê, com o que só a execução usa (o arquivo da foto, ou do vídeo, e quando o post nasceu). */
 export type PostLido = {
@@ -263,7 +264,7 @@ export async function lerEstadoDoPost(tx: Tx, tenantId: string, resourceId: stri
            f.object_key as foto_chave, f.width as foto_largura, f.height as foto_altura, f.bytes as foto_bytes,
            p.crop_pos, p.instagram_object_key, p.publish_at, p.created_at, p.version, o.timezone as fuso,
            p.media, (f.kind = 'video' and f.status = 'pronta' and f.removed_at is null) as video_pronto, f.duration_ms as video_duracao,
-           f.has_cover as video_tem_capa, f.cover_version as video_capa_versao, p.cover_photo_id, p.cover_sha256, p.cover_version,
+           f.has_cover as video_tem_capa, f.cover_version as video_capa_versao, p.cover_photo_id, p.cover_sha256, p.cover_version, p.cover_offset_ms,
            (cf.status = 'pronta' and cf.removed_at is null and cf.sha256 = p.cover_sha256) as capa_foto_pronta, cf.object_key as capa_foto_chave
       from liame.social_post p
       join liame.organization o on o.id = p.tenant_id
@@ -327,7 +328,9 @@ function videoDoPost(post: LinhaDoPost): { capaNoEstado: string | null; lido: Vi
     if (!post.video_tem_capa || post.video_capa_versao !== post.cover_version) return { capaNoEstado: null, lido: null };
     return { capaNoEstado: `capa:${post.cover_version}`, lido: { ...base, capa: { chave: chaveDaMiniatura(post.foto_chave) } } };
   }
-  return { capaNoEstado: 'meio', lido: { ...base, capa: { meioMs: Math.round(post.video_duracao / 2) } } };
+  // Um quadro do próprio vídeo, escolhido no novo post (A6, Z10, parte 4a): o arquivo não muda, então o tempo é o quadro.
+  if (post.cover_offset_ms !== null) return { capaNoEstado: `quadro:${post.cover_offset_ms}`, lido: { ...base, capa: { quadroMs: post.cover_offset_ms } } };
+  return { capaNoEstado: 'meio', lido: { ...base, capa: { quadroMs: Math.round(post.video_duracao / 2) } } };
 }
 
 /** O canal não sai: a frase vai para a pessoa (o pedido termina como "falhou", com ela). */
@@ -658,7 +661,7 @@ export class PostPublicacaoConnector implements Connector {
   /**
    * O contêiner do Reels (A6, Z10, parte 3a; a referência de `/{ig-user-id}/media`, conferida em 06/11/2026): o vídeo
    * como a loja gravou (`video_url`, o endereço assinado que a Meta busca), a legenda, no Feed e na aba Reels
-   * (`share_to_feed`), e a capa presa no pedido: a imagem (`cover_url`, JPEG) ou o quadro do meio (`thumb_offset`, em
+   * (`share_to_feed`), e a capa presa no pedido: a imagem (`cover_url`, JPEG) ou o quadro escolhido, ou o do meio (`thumb_offset`, em
    * milissegundos).
    */
   private async reelsDoInstagram(video: VideoLido, legenda: string, deps: DependenciasDoPost): Promise<Record<string, string>> {
@@ -670,7 +673,7 @@ export class PostPublicacaoConnector implements Connector {
         share_to_feed: 'true',
       };
       if ('chave' in video.capa) corpo.cover_url = await deps.armazem.enderecoDeLeitura(video.capa.chave, VALIDADE_DO_VIDEO_S);
-      else corpo.thumb_offset = String(video.capa.meioMs);
+      else corpo.thumb_offset = String(video.capa.quadroMs);
       return corpo;
     } catch (err) {
       if (err instanceof FalhaDoArmazem && err.semArquivo) throw new CanalNaoSaiu(VIDEO_SUMIU('instagram'));

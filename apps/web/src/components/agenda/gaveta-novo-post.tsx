@@ -7,8 +7,10 @@ import { Icone } from '@/components/ui/icone';
 import { useDialogo } from '@/components/ui/use-dialogo';
 import { api, chamar, mensagemDe } from '@/lib/api';
 import { disparar } from '@/lib/disparar';
+import { CampoDoVideo } from './campo-do-video';
 import { PreviaDoCanal } from './previa-do-canal';
 import { PreviaDoPacote } from './previa-do-pacote';
+import { PreviaDoReels } from './previa-do-reels';
 import {
   CANAIS_DO_LIAME,
   CANAIS_DO_PACOTE,
@@ -29,6 +31,17 @@ import {
   somaDias,
   textoDoBotao,
 } from './textos';
+import {
+  type CapaDoNovo,
+  cabeNoInstagram,
+  canalNoVideo,
+  capaNaTela,
+  capaNoPedido,
+  ehVideoPronto,
+  type MidiaDoPost,
+  PACOTE_SEM_VIDEO,
+  QUADRO_DO_MEIO,
+} from './video-do-post';
 
 // O novo post (P19, gaveta à direita; D-A6-20): a foto (das Fotos), onde sai (o Instagram e a Página ligados à marca, uma
 // conta em cada, D-A6-36), o texto de cada canal com o limite da rede, o recorte do Instagram quando a foto não cabe
@@ -37,11 +50,17 @@ import {
 // post") fica para quando o servidor mandar a pauta na Agenda (divergência do P19). O pacote pronto (P22; Z8): os
 // canais em dois grupos, o que o Liame publica e o que a pessoa publica (o TikTok e o YouTube, sem conta); o botão diz o
 // que acontece (mandar para aprovação, montar o pacote, ou os dois), e o pacote fica pronto na Agenda, na mesma hora.
+// O vídeo (P37, parte B; A6, Z10, parte 4a): com a função `videos`, "O post leva" Foto ou Vídeo; com o vídeo, a lista dos
+// vídeos das Fotos e vídeos, a capa (um quadro do vídeo ou uma das Fotos), os canais com o formato (Reels; na Página, o
+// vídeo comum quando deitado), sem o recorte, e a prévia do Reels. O vídeo ainda não vai no pacote (a parte 4c), e o
+// maior que o Reels do Instagram aceita vai só na Página (a redução é a parte 3b).
 
 type Props = {
   marca: string;
-  /** As fotos prontas das Fotos da marca, a mais nova primeiro; nula quando as Fotos não estão ligadas ou não abriram. */
+  /** As fotos (e os vídeos) prontos das Fotos da marca, o mais novo primeiro; nula quando as Fotos não estão ligadas ou não abriram. */
   fotos: BrandPhoto[] | null;
+  /** A função `videos` ligada para a empresa: o novo post oferece o vídeo (A6, Z10). */
+  videosLigados?: boolean;
   canais: PostChannelAccounts[];
   /** Se o post novo ganha o link do post (D-A6-46); ausente (servidor antigo), como o P19. */
   postLink?: { ok: boolean; reason: string | null };
@@ -63,7 +82,12 @@ type Props = {
 /** A ordem dos canais na tela e no pedido: os do Liame, depois os do pacote. */
 const ORDEM: readonly string[] = [...CANAIS_DO_LIAME, ...CANAIS_DO_PACOTE];
 
-export function GavetaNovoPost({ marca, fotos, canais, postLink, fuso, hoje, podeVerContas, podeVerFotos, reserva, pauta = null, aoMandar, aoFechar }: Props) {
+export function GavetaNovoPost({ marca, fotos: midias, videosLigados = false, canais, postLink, fuso, hoje, podeVerContas, podeVerFotos, reserva, pauta = null, aoMandar, aoFechar }: Props) {
+  // As fotos e os vídeos chegam juntos das Fotos: a lista das fotos fica só com as fotos (o vídeo não é foto de post).
+  const fotos = midias === null ? null : midias.filter((f) => f.kind !== 'video');
+  const videos = (midias ?? []).filter(ehVideoPronto);
+  const [midia, setMidia] = useState<MidiaDoPost>('foto');
+  const [capa, setCapa] = useState<CapaDoNovo>({ modo: 'quadro', quadro: QUADRO_DO_MEIO });
   const ids = useId();
   const primeiroCampo = useRef<HTMLButtonElement>(null);
   const fecharBt = useRef<HTMLButtonElement>(null);
@@ -82,13 +106,33 @@ export function GavetaNovoPost({ marca, fotos, canais, postLink, fuso, hoje, pod
   const [erros, setErros] = useState<ErrosDoNovo>({});
   const [erroGeral, setErroGeral] = useState<string | null>(null);
   const [enviando, setEnviando] = useState(false);
-  const foto = fotos?.find((f) => f.id === novo.foto) ?? null;
+  const foto = midia === 'foto' ? (fotos?.find((f) => f.id === novo.foto) ?? null) : null;
+  const video = midia === 'video' ? (videos.find((v) => v.id === novo.foto) ?? null) : null;
   const abaAtual = novo.canais.includes(aba) ? aba : (novo.canais[0] ?? aba);
   const quadro = foto && novo.canais.includes('instagram') ? quadroDoRecorte(foto.width, foto.height, novo.recorte) : null;
   const formato = foto ? formatoDaPrevia('instagram', foto.width, foto.height) : 'inteira';
 
   const mudar = (parcial: Partial<NovoPost>) => setNovo((n) => ({ ...n, ...parcial }));
   const tirarErro = (campo: string) => setErros((e) => (e[campo] ? Object.fromEntries(Object.entries(e).filter(([k]) => k !== campo)) : e));
+
+  /** Foto ou Vídeo: a escolha recomeça; com o vídeo, os canais do pacote saem (o vídeo ainda não vai no pacote). */
+  function mudarMidia(m: MidiaDoPost) {
+    if (m === midia) return;
+    setMidia(m);
+    setCapa({ modo: 'quadro', quadro: QUADRO_DO_MEIO });
+    mudar({ foto: null, recorte: 50, canais: m === 'video' ? novo.canais.filter((c) => !ehDoPacote(c)) : novo.canais });
+    tirarErro('foto');
+    tirarErro('capa');
+  }
+
+  /** O vídeo escolhido: o Instagram sai dos canais quando o vídeo passa do que o Reels aceita como está. */
+  function escolherVideo(id: string) {
+    const v = videos.find((x) => x.id === id);
+    mudar({ foto: id, canais: v && !cabeNoInstagram(v) ? novo.canais.filter((c) => c !== 'instagram') : novo.canais });
+    setCapa({ modo: 'quadro', quadro: QUADRO_DO_MEIO });
+    tirarErro('foto');
+    tirarErro('capa');
+  }
 
   // O foco vai ao primeiro erro depois que a tela redesenha: na recusa do servidor, os campos só voltam a aceitar foco
   // quando o "Mandando…" sai da tela (um campo desabilitado recusa o foco, e ele cairia na página).
@@ -101,7 +145,9 @@ export function GavetaNovoPost({ marca, fotos, canais, postLink, fuso, hoje, pod
     const textoComErro = novo.canais.find((c) => e[`texto-${c}`]);
     const alvo = e.foto
       ? ref.current?.querySelector<HTMLElement>('.po-foto-op')
-      : e.canais
+      : e.capa
+        ? ref.current?.querySelector<HTMLElement>('.po-capa .po-capa-quadro, .po-capa .seg button')
+        : e.canais
         ? ref.current?.querySelector<HTMLElement>('.po-canal input:not([disabled])')
         : textoComErro
           ? ref.current?.querySelector<HTMLElement>(`#${CSS.escape(`${ids}-texto`)}`)
@@ -120,6 +166,11 @@ export function GavetaNovoPost({ marca, fotos, canais, postLink, fuso, hoje, pod
     ev.preventDefault();
     setErroGeral(null);
     const e = conferirNovo(novo, new Date(), fuso);
+    // O vídeo (A6, Z10): o erro fala do vídeo, e a capa por uma das Fotos pede a foto (o servidor confere de novo).
+    if (midia === 'video') {
+      if (e.foto) e.foto = 'Escolha o vídeo do post.';
+      if (video && capa.modo === 'foto' && !capa.foto) e.capa = 'Escolha a foto da capa, ou use um quadro do vídeo.';
+    }
     setErros(e);
     if (Object.keys(e).length) return focarErro(e);
     setEnviando(true);
@@ -131,6 +182,7 @@ export function GavetaNovoPost({ marca, fotos, canais, postLink, fuso, hoje, pod
           photo_id: novo.foto!,
           publish_at: instanteNoFuso(novo.dia, novo.hora, fuso).toISOString(),
           ...(quadro ? { crop_pos: novo.recorte } : {}),
+          ...(video ? capaNoPedido(capa, video) : {}),
           channels: canaisNaOrdem.map((c) => ({ channel: c as 'instagram' | 'facebook' | 'tiktok' | 'youtube', text: (novo.textos[c] ?? '').trim() })),
         },
       }),
@@ -169,23 +221,28 @@ export function GavetaNovoPost({ marca, fotos, canais, postLink, fuso, hoje, pod
   /** A linha de um canal: a caixa de marcar, o nome e a conta (ou por que não dá). O canal do pacote não tem conta. */
   const caixaDoCanal = (c: string) => {
     const { conta, fora } = contas[c] ?? { conta: null, fora: null };
+    // O vídeo (A6, Z10): o canal diz o formato (Reels; na Página, o vídeo comum); o pacote ainda não leva vídeo, e o
+    // Instagram não leva o vídeo maior que o Reels aceita como está.
+    const noVideo = midia === 'video' ? canalNoVideo(c, video) : null;
+    const semVideo = midia === 'video' && (ehDoPacote(c) || (c === 'instagram' && video !== null && !cabeNoInstagram(video)));
     return (
-      <div key={c} className={`po-canal${fora ? ' po-canal--fora' : ''}`}>
+      <div key={c} className={`po-canal${fora || semVideo ? ' po-canal--fora' : ''}`}>
         <label>
           <input
             type="checkbox"
             checked={novo.canais.includes(c)}
-            disabled={Boolean(fora) || enviando}
+            disabled={Boolean(fora) || semVideo || enviando}
             onChange={(e) => {
               mudar({ canais: e.target.checked ? ORDEM.filter((x) => x === c || novo.canais.includes(x)) : novo.canais.filter((x) => x !== c) });
               if (e.target.checked) setAba(c);
               tirarErro('canais');
             }}
           />
-          {NOME_DO_CANAL[c]}
+          {noVideo?.nome ?? NOME_DO_CANAL[c]}
         </label>
         {conta && <span className="campo-dica">{conta.name}</span>}
         {fora && <span className="campo-dica">{fora}</span>}
+        {!fora && noVideo && <span className="campo-dica">{noVideo.dica}</span>}
       </div>
     );
   };
@@ -228,6 +285,42 @@ export function GavetaNovoPost({ marca, fotos, canais, postLink, fuso, hoje, pod
               <span>{erroGeral}</span>
             </p>
           )}
+          {videosLigados && (
+            <div className="campo">
+              <span className="rotulo" id={`${ids}-midia-t`}>
+                O post leva
+              </span>
+              <div className="seg po-midia" role="group" aria-labelledby={`${ids}-midia-t`}>
+                <button type="button" aria-pressed={midia === 'foto'} onClick={() => mudarMidia('foto')} disabled={enviando}>
+                  <Icone nome="image" pequeno />
+                  Foto
+                </button>
+                <button type="button" aria-pressed={midia === 'video'} onClick={() => mudarMidia('video')} disabled={enviando}>
+                  <Icone nome="video" pequeno />
+                  Vídeo
+                </button>
+              </div>
+            </div>
+          )}
+          {midia === 'video' ? (
+            <CampoDoVideo
+              ids={ids}
+              videos={videos}
+              fotos={fotos ?? []}
+              escolhido={novo.foto}
+              aoEscolher={escolherVideo}
+              capa={capa}
+              aoMudarCapa={(c) => {
+                setCapa(c);
+                tirarErro('capa');
+              }}
+              erroVideo={erros.foto}
+              erroCapa={erros.capa}
+              enviando={enviando}
+              podeVerFotos={podeVerFotos}
+              primeiro={primeiroCampo}
+            />
+          ) : (
           <div className="campo" role="group" aria-labelledby={`${ids}-fotos-t`} aria-describedby={erros.foto ? `${ids}-foto-erro` : `${ids}-fotos-d`}>
             <span className="rotulo" id={`${ids}-fotos-t`}>
               A foto
@@ -271,6 +364,7 @@ export function GavetaNovoPost({ marca, fotos, canais, postLink, fuso, hoje, pod
               </span>
             )}
           </div>
+          )}
 
           <fieldset className="campo" aria-describedby={`${erros.canais ? `${ids}-canais-erro ` : ''}${ids}-pacote-d`}>
             <legend>Onde sai</legend>
@@ -293,7 +387,9 @@ export function GavetaNovoPost({ marca, fotos, canais, postLink, fuso, hoje, pod
               {CANAIS_DO_PACOTE.map(caixaDoCanal)}
             </div>
             <span className="campo-dica" id={`${ids}-pacote-d`}>
-              No TikTok e no YouTube, o Liame não publica: ele monta o texto, a foto e a hora, e o pacote aparece na Agenda para você publicar.
+              {midia === 'video'
+                ? PACOTE_SEM_VIDEO
+                : 'No TikTok e no YouTube, o Liame não publica: ele monta o texto, a foto e a hora, e o pacote aparece na Agenda para você publicar.'}
             </span>
             {erros.canais && (
               <span className="campo-erro" id={`${ids}-canais-erro`}>
@@ -428,6 +524,21 @@ export function GavetaNovoPost({ marca, fotos, canais, postLink, fuso, hoje, pod
             <span className="campo-dica" id={`${ids}-hora-d`}>
               {dicaDaHora(novo.canais)}
             </span>
+          )}
+
+          {video && novo.canais.length > 0 && !ehDoPacote(abaAtual) && (
+            <section aria-labelledby={`${ids}-previa-t`} className="po-como-sai">
+              <h3 className="rotulo-marca" id={`${ids}-previa-t`}>
+                Como sai
+              </h3>
+              <PreviaDoReels
+                canal={abaAtual}
+                conta={contas[abaAtual]?.conta?.name ?? null}
+                texto={(novo.textos[abaAtual] ?? '').trim() || '…'}
+                video={video}
+                capa={capaNaTela(capa, video, fotos ?? [])}
+              />
+            </section>
           )}
 
           {foto && novo.canais.length > 0 && (

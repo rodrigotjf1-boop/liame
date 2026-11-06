@@ -79,6 +79,13 @@ export const VALIDADE_DA_FOTO_DO_PACOTE_S = 300;
 
 type Quem = { tenantId: string; userId: string };
 
+/**
+ * A capa presa no post com vídeo (D-A6-70): uma das Fotos (o id e o resumo), a versão da capa guardada com o vídeo, ou o
+ * tempo de um quadro do vídeo (A6, Z10, parte 4a); nenhuma, o quadro do meio. Uma só.
+ */
+type Capa = { fotoId: string | null; sha256: string | null; versao: number | null; quadroMs: number | null };
+const SEM_CAPA: Capa = { fotoId: null, sha256: null, versao: null, quadroMs: null };
+
 function desligada(): AppProblem {
   return new AppProblem(409, 'funcao-desligada', 'Função desligada', 'Os posts não estão ligados para esta empresa.');
 }
@@ -165,7 +172,7 @@ export class PostsService {
     video: { width: number; bytes: string | number; duration_ms: number | null; has_cover: boolean; cover_version: number },
     canais: readonly string[],
     comPacote: boolean,
-  ): Promise<{ fotoId: string | null; sha256: string | null; versao: number | null }> {
+  ): Promise<Capa> {
     if (comPacote) throw recusa('video-no-pacote', 'Vídeo no pacote', 'O vídeo ainda não vai no pacote do TikTok e do YouTube: escolha o Instagram e a Página do Facebook.', 'channels');
     if (body.crop_pos !== undefined) throw recusa('recorte-so-na-foto', 'Recorte só na foto', 'O Reels mostra o vídeo inteiro: o recorte vale só para a foto.', 'crop_pos');
     if (canais.includes('instagram') && !cabeNoReelsDoInstagram(video.width, Number(video.bytes), video.duration_ms ?? 0)) {
@@ -176,7 +183,15 @@ export class PostsService {
         'photo_id',
       );
     }
-    if (!body.cover_photo_id) return { fotoId: null, sha256: null, versao: video.has_cover ? video.cover_version : null };
+    if (body.cover_photo_id && body.cover_offset_ms !== undefined) {
+      throw recusa('capa-repetida', 'Uma capa só', 'Escolha uma capa só: um quadro do vídeo ou uma das Fotos.', 'cover_offset_ms');
+    }
+    // Um quadro do próprio vídeo (A6, Z10, parte 4a): o tempo dele, dentro da duração.
+    if (body.cover_offset_ms !== undefined) {
+      if (body.cover_offset_ms > (video.duration_ms ?? 0)) throw recusa('quadro-fora-do-video', 'Quadro fora do vídeo', 'O quadro da capa passa do fim do vídeo. Escolha outro.', 'cover_offset_ms');
+      return { ...SEM_CAPA, quadroMs: body.cover_offset_ms };
+    }
+    if (!body.cover_photo_id) return { ...SEM_CAPA, versao: video.has_cover ? video.cover_version : null };
     const c = (
       await currentTx().execute<{ id: string; sha256: string; bytes: string | number }>(sql`
         select id, sha256, bytes from liame.brand_photo
@@ -185,7 +200,7 @@ export class PostsService {
     ).rows[0];
     if (!c) throw recusa('capa-fora-da-marca', 'Capa não encontrada', 'A foto da capa não está nas Fotos desta marca.', 'cover_photo_id');
     if (Number(c.bytes) > CAPA_DO_REELS_BYTES) throw recusa('capa-grande-demais', 'Capa grande demais', 'A capa do Reels vai até 8 MB. Escolha outra foto.', 'cover_photo_id');
-    return { fotoId: c.id, sha256: c.sha256, versao: null };
+    return { ...SEM_CAPA, fotoId: c.id, sha256: c.sha256 };
   }
 
   private quem(auth: AuthContext): Quem {
@@ -280,9 +295,11 @@ export class PostsService {
     }
     const comInstagram = canais.includes('instagram');
     let recorte: number | null = null;
-    let capa: { fotoId: string | null; sha256: string | null; versao: number | null } = { fotoId: null, sha256: null, versao: null };
+    let capa: Capa = SEM_CAPA;
     if (!ehVideo) {
-      if (body.cover_photo_id) throw recusa('capa-so-no-video', 'Capa só no vídeo', 'A capa escolhida vale só para o post com vídeo.', 'cover_photo_id');
+      if (body.cover_photo_id || body.cover_offset_ms !== undefined) {
+        throw recusa('capa-so-no-video', 'Capa só no vídeo', 'A capa escolhida vale só para o post com vídeo.', body.cover_photo_id ? 'cover_photo_id' : 'cover_offset_ms');
+      }
       const precisaDeRecorte = comInstagram && recorteDoInstagram(midia.width, midia.height) !== 'nenhum';
       recorte = precisaDeRecorte ? (body.crop_pos ?? 50) : null;
     } else {
@@ -338,8 +355,8 @@ export class PostsService {
       if (ehVideo) {
         // O vídeo não tem o resumo do arquivo (ele não muda depois de pronto); a capa fica presa aqui (D-A6-70).
         await tx.execute(sql`
-          insert into liame.social_post (id, tenant_id, brand_id, media, photo_id, photo_sha256, crop_pos, cover_photo_id, cover_sha256, cover_version, publish_at, created_by)
-          values (${id}, ${quem.tenantId}, ${body.brand_id}, 'video', ${midia.id}, null, null, ${capa.fotoId}, ${capa.sha256}, ${capa.versao}, ${hora.toISOString()}, ${quem.userId})`);
+          insert into liame.social_post (id, tenant_id, brand_id, media, photo_id, photo_sha256, crop_pos, cover_photo_id, cover_sha256, cover_version, cover_offset_ms, publish_at, created_by)
+          values (${id}, ${quem.tenantId}, ${body.brand_id}, 'video', ${midia.id}, null, null, ${capa.fotoId}, ${capa.sha256}, ${capa.versao}, ${capa.quadroMs}, ${hora.toISOString()}, ${quem.userId})`);
       } else {
         await tx.execute(sql`
           insert into liame.social_post (id, tenant_id, brand_id, photo_id, photo_sha256, crop_pos, publish_at, created_by)
@@ -400,7 +417,9 @@ export class PostsService {
         // O link do post (D-A6-46): criado, ou por que não.
         link_do_post: destino === null ? null : destino.ok ? 'criado' : destino.motivo,
         // O post com vídeo (A6, Z10): o vídeo e a capa presa no pedido (a foto da capa, ou a versão da capa do vídeo).
-        ...(ehVideo ? { media: 'video', video_id: midia.id, capa: capa.fotoId ? { foto: capa.fotoId } : capa.versao !== null ? { versao: capa.versao } : 'meio' } : {}),
+        ...(ehVideo
+          ? { media: 'video', video_id: midia.id, capa: capa.fotoId ? { foto: capa.fotoId } : capa.quadroMs !== null ? { quadro_ms: capa.quadroMs } : capa.versao !== null ? { versao: capa.versao } : 'meio' }
+          : {}),
       },
     };
   }

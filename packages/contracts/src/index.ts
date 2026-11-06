@@ -486,6 +486,10 @@ export {
   BrandVideoMediaType,
   BrandVideoUploadResponse,
   CreateBrandVideoRequest,
+  fitsInstagramReels,
+  pageVideoFormat,
+  REELS_LIMITS,
+  reelsBitrate,
   UpdateBrandPhotoRequest,
 } from './fotos.js';
 export {

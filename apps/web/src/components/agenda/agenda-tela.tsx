@@ -51,6 +51,8 @@ export function AgendaTela() {
   const [fotos, setFotos] = useState<Map<string, BrandPhoto>>(new Map());
   /** As fotos para o novo post (a mais nova primeiro); nula quando as Fotos não estão ligadas ou não abriram. */
   const [fotosLista, setFotosLista] = useState<BrandPhoto[] | null>(null);
+  /** A função `videos` ligada para a empresa (A6, Z10): o novo post oferece o vídeo. */
+  const [videosLigados, setVideosLigados] = useState(false);
   const [aberto, setAberto] = useState<string | null>(null);
   const [novoAberto, setNovoAberto] = useState(false);
   // O item da pauta de onde o novo post nasce ("Fazer o post" no dia; D-A6-20); nulo: o "Novo post" do topo.
@@ -89,6 +91,7 @@ export function AgendaTela() {
     // Sem as Fotos (desligadas ou fora do ar), os cartões ficam sem a miniatura e o novo post diz por quê; a Agenda segue.
     setFotos(r.ok ? new Map(r.data.items.map((f) => [f.id, f])) : new Map());
     setFotosLista(r.ok && r.data.enabled ? r.data.items : null);
+    setVideosLigados(r.ok && r.data.enabled && r.data.videos_enabled === true);
   }, [podeVerFotos]);
 
   useEffect(() => {
@@ -395,6 +398,7 @@ export function AgendaTela() {
           pauta={daPauta}
           marca={marca}
           fotos={fotosLista}
+          videosLigados={videosLigados}
           canais={carga.dados.channels}
           postLink={carga.dados.post_link}
           fuso={carga.dados.timezone}

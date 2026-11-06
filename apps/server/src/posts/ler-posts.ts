@@ -19,6 +19,7 @@ type LinhaDoPost = {
   /** `foto` ou `video` (A6, Z10). */
   media: string;
   cover_photo_id: string | null;
+  cover_offset_ms: number | null;
   publish_at: Date;
   action_id: string | null;
   created_at: Date;
@@ -83,7 +84,7 @@ export async function fusoDaEmpresa(tx: Tx, tenantId: string): Promise<string> {
  */
 export async function lerPosts(tx: Tx, tenantId: string, filtro: SQL, prefixoDaRecusa: string, agora: Date = new Date()): Promise<PostResponse[]> {
   const p = await tx.execute<LinhaDoPost>(sql`
-    select p.id, p.brand_id, p.kind, p.photo_id, p.crop_pos, p.media, p.cover_photo_id, p.publish_at, p.action_id, p.created_at, r.status as pedido_status, r.status_reason as pedido_motivo,
+    select p.id, p.brand_id, p.kind, p.photo_id, p.crop_pos, p.media, p.cover_photo_id, p.cover_offset_ms, p.publish_at, p.action_id, p.created_at, r.status as pedido_status, r.status_reason as pedido_motivo,
            tl.destination_url as link_destino, tl.utm_source as link_origem, tl.utm_medium as link_meio, tl.utm_campaign as link_campanha, tl.code as link_codigo
       from liame.social_post p
       left join liame.action_request r on r.id = p.action_id and r.tenant_id = p.tenant_id
@@ -143,7 +144,7 @@ export async function lerPosts(tx: Tx, tenantId: string, filtro: SQL, prefixoDaR
       photo_id: l.photo_id,
       crop_pos: l.crop_pos,
       // O post com vídeo (A6, Z10) diz o que leva e a capa escolhida; o de foto segue como antes, sem as chaves.
-      ...(l.media === 'video' ? { media: 'video', cover_photo_id: l.cover_photo_id } : {}),
+      ...(l.media === 'video' ? { media: 'video', cover_photo_id: l.cover_photo_id, cover_offset_ms: l.cover_offset_ms } : {}),
       publish_at: iso(l.publish_at),
       action_id: l.action_id,
       // O pacote não tem pedido: a situação é a dos canais dele (A6, Z8).

@@ -128,8 +128,8 @@ describe.skipIf(!hasDb)('o post com vídeo (A6 · Z10, parte 3a)', () => {
   /** Os 5 minutos do preparo passaram (D-A6-69). */
   const passamOsCincoMinutos = (post: string) => ownerQuery(`update liame.social_post_channel set preparing_since = now() - interval '6 minutes' where post_id = $1 and preparing_since is not null`, [post]);
 
-  /** O novo post pela API, como a tela, sem aprovar. */
-  const novoPost = (e: EmpresaComCanais, midia: string, o: { canais?: Array<{ channel: string; text: string }>; crop?: number; capa?: string } = {}) =>
+  /** O novo post pela API, como a tela, sem aprovar. `quadro`: o tempo do quadro do vídeo escolhido como capa (parte 4a). */
+  const novoPost = (e: EmpresaComCanais, midia: string, o: { canais?: Array<{ channel: string; text: string }>; crop?: number; capa?: string; quadro?: number } = {}) =>
     api.call('POST', '/v1/posts', {
       cookie: e.cookie,
       body: {
@@ -139,11 +139,16 @@ describe.skipIf(!hasDb)('o post com vídeo (A6 · Z10, parte 3a)', () => {
         channels: o.canais ?? [{ channel: 'instagram', text: LEGENDA }],
         ...(o.crop === undefined ? {} : { crop_pos: o.crop }),
         ...(o.capa === undefined ? {} : { cover_photo_id: o.capa }),
+        ...(o.quadro === undefined ? {} : { cover_offset_ms: o.quadro }),
       },
     });
 
   /** O novo post com o vídeo, aprovado com o código do app e na hora de sair. */
-  async function postAprovado(e: EmpresaComCanais, midia: string, o: { canais?: Array<{ channel: string; text: string }>; capa?: string } = {}): Promise<{ post: string; pedido: string }> {
+  async function postAprovado(
+    e: EmpresaComCanais,
+    midia: string,
+    o: { canais?: Array<{ channel: string; text: string }>; capa?: string; quadro?: number } = {},
+  ): Promise<{ post: string; pedido: string }> {
     await ownerQuery(`update liame.organization set timezone = $2 where id = $1`, [e.tenantId, FUSO_DO_PEDIDO]);
     const r = await novoPost(e, midia, o);
     expect(r.status, JSON.stringify(r.body)).toBe(201);
@@ -207,9 +212,14 @@ describe.skipIf(!hasDb)('o post com vídeo (A6 · Z10, parte 3a)', () => {
     const grande = await fotoGuardada(e, armazem, { largura: 1080, altura: 1920 });
     await ownerQuery(`update liame.brand_photo set bytes = 9000000 where id = $1`, [grande.id]);
     expect(await recusa({ capa: grande.id })).toBe('capa-grande-demais');
+    // O quadro do vídeo como capa (parte 4a): dentro da duração (24 s), e uma capa só.
+    expect(await recusa({ quadro: 24_001 })).toBe('quadro-fora-do-video');
+    const umaFoto = await fotoGuardada(e, armazem, { largura: 1080, altura: 1920 });
+    expect(await recusa({ quadro: 1_000, capa: umaFoto.id })).toBe('capa-repetida');
     // A capa só no vídeo; e o post de foto segue com o estado de antes, sem a chave do vídeo.
     const foto = await fotoGuardada(e, armazem, { largura: 1600, altura: 1200 });
     expect(await recusa({ capa: foto.id }, foto.id)).toBe('capa-so-no-video');
+    expect(await recusa({ quadro: 1_000 }, foto.id)).toBe('capa-so-no-video');
     const deFoto = await novoPost(e, foto.id);
     expect(deFoto.status).toBe(201);
     expect(deFoto.body.media).toBeUndefined();
@@ -254,6 +264,17 @@ describe.skipIf(!hasDb)('o post com vídeo (A6 · Z10, parte 3a)', () => {
     expect((await pedidoDe(b.pedido)).status).toBe('executada');
     const comFoto = [...ig.conteineres.values()].find((c) => c.endereco.includes(video.chave))!;
     expect(comFoto).toMatchObject({ capa: `memoria://imagens/${foto.chave}?valido=590`, quadro: null });
+
+    // Um quadro do próprio vídeo, escolhido no novo post (A6, Z10, parte 4a): o tempo dele vai como `thumb_offset`.
+    const outro = await videoGuardado(e, armazem, { duracaoMs: 20_000 });
+    const c = await postAprovado(e, outro.id, { quadro: 5_000, canais: [{ channel: 'instagram', text: 'O smash no quadro dos 5 segundos.' }] });
+    expect((await pedidoDe(c.pedido)).before_state.video).toEqual({ id: outro.id, capa: 'quadro:5000' });
+    const lido = await api.call('GET', `/v1/posts/${c.post}`, { cookie: e.cookie });
+    expect(lido.body).toMatchObject({ media: 'video', cover_photo_id: null, cover_offset_ms: 5000 });
+    expect(await executar(e)).toBe(1);
+    expect((await pedidoDe(c.pedido)).status).toBe('executada');
+    const doQuadro = [...ig.conteineres.values()].find((x) => x.endereco.includes(outro.chave))!;
+    expect(doQuadro).toMatchObject({ capa: null, quadro: '5000' });
   });
 
   it('Instagram: a Meta prepara o vídeo: espera de 1 minuto sem contar tentativa; em 5 minutos, não sai; "Tentar de novo" publica o mesmo contêiner', async () => {
