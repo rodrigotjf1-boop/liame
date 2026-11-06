@@ -139,6 +139,8 @@
 .po-capa .seg { flex-wrap: wrap; max-width: 100%; }
 .po-capa .seg button { white-space: normal; }
 .po-capa-quadros { display: grid; grid-template-columns: repeat(auto-fill, minmax(64px, 1fr)); gap: var(--sp-2); list-style: none; margin: 0; padding: 0; }
+/* Os cinco quadros do vídeo numa linha só em toda largura (nenhum sozinho embaixo no celular). */
+.po-capa-quadros--video { grid-template-columns: repeat(5, minmax(0, 1fr)); max-width: 26rem; }
 .po-capa-quadro { position: relative; display: block; width: 100%; padding: 0; border: 2px solid transparent; border-radius: var(--radius); background: var(--bg-subtle); cursor: pointer; overflow: hidden; }
 .po-capa-quadro img, .po-capa-quadro video { display: block; width: 100%; aspect-ratio: 9 / 16; object-fit: cover; }
 .po-capa-quadro--deitado img, .po-capa-quadro--deitado video { aspect-ratio: 16 / 9; }

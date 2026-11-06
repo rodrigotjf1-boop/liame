@@ -108,7 +108,7 @@ export function CampoDoVideo({ ids, videos, fotos, escolhido, aoEscolher, capa, 
             </button>
           </div>
           {capa.modo === 'quadro' ? (
-            <ul className="po-capa-quadros" aria-label="Quadros do vídeo">
+            <ul className="po-capa-quadros po-capa-quadros--video" aria-label="Quadros do vídeo">
               {temposDosQuadros(video.video.duration_ms).map((t, i) => (
                 <li key={t}>
                   <button
