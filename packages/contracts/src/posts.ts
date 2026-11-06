@@ -28,8 +28,18 @@ export const POST_TEXT_LIMITS = { instagram: 2200, facebook: 10000, tiktok: 2200
 
 export const CreatePostRequest = z.strictObject({
   brand_id: z.uuid(),
-  /** Uma foto pronta das Fotos da marca (D-A6-6: só a foto de verdade, como ela é). */
+  /**
+   * Uma foto pronta das Fotos da marca (D-A6-6: só a foto de verdade, como ela é) ou, com a função `videos` ligada, um vídeo
+   * pronto das Fotos e vídeos (A6, Z10; D-A6-69): ele sai como Reels no Instagram e, na Página, como Reels (em pé) ou
+   * vídeo comum (deitado). O post com vídeo vai só aos canais em que o Liame publica, sem o recorte.
+   */
   photo_id: z.uuid(),
+  /**
+   * Só no post com vídeo (D-A6-70): uma foto pronta das Fotos da marca como a capa do Reels, em JPEG até 8 MB. Ausente, a
+   * capa é a do próprio vídeo (o quadro guardado com ele) ou, sem ela, o quadro do meio. A capa fica presa na hora do
+   * pedido: se ela mudar depois, o post não sai.
+   */
+  cover_photo_id: z.uuid().optional(),
   /** A hora marcada, com o fuso. Entre 8h e 22h no fuso da empresa, depois de agora e até 60 dias. */
   publish_at: z.iso.datetime({ offset: true }),
   /**
@@ -153,8 +163,14 @@ export const PostResponse = z.strictObject({
    * A6, Z8). A lista pode crescer.
    */
   kind: z.string().regex(/^[a-z_]{2,30}$/),
-  /** A foto das Fotos; nula quando ela foi apagada depois (o post não sai). */
+  /** A foto das Fotos, ou o vídeo (`media`); nula quando ela foi apagada depois (o post não sai). */
   photo_id: z.uuid().nullable(),
+  /**
+   * `video` no post com vídeo (A6, Z10); ausente no post de foto (como antes da Z10). A lista pode crescer.
+   */
+  media: z.string().regex(/^[a-z_]{2,30}$/).optional(),
+  /** No post com vídeo, a foto das Fotos escolhida como capa (D-A6-70); nula com a capa do próprio vídeo; ausente na foto. */
+  cover_photo_id: z.uuid().nullable().optional(),
   crop_pos: z.int().min(0).max(100).nullable(),
   publish_at: z.iso.datetime(),
   /**

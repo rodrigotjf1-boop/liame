@@ -2,6 +2,7 @@ import { randomBytes, randomUUID } from 'node:crypto';
 import { type Database, withTenant } from '@liame/database';
 import sharp from 'sharp';
 import { DATABASE } from '../../src/database/database.module.js';
+import { chaveDaMiniatura, chaveDoVideo } from '../../src/fotos/conferencia.js';
 import { VaultService } from '../../src/vault/vault.service.js';
 import { enableMfa, ownerQuery, signupAndLogin, type TestApi } from './api.js';
 import { ligarFlagDaEmpresa } from './meta-de-mentira.js';
@@ -99,6 +100,30 @@ export async function fotoGuardada(
     [id, e.tenantId, e.brandId, chave, sha256, bytes.length, largura, altura],
   );
   return { id, sha256, chave };
+}
+
+/**
+ * Um vídeo pronto nas Fotos e vídeos da marca (A6, Z10), como a parte 1 o deixa: o arquivo como a loja gravou (aqui, uns
+ * bytes de mentira, que a Meta de mentira busca pelo endereço), as medidas e a duração lidas do cabeçalho e, com `capa`,
+ * a capa guardada como a miniatura (um JPEG de verdade), com a versão 1. `bytes`: o tamanho guardado (a taxa do vídeo
+ * sai dele e da duração), que pode ser maior que o arquivo de mentira.
+ */
+export async function videoGuardado(
+  e: Pick<EmpresaComCanais, 'tenantId' | 'brandId'>,
+  armazem: { gravar(chave: string, bytes: Buffer): Promise<void> },
+  o: { largura?: number; altura?: number; duracaoMs?: number; bytes?: number; capa?: boolean } = {},
+): Promise<{ id: string; chave: string; capa: string | null }> {
+  const id = randomUUID();
+  const chave = chaveDoVideo(e.tenantId, e.brandId, id, 'video/mp4');
+  await armazem.gravar(chave, Buffer.from(`video-de-teste-${id}`));
+  const capa = (o.capa ?? true) ? chaveDaMiniatura(chave) : null;
+  if (capa) await armazem.gravar(capa, await sharp({ create: { width: 360, height: 640, channels: 3, background: { r: 200, g: 120, b: 40 } } }).jpeg().toBuffer());
+  await ownerQuery(
+    `insert into liame.brand_photo (id, tenant_id, brand_id, kind, status, object_key, sha256, bytes, width, height, duration_ms, media_type, has_audio, has_cover, cover_version)
+     values ($1, $2, $3, 'video', 'pronta', $4, null, $5, $6, $7, $8, 'video/mp4', true, $9, $10)`,
+    [id, e.tenantId, e.brandId, chave, o.bytes ?? 18_000_000, o.largura ?? 1080, o.altura ?? 1920, o.duracaoMs ?? 24_000, capa !== null, capa ? 1 : 0],
+  );
+  return { id, chave, capa };
 }
 
 /** Uma foto pronta nas Fotos da marca, como as Fotos a guardam (a cópia em JPEG, com o lado maior em até 2.048 px). */

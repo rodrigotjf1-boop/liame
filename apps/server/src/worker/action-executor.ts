@@ -7,7 +7,7 @@ import { type ApplyResult, CONNECTORS } from '../actions/connectors.js';
 import { TOOLS } from '../actions/tools.js';
 import { writeAudit } from '../audit/audit.js';
 import { ErroConector } from '../connectors/cliente-http.js';
-import { CONTEINER_EM_PREPARO, COTA_DE_POSTS } from '../connectors/meta/publicacao.js';
+import { CONTEINER_EM_PREPARO, COTA_DE_POSTS, VIDEO_EM_PREPARO } from '../connectors/meta/publicacao.js';
 import { DATABASE } from '../database/database.module.js';
 import { emitEvent } from '../events/outbox.js';
 import { FlagService } from '../flags/flag.service.js';
@@ -52,6 +52,7 @@ export function esperaDoAdiamento(esperarMs: number | null, tentativa: number): 
 function motivoDoAdiamento(err: ErroConector): string {
   // O post do Instagram (A6, Z5b): o contêiner que ainda prepara a foto e o limite de posts do dia não são "limite de uso".
   if (err.codigoProvider === CONTEINER_EM_PREPARO) return 'o Instagram ainda prepara a foto do post';
+  if (err.codigoProvider === VIDEO_EM_PREPARO) return 'a Meta ainda prepara o vídeo do post';
   if (err.codigoProvider === COTA_DE_POSTS) return 'o Instagram chegou ao limite de posts pela API nas últimas 24 horas';
   const quem = NOME_DO_PROVEDOR[err.provider] ?? 'a plataforma';
   // No Google o limite de operações é do projeto, para todas as contas juntas (não há limite por conta de anúncios).
@@ -62,8 +63,12 @@ function motivoDoAdiamento(err: ErroConector): string {
 
 type Outcome =
   | { status: 'executada' | 'falhou' | 'estado_mudou' | 'bloqueada'; reason: string | null; result?: Record<string, unknown>; version?: number }
-  /** A plataforma mandou esperar: nada foi dado como feito, e a ação volta para a fila com a hora da próxima tentativa. */
-  | { status: 'adiada'; reason: string; esperarMs: number | null; result?: undefined; version?: undefined };
+  /**
+   * A plataforma mandou esperar: nada foi dado como feito, e a ação volta para a fila com a hora da próxima tentativa.
+   * `fixa`: a espera é a que o connector pediu, sem dobrar e sem contar tentativa (o vídeo que a Meta prepara, A6, Z10;
+   * D-A6-69: quem encerra, em 5 minutos, é o connector).
+   */
+  | { status: 'adiada'; reason: string; esperarMs: number | null; fixa?: boolean; result?: undefined; version?: undefined };
 
 /** O connector não aplicou: alguém mexeu no recurso desde o pedido, ou o provedor recusou de vez. */
 function recusa(r: Exclude<ApplyResult, { ok: true }>): Outcome {
@@ -141,10 +146,11 @@ export class ActionExecutor {
       const startedAt = new Date().toISOString();
       const approval = await this.validApproval(tx, row);
       let outcome = await this.run(tx, row, approval);
-      const tentativas = Number(row.attempts ?? 0) + 1;
+      // A espera fixa (o vídeo que a Meta prepara) não conta tentativa: quem encerra é o connector.
+      const tentativas = Number(row.attempts ?? 0) + (outcome.status === 'adiada' && outcome.fixa ? 0 : 1);
       // Esperou vezes demais: a ação se encerra e a reserva volta ao envelope. Pode ter sobrado uma tentativa sem
       // resposta, então quem pediu confere na plataforma antes de pedir de novo.
-      if (outcome.status === 'adiada' && tentativas >= MAX_ADIAMENTOS) {
+      if (outcome.status === 'adiada' && !outcome.fixa && tentativas >= MAX_ADIAMENTOS) {
         outcome = {
           status: 'falhou',
           reason: `${outcome.reason}; depois de ${MAX_ADIAMENTOS} tentativas, a ação foi encerrada. Confira o objeto na plataforma e peça de novo, se ainda fizer sentido.`,
@@ -161,7 +167,8 @@ export class ActionExecutor {
                 ${outcome.version ?? null}, ${outcome.status}, ${outcome.reason}, ${startedAt})`);
 
       if (outcome.status === 'adiada') {
-        await this.adiar(tx, row, approval, outcome.reason, esperaDoAdiamento(outcome.esperarMs, tentativas), tentativas);
+        const espera = outcome.fixa ? (outcome.esperarMs ?? ESPERA_MINIMA_MS) : esperaDoAdiamento(outcome.esperarMs, tentativas);
+        await this.adiar(tx, row, approval, outcome.reason, espera, tentativas);
         return;
       }
 
@@ -232,7 +239,9 @@ export class ActionExecutor {
     } catch (err) {
       // A plataforma mandou esperar (limite de uso) ou não respondeu: a ação é adiada, em vez de insistir (A4-3).
       // O erro vem do cliente HTTP, fora do banco: a transação segue boa para gravar a espera.
-      if (err instanceof ErroConector && ADIA.has(err.tipo)) return { status: 'adiada', reason: motivoDoAdiamento(err), esperarMs: err.esperarMs };
+      if (err instanceof ErroConector && ADIA.has(err.tipo)) {
+        return { status: 'adiada', reason: motivoDoAdiamento(err), esperarMs: err.esperarMs, ...(err.codigoProvider === VIDEO_EM_PREPARO ? { fixa: true } : {}) };
+      }
       throw err;
     }
   }

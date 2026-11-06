@@ -118,6 +118,7 @@ describe('fail-fast da configuração em produção', () => {
   it('plataformas: em produção só os endereços oficiais; fora dela, trocáveis para os testes', () => {
     expect(loadConfig(prod).plataformas).toEqual({
       metaGraphUrl: 'https://graph.facebook.com',
+      metaRuploadUrl: 'https://rupload.facebook.com',
       googleAdsUrl: 'https://googleads.googleapis.com',
       ga4DataUrl: 'https://analyticsdata.googleapis.com',
       ga4AdminUrl: 'https://analyticsadmin.googleapis.com',
@@ -138,6 +139,9 @@ describe('fail-fast da configuração em produção', () => {
     expect(() => loadConfig({ ...prod, SEARCH_CONSOLE_URL: 'https://searchconsole.googleapis.com.outro.site' })).toThrow('endereço oficial');
     expect(() => loadConfig({ ...prod, SEARCH_CONSOLE_URL: 'https://www.googleapis.com' })).toThrow('endereço oficial');
     expect(() => loadConfig({ ...prod, META_GRAPH_URL: 'https://graph.facebook.com.outro.site' })).toThrow('endereço oficial');
+    // O envio do vídeo à Página (A6, Z10): o `rupload` da Meta, também só o oficial.
+    expect(() => loadConfig({ ...prod, META_RUPLOAD_URL: 'https://rupload.facebook.com.outro.site' })).toThrow('endereço oficial');
+    expect(loadConfig({ NODE_ENV: 'test', META_RUPLOAD_URL: 'http://127.0.0.1:4001/' } as NodeJS.ProcessEnv).plataformas.metaRuploadUrl).toBe('http://127.0.0.1:4001');
     expect(() => loadConfig({ ...prod, GA4_DATA_URL: 'http://127.0.0.1:4000' })).toThrow('endereço oficial');
     expect(() => loadConfig({ ...prod, GOOGLE_DATA_MANAGER_URL: 'https://datamanager.googleapis.com.outro.site' })).toThrow('endereço oficial');
     expect(loadConfig({ NODE_ENV: 'test', META_GRAPH_URL: 'http://127.0.0.1:4000/' } as NodeJS.ProcessEnv).plataformas.metaGraphUrl).toBe('http://127.0.0.1:4000');

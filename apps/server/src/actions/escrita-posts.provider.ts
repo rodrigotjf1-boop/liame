@@ -35,6 +35,7 @@ export class EscritaPosts implements OnModuleInit {
       // antes se o post já saiu.
       cliente: () => new ClienteConector(database.db, { enderecos: enderecosDasPlataformas(this.config.plataformas), tentativas: 1 }),
       graphUrl: this.config.plataformas.metaGraphUrl,
+      ruploadUrl: this.config.plataformas.metaRuploadUrl,
       appSecret: this.config.plataformas.metaAppSecret,
       versao: (capacidade) => versaoRegistrada(database.db, 'meta_ads', capacidade),
       armazem: this.armazem,

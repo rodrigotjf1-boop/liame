@@ -530,7 +530,8 @@ export class FotosService {
     return naTransacaoDaEmpresa(database, quem, async () => {
       const tx = currentTx();
       const r = await tx.execute<{ id: string }>(
-        sql`update liame.brand_photo set has_cover = true, updated_at = now() where id = ${id} and removed_at is null returning id`,
+        // A versão da capa sobe a cada capa gravada: o post com vídeo que prendeu a capa de antes não sai (A6, Z10; D-A6-70).
+        sql`update liame.brand_photo set has_cover = true, cover_version = cover_version + 1, updated_at = now() where id = ${id} and removed_at is null returning id`,
       );
       // Apagado enquanto a capa era processada: a capa gravada sai com o vídeo, pela rotina.
       if (!r.rows[0]) throw naoEncontrada();

@@ -1,7 +1,7 @@
 import type { PostMetrics, PostResponse } from '@liame/contracts';
 import type { Tx } from '@liame/database';
 import { type SQL, sql } from 'drizzle-orm';
-import { pedeUmPostNovo } from '../actions/post-publicacao.js';
+import { naoTerminouDePreparar, pedeUmPostNovo } from '../actions/post-publicacao.js';
 import { linkComRastreio } from '../links/construtor.js';
 import { pedidosDosPosts } from '../results/post-do-pedido.js';
 import { novaTentativa, recursoDoPost, situacaoDoApagar, situacaoDoPacote, situacaoDoPost } from './post-plano.js';
@@ -16,6 +16,9 @@ type LinhaDoPost = {
   kind: string;
   photo_id: string | null;
   crop_pos: number | null;
+  /** `foto` ou `video` (A6, Z10). */
+  media: string;
+  cover_photo_id: string | null;
   publish_at: Date;
   action_id: string | null;
   created_at: Date;
@@ -37,6 +40,7 @@ type LinhaDoCanal = {
   permalink: string | null;
   error: string | null;
   published_at: Date | null;
+  attempted_at: Date | null;
   removed_at: Date | null;
   metrics: Record<string, unknown> | null;
   metrics_status: string | null;
@@ -79,7 +83,7 @@ export async function fusoDaEmpresa(tx: Tx, tenantId: string): Promise<string> {
  */
 export async function lerPosts(tx: Tx, tenantId: string, filtro: SQL, prefixoDaRecusa: string, agora: Date = new Date()): Promise<PostResponse[]> {
   const p = await tx.execute<LinhaDoPost>(sql`
-    select p.id, p.brand_id, p.kind, p.photo_id, p.crop_pos, p.publish_at, p.action_id, p.created_at, r.status as pedido_status, r.status_reason as pedido_motivo,
+    select p.id, p.brand_id, p.kind, p.photo_id, p.crop_pos, p.media, p.cover_photo_id, p.publish_at, p.action_id, p.created_at, r.status as pedido_status, r.status_reason as pedido_motivo,
            tl.destination_url as link_destino, tl.utm_source as link_origem, tl.utm_medium as link_meio, tl.utm_campaign as link_campanha, tl.code as link_codigo
       from liame.social_post p
       left join liame.action_request r on r.id = p.action_id and r.tenant_id = p.tenant_id
@@ -90,7 +94,7 @@ export async function lerPosts(tx: Tx, tenantId: string, filtro: SQL, prefixoDaR
   if (p.rows.length === 0) return [];
   const c = await tx.execute<LinhaDoCanal>(sql`
     select ch.post_id, ch.channel, ch.connected_account_id, a.name as account_name, ch.body, ch.status, ch.permalink, ch.error, ch.published_at,
-           ch.removed_at, ch.metrics, ch.metrics_status, ch.metrics_read_at
+           ch.attempted_at, ch.removed_at, ch.metrics, ch.metrics_status, ch.metrics_read_at
       from liame.social_post_channel ch
       left join liame.connected_account a on a.id = ch.connected_account_id
      where ch.tenant_id = ${tenantId} and ch.post_id in ${p.rows.map((x) => x.id)}
@@ -121,7 +125,14 @@ export async function lerPosts(tx: Tx, tenantId: string, filtro: SQL, prefixoDaR
       l.kind === 'post'
         ? novaTentativa(
             l.pedido_status,
-            canais.map((x) => ({ canal: x.channel, situacao: x.status, publicadoEm: x.published_at ? new Date(x.published_at) : null, pedePostNovo: pedeUmPostNovo(x.error) })),
+            canais.map((x) => ({
+              canal: x.channel,
+              situacao: x.status,
+              publicadoEm: x.published_at ? new Date(x.published_at) : null,
+              pedePostNovo: pedeUmPostNovo(x.error),
+              semPreparo: naoTerminouDePreparar(x.error),
+              tentadoEm: x.attempted_at ? new Date(x.attempted_at) : null,
+            })),
             agora,
           )
         : null;
@@ -131,6 +142,8 @@ export async function lerPosts(tx: Tx, tenantId: string, filtro: SQL, prefixoDaR
       kind: l.kind,
       photo_id: l.photo_id,
       crop_pos: l.crop_pos,
+      // O post com vídeo (A6, Z10) diz o que leva e a capa escolhida; o de foto segue como antes, sem as chaves.
+      ...(l.media === 'video' ? { media: 'video', cover_photo_id: l.cover_photo_id } : {}),
       publish_at: iso(l.publish_at),
       action_id: l.action_id,
       // O pacote não tem pedido: a situação é a dos canais dele (A6, Z8).
@@ -152,7 +165,7 @@ export async function lerPosts(tx: Tx, tenantId: string, filtro: SQL, prefixoDaR
         metrics: numerosDoCanal(x.metrics),
         metrics_status: x.metrics_status,
         metrics_read_at: isoOuNulo(x.metrics_read_at),
-        retry_until: tentativa?.ok && tentativa.canal === x.channel ? tentativa.ate.toISOString() : null,
+        retry_until: tentativa?.ok && tentativa.canais.includes(x.channel) ? tentativa.ate.toISOString() : null,
       })),
       removal: pedidoDeApagar
         ? {

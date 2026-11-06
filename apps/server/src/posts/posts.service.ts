@@ -11,13 +11,14 @@ import { uuidv7 } from '@liame/database';
 import { Inject, Injectable } from '@nestjs/common';
 import { type SQL, sql } from 'drizzle-orm';
 import { ActionService, PREFIXO_RECUSA } from '../actions/action.service.js';
-import { pedeUmPostNovo } from '../actions/post-publicacao.js';
+import { naoTerminouDePreparar, pedeUmPostNovo } from '../actions/post-publicacao.js';
 import { contaConectada } from '../connections/conectada.js';
-import { FLAG_DOS_POSTS } from '../connectors/meta/publicacao.js';
+import { CAPA_DO_REELS_BYTES, cabeNoReelsDoInstagram, FLAG_DOS_POSTS } from '../connectors/meta/publicacao.js';
 import { type AuthContext, auditDetail, currentTx } from '../context/request-context.js';
 import { AppProblem } from '../errors/problems.js';
 import { FlagService } from '../flags/flag.service.js';
 import { recorteDoInstagram } from '../fotos/conferencia.js';
+import { FLAG_VIDEOS } from '../fotos/fotos.service.js';
 import { ARMAZEM_DE_IMAGENS, type ArmazemDeImagens, ArmazemIndisponivel, FalhaDoArmazem } from '../imagens/armazem.js';
 import { palavrasProibidasNoTexto } from '../policy/engine.js';
 import { carregarPoliticas } from '../policy/policy.service.js';
@@ -147,6 +148,46 @@ export class PostsService {
     return this.flags.isEnabled(FLAG_DOS_POSTS, this.flags.context({ tenantId: quem.tenantId, userId: quem.userId, brandId }));
   }
 
+  /** A função dos vídeos (A6, Z10; D-A6-67), além da dos posts: sem ela, o post não leva vídeo. */
+  private videosLigados(quem: Quem, brandId: string): Promise<boolean> {
+    return this.flags.isEnabled(FLAG_VIDEOS, this.flags.context({ tenantId: quem.tenantId, userId: quem.userId, brandId }));
+  }
+
+  /**
+   * O post com vídeo (A6, Z10, parte 3a; D-A6-68 a D-A6-70): só nos canais em que o Liame publica (o pacote ainda não leva
+   * vídeo), sem o recorte (o Reels mostra o vídeo inteiro), e, no Instagram, o vídeo que cabe no Reels como está (até
+   * 1.920 px de largura e 25 Mbps; a redução ainda não existe). A capa que fica presa no pedido: uma das Fotos (com o
+   * resumo do arquivo, JPEG até 8 MB) ou a do próprio vídeo (pela versão); sem nenhuma, o quadro do meio.
+   */
+  private async conferirOVideo(
+    quem: Quem,
+    body: CreatePostRequest,
+    video: { width: number; bytes: string | number; duration_ms: number | null; has_cover: boolean; cover_version: number },
+    canais: readonly string[],
+    comPacote: boolean,
+  ): Promise<{ fotoId: string | null; sha256: string | null; versao: number | null }> {
+    if (comPacote) throw recusa('video-no-pacote', 'Vídeo no pacote', 'O vídeo ainda não vai no pacote do TikTok e do YouTube: escolha o Instagram e a Página do Facebook.', 'channels');
+    if (body.crop_pos !== undefined) throw recusa('recorte-so-na-foto', 'Recorte só na foto', 'O Reels mostra o vídeo inteiro: o recorte vale só para a foto.', 'crop_pos');
+    if (canais.includes('instagram') && !cabeNoReelsDoInstagram(video.width, Number(video.bytes), video.duration_ms ?? 0)) {
+      throw recusa(
+        'video-grande-para-o-reels',
+        'Vídeo grande para o Reels',
+        'O Instagram aceita o Reels com até 1.920 px de largura e até 25 Mbps, e o Liame ainda não reduz o vídeo. Grave em 1080p e envie de novo, ou publique só na Página do Facebook.',
+        'photo_id',
+      );
+    }
+    if (!body.cover_photo_id) return { fotoId: null, sha256: null, versao: video.has_cover ? video.cover_version : null };
+    const c = (
+      await currentTx().execute<{ id: string; sha256: string; bytes: string | number }>(sql`
+        select id, sha256, bytes from liame.brand_photo
+         where id = ${body.cover_photo_id} and tenant_id = ${quem.tenantId} and brand_id = ${body.brand_id} and status = 'pronta' and removed_at is null
+           and kind = 'foto_produto'`)
+    ).rows[0];
+    if (!c) throw recusa('capa-fora-da-marca', 'Capa não encontrada', 'A foto da capa não está nas Fotos desta marca.', 'cover_photo_id');
+    if (Number(c.bytes) > CAPA_DO_REELS_BYTES) throw recusa('capa-grande-demais', 'Capa grande demais', 'A capa do Reels vai até 8 MB. Escolha outra foto.', 'cover_photo_id');
+    return { fotoId: c.id, sha256: c.sha256, versao: null };
+  }
+
   private quem(auth: AuthContext): Quem {
     if (!auth.tenantId) throw new AppProblem(403, 'sem-empresa-ativa', 'Escolha uma empresa', 'Selecione uma empresa com acesso ativo.');
     return { tenantId: auth.tenantId, userId: auth.userId };
@@ -227,15 +268,26 @@ export class PostsService {
       }
     }
 
-    const f = await tx.execute<{ id: string; sha256: string; width: number; height: number }>(sql`
-      select id, sha256, width, height from liame.brand_photo
+    // A foto, ou (A6, Z10; D-A6-69) o vídeo pronto, com a função `videos` ligada: sem ela, o vídeo é recusado como antes.
+    const f = await tx.execute<{ id: string; kind: string; sha256: string | null; width: number; height: number; bytes: string | number; duration_ms: number | null; has_cover: boolean; cover_version: number }>(sql`
+      select id, kind, sha256, width, height, bytes, duration_ms, has_cover, cover_version from liame.brand_photo
        where id = ${body.photo_id} and tenant_id = ${quem.tenantId} and brand_id = ${body.brand_id} and status = 'pronta' and removed_at is null
-         and kind = 'foto_produto'`);
-    const foto = f.rows[0];
-    if (!foto) throw recusa('foto-fora-da-marca', 'Foto não encontrada', 'A foto não está nas Fotos desta marca (ou ainda não terminou de chegar).', 'photo_id');
+         and kind in ('foto_produto', 'video')`);
+    const midia = f.rows[0];
+    const ehVideo = midia?.kind === 'video';
+    if (!midia || (ehVideo && !(await this.videosLigados(quem, body.brand_id)))) {
+      throw recusa('foto-fora-da-marca', 'Foto não encontrada', 'A foto não está nas Fotos desta marca (ou ainda não terminou de chegar).', 'photo_id');
+    }
     const comInstagram = canais.includes('instagram');
-    const precisaDeRecorte = comInstagram && recorteDoInstagram(foto.width, foto.height) !== 'nenhum';
-    const recorte = precisaDeRecorte ? (body.crop_pos ?? 50) : null;
+    let recorte: number | null = null;
+    let capa: { fotoId: string | null; sha256: string | null; versao: number | null } = { fotoId: null, sha256: null, versao: null };
+    if (!ehVideo) {
+      if (body.cover_photo_id) throw recusa('capa-so-no-video', 'Capa só no vídeo', 'A capa escolhida vale só para o post com vídeo.', 'cover_photo_id');
+      const precisaDeRecorte = comInstagram && recorteDoInstagram(midia.width, midia.height) !== 'nenhum';
+      recorte = precisaDeRecorte ? (body.crop_pos ?? 50) : null;
+    } else {
+      capa = await this.conferirOVideo(quem, body, midia, canais, doPacote.length > 0);
+    }
 
     const hora = new Date(body.publish_at);
     const fuso = await fusoDaEmpresa(tx, quem.tenantId);
@@ -283,9 +335,16 @@ export class PostsService {
     let linkDoPost: string | null = null;
     if (ordenados.length) {
       id = uuidv7();
-      await tx.execute(sql`
-        insert into liame.social_post (id, tenant_id, brand_id, photo_id, photo_sha256, crop_pos, publish_at, created_by)
-        values (${id}, ${quem.tenantId}, ${body.brand_id}, ${foto.id}, ${foto.sha256}, ${recorte}, ${hora.toISOString()}, ${quem.userId})`);
+      if (ehVideo) {
+        // O vídeo não tem o resumo do arquivo (ele não muda depois de pronto); a capa fica presa aqui (D-A6-70).
+        await tx.execute(sql`
+          insert into liame.social_post (id, tenant_id, brand_id, media, photo_id, photo_sha256, crop_pos, cover_photo_id, cover_sha256, cover_version, publish_at, created_by)
+          values (${id}, ${quem.tenantId}, ${body.brand_id}, 'video', ${midia.id}, null, null, ${capa.fotoId}, ${capa.sha256}, ${capa.versao}, ${hora.toISOString()}, ${quem.userId})`);
+      } else {
+        await tx.execute(sql`
+          insert into liame.social_post (id, tenant_id, brand_id, photo_id, photo_sha256, crop_pos, publish_at, created_by)
+          values (${id}, ${quem.tenantId}, ${body.brand_id}, ${midia.id}, ${midia.sha256}, ${recorte}, ${hora.toISOString()}, ${quem.userId})`);
+      }
       // Com a Página e o cardápio da loja, o link do post nasce com ele e vai no fim do texto da Página: é o que vai para
       // Aprovações e o que sai (D-A6-47).
       if (canais.includes('facebook') && destino?.ok) {
@@ -315,7 +374,7 @@ export class PostsService {
     if (pacotes.length) {
       await tx.execute(sql`
         insert into liame.social_post (id, tenant_id, brand_id, kind, photo_id, photo_sha256, crop_pos, publish_at, created_by)
-        select x.id, ${quem.tenantId}, ${body.brand_id}, 'pacote', ${foto.id}, ${foto.sha256}, null, ${hora.toISOString()}, ${quem.userId}
+        select x.id, ${quem.tenantId}, ${body.brand_id}, 'pacote', ${midia.id}, ${midia.sha256}, null, ${hora.toISOString()}, ${quem.userId}
           from jsonb_to_recordset(${JSON.stringify(pacotes)}::jsonb) as x (id uuid)`);
       await tx.execute(sql`
         insert into liame.social_post_channel (id, tenant_id, post_id, channel, connected_account_id, body, status)
@@ -340,6 +399,8 @@ export class PostsService {
         crop_pos: recorte,
         // O link do post (D-A6-46): criado, ou por que não.
         link_do_post: destino === null ? null : destino.ok ? 'criado' : destino.motivo,
+        // O post com vídeo (A6, Z10): o vídeo e a capa presa no pedido (a foto da capa, ou a versão da capa do vídeo).
+        ...(ehVideo ? { media: 'video', video_id: midia.id, capa: capa.fotoId ? { foto: capa.fotoId } : capa.versao !== null ? { versao: capa.versao } : 'meio' } : {}),
       },
     };
   }
@@ -405,15 +466,23 @@ export class PostsService {
     if (p.kind !== 'post') throw new AppProblem(409, 'e-pacote', 'É um pacote', 'O pacote, quem publica é você: ele não tem "Tentar de novo".');
     if (!(await this.ligada(quem, p.brand_id))) throw desligada();
     const canais = (
-      await tx.execute<{ id: string; channel: string; connected_account_id: string | null; status: string; error: string | null; published_at: Date | null }>(sql`
-        select id, channel, connected_account_id, status, error, published_at from liame.social_post_channel
+      await tx.execute<{ id: string; channel: string; connected_account_id: string | null; status: string; error: string | null; published_at: Date | null; attempted_at: Date | null }>(sql`
+        select id, channel, connected_account_id, status, error, published_at, attempted_at from liame.social_post_channel
          where post_id = ${id} and tenant_id = ${quem.tenantId}
          order by case channel when 'instagram' then 0 else 1 end
            for update`)
     ).rows;
     const decisao = novaTentativa(
       p.pedido,
-      canais.map((c) => ({ canal: c.channel, situacao: c.status, publicadoEm: c.published_at ? new Date(c.published_at) : null, pedePostNovo: pedeUmPostNovo(c.error) })),
+      canais.map((c) => ({
+        canal: c.channel,
+        situacao: c.status,
+        publicadoEm: c.published_at ? new Date(c.published_at) : null,
+        pedePostNovo: pedeUmPostNovo(c.error),
+        // O vídeo que a Meta não terminou de preparar (A6, Z10; D-A6-69): tenta de novo mesmo sem ter saído em nenhum.
+        semPreparo: naoTerminouDePreparar(c.error),
+        tentadoEm: c.attempted_at ? new Date(c.attempted_at) : null,
+      })),
       agora,
     );
     if (!decisao.ok) {
@@ -421,24 +490,29 @@ export class PostsService {
       const falta = canais.find((c) => c.status !== 'publicado')?.channel;
       throw semNovaTentativa(decisao.motivo, outro, falta);
     }
-    const canal = canais.find((c) => c.channel === decisao.canal)!;
-    const nome = canal.channel as CanalDoPost;
-    if (!canal.connected_account_id) {
-      throw recusa('canal-nao-conectado', 'Canal não conectado', `A conta ${DO_CANAL[nome]} deste post não está mais ligada à marca: conecte de novo em Contas conectadas.`, 'channels');
+    const voltam = canais.filter((c) => decisao.canais.includes(c.channel));
+    for (const c of voltam) {
+      if (!c.connected_account_id) {
+        throw recusa('canal-nao-conectado', 'Canal não conectado', `A conta ${DO_CANAL[c.channel as CanalDoPost]} deste post não está mais ligada à marca: conecte de novo em Contas conectadas.`, 'channels');
+      }
     }
-    // O canal volta para a espera (o contêiner e a hora da tentativa anterior ficam: é por eles que a publicação confere
+    const canal = voltam.find((c) => c.channel === decisao.canal)!;
+    const nome = canal.channel as CanalDoPost;
+    // Os canais voltam para a espera (o contêiner e a hora da tentativa anterior ficam: é por eles que a publicação confere
     // se a tentativa anterior já publicou, A6-9). O pedido novo nasce aprovado e sai agora, na janela das 8h às 22h.
-    await tx.execute(sql`update liame.social_post_channel set status = 'aguardando', error = null, updated_at = now() where id = ${canal.id}`);
+    await tx.execute(sql`update liame.social_post_channel set status = 'aguardando', error = null, updated_at = now() where id in ${voltam.map((c) => c.id)}`);
     const pedido = await this.actions.pedirNovaTentativa(
       auth,
-      { tool: 'post_tentar_de_novo', brand_id: p.brand_id, provider: PROVEDOR_DO_CANAL[nome], account_id: canal.connected_account_id, resource_id: recursoDoPost(id), params: {} },
+      { tool: 'post_tentar_de_novo', brand_id: p.brand_id, provider: PROVEDOR_DO_CANAL[nome], account_id: canal.connected_account_id!, resource_id: recursoDoPost(id), params: {} },
       p.action_id!,
     );
     await tx.execute(sql`update liame.social_post set action_id = ${pedido}, updated_at = now() where id = ${id} and tenant_id = ${quem.tenantId}`);
+    // Com mais de um canal (o vídeo sem preparo a tempo), a lista vai junto; o primeiro segue em `canal`, como sempre.
+    const todos = voltam.length > 1 ? { canais: voltam.map((c) => c.channel) } : {};
     auditDetail({
       resourceId: id,
-      before: { canal: nome, situacao: canal.status, erro: canal.error, action_id: p.action_id },
-      after: { brand_id: p.brand_id, canal: nome, situacao: 'aguardando', action_id: pedido, ate: decisao.ate.toISOString() },
+      before: { canal: nome, situacao: canal.status, erro: canal.error, action_id: p.action_id, ...todos },
+      after: { brand_id: p.brand_id, canal: nome, situacao: 'aguardando', action_id: pedido, ate: decisao.ate.toISOString(), ...todos },
     });
     return this.obter(auth, id);
   }
