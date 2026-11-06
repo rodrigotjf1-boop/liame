@@ -99,6 +99,8 @@ describe('o post no Instagram: as regras puras (A6 · Z5b, parte 2)', () => {
     expect(postJaPublicado({ data: [lista.data[2]] }, 'Smash duplo\nhoje.', desde)).toBeNull();
     expect(postJaPublicado({ data: [{ ...lista.data[1], id: '../x' }] }, 'Smash duplo\nhoje.', desde)).toBeNull();
     expect(postJaPublicado({}, 'x', desde)).toBeNull();
+    // ERR-206: o que outro canal do Liame já guardou como seu não é deste post, mesmo com a legenda e a hora.
+    expect(postJaPublicado(lista, 'Smash duplo\nhoje.', desde, new Set(['1790000000000002']))).toBeNull();
     expect(horaDoInstagram('2026-10-30T22:00:00+0000')).toBe(Date.parse('2026-10-30T22:00:00Z'));
     expect(horaDoInstagram('2026-10-30T19:00:00-0300')).toBe(Date.parse('2026-10-30T22:00:00Z'));
     expect(horaDoInstagram(42)).toBeNaN();
@@ -152,6 +154,9 @@ describe('o post no Instagram: as regras puras (A6 · Z5b, parte 2)', () => {
     expect(fotoJaNaPagina(fotos, 'Smash duplo hoje.', desde)).toEqual({ id: '9000000000000002', post: '222222222222222_8000000000000002', link: 'https://www.facebook.com/photo/?fbid=9000000000000002' });
     expect(fotoJaNaPagina({ data: [fotos.data[1]] }, 'Smash duplo hoje.', desde)).toBeNull();
     expect(fotoJaNaPagina(null, 'x', desde)).toBeNull();
+    // ERR-206: a foto que outro canal já guardou (pelo post dela, como o Liame guarda, ou pelo id) não é deste post.
+    expect(fotoJaNaPagina(fotos, 'Smash duplo hoje.', desde, new Set(['222222222222222_8000000000000002']))).toBeNull();
+    expect(fotoJaNaPagina(fotos, 'Smash duplo hoje.', desde, new Set(['9000000000000002']))).toBeNull();
 
     expect(idDoPostDaPagina('222222222222222_8000000000000002')).toBe('222222222222222_8000000000000002');
     for (const ruim of ['8000000000000002', '222_../x', 42, null]) expect(idDoPostDaPagina(ruim)).toBeNull();

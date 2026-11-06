@@ -92,6 +92,8 @@ describe('o vídeo no Reels e na Página (A6 · Z10, parte 3a)', () => {
     expect(videoJaNaPagina(lista, 'O smash', desde)).toBe('222');
     expect(videoJaNaPagina(lista, 'Nenhum', desde)).toBeNull();
     expect(videoJaNaPagina({ data: [{ id: '333', description: 'O smash', created_time: '2026-11-06T13:59:00+0000' }] }, 'O smash', desde)).toBeNull();
+    // ERR-206: o vídeo que outro canal do Liame já guardou não é deste post.
+    expect(videoJaNaPagina(lista, 'O smash', desde, new Set(['222']))).toBeNull();
   });
 });
 

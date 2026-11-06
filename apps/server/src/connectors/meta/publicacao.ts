@@ -233,9 +233,10 @@ export function horaDoInstagram(v: unknown): number {
 /**
  * O post que já saiu no Instagram com esta legenda desde `desde` (a criação do post no Liame), na resposta de `GET
  * /{ig}/media?fields=id,caption,timestamp,permalink`: é como a tentativa seguinte sabe que a anterior publicou mesmo
- * sem a resposta dela ter chegado, e não publica de novo (A6-9). Nulo quando não há.
+ * sem a resposta dela ter chegado, e não publica de novo (A6-9). `excluir`: os posts que outros canais do Liame já
+ * guardaram como seus (o post de outro dia com a mesma legenda não é este; ERR-206). Nulo quando não há.
  */
-export function postJaPublicado(resposta: unknown, legenda: string, desde: Date): { id: string; permalink: string | null } | null {
+export function postJaPublicado(resposta: unknown, legenda: string, desde: Date, excluir: ReadonlySet<string> = new Set()): { id: string; permalink: string | null } | null {
   const data = (resposta as { data?: unknown } | null)?.data;
   if (!Array.isArray(data)) return null;
   const procurada = legendaComparavel(legenda);
@@ -243,7 +244,7 @@ export function postJaPublicado(resposta: unknown, legenda: string, desde: Date)
   const aPartirDe = Math.floor(desde.getTime() / 1000) * 1000;
   for (const m of data as Array<Record<string, unknown> | null>) {
     const id = idDaGraph(m?.id);
-    if (!id || typeof m?.caption !== 'string' || legendaComparavel(m.caption) !== procurada) continue;
+    if (!id || excluir.has(id) || typeof m?.caption !== 'string' || legendaComparavel(m.caption) !== procurada) continue;
     const quando = horaDoInstagram(m.timestamp);
     if (!Number.isNaN(quando) && quando >= aPartirDe) return { id, permalink: enderecoDoPost(m.permalink) };
   }
@@ -314,16 +315,18 @@ export function enderecoNaPagina(v: unknown): string | null {
  * A foto que já saiu na Página com esta legenda desde `desde`, na resposta de `GET /{página}/photos?type=uploaded&fields=
  * id,name,created_time,link,page_story_id` (o `name` da foto é a legenda: "Corresponds to caption when creating
  * photos"; a data vem como a do Instagram, `+0000`). É como a tentativa seguinte sabe que a anterior publicou sem a
- * resposta ter chegado (A6-9). Nulo quando não há.
+ * resposta ter chegado (A6-9). `excluir`: as fotos (ou os posts delas) que outros canais do Liame já guardaram como
+ * seus (ERR-206). Nulo quando não há.
  */
-export function fotoJaNaPagina(resposta: unknown, legenda: string, desde: Date): { id: string; post: string | null; link: string | null } | null {
+export function fotoJaNaPagina(resposta: unknown, legenda: string, desde: Date, excluir: ReadonlySet<string> = new Set()): { id: string; post: string | null; link: string | null } | null {
   const data = (resposta as { data?: unknown } | null)?.data;
   if (!Array.isArray(data)) return null;
   const procurada = legendaComparavel(legenda);
   const aPartirDe = Math.floor(desde.getTime() / 1000) * 1000;
   for (const f of data as Array<Record<string, unknown> | null>) {
     const id = idDaGraph(f?.id);
-    if (!id || typeof f?.name !== 'string' || legendaComparavel(f.name) !== procurada) continue;
+    if (!id || excluir.has(id) || (typeof f?.page_story_id === 'string' && excluir.has(f.page_story_id))) continue;
+    if (typeof f?.name !== 'string' || legendaComparavel(f.name) !== procurada) continue;
     const quando = horaDoInstagram(f.created_time);
     if (!Number.isNaN(quando) && quando >= aPartirDe) return { id, post: idDoPostDaPagina(f.page_story_id), link: enderecoNaPagina(f.link) };
   }
@@ -414,16 +417,17 @@ export function idDoVideoNaPagina(corpo: unknown): string | null {
 /**
  * O vídeo comum que já saiu na Página com esta legenda desde `desde`, na resposta de `GET /{página}/videos?fields=id,
  * description,created_time` (a legenda do vídeo é a `description`; a data vem como a do Instagram, `+0000`): é como a
- * tentativa seguinte sabe que a anterior mandou o vídeo sem a resposta ter chegado, e não manda de novo. O id, ou nulo.
+ * tentativa seguinte sabe que a anterior mandou o vídeo sem a resposta ter chegado, e não manda de novo. `excluir`: os
+ * vídeos que outros canais do Liame já guardaram como seus (ERR-206). O id, ou nulo.
  */
-export function videoJaNaPagina(resposta: unknown, legenda: string, desde: Date): string | null {
+export function videoJaNaPagina(resposta: unknown, legenda: string, desde: Date, excluir: ReadonlySet<string> = new Set()): string | null {
   const data = (resposta as { data?: unknown } | null)?.data;
   if (!Array.isArray(data)) return null;
   const procurada = legendaComparavel(legenda);
   const aPartirDe = Math.floor(desde.getTime() / 1000) * 1000;
   for (const v of data as Array<Record<string, unknown> | null>) {
     const id = idDaGraph(v?.id);
-    if (!id || typeof v?.description !== 'string' || legendaComparavel(v.description) !== procurada) continue;
+    if (!id || excluir.has(id) || typeof v?.description !== 'string' || legendaComparavel(v.description) !== procurada) continue;
     const quando = horaDoInstagram(v.created_time);
     if (!Number.isNaN(quando) && quando >= aPartirDe) return id;
   }

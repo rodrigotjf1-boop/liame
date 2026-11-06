@@ -196,8 +196,9 @@ describe.skipIf(!hasDb)('o post no Instagram e na Página (A6 · Z5b, partes 2 e
       [post],
     );
     expect(fila!.espera_min).toBe(60);
-    // A ordem: os recentes (já saiu?), o limite do dia, o contêiner, a situação dele, a publicação e o endereço.
-    expect([ig.contar('media', 'GET'), ig.contar('content_publishing_limit'), ig.contar('media', 'POST'), ig.contar('status_code'), ig.contar('media_publish')]).toEqual([1, 1, 1, 1, 1]);
+    // A ordem: o limite do dia, o contêiner, a situação dele, a publicação e o endereço. Os recentes (já saiu?) não são
+    // lidos na primeira tentativa: sem um contêiner deste post, nada dele está no Instagram (ERR-206).
+    expect([ig.contar('media', 'GET'), ig.contar('content_publishing_limit'), ig.contar('media', 'POST'), ig.contar('status_code'), ig.contar('media_publish')]).toEqual([0, 1, 1, 1, 1]);
     // O token foi no cabeçalho, com a prova do segredo do app; nunca na URL.
     expect(ig.defeitos).toEqual([]);
 
@@ -206,6 +207,32 @@ describe.skipIf(!hasDb)('o post no Instagram e na Página (A6 · Z5b, partes 2 e
     expect(r.body.channels[0]).toMatchObject({ channel: 'instagram', status: 'publicado', permalink: publicados[0]!.permalink, error: null });
     // Nada mais a fazer: o executor não pega o pedido de novo.
     expect(await executar(e)).toBe(0);
+  });
+
+  it('ERR-206: dois posts com a mesma legenda: o segundo, criado antes de o primeiro sair, sai também (no Instagram e na Página)', async () => {
+    const e = await comPagina('Brasa Mesma Legenda');
+    const TEXTO_DA_PAGINA = 'Smash duplo hoje na Casa Brasa.';
+    const canais = [
+      { channel: 'instagram', text: LEGENDA },
+      { channel: 'facebook', text: TEXTO_DA_PAGINA },
+    ];
+    // O segundo post nasce primeiro e espera a hora dele; o primeiro sai antes, com as mesmas legendas.
+    const segundo = await postAprovado(e, (await fotoGuardada(e, armazem, { largura: 1600, altura: 1200 })).id, { canais });
+    await ownerQuery(`update liame.action_request set next_attempt_at = now() + interval '1 hour' where id = $1`, [segundo.pedido]);
+    const primeiro = await postAprovado(e, (await fotoGuardada(e, armazem, { largura: 1600, altura: 1200 })).id, { canais });
+    expect(await executar(e)).toBe(1);
+    expect((await pedidoDe(primeiro.pedido)).status).toBe('executada');
+
+    // A hora do segundo chega: ele publica o dele, sem tomar o do primeiro por seu.
+    await passaAEspera(segundo.pedido);
+    expect(await executar(e)).toBe(1);
+    expect((await pedidoDe(segundo.pedido)).status).toBe('executada');
+    expect(ig.postsDe(e.instagram!.externo)).toHaveLength(2);
+    expect(ig.fotosDe(e.pagina!.externo)).toHaveLength(2);
+    const [igA, igB] = [await canalDe(primeiro.post), await canalDe(segundo.post)];
+    expect(igB.external_id).not.toBe(igA.external_id);
+    const [pgA, pgB] = [await canalDe(primeiro.post, 'facebook'), await canalDe(segundo.post, 'facebook')];
+    expect(pgB.external_id).not.toBe(pgA.external_id);
   });
 
   it('a foto que não cabe vai recortada na posição aprovada (o topo), e o recorte sai do armazenamento depois', async () => {
