@@ -1,5 +1,6 @@
 import type { ActionResponse } from '@liame/contracts';
-import { ANTECEDENCIA_MINIMA_MIN, DIAS_DE_ANTECEDENCIA, ehDia, instanteNoFuso, NO_CANAL, noFuso, quando, situacaoDoPost } from '@/components/agenda/textos';
+import { ANTECEDENCIA_MINIMA_MIN, DIAS_DE_ANTECEDENCIA, ehDia, instanteNoFuso, NO_CANAL, noFuso, podeTentarDeNovo, quando, situacaoDoPost, situacaoNaTela } from '@/components/agenda/textos';
+import { ehPostComVideo, PREPARANDO, SEM_PREPARO, videoSemPreparo } from '@/components/agenda/video-do-post';
 import { type PedidoApresentado, recusaDe } from './textos';
 
 // O pedido de post em Aprovações (mockups/prototipo-post.html, P19 aprovado em 21/10/2026; A6, Z5c, parte 4). O servidor
@@ -132,9 +133,11 @@ export function postApresentado(a: AcaoDePost, agora: Date): PedidoApresentado {
       depoisDeAprovar: '',
     };
   }
+  // O post com vídeo (P37, parte B): o título e a frase dizem que é um vídeo.
+  const video = ehPostComVideo(post);
   return {
-    titulo: `Post de ${quando}`,
-    resumo: `Você vai publicar um post ${ondeSai(post)}, ${quando}. Ele é público e sai em nome da empresa. Se você aprovar, o Liame publica na hora marcada.`,
+    titulo: `${video ? 'Post com vídeo' : 'Post'} de ${quando}`,
+    resumo: `Você vai publicar ${video ? 'um vídeo' : 'um post'} ${ondeSai(post)}, ${quando}. Ele é público e sai em nome da empresa. Se você aprovar, o Liame publica na hora marcada.`,
     impacto: null,
     mudancas: [],
     desfazer: DESFAZER_DO_POST,
@@ -147,7 +150,7 @@ export function etiquetaDoPost(a: AcaoDePost): string {
   // O pedido trocado pela hora nova não diz a situação do post: ela é a do pedido novo.
   if (ehHoraMudada(a)) return 'Hora mudada';
   if (ehApagarDasRedes(a)) return ETIQUETA_DO_APAGAR[situacaoDoApagar(a)] ?? 'Apagar das redes';
-  return situacaoDoPost(a.post.status).rotulo;
+  return situacaoNaTela(a.post).rotulo;
 }
 
 /** O que aconteceu com o post depois da decisão, no detalhe: o tom, o ícone e a frase. */
@@ -197,12 +200,21 @@ export function resultadoDoPost(a: AcaoDePost, agora: Date): ResultadoDoPost {
         texto: 'Antes de publicar, o Liame consulta o limite de posts do dia do Instagram; no limite, o post espera, e o motivo aparece aqui.',
       };
     case 'publicando':
+      // O vídeo (P37, parte B): a Meta prepara antes de publicar.
+      if (ehPostComVideo(post)) return { tom: 'espera', icone: 'clock', titulo: PREPARANDO.titulo, texto: PREPARANDO.texto };
       return { tom: 'espera', icone: 'clock', titulo: 'Publicando…', texto: 'O Liame manda a foto e o texto para cada canal, uma vez só em cada um.' };
     case 'publicado':
-      return { tom: 'ok', icone: 'check', titulo: 'Publicado.', texto: 'Saiu exatamente o texto e a foto aprovados. Veja abaixo em cada canal.' };
+      return {
+        tom: 'ok',
+        icone: 'check',
+        titulo: 'Publicado.',
+        texto: `Saiu exatamente ${ehPostComVideo(post) ? 'o texto, o vídeo e a capa aprovados' : 'o texto e a foto aprovados'}. Veja abaixo em cada canal.`,
+      };
     case 'em_parte':
       return { tom: 'falha', icone: 'alert', titulo: 'Saiu em parte.', texto: 'Um canal não saiu; no outro, o post está no ar. Veja abaixo o motivo.' };
     case 'nao_saiu':
+      // O vídeo que a Meta não terminou de preparar (P37; D-A6-76): "Tentar de novo" manda o mesmo, sem o código.
+      if (videoSemPreparo(post, (c) => podeTentarDeNovo(c, agora))) return { tom: 'falha', icone: 'alert', titulo: SEM_PREPARO.titulo, texto: SEM_PREPARO.texto };
       return { tom: 'falha', icone: 'alert', titulo: 'Não saiu.', texto: 'Veja abaixo o motivo em cada canal.' };
     case 'cancelado':
       return { tom: '', icone: 'x', titulo: 'Cancelado antes de sair.', texto: 'Nada foi publicado.' };

@@ -34,7 +34,7 @@ import { Mailer } from '../mail/mailer.js';
 import { actionMatches, evaluatePolicy, type LoadedPolicy, rateLimitsFor } from '../policy/engine.js';
 import { PolicyService } from '../policy/policy.service.js';
 import { currentTraceparent, inSpan } from '../observability/trace.js';
-import { fusoDaEmpresa, lerPosts } from '../posts/ler-posts.js';
+import { fusoDaEmpresa, lerPosts, postComCanalSaindo } from '../posts/ler-posts.js';
 import { postDoRecurso, PROVEDOR_DO_CANAL } from '../posts/post-plano.js';
 import { alvoDaRecomendacao, direcaoDaRecomendacao, type FalhaDaLigacao } from '../sombra/pedido.js';
 import type { AcaoSombra } from '../sombra/regras.js';
@@ -1006,6 +1006,15 @@ export class ActionService {
     const row = await this.lock(tx, tenantId, id);
     if (!['sombra', 'aguardando_aprovacao', 'aprovada'].includes(row.status)) {
       throw new AppProblem(409, 'acao-nao-cancela', 'Não dá para cancelar', 'A ação já está em execução ou terminou.');
+    }
+    // O post aprovado que já começou a sair (a Meta preparando o vídeo): ela já recebeu, e cancelar mentiria (ERR-207).
+    if ((row.tool === 'post_publicar' || row.tool === 'post_tentar_de_novo') && (await postComCanalSaindo(tx, tenantId, id))) {
+      throw new AppProblem(
+        409,
+        'post-saindo',
+        'O post já está saindo',
+        'A Meta já recebeu o post e está preparando para publicar: não dá mais para cancelar. Depois que ele sair, dá para apagar das redes.',
+      );
     }
     await tx.execute(sql`update liame.action_request set status = 'cancelada', status_reason = ${motivo}, updated_at = now() where id = ${id}`);
     const released = await this.budget.release(tx, tenantId, id);

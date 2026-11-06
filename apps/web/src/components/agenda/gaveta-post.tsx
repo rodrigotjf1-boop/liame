@@ -16,7 +16,8 @@ import { oQueOPostTrouxe } from './post-trouxe';
 import { PostTrouxe } from './post-trouxe-secao';
 import { PreviasDoPost } from './previas-do-post';
 import { SituacaoDosCanais } from './situacao-dos-canais';
-import { avisoDoApagar, deOndeSai, fraseDaSituacao, linkCurto, NO_CANAL, noFuso, podeApagar, quando, situacaoDoCartao } from './textos';
+import { avisoDoApagar, deOndeSai, fraseDaSituacao, linkCurto, NO_CANAL, noFuso, podeApagar, podeTentarDeNovo, quando, situacaoDoCartao } from './textos';
+import { ehPostComVideo, ehVideoPronto, fatoDoVideo, SEM_PREPARO, videoSemPreparo } from './video-do-post';
 
 // Um post da Agenda (P19, gaveta à direita): a situação, a prévia de cada canal (a foto, com o recorte do Instagram, e
 // o texto), o que aconteceu em cada canal e o que dá para fazer: abrir o pedido em Aprovações (o post que espera),
@@ -28,8 +29,10 @@ type Props = {
   post: PostResponse;
   fuso: string;
   hoje: string;
-  /** A foto do post (das Fotos); nula quando ela saiu das Fotos ou a lista não pôde ser lida. */
+  /** A foto do post (das Fotos); nula quando ela saiu das Fotos ou a lista não pôde ser lida. No post com vídeo, o vídeo. */
   foto: BrandPhoto | null;
+  /** No post com vídeo, a foto escolhida como capa (P37), quando ela está na lista das Fotos. */
+  capaFoto?: BrandPhoto | null;
   podeOperar: boolean;
   /** Pode aprovar (`acoes.aprovar`): mudar a hora do post aprovado e apagar das redes pedem o código do app. */
   podeAprovar: boolean;
@@ -52,6 +55,7 @@ export function GavetaPost({
   fuso,
   hoje,
   foto,
+  capaFoto = null,
   podeOperar,
   podeAprovar,
   podeVerContas,
@@ -101,6 +105,10 @@ export function GavetaPost({
   const pedidoEm = noFuso(new Date(post.created_at), fuso);
   // P33: o que o post que já saiu trouxe (os pedidos pelo link e os números de cada rede); nulo antes de sair.
   const trouxe = oQueOPostTrouxe(post, agora, fuso);
+  // O post com vídeo (P37, parte B): o vídeo da lista das Fotos e o vídeo que a Meta não terminou de preparar.
+  const comVideo = ehPostComVideo(post);
+  const video = comVideo && foto && ehVideoPronto(foto) ? foto : null;
+  const semPreparo = videoSemPreparo(post, (c) => podeTentarDeNovo(c, agora));
 
   async function cancelar() {
     if (!post.action_id) return;
@@ -138,7 +146,8 @@ export function GavetaPost({
       return;
     }
     aoMudar(r.data);
-    setAviso(`Tentando de novo ${NO_CANAL[canal] ?? canal}: o mesmo post aprovado, só no canal que faltou. A Agenda mostra quando ele sair.`);
+    // O vídeo que a Meta não terminou de preparar: a nova tentativa vale para os canais que faltam (P37).
+    setAviso(semPreparo ? SEM_PREPARO.deNovo : `Tentando de novo ${NO_CANAL[canal] ?? canal}: o mesmo post aprovado, só no canal que faltou. A Agenda mostra quando ele sair.`);
     setFocarAviso((n) => n + 1);
   }
 
@@ -194,7 +203,9 @@ export function GavetaPost({
         <div className="dialogo-cab">
           <div className="dlg-titulo">
             <p className="rotulo-marca">Post</p>
-            <h2 id={`${ids}-t`}>Post de {quando(dia, hora, hoje)}</h2>
+            <h2 id={`${ids}-t`}>
+              {comVideo ? 'Post com vídeo' : 'Post'} de {quando(dia, hora, hoje)}
+            </h2>
           </div>
           <button className="btn btn--icon btn--ghost" type="button" ref={fecharBt} onClick={fechar} aria-label="Fechar" disabled={ocupado}>
             <Icone nome="x" />
@@ -218,7 +229,7 @@ export function GavetaPost({
             </p>
           )}
           {trouxe && <PostTrouxe trouxe={trouxe} podeVerResultados={podeVerResultados} podeVerContas={podeVerContas} />}
-          <PreviasDoPost key={post.id} post={post} foto={foto} aoFalharImagem={aoFalharImagem} />
+          <PreviasDoPost key={post.id} post={post} foto={foto} capaFoto={capaFoto} aoFalharImagem={aoFalharImagem} />
           <section aria-labelledby={`${ids}-sit`}>
             <h3 className="rotulo-marca" id={`${ids}-sit`}>
               Em cada canal
@@ -230,6 +241,12 @@ export function GavetaPost({
               agora={agora}
               tentar={podeOperar ? { aoTentar: (canal) => disparar(tentarDeNovo(canal)), ocupado: tentando } : null}
             />
+            {semPreparo && (
+              <p className="po-nota" data-po-sem-preparo>
+                <Icone nome="info" pequeno />
+                <span>{SEM_PREPARO.nota}</span>
+              </p>
+            )}
             {aviso && (
               <p className="po-nota" role="status" tabIndex={-1} ref={avisoRef}>
                 <Icone nome="refresh" pequeno />
@@ -238,6 +255,12 @@ export function GavetaPost({
             )}
           </section>
           <dl className="po-fatos">
+            {video && (
+              <div>
+                <dt>Vídeo</dt>
+                <dd>{fatoDoVideo(post, video, capaFoto)}</dd>
+              </div>
+            )}
             <div>
               <dt>Marcado para</dt>
               <dd>{quando(dia, hora, hoje)}</dd>

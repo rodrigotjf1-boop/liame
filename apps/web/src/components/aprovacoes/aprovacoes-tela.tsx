@@ -4,7 +4,8 @@ import type { ActionResponse, BrandPhoto, BrandResponse, BudgetMonthResponse, Pl
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { deOndeSai, NO_CANAL } from '@/components/agenda/textos';
+import { deOndeSai, NO_CANAL, podeTentarDeNovo } from '@/components/agenda/textos';
+import { SEM_PREPARO, videoSemPreparo } from '@/components/agenda/video-do-post';
 import { GavetaPedir } from '@/components/pedir/gaveta-pedir';
 import { destinoInicial } from '@/components/shell/inicio';
 import { useAvisar } from '@/components/ui/avisos';
@@ -460,7 +461,10 @@ export function AprovacoesTela() {
       setTentativa((n) => n + 1);
       return { ok: false, texto: mensagemDe(r.problema) };
     }
-    avisar(`Tentando de novo ${NO_CANAL[canal] ?? canal}: o mesmo post aprovado, só no canal que faltou.`);
+    // O vídeo que a Meta não terminou de preparar: a nova tentativa vale para os canais que faltam (P37).
+    avisar(
+      videoSemPreparo(acao.post, (c) => podeTentarDeNovo(c, new Date())) ? SEM_PREPARO.deNovo : `Tentando de novo ${NO_CANAL[canal] ?? canal}: o mesmo post aprovado, só no canal que faltou.`,
+    );
     await carregar();
     focarOTitulo();
     return { ok: true };
@@ -875,6 +879,7 @@ export function AprovacoesTela() {
         temApp={temApp}
         temChave={temChave}
         foto={post.post.photo_id ? (fotos.get(post.post.photo_id) ?? null) : null}
+        capaFoto={post.post.cover_photo_id ? (fotos.get(post.post.cover_photo_id) ?? null) : null}
         titulo={tituloDoDetalhe}
         campoCodigo={campoCodigo}
         aoVoltar={voltarParaALista}

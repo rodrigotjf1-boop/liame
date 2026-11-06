@@ -78,6 +78,20 @@ export async function fusoDaEmpresa(tx: Tx, tenantId: string): Promise<string> {
 }
 
 /**
+ * O post deste pedido já começou a sair em algum canal (ERR-207)? O canal `publicando` com o pedido ainda aprovado é a
+ * Meta preparando o vídeo ou o contêiner entre uma conferência e outra: ela já recebeu o post, e na Página publica sozinha
+ * o vídeo que recebeu. Cancelar aí diria "não saiu" sobre um post que pode sair.
+ */
+export async function postComCanalSaindo(tx: Tx, tenantId: string, pedido: string): Promise<boolean> {
+  const r = await tx.execute(sql`
+    select 1 from liame.social_post p
+      join liame.social_post_channel ch on ch.post_id = p.id and ch.tenant_id = p.tenant_id
+     where p.tenant_id = ${tenantId} and p.action_id = ${pedido} and ch.status = 'publicando'
+     limit 1`);
+  return r.rows.length > 0;
+}
+
+/**
  * Os posts da empresa que casam com o filtro (sobre `liame.social_post p`), com os canais, numa consulta para os posts e
  * uma para os canais. `prefixoDaRecusa`: o começo do motivo do pedido recusado (do serviço das ações), que separa
  * "recusado" de "cancelado". `agora`: a hora em que se lê (até quando dá para "Tentar de novo" num canal, A6, Z5d).

@@ -290,6 +290,15 @@ describe.skipIf(!hasDb)('o post com vídeo (A6 · Z10, parte 3a)', () => {
     expect(espera).toBeGreaterThan(50);
     expect(espera).toBeLessThanOrEqual(61);
     expect((await canalDe(post)).preparing_since).not.toBeNull();
+    // ERR-207: enquanto a Meta prepara, o post está saindo (não "agendado"), e cancelar é recusado: o contêiner já existe,
+    // e na Página a Meta publica sozinha o que já recebeu.
+    const preparando = await api.call('GET', `/v1/posts/${post}`, { cookie: e.cookie });
+    expect(preparando.body.status).toBe('publicando');
+    expect(preparando.body.channels[0].status).toBe('publicando');
+    const cancelar = await api.call('POST', `/v1/actions/${pedido}/cancel`, { cookie: e.cookie });
+    expect(cancelar.status, JSON.stringify(cancelar.body)).toBe(409);
+    expect(cancelar.body.code).toBe('post-saindo');
+    expect((await pedidoDe(pedido)).status).toBe('aprovada');
 
     // Na volta, ainda prepara: espera de novo, ainda sem contar.
     await passaAEspera(pedido);

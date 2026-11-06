@@ -1,5 +1,7 @@
-import { PACKAGE_CHANNELS, POST_TEXT_LIMITS, type PostChannelResponse, type PostListResponse, type PostResponse } from '@liame/contracts';
+import { type BrandPhoto, PACKAGE_CHANNELS, POST_TEXT_LIMITS, type PostChannelResponse, type PostListResponse, type PostResponse } from '@liame/contracts';
+import { duracaoCurta, duracaoPorExtenso } from '@/components/fotos/textos';
 import type { NomeIcone } from '@/components/ui/icone';
+import { ehPostComVideo, ehVideoPronto, PREPARANDO } from './video-do-post';
 
 // A Agenda (mockups/prototipo-post.html, P19 aprovado em 21/10/2026; Z5c da A6): os posts da marca na semana, dia a
 // dia, no fuso da empresa (que vem do servidor: a janela das 8h às 22h é nele). Funções puras: a semana, o dia e a hora
@@ -85,16 +87,27 @@ export function situacaoDoPost(status: string): SituacaoNaTela {
   return SITUACAO[status] ?? { rotulo: status.replace(/_/g, ' '), icone: 'info', tom: '' };
 }
 
+/** O post com vídeo saindo: a Meta prepara o vídeo antes de publicar (P37, parte B; A6, Z10, parte 4b). */
+const PREPARANDO_O_VIDEO: SituacaoNaTela = { rotulo: 'Preparando o vídeo', icone: 'clock', tom: 'espera' };
+
+/** A situação do post na tela: a do servidor, e o vídeo que está saindo como "Preparando o vídeo" (P37). */
+export function situacaoNaTela(post: Pick<PostResponse, 'status' | 'media'>): SituacaoNaTela {
+  return ehPostComVideo(post) && post.status === 'publicando' ? PREPARANDO_O_VIDEO : situacaoDoPost(post.status);
+}
+
 /** A situação no cartão do dia: a do post, ou "Apagando" enquanto o pedido de apagar das redes executa (A6, Z5d, parte 7). */
-export function situacaoDoCartao(post: Pick<PostResponse, 'status' | 'removal'>): SituacaoNaTela {
-  return post.removal?.status === 'apagando' ? { rotulo: 'Apagando das redes', icone: 'clock', tom: '' } : situacaoDoPost(post.status);
+export function situacaoDoCartao(post: Pick<PostResponse, 'status' | 'removal' | 'media'>): SituacaoNaTela {
+  return post.removal?.status === 'apagando' ? { rotulo: 'Apagando das redes', icone: 'clock', tom: '' } : situacaoNaTela(post);
 }
 
 /** O que sai da semana: o cancelado, o recusado e o que expirou sem aprovação não vão ao ar (o P19 também os tira). */
 const FORA_DA_SEMANA = new Set(['cancelado', 'recusado', 'expirado']);
 
-/** `pedidos`: o post que já saiu e trouxe pedido pelo link ("3 pedidos", P33); nulo nos outros. */
-export type PostNoDia = { post: PostResponse; dia: string; hora: string; canais: string; situacao: SituacaoNaTela; rotulo: string; pedidos: string | null };
+/**
+ * `pedidos`: o post que já saiu e trouxe pedido pelo link ("3 pedidos", P33); nulo nos outros. `duracao`: a do vídeo do
+ * post ("0:18", na miniatura; P37), nula no post de foto ou sem o vídeo na lista das Fotos.
+ */
+export type PostNoDia = { post: PostResponse; dia: string; hora: string; canais: string; situacao: SituacaoNaTela; rotulo: string; pedidos: string | null; duracao: string | null };
 
 /** O que já saiu e pode ter trazido pedido pelo link: o post publicado (ou em parte) e o pacote que a pessoa publicou. */
 const SAIU = new Set(['publicado', 'em_parte', 'pacote_publicado']);
@@ -122,11 +135,15 @@ export type TelaDaAgenda =
 /** O post é um pacote pronto (P22): quem publica é a pessoa. */
 export const ehPacote = (p: Pick<PostResponse, 'kind'>): boolean => p.kind === 'pacote';
 
-/** Os nomes dos canais do post, no cartão: "Instagram · Facebook". */
-const canaisDoPost = (p: PostResponse) => p.channels.map((c) => NOME_CURTO[c.channel] ?? c.channel).join(' · ');
+/** Os nomes dos canais do post, no cartão: "Instagram · Facebook"; no post com vídeo, "Reels no Instagram · Facebook" (P37). */
+const canaisDoPost = (p: PostResponse) =>
+  p.channels.map((c) => (c.channel === 'instagram' && ehPostComVideo(p) ? 'Reels no Instagram' : (NOME_CURTO[c.channel] ?? c.channel))).join(' · ');
 
-/** A semana da Agenda: os sete dias de `inicio` (segunda), cada um com os posts dele, na hora do fuso da empresa. */
-export function telaDaAgenda(dados: PostListResponse, inicio: string, hoje: string): TelaDaAgenda {
+/**
+ * A semana da Agenda: os sete dias de `inicio` (segunda), cada um com os posts dele, na hora do fuso da empresa. `fotos`:
+ * as Fotos e vídeos da marca, para a duração do vídeo no cartão (P37); sem elas, o cartão sai sem a duração.
+ */
+export function telaDaAgenda(dados: PostListResponse, inicio: string, hoje: string, fotos?: ReadonlyMap<string, BrandPhoto>): TelaDaAgenda {
   if (!dados.enabled) return { tipo: 'desligada' };
   const porDia = new Map<string, PostNoDia[]>();
   for (const post of dados.items) {
@@ -136,6 +153,9 @@ export function telaDaAgenda(dados: PostListResponse, inicio: string, hoje: stri
     const canais = canaisDoPost(post);
     const nomes = post.channels.map((c) => NOME_DO_CANAL[c.channel] ?? c.channel).join(' e ');
     const pedidos = pedidosDoCartao(post);
+    const midia = ehPostComVideo(post) && post.photo_id ? fotos?.get(post.photo_id) : undefined;
+    const video = midia && ehVideoPronto(midia) ? midia : null;
+    const nome = ehPacote(post) ? 'Pacote' : ehPostComVideo(post) ? `Post com vídeo${video ? ` (${duracaoPorExtenso(video.video.duration_ms)})` : ''}` : 'Post';
     const item: PostNoDia = {
       post,
       dia,
@@ -143,7 +163,8 @@ export function telaDaAgenda(dados: PostListResponse, inicio: string, hoje: stri
       canais,
       situacao,
       pedidos,
-      rotulo: `${ehPacote(post) ? 'Pacote' : 'Post'} de ${quando(dia, hora, hoje)}, ${nomes}: ${situacao.rotulo.toLowerCase()}${pedidos ? `, ${pedidos} pelo link` : ''}`,
+      duracao: video ? duracaoCurta(video.video.duration_ms) : null,
+      rotulo: `${nome} de ${quando(dia, hora, hoje)}, ${nomes}: ${situacao.rotulo.toLowerCase()}${pedidos ? `, ${pedidos} pelo link` : ''}`,
     };
     porDia.set(dia, [...(porDia.get(dia) ?? []), item]);
   }
@@ -184,7 +205,10 @@ export function linhaDoCanal(c: PostChannelResponse, post: PostResponse, fuso: s
   // Esperando ou publicando: o pedido que espera a aprovação não tem hora certa para sair.
   const marcado = noFuso(new Date(post.publish_at), fuso);
   if (post.status === 'esperando_aprovacao') return { ...base, icone: 'clock', tom: 'espera', frase: `sai ${quando(marcado.dia, marcado.hora, hoje)}, depois de aprovado.` };
-  if (c.status === 'publicando' || post.status === 'publicando') return { ...base, icone: 'clock', tom: 'espera', frase: 'publicando agora.' };
+  if (c.status === 'publicando' || post.status === 'publicando') {
+    // O vídeo: a Meta prepara antes de publicar (P37; D-A6-69).
+    return { ...base, icone: 'clock', tom: 'espera', frase: ehPostComVideo(post) ? PREPARANDO.noCanal : 'publicando agora.' };
+  }
   // O pedido terminou com o canal ainda esperando (uma trava barrou a execução, por exemplo): ele não saiu.
   if (['cancelado', 'recusado', 'expirado', 'em_parte', 'nao_saiu'].includes(post.status)) return { ...base, icone: 'x', tom: '', frase: 'não saiu.' };
   return { ...base, icone: 'clock', tom: 'espera', frase: `sai ${quando(marcado.dia, marcado.hora, hoje)}.` };
@@ -244,6 +268,7 @@ export function fraseDaSituacao(post: PostResponse, fuso: string, hoje: string):
     const quem = post.removal?.requested_by_name ? ` por ${post.removal.requested_by_name}` : '';
     return `${s.rotulo}${quem}${em ? `, ${quando(em.dia, em.hora, hoje)}` : ''}. O post não aparece mais nas redes; quem já viu, viu.`;
   }
+  if (post.status === 'publicando' && ehPostComVideo(post)) return `${PREPARANDO.titulo} ${PREPARANDO.texto}`;
   if (post.status === 'esperando_aprovacao') return `${s.rotulo}: o post só sai depois de aprovado, com o código do app.`;
   if (post.status === 'agendado') return `${s.rotulo}: aprovado, sai ${quando(dia, hora, hoje)}.`;
   if (post.status === 'em_parte') return `${s.rotulo}: veja abaixo onde saiu e onde não saiu.`;
