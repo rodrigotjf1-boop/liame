@@ -135,7 +135,7 @@ export function AgendaTela() {
     requestAnimationFrame(() => document.querySelector<HTMLElement>(`[data-post="${id}"]`)?.focus());
   }, [carga]);
 
-  const tela = useMemo(() => (carga.tipo === 'ok' ? telaDaAgenda(carga.dados, carga.semana, hoje) : null), [carga, hoje]);
+  const tela = useMemo(() => (carga.tipo === 'ok' ? telaDaAgenda(carga.dados, carga.semana, hoje, fotos) : null), [carga, hoje, fotos]);
   const postAberto = carga.tipo === 'ok' && aberto ? (carga.dados.items.find((p) => p.id === aberto) ?? null) : null;
 
   if (!podeVer) {
@@ -382,6 +382,7 @@ export function AgendaTela() {
           fuso={carga.dados.timezone}
           hoje={hoje}
           foto={postAberto.photo_id ? (fotos.get(postAberto.photo_id) ?? null) : null}
+          capaFoto={postAberto.cover_photo_id ? (fotos.get(postAberto.cover_photo_id) ?? null) : null}
           podeOperar={podeOperar}
           podeAprovar={podeAprovar}
           podeVerContas={podeVerContas}
@@ -473,8 +474,10 @@ function Dia({
                   data-post={p.post.id}
                   onClick={() => aoAbrir(p.post.id)}
                 >
-                  <span className="ag-mini" aria-hidden="true">
-                    {foto ? <img src={foto.thumbnail_url} alt="" referrerPolicy="no-referrer" /> : <Icone nome="image" />}
+                  <span className={`ag-mini${p.duracao ? ' ag-mini--video' : ''}`} aria-hidden="true">
+                    {foto ? <img src={foto.thumbnail_url} alt="" referrerPolicy="no-referrer" /> : <Icone nome={p.post.media === 'video' ? 'video' : 'image'} />}
+                    {/* P37: o vídeo diz a duração na miniatura. */}
+                    {p.duracao && <span className="ag-mini-dur">{p.duracao}</span>}
                   </span>
                   <span className="ag-post-txt">
                     <b>{p.hora}</b>

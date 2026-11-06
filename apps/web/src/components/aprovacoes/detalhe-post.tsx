@@ -7,7 +7,8 @@ import type { Prova } from '@/lib/chave-de-acesso';
 import { ApagarDasRedes, type FeitoDoApagar } from '@/components/agenda/apagar-das-redes';
 import { PreviasDoPost } from '@/components/agenda/previas-do-post';
 import { SituacaoDosCanais } from '@/components/agenda/situacao-dos-canais';
-import { avisoDoApagar, deOndeSai, noFuso, podeApagar } from '@/components/agenda/textos';
+import { avisoDoApagar, deOndeSai, noFuso, podeApagar, podeTentarDeNovo } from '@/components/agenda/textos';
+import { CABE_NO_REELS, conferidoDoVideo, duracaoDoVideo, ehPostComVideo, ehVideoPronto, PREPARO_ANTES, SEM_PREPARO, videoSemPreparo } from '@/components/agenda/video-do-post';
 import { ConfirmaNaLinha } from '@/components/ui/confirma-na-linha';
 import { Icone } from '@/components/ui/icone';
 import { disparar } from '@/lib/disparar';
@@ -37,8 +38,10 @@ type Props = {
   temApp: boolean;
   /** A pessoa tem chave de acesso: ela vem primeiro ao aprovar (D-A7-56). */
   temChave?: boolean;
-  /** A foto do post (das Fotos); nula quando ela não pôde ser lida, saiu das Fotos ou quem vê não vê as Fotos. */
+  /** A foto do post (das Fotos); nula quando ela não pôde ser lida, saiu das Fotos ou quem vê não vê as Fotos. No post com vídeo, o vídeo. */
   foto: BrandPhoto | null;
+  /** No post com vídeo, a foto escolhida como capa (P37), quando ela está na lista das Fotos. */
+  capaFoto?: BrandPhoto | null;
   titulo: RefObject<HTMLHeadingElement | null>;
   campoCodigo: RefObject<HTMLInputElement | null>;
   aoVoltar: () => void;
@@ -68,6 +71,7 @@ export function DetalhePost({
   temApp,
   temChave = false,
   foto,
+  capaFoto = null,
   titulo,
   campoCodigo,
   aoVoltar,
@@ -86,6 +90,10 @@ export function DetalhePost({
   const plano = identidadeDoPlano(acao);
   const prazo = prazoDe(acao, agora);
   const hoje = noFuso(agora, post.timezone).dia;
+  // O post com vídeo (P37, parte B): o vídeo da lista das Fotos e o que muda nas frases ("o texto, o vídeo, a capa").
+  const comVideo = ehPostComVideo(post);
+  const video = comVideo && foto && ehVideoPronto(foto) ? foto : null;
+  const oQueMuda = comVideo ? 'o texto, o vídeo, a capa ou os canais' : 'o texto, a foto ou os canais';
   const cancelarBt = useRef<HTMLButtonElement>(null);
   const [cancelando, setCancelando] = useState<'nao' | 'confirmando' | 'enviando'>('nao');
   const [erroAoCancelar, setErroAoCancelar] = useState<string | null>(null);
@@ -155,7 +163,7 @@ export function DetalhePost({
   const previas = (
     <div className="secao">
       <p className="rotulo-marca">Como sai</p>
-      <PreviasDoPost key={acao.id} post={post} foto={foto} aoFalharImagem={aoFalharImagem} />
+      <PreviasDoPost key={acao.id} post={post} foto={foto} capaFoto={capaFoto} aoFalharImagem={aoFalharImagem} />
     </div>
   );
 
@@ -195,6 +203,12 @@ export function DetalhePost({
           {erroAoTentar && (
             <p className="campo-erro" role="alert">
               {erroAoTentar}
+            </p>
+          )}
+          {videoSemPreparo(post, (c) => podeTentarDeNovo(c, agora)) && (
+            <p className="nota" data-po-sem-preparo>
+              <Icone nome="info" />
+              <span>{SEM_PREPARO.nota}</span>
             </p>
           )}
           {naoApagou && (
@@ -312,6 +326,7 @@ export function DetalhePost({
         <div className="secao secao--lite">
           <p className="lite-frase lite-frase--grande">{p.resumo}</p>
           <div className="lite-chips">
+            {video && <span className="lite-chip">Vídeo · {duracaoDoVideo(video)}</span>}
             <span className="risco risco--medio">Post público</span>
             <span className="lite-chip">{prazo}</span>
           </div>
@@ -324,7 +339,7 @@ export function DetalhePost({
         </p>
       )}
       <p className="plano-id">
-        Plano {plano.plano} · hash <b>{plano.hash}</b> · a aprovação vale para este post nos canais escolhidos: mudar o texto, a foto ou os canais é outro pedido
+        Plano {plano.plano} · hash <b>{plano.hash}</b> · a aprovação vale para este post nos canais escolhidos: mudar {oQueMuda} é outro pedido
       </p>
       {previas}
       <div className="secao">
@@ -333,14 +348,37 @@ export function DetalhePost({
           <Icone nome="check-circle" />
           <span>A política conferiu os textos: nenhuma palavra que a empresa ou a marca não usam.</span>
         </p>
-        <p className="nota">
-          <Icone nome="image" />
-          <span>A foto é uma das Fotos da marca, como ela é: sem edição e sem imagem feita por IA.</span>
-        </p>
+        {video ? (
+          <>
+            <p className="nota">
+              <Icone nome="video" />
+              <span>{conferidoDoVideo(post, video, capaFoto)}</span>
+            </p>
+            <p className="nota">
+              <Icone nome="check-circle" />
+              <span>{CABE_NO_REELS(video)}</span>
+            </p>
+          </>
+        ) : (
+          <p className="nota">
+            <Icone nome={comVideo ? 'video' : 'image'} />
+            <span>
+              {comVideo
+                ? 'O vídeo é um dos vídeos da tela Fotos, como a loja gravou: sem edição e sem imagem feita por IA.'
+                : 'A foto é uma das Fotos da marca, como ela é: sem edição e sem imagem feita por IA.'}
+            </span>
+          </p>
+        )}
         <p className="nota">
           <Icone nome="clock" />
           <span>Na hora marcada, o Liame consulta o limite de posts do dia do Instagram e publica uma vez só em cada canal.</span>
         </p>
+        {comVideo && (
+          <p className="nota">
+            <Icone nome="clock" />
+            <span>{PREPARO_ANTES}</span>
+          </p>
+        )}
         <p className="nota">
           <Icone nome="undo" />
           <span>{p.desfazer}</span>
@@ -364,7 +402,7 @@ export function DetalhePost({
           temChave={temChave}
           campoCodigo={campoCodigo}
           motivos={MOTIVOS}
-          dica="O código de 6 números que o app autenticador mostra agora. A aprovação vale para este post: mudar o texto, a foto ou os canais é outro pedido."
+          dica={`O código de 6 números que o app autenticador mostra agora. A aprovação vale para este post: mudar ${oQueMuda} é outro pedido.`}
           aoAprovar={(prova) => aoAprovar(acao, prova)}
           aoRecusar={(motivo) => aoRecusar(acao, motivo)}
         />

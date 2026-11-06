@@ -97,6 +97,9 @@ describe('o post no trilho: as regras puras (A6 · Z5b)', () => {
     expect(s('aguardando_aprovacao', ['aguardando', 'aguardando'])).toBe('esperando_aprovacao');
     expect(s('aprovada', ['aguardando', 'aguardando'])).toBe('agendado');
     expect(s('aprovada', ['publicado', 'aguardando'])).toBe('publicando');
+    // ERR-207: a Meta preparando o vídeo entre uma conferência e outra (o pedido volta a "aprovada" e espera 1 minuto).
+    expect(s('aprovada', ['publicando'])).toBe('publicando');
+    expect(s('aprovada', ['aguardando', 'publicando'])).toBe('publicando');
     expect(s('executando', ['aguardando'])).toBe('publicando');
     expect(s('executada', ['publicado', 'publicado'])).toBe('publicado');
     expect(s('executada', ['publicado', 'falhou'])).toBe('em_parte');

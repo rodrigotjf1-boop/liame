@@ -336,7 +336,9 @@ export type SituacaoDoPost =
  * A situação do post, pelo pedido em Aprovações e pelos canais: o pedido que espera é "esperando a aprovação"; o aprovado
  * espera a hora ("agendado"); o que executa está "publicando"; o que terminou diz o que saiu (todos os canais, parte deles,
  * nenhum). Recusado e cancelado vêm do pedido (a recusa tem o prefixo dela no motivo). O canal apagado das redes (Z5d,
- * parte 6) saiu: o post que continua no ar nos outros é "publicado", e o que saiu de todos é "apagado".
+ * parte 6) saiu: o post que continua no ar nos outros é "publicado", e o que saiu de todos é "apagado". O aprovado com um
+ * canal já começado (a Meta preparando o vídeo ou o contêiner, entre uma conferência e outra) também está "publicando",
+ * não esperando a hora (ERR-207).
  */
 export function situacaoDoPost(pedido: { status: string; status_reason: string | null } | null, canais: readonly string[], prefixoDaRecusa: string): SituacaoDoPost {
   const publicados = canais.filter((s) => s === 'publicado').length;
@@ -349,7 +351,7 @@ export function situacaoDoPost(pedido: { status: string; status_reason: string |
     case 'sombra':
       return 'esperando_aprovacao';
     case 'aprovada':
-      return publicados > 0 ? 'publicando' : 'agendado';
+      return publicados > 0 || canais.includes('publicando') ? 'publicando' : 'agendado';
     case 'executando':
       return 'publicando';
     case 'cancelada':

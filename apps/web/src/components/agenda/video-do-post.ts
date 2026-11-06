@@ -1,4 +1,4 @@
-import { type BrandPhoto, fitsInstagramReels, pageVideoFormat } from '@liame/contracts';
+import { type BrandPhoto, fitsInstagramReels, type PostResponse, pageVideoFormat } from '@liame/contracts';
 import { deitado, duracaoCurta, duracaoPorExtenso } from '@/components/fotos/textos';
 
 // O vídeo no novo post (A6, Z10, parte 4a; P37, parte B, aprovado pelo dono em 04/11/2026; D-A6-68 a D-A6-70). Funções
@@ -119,3 +119,77 @@ export function dicaDaCapa(modo: CapaDoNovo['modo']): string {
 
 /** O nome de cada quadro (o tempo), para o botão. */
 export const rotuloDoQuadro = (tempoMs: number) => `Quadro de ${duracaoCurta(tempoMs)}`;
+
+// ---- O post com vídeo já feito: em Aprovações e na Agenda (A6, Z10, parte 4b; P37, parte B) ----------------------------
+
+/** O post leva um vídeo (o servidor manda `media` só no post com vídeo). */
+export const ehPostComVideo = (p: Pick<PostResponse, 'media'>): boolean => p.media === 'video';
+
+type CapaDoPostFeito = Pick<PostResponse, 'cover_photo_id' | 'cover_offset_ms'>;
+
+/**
+ * A capa do post como ele foi pedido: uma das Fotos (`cover_photo_id`, quando ela ainda está na lista), o quadro escolhido
+ * pelo tempo (`cover_offset_ms`) ou a capa guardada com o vídeo (sem ela, o quadro do meio, como o servidor faz).
+ */
+export function capaDoPost(post: CapaDoPostFeito, v: VideoDasFotos, capaFoto: BrandPhoto | null): CapaNaTela {
+  if (post.cover_photo_id && capaFoto) return { imagem: capaFoto.thumbnail_url };
+  if (typeof post.cover_offset_ms === 'number') return { video: v.url, tempoMs: post.cover_offset_ms };
+  if (v.video.has_cover) return { imagem: v.thumbnail_url };
+  return { video: v.url, tempoMs: temposDosQuadros(v.video.duration_ms)[QUADRO_DO_MEIO] ?? 0 };
+}
+
+/** De onde vem a capa, em palavras: "uma das Fotos (Smash duplo)", "o quadro de 0:05", "a capa guardada com o vídeo". */
+export function deOndeVemACapa(post: CapaDoPostFeito, v: VideoDasFotos, capaFoto: BrandPhoto | null): string {
+  if (post.cover_photo_id) return capaFoto?.product ? `uma das Fotos (${capaFoto.product})` : 'uma das Fotos';
+  if (typeof post.cover_offset_ms === 'number') return `o quadro de ${duracaoCurta(post.cover_offset_ms)}`;
+  return v.video.has_cover ? 'a capa guardada com o vídeo' : `o quadro de ${duracaoCurta(temposDosQuadros(v.video.duration_ms)[QUADRO_DO_MEIO] ?? 0)}`;
+}
+
+/** O fato do vídeo na gaveta do post (P37): "Smash duplo, 18 segundos, em pé; a capa: o quadro de 0:05". */
+export function fatoDoVideo(post: CapaDoPostFeito, v: VideoDasFotos, capaFoto: BrandPhoto | null): string {
+  return `${v.product ?? 'Sem produto'}, ${duracaoPorExtenso(v.video.duration_ms)}, ${videoDeitado(v) ? 'deitado' : 'em pé'}; a capa: ${deOndeVemACapa(post, v, capaFoto)}`;
+}
+
+/** O que foi conferido do vídeo, no pedido em Aprovações (P37): o vídeo como a loja gravou, como sai na Página e a capa. */
+export function conferidoDoVideo(post: CapaDoPostFeito, v: VideoDasFotos, capaFoto: BrandPhoto | null): string {
+  const pagina =
+    comoSaiNaPagina(v) === 'reels'
+      ? 'Está em pé (9:16): sai como Reels.'
+      : videoDeitado(v)
+        ? 'Está deitado: na Página, sai como vídeo comum.'
+        : 'É pequeno para o Reels da Página (a partir de 540 × 960): lá, sai como vídeo comum.';
+  return `O vídeo é um dos vídeos da tela Fotos, como a loja gravou: sem edição e sem imagem feita por IA. ${pagina} A capa: ${deOndeVemACapa(post, v, capaFoto)}.`;
+}
+
+/** A duração conferida (P37): "Cabe no que o Reels aceita: 18 segundos (de 3 a 90)…". */
+export const CABE_NO_REELS = (v: VideoDasFotos) =>
+  `Cabe no que o Reels aceita: ${duracaoPorExtenso(v.video.duration_ms)} (de 3 a 90), com o formato e o tamanho conferidos quando entrou em Fotos.`;
+
+/** O preparo da Meta, antes de aprovar (P37; D-A6-69). */
+export const PREPARO_ANTES =
+  'Antes de publicar, a Meta prepara o vídeo: o Liame confere uma vez por minuto, por até 5 minutos, e só então publica. Se ela não terminar, o post não sai e aparece aqui, com "Tentar de novo".';
+
+/** A Meta preparando o vídeo depois de aprovado (P37). */
+export const PREPARANDO = {
+  titulo: 'Aprovado. A Meta está preparando o vídeo.',
+  texto: 'O Liame confere uma vez por minuto, por até 5 minutos, e publica assim que ela terminar, uma vez só em cada canal. Você não precisa fazer nada.',
+  noCanal: 'a Meta está preparando o vídeo; o Liame publica assim que ela terminar.',
+} as const;
+
+/**
+ * O vídeo que não saiu em nenhum canal e ainda pode "Tentar de novo": pela regra do servidor (D-A6-76), sem nenhum canal
+ * no ar, só o preparo que a Meta não terminou em 5 minutos oferece a nova tentativa (os outros motivos pedem o outro canal
+ * no ar). `podeTentar`: a conferência do prazo de cada canal, da mesma tela.
+ */
+export function videoSemPreparo(post: Pick<PostResponse, 'media' | 'status' | 'channels'>, podeTentar: (c: PostResponse['channels'][number]) => boolean): boolean {
+  return ehPostComVideo(post) && post.status === 'nao_saiu' && post.channels.some((c) => c.status === 'falhou' && podeTentar(c));
+}
+
+/** O vídeo que não saiu porque a Meta não terminou de preparar (P37; na Página, ela ainda pode publicar: a frase do canal diz). */
+export const SEM_PREPARO = {
+  titulo: 'Não saiu: a Meta não terminou de preparar o vídeo a tempo.',
+  texto: 'Veja abaixo em cada canal. Tentar de novo manda o mesmo vídeo aprovado, sem pedir o código outra vez.',
+  nota: 'Se falhar de novo, o vídeo pode estar fora do que a Meta aceita. Confira em Fotos ou escolha outro vídeo num post novo.',
+  /** O aviso depois do "Tentar de novo" (P37): a nova tentativa vale para os canais que faltam. */
+  deNovo: 'Mandado de novo: a Meta prepara o vídeo, e o Liame publica assim que ela terminar.',
+} as const;
