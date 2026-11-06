@@ -43,6 +43,30 @@ export const BRAND_VIDEO_LIMITS = {
   uploadSeconds: 600,
 } as const;
 
+/**
+ * O vídeo no post (A6, Z10; as especificações da Meta, conferidas em 06/11/2026): o Reels do Instagram aceita o arquivo
+ * com até 1.920 px de largura e até 25 Mbps (o maior, o servidor ainda não reduz: vai só na Página); o Reels da Página, em
+ * pé a partir de 540 × 960 (deitado, ou menor, sai como vídeo comum). As mesmas contas no servidor e na tela (V74).
+ */
+export const REELS_LIMITS = { instagramMaxWidth: 1920, instagramMaxBitrate: 25_000_000, pageMinWidth: 540, pageMinHeight: 960 } as const;
+
+/** A taxa média do arquivo, em bits por segundo (o som junto); sem a duração, infinita. */
+export function reelsBitrate(bytes: number, durationMs: number): number {
+  if (!(durationMs > 0)) return Number.POSITIVE_INFINITY;
+  return (bytes * 8) / (durationMs / 1000);
+}
+
+/** O vídeo vai ao Reels do Instagram como está (a largura gravada e a taxa no limite)? */
+export function fitsInstagramReels(width: number, bytes: number, durationMs: number): boolean {
+  return width > 0 && width <= REELS_LIMITS.instagramMaxWidth && reelsBitrate(bytes, durationMs) <= REELS_LIMITS.instagramMaxBitrate;
+}
+
+/** Como o vídeo sai na Página: `reels` (em pé, a partir de 540 × 960) ou `video` (o vídeo comum: deitado ou menor). */
+export function pageVideoFormat(width: number, height: number): 'reels' | 'video' {
+  if (width > height) return 'video';
+  return width >= REELS_LIMITS.pageMinWidth && height >= REELS_LIMITS.pageMinHeight ? 'reels' : 'video';
+}
+
 /** Os formatos do vídeo: o tipo que o navegador manda no envio (e que vai na assinatura). */
 export const BrandVideoMediaType = z.enum(['video/mp4', 'video/quicktime']);
 

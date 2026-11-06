@@ -40,6 +40,12 @@ export const CreatePostRequest = z.strictObject({
    * pedido: se ela mudar depois, o post não sai.
    */
   cover_photo_id: z.uuid().optional(),
+  /**
+   * Só no post com vídeo, no lugar de `cover_photo_id` (D-A6-70; A6, Z10, parte 4a): um quadro do próprio vídeo como a
+   * capa, pelo tempo dele em milissegundos (dentro da duração). O Instagram usa o quadro desse tempo; ausente, vale a
+   * capa guardada com o vídeo.
+   */
+  cover_offset_ms: z.int().min(0).max(900_000).optional(),
   /** A hora marcada, com o fuso. Entre 8h e 22h no fuso da empresa, depois de agora e até 60 dias. */
   publish_at: z.iso.datetime({ offset: true }),
   /**
@@ -171,6 +177,8 @@ export const PostResponse = z.strictObject({
   media: z.string().regex(/^[a-z_]{2,30}$/).optional(),
   /** No post com vídeo, a foto das Fotos escolhida como capa (D-A6-70); nula com a capa do próprio vídeo; ausente na foto. */
   cover_photo_id: z.uuid().nullable().optional(),
+  /** No post com vídeo, o tempo do quadro escolhido como capa (A6, Z10, parte 4a); nulo com a capa guardada ou uma foto; ausente na foto. */
+  cover_offset_ms: z.int().min(0).nullable().optional(),
   crop_pos: z.int().min(0).max(100).nullable(),
   publish_at: z.iso.datetime(),
   /**

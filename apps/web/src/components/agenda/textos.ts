@@ -402,9 +402,11 @@ export function fraseDoPacote(post: PostResponse, fuso: string, hoje: string): s
 }
 
 /** O campo da recusa do servidor (o código do problema), para o erro aparecer no lugar certo; o resto vai para o topo. */
-export function campoDaRecusa(code: string): 'foto' | 'canais' | 'hora' | 'texto' | null {
+export function campoDaRecusa(code: string): 'foto' | 'capa' | 'canais' | 'hora' | 'texto' | null {
   if (code.startsWith('hora-')) return 'hora';
-  if (code.startsWith('foto-')) return 'foto';
+  // O vídeo (A6, Z10): o vídeo grande para o Reels fica no campo do vídeo; a capa e o quadro, no da capa.
+  if (code.startsWith('foto-') || code.startsWith('video-')) return 'foto';
+  if (code.startsWith('capa-') || code.startsWith('quadro-')) return 'capa';
   if (code.startsWith('canal-')) return 'canais';
   if (code.startsWith('texto-')) return 'texto';
   return null;

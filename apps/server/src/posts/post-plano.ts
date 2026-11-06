@@ -91,8 +91,9 @@ export const EstadoDoPost = z.object({
   /**
    * O vídeo das Fotos e vídeos (A6, Z10, parte 3a; D-A6-69 e D-A6-70), só no post com vídeo: no de foto a chave não
    * existe, e o estado dele é o mesmo de antes (o pedido aprovado não muda de plano). O id e a capa presa na hora do
-   * pedido: `capa:<versão>` (a do próprio vídeo), `foto:<id>` (uma das Fotos) ou `meio` (sem capa gravada: o quadro do
-   * meio). Nulo quando o vídeo foi apagado; a capa nula quando ela mudou, ou a foto dela foi apagada, depois do pedido.
+   * pedido: `capa:<versão>` (a do próprio vídeo), `foto:<id>` (uma das Fotos), `quadro:<ms>` (um quadro do vídeo,
+   * escolhido no novo post) ou `meio` (sem capa gravada: o quadro do meio). Nulo quando o vídeo foi apagado; a capa nula
+   * quando ela mudou, ou a foto dela foi apagada, depois do pedido.
    */
   video: z.object({ id: z.string(), capa: z.string().nullable() }).nullable().optional(),
   /** A posição do recorte do Instagram (D-A6-21), de 0 a 100 ao longo do lado comprido; nula = a foto cabe inteira. */

@@ -1,7 +1,7 @@
 // A publicação na Meta (A6 · Z5; `base-conhecimento.md` §2.2, reconferida em 21/10/2026): as regras puras que o teste
 // da D-A6-10 (`scripts/teste-foto-meta.ts`) usa e que o post de verdade vai usar. Sem rede e sem banco.
 
-import { META_INSTAGRAM_PUBLISH_SCOPE, META_PAGE_PUBLISH_SCOPE } from '@liame/contracts';
+import { fitsInstagramReels, META_INSTAGRAM_PUBLISH_SCOPE, META_PAGE_PUBLISH_SCOPE, pageVideoFormat, REELS_LIMITS, reelsBitrate } from '@liame/contracts';
 
 /**
  * A proporção que o post do feed do Instagram aceita (content publishing, 21/10/2026): de 4:5 (em pé) a 1,91:1 (deitada).
@@ -339,16 +339,16 @@ export function fotoJaNaPagina(resposta: unknown, legenda: string, desde: Date, 
 /**
  * O que o Reels do Instagram aceita do arquivo: até 1.920 colunas (a largura, em px) e até 25 Mbps. O vídeo que passa disso
  * (o 4K do celular) é reduzido pelo servidor antes de sair (D-A6-68), o que ainda não existe: até lá, o post com ele no
- * Instagram é recusado ao montar.
+ * Instagram é recusado ao montar. Os números moram nos contratos: a tela confere com a mesma conta (V74).
  */
-export const REELS_DO_INSTAGRAM = { maiorLargura: 1920, maiorTaxaBps: 25_000_000 } as const;
+export const REELS_DO_INSTAGRAM = { maiorLargura: REELS_LIMITS.instagramMaxWidth, maiorTaxaBps: REELS_LIMITS.instagramMaxBitrate } as const;
 
 /**
  * O Reels da Página do Facebook: em pé, a partir de 540 × 960 (o código 1363127 recusa abaixo disso), e até 30 publicados
  * pela API em 24 horas, por Página (janela móvel; a Meta pede que o app também conte). O vídeo deitado, ou menor que isso,
  * sai como vídeo comum (D-A6-69).
  */
-export const REELS_DA_PAGINA = { menorLargura: 540, menorAltura: 960, porDia: 30 } as const;
+export const REELS_DA_PAGINA = { menorLargura: REELS_LIMITS.pageMinWidth, menorAltura: REELS_LIMITS.pageMinHeight, porDia: 30 } as const;
 
 /** Por quanto tempo o Liame espera a Meta preparar o vídeo, conferindo uma vez por minuto (D-A6-69). */
 export const PREPARO_DO_VIDEO_MS = 5 * 60_000;
@@ -365,23 +365,21 @@ export const RUPLOAD_OFICIAL = 'https://rupload.facebook.com';
 /** A capa do Reels do Instagram (`cover_url`): JPEG até 8 MB (a especificação da capa, na mesma página). */
 export const CAPA_DO_REELS_BYTES = 8 * 1024 * 1024;
 
-/** A taxa média do arquivo, em bits por segundo (o som junto); sem a duração, infinita. */
+/** A taxa média do arquivo, em bits por segundo (o som junto); sem a duração, infinita (a conta dos contratos). */
 export function taxaDoVideo(bytes: number, duracaoMs: number): number {
-  if (!(duracaoMs > 0)) return Number.POSITIVE_INFINITY;
-  return (bytes * 8) / (duracaoMs / 1000);
+  return reelsBitrate(bytes, duracaoMs);
 }
 
-/** O vídeo vai ao Reels do Instagram como está (a largura e a taxa no limite)? */
+/** O vídeo vai ao Reels do Instagram como está (a largura e a taxa no limite)? A conta dos contratos, a mesma da tela. */
 export function cabeNoReelsDoInstagram(largura: number, bytes: number, duracaoMs: number): boolean {
-  return largura > 0 && largura <= REELS_DO_INSTAGRAM.maiorLargura && taxaDoVideo(bytes, duracaoMs) <= REELS_DO_INSTAGRAM.maiorTaxaBps;
+  return fitsInstagramReels(largura, bytes, duracaoMs);
 }
 
 /** Como o vídeo sai na Página: Reels, em pé e a partir de 540 × 960; vídeo comum, deitado ou menor (D-A6-69). */
 export type ComoSaiNaPagina = 'reels' | 'video';
 
 export function comoSaiNaPagina(largura: number, altura: number): ComoSaiNaPagina {
-  if (largura > altura) return 'video';
-  return largura >= REELS_DA_PAGINA.menorLargura && altura >= REELS_DA_PAGINA.menorAltura ? 'reels' : 'video';
+  return pageVideoFormat(largura, altura);
 }
 
 /** A situação do vídeo na Página: publicado, a Meta ainda prepara, recusado, vencido ou fora do formato conhecido. */
