@@ -38,6 +38,7 @@ Cada entrega é um PR com CI verde. Migrations testadas no local e no CI e aplic
 | **Y6** | **Funcionário de CRM e mensageria** | Propõe a mensagem a partir do que o sistema já sabe (o público pronto, a oferta de Minha marca, o calendário do Estrategista): o texto do modelo em rascunho, conferido pelo Compliance, e o pedido de disparo. Sempre com aprovação; sem sombra e sem promoção de autonomia nesta fase. Eval próprio como portão | A5-11, A5-13 | Y5 |
 | **Y7** | **Conversões para a Meta** | O evento de compra pela Conversions API para o conjunto de dados da conta, com o id do pedido para não duplicar. Flag `conversoes_meta`, desligada | A5-1 a A5-4 | D-A5-9; o item C3d da trilha C |
 | **Y8** | **Telas** | Pelos protótipos da seção 5 | A5-14 | Aprovação dos protótipos |
+| **Y9** | **Campanha nova no Google** (pedido do dono em 07/11/2026; prioridade) | Como a X5 da Meta: montada pelo Liame com a foto ou o vídeo guardados da loja e o rastreio do Liame, conferida antes, criada **pausada**; ativar é outro pedido, com aprovação e código. O nível Explorer do acesso à API já deixa criar campanha em conta real; o planejador de palavras-chave fica bloqueado nele (`base-conhecimento.md`, os níveis de acesso do Google Ads) | A definir com o protótipo | Y2 e Y3; a função `google_write` |
 
 **Trilha C (Regem e RegemCast), em PRs de lá:**
 
@@ -55,7 +56,7 @@ Cada entrega é um PR com CI verde. Migrations testadas no local e no CI e aplic
 | --- | --- | --- | --- |
 | D-A5-1 | **O que vem primeiro** | As conversões para o Google (Y1), depois a escrita no Google (Y2 e Y3), depois a mensageria (Y4 a Y6). Conversões para a Meta por último | Y1 não muda campanha nem gasta: só informa venda. É o que mais ajuda o resultado e o que menos arrisca |
 | D-A5-2 | **Quando ligar a escrita no Google** | Só depois do critério A4-14 (10 ações executadas na Meta sem erro). O código entra antes, desligado | O trilho se prova num canal por vez |
-| D-A5-3 | **Regras da escrita no Google** | As mesmas da Meta: validação antes, passo de até 10%, tetos, aprovação com o código do app. Campanha nova no Google fica fora da A5 | Uma regra só para o dono entender; criar campanha depende das fotos (fim do roteiro) |
+| D-A5-3 | **Regras da escrita no Google** | As mesmas da Meta: validação antes, passo de até 10%, tetos, aprovação com o código do app. Campanha nova no Google entra como Y9 (prioridade, pedido do dono em 07/11/2026; antes, ficava fora da A5) | Uma regra só para o dono entender; as fotos e os vídeos da loja já estão guardados (A6 · Z4 e Z10) |
 | D-A5-4 | **Orçamento compartilhado** | No Google, um orçamento pode servir a várias campanhas. Na A5 o Liame **não mexe** em orçamento compartilhado: mostra o motivo e quais campanhas dividem a verba | Mudar a verba de uma campanha mudaria a de outras sem ninguém pedir |
 | D-A5-5 | **O que vai na conversão para o Google** | Só o id do clique, o instante, o valor e o id do pedido. **Nenhum telefone ou e-mail**, nem em hash | O Liame não guarda esses dados; o id do clique basta para o Google ligar a venda ao anúncio |
 | D-A5-6 | **Que valor é enviado** | A receita confirmada no caixa. A margem e o custo **nunca** saem do Liame | A plataforma otimiza por valor de venda; a margem é segredo comercial da loja |
@@ -157,4 +158,4 @@ Cada entrega é um PR com CI verde. Migrations testadas no local e no CI e aplic
 
 ## 11. Fora da A5
 
-Campanha nova no Google e mexer em anúncios e palavras-chave; e-mail e SMS; públicos de anúncio com lista de clientes; a LIA no WhatsApp (A6); vídeo, TikTok e redes sociais (A6); execução sem aprovação (A7).
+Mexer em anúncios e palavras-chave (a campanha nova no Google entrou como Y9 em 07/11/2026); e-mail e SMS; públicos de anúncio com lista de clientes; a LIA no WhatsApp (A6); vídeo, TikTok e redes sociais (A6); execução sem aprovação (A7).
