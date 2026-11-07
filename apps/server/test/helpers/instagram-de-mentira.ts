@@ -42,6 +42,18 @@ import type { AddressInfo } from 'node:net';
 // `CAROUSEL_ALBUM`) e `media_product_type` (`FEED`, `REELS`, `STORY`, `AD`); `thumbnail_url` só no vídeo; e o pior caso
 // do que pode faltar (V125): `media_url` não vem no vídeo com áudio protegido ou licenciado (a música do Instagram), e
 // `like_count` não vem quando a conta esconde as curtidas. O post publicado fora do Liame entra por `publicadoForaDoLiame`.
+//
+// Comentários (A6, Z11, parte 1), pelas páginas oficiais lidas em 07/11/2026 (base §2.2):
+//   - Instagram, `GET /{v}/{ig-media-id}/comments` (`…/instagram-graph-api/reference/ig-media/comments` e `…/ig-comment`):
+//     até 50 por consulta, do mais novo para o mais velho, só os de primeiro nível; as respostas pelo campo `replies`
+//     (`replies.limit(n){…}`); `username`, `from` (`id` e `username`), `like_count` e `hidden`; sem a permissão
+//     `instagram_manage_comments`, a recusa (#10). O oculto volta com `hidden: true` (a referência tem o campo);
+//   - Página, `GET /{v}/{page-id}/posts` (`…/graph-api/reference/page/feed`): até 100, com o agendado e o rascunho
+//     (`is_published`), pelo token da Página de quem pode CREATE_CONTENT, MANAGE ou MODERATE; e `GET /{v}/{page-post-id}/
+//     comments` (`…/docs/pages-api/comments-mentions`), pelo token da Página de quem pode MODERATE (sem a tarefa, a recusa
+//     #200); `filter=stream` traz todos os níveis, com o `parent`; sem ele, só os de primeiro nível. A documentação não diz
+//     quando o `from` vem: o pior caso (V125, [NC]) é não vir para quem comentou (`paginaDevolveQuemComentou`); o da
+//     própria Página vem.
 
 export const TOKEN_DO_INSTAGRAM = `token-do-instagram-${randomBytes(6).toString('hex')}`;
 export const SEGREDO_DO_APP = `segredo-do-app-${randomBytes(6).toString('hex')}`;
@@ -104,6 +116,31 @@ export type VideoNaPagina = {
 };
 export type ChamadaNoInstagram = { metodo: string; caminho: string; params: Record<string, string>; corpo: Record<string, unknown> | null; cabecalhos?: Record<string, string> };
 export type FalhaCombinada = { status: number; corpo: unknown };
+/** Um comentário numa mídia do Instagram (A6, Z11), com as respostas. `deId`: o IGSID de quem comentou. */
+export type ComentarioNoInstagram = {
+  id: string;
+  text: string;
+  timestamp: string;
+  username: string;
+  deId: string;
+  like_count: number;
+  hidden: boolean;
+  respostas: ComentarioNoInstagram[];
+};
+/** Um post de uma Página (A6, Z11). */
+export type PostNaPagina = { id: string; pagina: string; message: string; created_time: string; permalink_url: string; full_picture: string | null; is_published: boolean };
+/** Um comentário num post da Página (A6, Z11). `deId` e `nome`: quem comentou (o id da Página, se foi ela). */
+export type ComentarioNaPagina = {
+  id: string;
+  message: string;
+  created_time: string;
+  deId: string;
+  nome: string;
+  like_count: number;
+  comment_count: number;
+  is_hidden: boolean;
+  parent: string | null;
+};
 
 /** Um id numérico como os da Meta, único a cada execução (V156). */
 const idDaMeta = (): string => `${Date.now()}${Number.parseInt(randomBytes(3).toString('hex'), 16)}`.slice(0, 17).padEnd(17, '3');
@@ -149,6 +186,16 @@ export class InstagramDeMentira {
   perderARespostaDoVideo = false;
   /** O que a Página responde ao fim do Reels (um código de recusa do vídeo, como o 1363040 da proporção). */
   recusaDoReels: { codigo: number; mensagem: string } | null = null;
+  /** Os comentários de cada mídia do Instagram, do mais novo para o mais velho (A6, Z11). */
+  readonly comentariosNoInstagram = new Map<string, ComentarioNoInstagram[]>();
+  /** A autorização sem a permissão de ler os comentários do Instagram (`instagram_manage_comments`): a recusa (#10). */
+  semPermissaoDeComentarios = false;
+  /** Os posts das Páginas (A6, Z11), do mais novo para o mais velho. */
+  readonly postsNaPagina: PostNaPagina[] = [];
+  /** Os comentários de cada post da Página, do mais velho para o mais novo (a ordem do `filter=stream`). */
+  readonly comentariosNaPagina = new Map<string, ComentarioNaPagina[]>();
+  /** A Página manda o `from` de quem comentou (o pior caso, V125: não manda). */
+  paginaDevolveQuemComentou = false;
   base = '';
   /** O endereço do envio do vídeo à Página (o `rupload` de mentira, no mesmo servidor). */
   rupload = '';
@@ -188,6 +235,8 @@ export class InstagramDeMentira {
     this.videoDaPaginaAoTerminar = 'publicado';
     this.perderARespostaDoVideo = false;
     this.recusaDoReels = null;
+    this.semPermissaoDeComentarios = false;
+    this.paginaDevolveQuemComentou = false;
     this.chamadas.length = 0;
     this.defeitos.length = 0;
   }
@@ -219,6 +268,141 @@ export class InstagramDeMentira {
     if (i < 0) this.posts.push(p);
     else this.posts.splice(i, 0, p);
     return p.id;
+  }
+
+  /** Um comentário de outra pessoa (ou da marca, com o `deId` da conta) numa mídia do Instagram, o mais novo. Devolve o id. */
+  comentouNoInstagram(media: string, o: { texto: string; usuario?: string; deId?: string; horas?: number; curtidas?: number; oculto?: boolean }): string {
+    const c: ComentarioNoInstagram = {
+      id: idDaMeta(),
+      text: o.texto,
+      timestamp: dataDoInstagram(new Date(Date.now() - (o.horas ?? 1) * 3_600_000)),
+      username: o.usuario ?? `cliente${randomBytes(3).toString('hex')}`,
+      deId: o.deId ?? idDaMeta(),
+      like_count: o.curtidas ?? 0,
+      hidden: o.oculto ?? false,
+      respostas: [],
+    };
+    const lista = this.comentariosNoInstagram.get(media) ?? [];
+    lista.unshift(c);
+    this.comentariosNoInstagram.set(media, lista);
+    return c.id;
+  }
+
+  /** Uma resposta a um comentário do Instagram (a mais nova fica por último). Devolve o id. */
+  respondeuNoInstagram(media: string, comentario: string, o: { texto: string; usuario: string; deId: string }): string {
+    const pai = (this.comentariosNoInstagram.get(media) ?? []).find((c) => c.id === comentario);
+    if (!pai) throw new Error('comentário do Instagram de mentira não encontrado');
+    const r: ComentarioNoInstagram = { id: idDaMeta(), text: o.texto, timestamp: dataDoInstagram(new Date()), username: o.usuario, deId: o.deId, like_count: 0, hidden: false, respostas: [] };
+    pai.respostas.push(r);
+    return r.id;
+  }
+
+  /** Um post publicado (ou agendado) numa Página, há `horas`. Devolve o id (`{página}_{post}`). */
+  postouNaPagina(pagina: string, o: { message?: string; horas?: number; publicado?: boolean } = {}): string {
+    const id = `${pagina}_${idDaMeta()}`;
+    const p: PostNaPagina = {
+      id,
+      pagina,
+      message: o.message ?? '',
+      created_time: dataDoInstagram(new Date(Date.now() - (o.horas ?? 1) * 3_600_000)),
+      permalink_url: `https://www.facebook.com/${pagina}/posts/${id.split('_')[1]}`,
+      full_picture: `https://scontent.xx.fbcdn.net/v/${id}.jpg?oe=teste`,
+      is_published: o.publicado ?? true,
+    };
+    const i = this.postsNaPagina.findIndex((x) => x.created_time < p.created_time);
+    if (i < 0) this.postsNaPagina.push(p);
+    else this.postsNaPagina.splice(i, 0, p);
+    return id;
+  }
+
+  /** Um comentário (ou, com `pai`, uma resposta) num post da Página. Devolve o id (`{post}_{comentário}`). */
+  comentouNaPagina(post: string, o: { message: string; deId?: string; nome?: string; pai?: string; oculto?: boolean }): string {
+    const c: ComentarioNaPagina = {
+      id: `${post.split('_')[1]}_${idDaMeta()}`,
+      message: o.message,
+      created_time: dataDoInstagram(new Date()),
+      deId: o.deId ?? idDaMeta(),
+      nome: o.nome ?? 'Cliente da Página',
+      like_count: 0,
+      comment_count: 0,
+      is_hidden: o.oculto ?? false,
+      parent: o.pai ?? null,
+    };
+    const lista = this.comentariosNaPagina.get(post) ?? [];
+    lista.push(c);
+    if (c.parent) {
+      const pai = lista.find((x) => x.id === c.parent);
+      if (pai) pai.comment_count += 1;
+    }
+    this.comentariosNaPagina.set(post, lista);
+    return c.id;
+  }
+
+  /** Um comentário do Instagram como a Meta o devolve. */
+  private comentarioDoInstagram(c: ComentarioNoInstagram, comRespostas: boolean): Record<string, unknown> {
+    const base: Record<string, unknown> = { id: c.id, text: c.text, timestamp: c.timestamp, username: c.username, from: { id: c.deId, username: c.username }, like_count: c.like_count, hidden: c.hidden };
+    if (!comRespostas || c.respostas.length === 0) return base;
+    const limite = 50;
+    const respostas = c.respostas.slice(0, limite).map((r) => this.comentarioDoInstagram(r, false));
+    return { ...base, replies: { data: respostas, ...(c.respostas.length > limite ? { paging: { cursors: { after: String(limite) }, next: 'https://graph.facebook.com/proxima' } } : {}) } };
+  }
+
+  /**
+   * Os comentários (A6, Z11): a lista dos do Instagram (o token da autorização), os posts da Página e os comentários do post
+   * da Página (o token dela). Nulo para o que não é dos comentários.
+   */
+  private dosComentarios(metodo: string, id: string, aresta: string | undefined, params: Record<string, string>): Resposta | null {
+    if (metodo !== 'GET') return null;
+    const pagina = (params: Record<string, string>, total: number, maximo: number) => {
+      const inicio = Number(params.after ?? 0);
+      const quantos = Math.min(Number(params.limit ?? 25), maximo);
+      return { inicio, fim: inicio + quantos, paging: inicio + quantos < total ? { cursors: { after: String(inicio + quantos) }, next: 'https://graph.facebook.com/proxima' } : {} };
+    };
+    if (aresta === 'posts' && this.paginas.has(id)) {
+      const tarefas = this.paginas.get(id)!;
+      if (!['CREATE_CONTENT', 'MANAGE', 'MODERATE'].some((t) => tarefas.includes(t))) return erro(403, 200, 'Requires the CREATE_CONTENT, MANAGE or MODERATE task on the Page');
+      const lista = this.postsNaPagina.filter((p) => p.pagina === id);
+      const p = pagina(params, lista.length, 100);
+      return {
+        status: 200,
+        corpo: {
+          data: lista.slice(p.inicio, p.fim).map((x) => ({ id: x.id, created_time: x.created_time, message: x.message, permalink_url: x.permalink_url, full_picture: x.full_picture, is_published: x.is_published })),
+          paging: p.paging,
+        },
+      };
+    }
+    if (aresta !== 'comments') return null;
+    if (id.includes('_')) {
+      const dona = id.split('_')[0]!;
+      if (!(this.paginas.get(dona) ?? []).includes('MODERATE')) return erro(403, 200, 'Requires the MODERATE task on the Page');
+      const todos = this.comentariosNaPagina.get(id) ?? [];
+      const lista = params.filter === 'stream' ? todos : todos.filter((c) => !c.parent);
+      const p = pagina(params, lista.length, 100);
+      const daPagina = (c: ComentarioNaPagina) => c.deId === dona;
+      return {
+        status: 200,
+        corpo: {
+          data: lista.slice(p.inicio, p.fim).map((c) => ({
+            id: c.id,
+            message: c.message,
+            created_time: c.created_time,
+            ...(daPagina(c) || this.paginaDevolveQuemComentou ? { from: { id: c.deId, name: c.nome } } : {}),
+            like_count: c.like_count,
+            comment_count: c.comment_count,
+            is_hidden: c.is_hidden,
+            ...(c.parent ? { parent: { id: c.parent } } : {}),
+          })),
+          paging: p.paging,
+        },
+      };
+    }
+    if (this.semPermissaoDeComentarios) return erro(403, 10, '(#10) Application does not have permission for this action');
+    const lista = this.comentariosNoInstagram.get(id);
+    if (!lista && !this.posts.some((x) => x.id === id)) return erro(400, 100, `Unsupported get request. Object with ID '${id}' does not exist`, 33);
+    const todos = lista ?? [];
+    const p = pagina(params, todos.length, 50);
+    const comRespostas = (params.fields ?? '').includes('replies');
+    return { status: 200, corpo: { data: todos.slice(p.inicio, p.fim).map((c) => this.comentarioDoInstagram(c, comRespostas)), paging: p.paging } };
   }
 
   /** O post como a lista da conta o descreve, só com os campos pedidos (`fields`). */
@@ -349,6 +533,10 @@ export class InstagramDeMentira {
     const final = aresta ?? (params.fields === 'status_code' ? 'status_code' : params.fields === 'status' ? 'status' : 'objeto');
     const falha = this.falhas.get(final)?.shift();
     if (falha) return falha;
+
+    // Os comentários (A6, Z11, parte 1).
+    const dosComentarios = this.dosComentarios(metodo, id ?? '', aresta, params);
+    if (dosComentarios) return dosComentarios;
 
     // O vídeo na Página (A6, Z10, parte 3a).
     const doVideo = this.videoNaPagina(metodo, id ?? '', aresta, params, corpo);

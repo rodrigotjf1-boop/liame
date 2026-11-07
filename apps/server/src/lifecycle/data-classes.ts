@@ -220,6 +220,13 @@ export const DATA_CLASSES: Record<string, TableClassification> = {
   // marca, com a legenda, o endereço, a miniatura no endereço da Meta e os números. É o que a própria loja publicou, sem
   // arquivo guardado; a lista espelha a conta a cada leitura (o que sai de lá sai daqui), como os números do Search Console.
   instagram_media: { class: 'CONFIDENTIAL', retention: 'com a conta conectada' },
+  // Os comentários dos posts da marca (A6, Z11, parte 1, migration 0123; D-A6-86): o post de onde vêm (a legenda, o
+  // endereço e a miniatura no endereço da Meta, sem arquivo) e cada comentário, com o texto, o @ ou o nome de quem
+  // comentou, a hora, as curtidas e se está oculto; sem a foto do perfil. O texto é de terceiro: sai 90 dias depois de
+  // feito (o expurgo `comentario`), antes se for apagado na rede ou se a conta for desligada. O post sem comentário
+  // guardado sai 90 dias depois de publicado (`post_comentado`).
+  social_comment_post: { class: 'CONFIDENTIAL', retention: 'com a conta conectada; 90 dias depois de publicado, sem comentário guardado', purge: { job: 'post_comentado', days: 90 } },
+  social_comment: { class: 'PERSONAL', retention: '90 dias depois do comentário; antes, se for apagado na rede ou se a conta for desligada', purge: { job: 'comentario', days: 90 } },
   // Os posts da marca (A6, Z5b, migration 0086): a foto (pela referência e o resumo), a hora e cada canal com o texto
   // que a empresa escreveu em nome dela e o que aconteceu na rede. Conteúdo da empresa, sem dado de pessoa. Fica com a
   // marca: é o histórico da Agenda e o que diz o que saiu, onde e quando.

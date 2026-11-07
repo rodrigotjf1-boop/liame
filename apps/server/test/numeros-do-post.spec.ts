@@ -40,7 +40,7 @@ describe('os números de cada post (A6 · Z7, parte c)', () => {
 
   it('o token da Página diz se quem autorizou pode analisar (ANALYZE), para ler os números', () => {
     const contas = { data: [{ id: '111111111111111', access_token: 'token-a', tasks: ['ANALYZE'] }, { id: '222222222222222', access_token: 'token-b', tasks: ['CREATE_CONTENT'] }] };
-    expect(tokenDaPagina(contas, '111111111111111')).toEqual({ token: 'token-a', podePublicar: false, podeAnalisar: true });
-    expect(tokenDaPagina(contas, '222222222222222')).toEqual({ token: 'token-b', podePublicar: true, podeAnalisar: false });
+    expect(tokenDaPagina(contas, '111111111111111')).toEqual({ token: 'token-a', podePublicar: false, podeAnalisar: true, podeModerar: false });
+    expect(tokenDaPagina(contas, '222222222222222')).toEqual({ token: 'token-b', podePublicar: true, podeAnalisar: false, podeModerar: false });
   });
 });

@@ -68,9 +68,9 @@ function contagem(v: unknown): number | null {
 
 /**
  * Texto sem o caractere nulo e sem metade de par de surrogates (o Postgres não guarda nenhum dos dois, como em
- * `orders/regem-leitura.ts`), cortado no limite sem partir um emoji ao meio.
+ * `orders/regem-leitura.ts`), cortado no limite sem partir um emoji ao meio. Os comentários (Z11) usam a mesma.
  */
-function textoGuardavel(v: unknown, maximo: number): string {
+export function textoGuardavel(v: unknown, maximo: number): string {
   if (typeof v !== 'string') return '';
   const limpo = v.replaceAll('\u0000', '').toWellFormed();
   let saida = '';
