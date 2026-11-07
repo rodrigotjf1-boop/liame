@@ -22,7 +22,10 @@ jobs:
   build-test:
     name: build e testes
     runs-on: ubuntu-24.04
-    timeout-minutes: 20
+    # 30, não 20 (ERR-210): em novembro de 2026 o job verde da main levava de 19min43s a 19min57s, e o teste a mais
+    # de um PR (ou a máquina um pouco mais lenta) o cancelava no último passo, os evals, com os testes já verdes.
+    # A folga se confere a cada PR que acrescenta testes: a duração das últimas verdes contra este limite (V183).
+    timeout-minutes: 30
 
     services:
       postgres:

@@ -41,6 +41,7 @@ import { ConferenciaDoGasto } from './conferencia-do-gasto.js';
 import { FotosLoop } from './fotos-loop.js';
 import { PostsNumerosLoop } from './posts-numeros-loop.js';
 import { DoSeuInstagramLoop } from './do-seu-instagram-loop.js';
+import { ComentariosLoop } from './comentarios-loop.js';
 import { SincronizacaoLoop } from './sincronizacao-loop.js';
 import { ExplicarService } from '../ai/explicar/explicar.service.js';
 import { AiGateway } from '../ai/gateway.js';
@@ -155,6 +156,8 @@ import { WebhookDeliverer } from './webhook-deliverer.js';
     PostsNumerosLoop,
     // "Do seu Instagram" (A6, Z10, parte 5): as publicações da conta do Instagram de cada marca, com os números, uma vez por dia.
     DoSeuInstagramLoop,
+    // Comentários (A6, Z11, parte 1): os comentários dos posts do Instagram e da Página de cada marca, a cada 15 minutos.
+    ComentariosLoop,
     // Conversões para o Google (A5, Y1): a venda confirmada que veio de um anúncio do Google volta para ele; nasce desligada.
     ConversoesLoop,
     // Sombra de verdade (A3, I5): lê os resultados como a tela e registra o que o Liame recomendaria.

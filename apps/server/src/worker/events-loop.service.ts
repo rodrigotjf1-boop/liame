@@ -19,6 +19,7 @@ import { CriativoLoop } from './criativo-loop.js';
 import { FotosLoop } from './fotos-loop.js';
 import { PostsNumerosLoop } from './posts-numeros-loop.js';
 import { DoSeuInstagramLoop } from './do-seu-instagram-loop.js';
+import { ComentariosLoop } from './comentarios-loop.js';
 import { EstrategistaAgenda, MARCAS_POR_VOLTA } from './estrategista-agenda.js';
 import { EstrategistaLoop } from './estrategista-loop.js';
 import { PedidosQueEsperam } from './pedidos-que-esperam.js';
@@ -84,6 +85,7 @@ export class EventsLoopService implements OnApplicationBootstrap, OnApplicationS
     private readonly fotos: FotosLoop,
     private readonly numerosDosPosts: PostsNumerosLoop,
     private readonly doSeuInstagram: DoSeuInstagramLoop,
+    private readonly comentarios: ComentariosLoop,
     private readonly sugestoes: SugestoesDeRespostaLoop,
     private readonly postsSugeridos: PostsSugeridosLoop,
     private readonly assinaturas: AssinaturasLoop,
@@ -163,6 +165,10 @@ export class EventsLoopService implements OnApplicationBootstrap, OnApplicationS
       // números, uma vez por dia; a fila é olhada de 5 em 5 minutos (a conta recém-ligada é lida na volta seguinte), só
       // com as funções `fotos` e `videos` ligadas.
       this.loop('do-seu-instagram', 3, 300_000, async (n) => (await this.doSeuInstagram.executarLote(n)).length),
+      // Comentários (A6, Z11, parte 1): os comentários dos posts dos últimos 30 dias de cada Instagram e de cada Página
+      // ligados a uma marca, a cada 15 minutos por conta; a fila é olhada a cada minuto (o "Ler agora" sai na volta
+      // seguinte), só com a função `comentarios` ligada.
+      this.loop('comentarios', 5, 60_000, async (n) => (await this.comentarios.executarLote(n)).length),
       // As sugestões de resposta do Social media (A6, Z6): a avaliação nova entra na fila na leitura do Perfil que a
       // trouxe, e o "Pedir outras" entra quando a pessoa pede, com ela esperando na tela de Aprovações (P31): por isso a
       // fila é olhada de 15 em 15 segundos (a do "Pedir outras" primeiro). Quem espera a vez (a IA desligada, o limite)

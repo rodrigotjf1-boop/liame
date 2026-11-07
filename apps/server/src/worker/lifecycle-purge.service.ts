@@ -177,6 +177,29 @@ export class LifecyclePurgeService {
           returning tenant_id`,
       true,
     );
+    // Os comentários dos posts da marca (A6, Z11; D-A6-86): 90 dias contados de quando foram feitos. O texto é de
+    // terceiro. A chave é composta (conta, comentário): a linha sai pela chave inteira. Depois, o post que ficou sem
+    // comentário guardado e já passou dos 90 dias (a leitura só olha os posts dos últimos 30).
+    await run(
+      'comentario',
+      sql`delete from liame.social_comment c using (
+            select e.connected_account_id, e.comment_id from liame.social_comment e
+             where e.published_at < now() - interval '90 days' and ${noHold('e')} ${t('e.tenant_id')} limit ${BATCH}) v
+           where c.connected_account_id = v.connected_account_id and c.comment_id = v.comment_id
+          returning c.tenant_id`,
+      true,
+    );
+    await run(
+      'post_comentado',
+      sql`delete from liame.social_comment_post p using (
+            select e.connected_account_id, e.post_id from liame.social_comment_post e
+             where e.published_at < now() - interval '90 days' and ${noHold('e')} ${t('e.tenant_id')}
+               and not exists (select 1 from liame.social_comment c where c.connected_account_id = e.connected_account_id and c.post_id = e.post_id)
+             limit ${BATCH}) v
+           where p.connected_account_id = v.connected_account_id and p.post_id = v.post_id
+          returning p.tenant_id`,
+      true,
+    );
     // As buscas da semana do Search Console (A6, Z3): 12 meses contados do começo da semana. O texto é o que as
     // pessoas digitaram no Google. A chave é composta (site, semana, busca): a linha sai pela chave inteira.
     await run(
