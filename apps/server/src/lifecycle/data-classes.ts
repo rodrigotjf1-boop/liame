@@ -216,6 +216,10 @@ export const DATA_CLASSES: Record<string, TableClassification> = {
   // de imagens. É conteúdo da empresa (a tela pede foto sem pessoas que dê para reconhecer). Fica enquanto a marca
   // existir, ou até alguém apagar; a rotina `fotos` do worker e o expurgo tiram o arquivo antes da linha.
   brand_photo: { class: 'CONFIDENTIAL', retention: 'enquanto a marca existir, ou até alguém apagar (o arquivo sai antes da linha)' },
+  // "Do seu Instagram" (A6, Z10, parte 5; migration 0122): as publicações mais novas da conta do Instagram ligada à
+  // marca, com a legenda, o endereço, a miniatura no endereço da Meta e os números. É o que a própria loja publicou, sem
+  // arquivo guardado; a lista espelha a conta a cada leitura (o que sai de lá sai daqui), como os números do Search Console.
+  instagram_media: { class: 'CONFIDENTIAL', retention: 'com a conta conectada' },
   // Os posts da marca (A6, Z5b, migration 0086): a foto (pela referência e o resumo), a hora e cada canal com o texto
   // que a empresa escreveu em nome dela e o que aconteceu na rede. Conteúdo da empresa, sem dado de pessoa. Fica com a
   // marca: é o histórico da Agenda e o que diz o que saiu, onde e quando.

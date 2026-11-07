@@ -40,6 +40,7 @@ import { ConexaoProcessor } from './conexao-processor.js';
 import { ConferenciaDoGasto } from './conferencia-do-gasto.js';
 import { FotosLoop } from './fotos-loop.js';
 import { PostsNumerosLoop } from './posts-numeros-loop.js';
+import { DoSeuInstagramLoop } from './do-seu-instagram-loop.js';
 import { SincronizacaoLoop } from './sincronizacao-loop.js';
 import { ExplicarService } from '../ai/explicar/explicar.service.js';
 import { AiGateway } from '../ai/gateway.js';
@@ -152,6 +153,8 @@ import { WebhookDeliverer } from './webhook-deliverer.js';
     FotosLoop,
     // Os números de cada post nas redes (A6, Z7, parte c): a leitura do alcance e das interações, como apoio; só com a função dos posts.
     PostsNumerosLoop,
+    // "Do seu Instagram" (A6, Z10, parte 5): as publicações da conta do Instagram de cada marca, com os números, uma vez por dia.
+    DoSeuInstagramLoop,
     // Conversões para o Google (A5, Y1): a venda confirmada que veio de um anúncio do Google volta para ele; nasce desligada.
     ConversoesLoop,
     // Sombra de verdade (A3, I5): lê os resultados como a tela e registra o que o Liame recomendaria.

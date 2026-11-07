@@ -36,6 +36,12 @@ import type { AddressInfo } from 'node:net';
 //   - `DELETE /{v}/{page_post_id}`, com o token da Página → `{"success": true}`. A página não diz qual tarefa apagar pede
 //     (fala em `CREATE_CONTENT`, `MANAGE` e `MODERATE` para os posts em geral): aqui, a de publicar, `CREATE_CONTENT`;
 //   - o que não existe (já apagado direto na rede): o código 100 com o subcódigo 33, como qualquer objeto que a Meta não acha.
+//
+// "Do seu Instagram" (A6, Z10, parte 5), pela referência do objeto de mídia lida em 07/11/2026 (`…/instagram-platform/
+// reference/instagram-media`): a lista devolve só os campos pedidos em `fields`; `media_type` (`IMAGE`, `VIDEO`,
+// `CAROUSEL_ALBUM`) e `media_product_type` (`FEED`, `REELS`, `STORY`, `AD`); `thumbnail_url` só no vídeo; e o pior caso
+// do que pode faltar (V125): `media_url` não vem no vídeo com áudio protegido ou licenciado (a música do Instagram), e
+// `like_count` não vem quando a conta esconde as curtidas. O post publicado fora do Liame entra por `publicadoForaDoLiame`.
 
 export const TOKEN_DO_INSTAGRAM = `token-do-instagram-${randomBytes(6).toString('hex')}`;
 export const SEGREDO_DO_APP = `segredo-do-app-${randomBytes(6).toString('hex')}`;
@@ -44,7 +50,29 @@ export const TOKEN_DA_PAGINA = `token-da-pagina-${randomBytes(6).toString('hex')
 
 export type FotoNaPagina = { id: string; pagina: string; name: string; created_time: string; link: string; page_story_id: string; imagem: Buffer | null };
 
-export type PostNoInstagram = { id: string; caption: string; timestamp: string; permalink: string; conteiner: string; imagem: Buffer | null };
+export type PostNoInstagram = {
+  id: string;
+  caption: string;
+  timestamp: string;
+  permalink: string;
+  conteiner: string;
+  imagem: Buffer | null;
+  /** Os campos da lista de "Do seu Instagram" (A6, Z10, parte 5). Sem eles: a foto do feed, com o arquivo. */
+  media_type?: 'IMAGE' | 'VIDEO' | 'CAROUSEL_ALBUM';
+  media_product_type?: 'FEED' | 'REELS' | 'STORY' | 'AD';
+  /** Nulo: a Meta não manda (o vídeo com música do Instagram). */
+  media_url?: string | null;
+  thumbnail_url?: string | null;
+  /** Nulo: a conta esconde as curtidas (o campo não vem). */
+  like_count?: number | null;
+  comments_count?: number;
+};
+
+/** O que se pode dizer de um post publicado fora do Liame (A6, Z10, parte 5). */
+export type PostForaDoLiame = Partial<Pick<PostNoInstagram, 'caption' | 'media_type' | 'media_product_type' | 'media_url' | 'thumbnail_url' | 'like_count' | 'comments_count'>> & {
+  /** Há quantas horas saiu. */
+  horas?: number;
+};
 /**
  * O contêiner do post: a foto (`image_url`) ou, no Reels (A6, Z10), o vídeo (`video_url`), com a capa (`cover_url` ou
  * `thumb_offset`) e `share_to_feed`, como o pedido chegou.
@@ -167,6 +195,49 @@ export class InstagramDeMentira {
   /** Os vídeos publicados (ou não) numa Página. */
   videosDe(pagina: string): VideoNaPagina[] {
     return this.videosNaPagina.filter((v) => v.pagina === pagina);
+  }
+
+  /**
+   * Um post que a loja publicou direto no Instagram, fora do Liame ("Do seu Instagram", A6, Z10, parte 5): entra na
+   * lista da conta como o mais novo, com o id e o endereço da Meta. Devolve o id.
+   */
+  publicadoForaDoLiame(ig: string, o: PostForaDoLiame = {}): string {
+    const conteiner: Conteiner = { id: idDaMeta(), ig, caption: o.caption ?? '', imagem: null, endereco: '', status: 'PUBLISHED', tipo: o.media_product_type === 'REELS' ? 'REELS' : 'foto' };
+    this.conteineres.set(conteiner.id, conteiner);
+    const { horas, ...campos } = o;
+    const p: PostNoInstagram = {
+      id: idDaMeta(),
+      caption: o.caption ?? '',
+      timestamp: dataDoInstagram(new Date(Date.now() - (horas ?? 1) * 3_600_000)),
+      permalink: `https://www.instagram.com/p/${randomBytes(5).toString('hex')}/`,
+      conteiner: conteiner.id,
+      imagem: null,
+      ...campos,
+    };
+    // A lista vem do mais novo ao mais antigo.
+    const i = this.posts.findIndex((x) => x.timestamp < p.timestamp);
+    if (i < 0) this.posts.push(p);
+    else this.posts.splice(i, 0, p);
+    return p.id;
+  }
+
+  /** O post como a lista da conta o descreve, só com os campos pedidos (`fields`). */
+  private naLista(p: PostNoInstagram, campos: string[]): Record<string, unknown> {
+    const tipo = p.media_type ?? 'IMAGE';
+    const completo: Record<string, unknown> = {
+      id: p.id,
+      caption: p.caption,
+      timestamp: p.timestamp,
+      permalink: p.permalink,
+      media_type: tipo,
+      media_product_type: p.media_product_type ?? 'FEED',
+      // O arquivo: o que o post diz; sem nada, um endereço da Meta. Nulo = a Meta não manda o campo.
+      ...(p.media_url === null ? {} : { media_url: p.media_url ?? `https://scontent.cdninstagram.com/v/${p.id}.jpg?oe=teste` }),
+      ...(tipo === 'VIDEO' && p.thumbnail_url !== null ? { thumbnail_url: p.thumbnail_url ?? `https://scontent.cdninstagram.com/v/${p.id}-capa.jpg?oe=teste` } : {}),
+      ...(p.like_count === null ? {} : { like_count: p.like_count ?? 0 }),
+      comments_count: p.comments_count ?? 0,
+    };
+    return Object.fromEntries(campos.filter((c) => c in completo).map((c) => [c, completo[c]]));
   }
 
   /** As chamadas a um caminho final (`media`, `media_publish`, `content_publishing_limit`, `status_code` para a situação). */
@@ -380,7 +451,8 @@ export class InstagramDeMentira {
       return { status: 200, corpo: { data: [{ quota_usage: this.cota.usados, config: { quota_total: this.cota.total, quota_duration: 86400 } }] } };
     }
     if (metodo === 'GET' && aresta === 'media') {
-      return { status: 200, corpo: { data: this.postsDe(id!).slice(0, Number(params.limit ?? 25)).map((p) => ({ id: p.id, caption: p.caption, timestamp: p.timestamp, permalink: p.permalink })) } };
+      const campos = (params.fields ?? 'id').split(',');
+      return { status: 200, corpo: { data: this.postsDe(id!).slice(0, Number(params.limit ?? 25)).map((p) => this.naLista(p, campos)) } };
     }
     if (metodo === 'GET' && !aresta) {
       const c = this.conteineres.get(id!);
