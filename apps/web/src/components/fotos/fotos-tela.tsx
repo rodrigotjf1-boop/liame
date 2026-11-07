@@ -1,6 +1,6 @@
 'use client';
 
-import type { BrandPhoto, BrandPhotosResponse, BrandResponse } from '@liame/contracts';
+import type { BrandPhoto, BrandPhotosResponse, BrandResponse, InstagramMedia } from '@liame/contracts';
 import { type DragEvent, useCallback, useEffect, useRef, useState } from 'react';
 import { useAvisar } from '@/components/ui/avisos';
 import { Estado } from '@/components/ui/estado';
@@ -10,8 +10,11 @@ import { useAgora } from '@/lib/agora';
 import { api, chamar, mensagemDe, type Problema } from '@/lib/api';
 import { disparar } from '@/lib/disparar';
 import { useSessao } from '@/lib/sessao';
+import { AbaDoInstagram } from './aba-do-instagram';
 import { CartaoFoto } from './cartao-foto';
 import { DialogoApagarFoto } from './dialogo-apagar-foto';
+import { type AbaDasFotos, ROTULOS_DAS_ABAS } from './do-seu-instagram';
+import { GavetaDoInstagram } from './gaveta-do-instagram';
 import { concluirOVideo, enviarCapa, enviarFoto, hashDoArquivo, medirImagem, medirVideo, pedirEnvioDoVideo, quadroDoMeio, subirOVideo } from './enviar';
 import { FilaDoEnvio, type ItemDoEnvio } from './fila-do-envio';
 import { GavetaFoto } from './gaveta-foto';
@@ -54,6 +57,8 @@ import {
 // O vídeo (A6 · Z10, parte 2; mockups/prototipo-video-fotos.html, P37 aprovado em 04/11/2026), com a função `videos`
 // ligada: "Enviar fotos e vídeos", o vídeo direto ao armazenamento (com a conferência do servidor e a capa), o filtro
 // Tudo, Fotos e Vídeos, e o vídeo na grade e na gaveta.
+// "Do seu Instagram" (A6 · Z10, parte 5b; P37 parte A; D-A6-83), também com a função `videos`: a aba ao lado de
+// "Enviados por vocês", com o que a loja já publicou no Instagram (`aba-do-instagram.tsx`). Nela não se envia nada.
 
 type Medidas = { duracaoMs: number; largura: number; altura: number };
 /** O arquivo de cada item da lista; no vídeo, também onde o envio parou (a nova tentativa recomeça dali). */
@@ -80,6 +85,8 @@ export function FotosTela() {
   const [tentativa, setTentativa] = useState(0);
   const [filtro, setFiltro] = useState('todas');
   const [tipo, setTipo] = useState<TipoNaGrade>('tudo');
+  const [aba, setAba] = useState<AbaDasFotos>('enviados');
+  const [publicacao, setPublicacao] = useState<InstagramMedia | null>(null);
   const [fila, setFila] = useState<ItemDoEnvio[]>([]);
   const [aberta, setAberta] = useState<string | null>(null);
   const [apagar, setApagar] = useState<string | null>(null);
@@ -125,6 +132,7 @@ export function FotosTela() {
     const id = ++seq.current;
     setCarga({ tipo: 'carregando' });
     setAberta(null);
+    setPublicacao(null);
     setApagar(null);
     setFiltro('todas');
     setTipo('tudo');
@@ -351,6 +359,10 @@ export function FotosTela() {
   const dados = carga.tipo === 'ok' ? carga.dados : null;
   const podeEnviar = Boolean(dados?.enabled && dados.can_manage);
   const podeVideo = Boolean(podeEnviar && dados?.videos_enabled);
+  // "Do seu Instagram" vem com os vídeos; na aba dele, a tela não recebe arquivo (arrastar não envia).
+  const comInstagram = Boolean(dados?.enabled && dados.videos_enabled);
+  const naAbaDoInstagram = comInstagram && aba === 'instagram';
+  const recebeArquivo = podeEnviar && !naAbaDoInstagram;
 
   const receber = useCallback(
     (lista: File[]) => {
@@ -494,8 +506,35 @@ export function FotosTela() {
       </div>
     );
   } else {
-    corpo = (
+    // As abas (P37): "Enviados por vocês" e "Do seu Instagram", só com a função `videos`.
+    const abas = comInstagram ? (
+      <div className="seg ig-abas" role="group" aria-label="De onde">
+        {ROTULOS_DAS_ABAS.map(([a, rotulo]) => (
+          <button
+            key={a}
+            type="button"
+            data-ig-aba={a}
+            aria-pressed={aba === a}
+            onClick={() => {
+              setAba(a);
+              setAberta(null);
+              setPublicacao(null);
+              setAnuncio(rotulo);
+            }}
+          >
+            {rotulo}
+          </button>
+        ))}
+      </div>
+    ) : null;
+    corpo = naAbaDoInstagram && marca ? (
       <>
+        {abas}
+        <AbaDoInstagram key={marca} marca={marca} agora={agora} aberta={publicacao?.id ?? null} aoAbrir={setPublicacao} aoAnunciar={setAnuncio} />
+      </>
+    ) : (
+      <>
+        {abas}
         {!dados.can_manage && (
           <Faixa icone={<Icone nome="lock" />} titulo="Você vê as fotos, mas só o Dono, o Administrador e o Gestor enviam e apagam" texto="Se faltar a foto de um produto, peça a um deles." />
         )}
@@ -582,12 +621,12 @@ export function FotosTela() {
         onDragEnter={(e) => {
           if (!comArquivos(e)) return;
           e.preventDefault();
-          if (podeEnviar) setArrastando(true);
+          if (recebeArquivo) setArrastando(true);
         }}
         onDragOver={(e) => {
           if (!comArquivos(e)) return;
           e.preventDefault();
-          e.dataTransfer.dropEffect = podeEnviar ? 'copy' : 'none';
+          e.dataTransfer.dropEffect = recebeArquivo ? 'copy' : 'none';
         }}
         onDragLeave={(e) => {
           if (!(e.relatedTarget instanceof Node) || !e.currentTarget.contains(e.relatedTarget)) setArrastando(false);
@@ -596,7 +635,7 @@ export function FotosTela() {
           if (!comArquivos(e)) return;
           e.preventDefault();
           setArrastando(false);
-          if (podeEnviar) receber([...e.dataTransfer.files]);
+          if (recebeArquivo) receber([...e.dataTransfer.files]);
         }}
       >
         <div className="view-cab anima" style={{ ['--i' as string]: 0 }}>
@@ -605,11 +644,13 @@ export function FotosTela() {
               Fotos
             </h1>
             <p>
-              {dados?.videos_enabled
-                ? `As fotos e os vídeos de verdade dos produtos da ${nomeDaMarca}, como são. Os posts usam só estes.`
-                : `As fotos de verdade dos produtos da ${nomeDaMarca}, como são. Os posts usam só estas fotos.`}
+              {comInstagram
+                ? `As fotos e os vídeos de verdade dos produtos da ${nomeDaMarca}, como são, e o que a loja já publicou no Instagram. Os posts usam só estes.`
+                : dados?.videos_enabled
+                  ? `As fotos e os vídeos de verdade dos produtos da ${nomeDaMarca}, como são. Os posts usam só estes.`
+                  : `As fotos de verdade dos produtos da ${nomeDaMarca}, como são. Os posts usam só estas fotos.`}
             </p>
-            {podeEnviar && tem && <p className="ft-info">{info}</p>}
+            {recebeArquivo && tem && <p className="ft-info">{info}</p>}
           </div>
           <div className="cab-acoes">
             {marcas && marcas.length > 1 && (
@@ -624,7 +665,7 @@ export function FotosTela() {
                 </select>
               </label>
             )}
-            {podeEnviar && tem && (
+            {recebeArquivo && tem && (
               <button className="btn btn--primary" type="button" data-ft-enviar="cab" onClick={() => seletor.current?.click()}>
                 <Icone nome="upload" />
                 {textoDoBotao}
@@ -684,6 +725,9 @@ export function FotosTela() {
           aoFalharImagem={relerPorEndereco}
           aoFechar={() => setAberta((a) => (a === fotoAberta.id ? null : a))}
         />
+      )}
+      {naAbaDoInstagram && publicacao && (
+        <GavetaDoInstagram key={`ig-${publicacao.id}`} publicacao={publicacao} agora={agora} reserva={titulo} aoFechar={() => setPublicacao((p) => (p?.id === publicacao.id ? null : p))} />
       )}
       {apagar && (
         <DialogoApagarFoto
