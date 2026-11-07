@@ -53,14 +53,21 @@ export function origemDasImagens(ambiente: Readonly<Record<string, string | unde
   return `https://${bucket}.s3.${regiao}.amazonaws.com`;
 }
 
+/**
+ * As miniaturas de "Do seu Instagram" (A6 · Z10, parte 5b; D-A6-83): a imagem que o Instagram serve, no endereço da
+ * própria Meta (nada é guardado no Liame). Só imagem, só nas telas do app.
+ */
+export const IMAGENS_DA_META = ['https://*.cdninstagram.com', 'https://*.fbcdn.net'] as const;
+
 function diretivas({ isDev, api, imagens }: Base, scriptSrc: string, imagemDaApi = false): string {
   return [
     "default-src 'self'",
     scriptSrc,
     // Atributos style do React: não executam código.
     "style-src 'self' 'unsafe-inline'",
-    // A API só entra no img-src das telas do app: o logo público da agência no relatório do dono (A7, W7, parte 5a).
-    `img-src 'self' blob: data:${imagemDaApi ? ` ${api}` : ''}${imagens ? ` ${imagens}` : ''}`,
+    // A API só entra no img-src das telas do app: o logo público da agência no relatório do dono (A7, W7, parte 5a); e
+    // as miniaturas do Instagram, no endereço da Meta ("Do seu Instagram").
+    `img-src 'self' blob: data:${imagemDaApi ? ` ${api} ${IMAGENS_DA_META.join(' ')}` : ''}${imagens ? ` ${imagens}` : ''}`,
     // O vídeo das Fotos (A6 · Z10): toca do bucket (endereço assinado) e, antes do envio, do próprio arquivo (`blob:`).
     `media-src 'self' blob:${imagens ? ` ${imagens}` : ''}`,
     "font-src 'self'",

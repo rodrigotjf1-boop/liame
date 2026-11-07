@@ -94,18 +94,21 @@ describe('CSP do web', () => {
     const hashTema = await hashDeScript(SCRIPT_TEMA);
     const d = diretivas(cspComNonce({ ...base, imagens: origem, nonce: 'n', hashTema }));
     essencial({ ...d, 'connect-src': d['connect-src']?.filter((v) => v !== origem) ?? [] });
-    // Nas telas do app, a API também entra no img-src: o logo público da agência no relatório do dono (A7, W7, parte 5a).
-    expect(d['img-src']).toEqual(["'self'", 'blob:', 'data:', base.api, origem]);
+    // Nas telas do app, a API também entra no img-src: o logo público da agência no relatório do dono (A7, W7, parte 5a);
+    // e as miniaturas do Instagram, no endereço da Meta ("Do seu Instagram", A6 · Z10, parte 5b).
+    expect(d['img-src']).toEqual(["'self'", 'blob:', 'data:', base.api, 'https://*.cdninstagram.com', 'https://*.fbcdn.net', origem]);
     // O vídeo toca do bucket e, antes do envio, do próprio arquivo; e vai do navegador direto ao bucket.
     expect(d['media-src']).toEqual(["'self'", 'blob:', origem]);
     expect(d['connect-src']).toEqual(["'self'", base.api, origem]);
     // Nenhuma outra diretiva ganha a origem do bucket; e sem ela, as três ficam como eram.
     expect(Object.entries(d).filter(([nome, valores]) => !['img-src', 'media-src', 'connect-src'].includes(nome) && valores.includes(origem ?? ''))).toEqual([]);
+    // Os endereços da Meta só no img-src (nenhum script, estilo, mídia ou conexão com eles).
+    expect(Object.entries(d).filter(([nome, valores]) => nome !== 'img-src' && valores.some((v) => v.includes('cdninstagram') || v.includes('fbcdn')))).toEqual([]);
     const sem = diretivas(cspComNonce({ ...base, nonce: 'n', hashTema }));
-    expect(sem['img-src']).toEqual(["'self'", 'blob:', 'data:', base.api]);
+    expect(sem['img-src']).toEqual(["'self'", 'blob:', 'data:', base.api, 'https://*.cdninstagram.com', 'https://*.fbcdn.net']);
     expect(sem['media-src']).toEqual(["'self'", 'blob:']);
     expect(sem['connect-src']).toEqual(["'self'", base.api]);
-    // As telas de entrada não mostram imagem da API nem vídeo do bucket.
+    // As telas de entrada não mostram imagem da API, do Instagram nem vídeo do bucket.
     expect(diretivas(cspPublica(base))['img-src']).toEqual(["'self'", 'blob:', 'data:']);
     expect(diretivas(cspPublica(base))['media-src']).toEqual(["'self'", 'blob:']);
   });
