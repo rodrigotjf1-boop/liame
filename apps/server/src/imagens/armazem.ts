@@ -68,8 +68,12 @@ export class FalhaDoArmazem extends Error {
   }
 }
 
-/** O nome do arquivo que o endereço baixa: só minúsculas, números e hífen, terminado em `.jpg` (nada que quebre o cabeçalho). */
-const NOME_DE_ARQUIVO = /^[a-z0-9-]{1,80}\.jpg$/;
+/**
+ * O nome do arquivo que o endereço baixa: só minúsculas, números e hífen, terminado em `.jpg` (a foto) ou, no pacote com
+ * vídeo (A6 · Z10, parte 4c), em `.mp4` ou `.mov` (nada que quebre o cabeçalho). O mesmo desenho do contrato
+ * (`PostPhotoResponse.filename`).
+ */
+const NOME_DE_ARQUIVO = /^[a-z0-9-]{1,80}\.(jpg|mp4|mov)$/;
 
 function exigirNome(nome: string | undefined): void {
   if (nome !== undefined && !NOME_DE_ARQUIVO.test(nome)) throw new Error('armazenamento de imagens: nome de arquivo fora do desenho');

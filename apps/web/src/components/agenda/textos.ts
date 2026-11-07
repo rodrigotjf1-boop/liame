@@ -155,7 +155,9 @@ export function telaDaAgenda(dados: PostListResponse, inicio: string, hoje: stri
     const pedidos = pedidosDoCartao(post);
     const midia = ehPostComVideo(post) && post.photo_id ? fotos?.get(post.photo_id) : undefined;
     const video = midia && ehVideoPronto(midia) ? midia : null;
-    const nome = ehPacote(post) ? 'Pacote' : ehPostComVideo(post) ? `Post com vídeo${video ? ` (${duracaoPorExtenso(video.video.duration_ms)})` : ''}` : 'Post';
+    // O pacote com vídeo (A6, Z10, parte 4c) também diz a duração, como o post.
+    const duracao = video ? ` (${duracaoPorExtenso(video.video.duration_ms)})` : '';
+    const nome = ehPostComVideo(post) ? `${ehPacote(post) ? 'Pacote' : 'Post'} com vídeo${duracao}` : ehPacote(post) ? 'Pacote' : 'Post';
     const item: PostNoDia = {
       post,
       dia,
@@ -385,12 +387,16 @@ export function avisoDoNovo(post: Pick<PostResponse, 'publish_at'>, canais: read
   return um ? `Pacote pronto. Ele aparece na Agenda ${em}, para você publicar ${no}.` : `Pacotes prontos. Eles aparecem na Agenda ${em}, para você publicar ${no}.`;
 }
 
-/** A dica do texto de cada canal no novo post (o que o canal faz com o link e quem publica; na Página, o link do post). */
-export function dicaDoTexto(canal: string, postLink?: { ok: boolean; reason: string | null }): string {
+/**
+ * A dica do texto de cada canal no novo post (o que o canal faz com o link e quem publica; na Página, o link do post).
+ * `video`: o post leva o vídeo (A6, Z10), e a dica fala dele no lugar da foto.
+ */
+export function dicaDoTexto(canal: string, postLink?: { ok: boolean; reason: string | null }, video = false): string {
+  const midia = video ? 'o vídeo' : 'a foto';
   if (canal === 'instagram') return 'No Instagram, a legenda não tem link que abre: diga onde pedir (“Peça pelo link da bio”).';
   if (canal === 'tiktok') return 'No TikTok, a legenda não tem link que abre: diga onde pedir (“Peça pelo link da bio”). Quem publica é você: o Liame monta o pacote.';
-  if (canal === 'youtube') return 'Quem publica é você: o Liame monta o pacote com o texto e a foto.';
-  return `O texto que sai na Página, com a foto. ${dicaDoLinkDoPost(postLink)}`;
+  if (canal === 'youtube') return `Quem publica é você: o Liame monta o pacote com o texto e ${midia}.`;
+  return `O texto que sai na Página, com ${midia}. ${dicaDoLinkDoPost(postLink)}`;
 }
 
 /** O link do post como a tela o mostra: o cardápio sem os parâmetros ("cardapio.regem.com/casa-brasa"). */

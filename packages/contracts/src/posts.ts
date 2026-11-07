@@ -37,13 +37,14 @@ export const CreatePostRequest = z.strictObject({
   /**
    * Só no post com vídeo (D-A6-70): uma foto pronta das Fotos da marca como a capa do Reels, em JPEG até 8 MB. Ausente, a
    * capa é a do próprio vídeo (o quadro guardado com ele) ou, sem ela, o quadro do meio. A capa fica presa na hora do
-   * pedido: se ela mudar depois, o post não sai.
+   * pedido: se ela mudar depois, o post não sai. A capa é a do Reels: só com o pacote (o TikTok e o YouTube), 422
+   * `capa-so-no-reels`.
    */
   cover_photo_id: z.uuid().optional(),
   /**
    * Só no post com vídeo, no lugar de `cover_photo_id` (D-A6-70; A6, Z10, parte 4a): um quadro do próprio vídeo como a
    * capa, pelo tempo dele em milissegundos (dentro da duração). O Instagram usa o quadro desse tempo; ausente, vale a
-   * capa guardada com o vídeo.
+   * capa guardada com o vídeo. Só com o pacote, 422 `capa-so-no-reels`.
    */
   cover_offset_ms: z.int().min(0).max(900_000).optional(),
   /** A hora marcada, com o fuso. Entre 8h e 22h no fuso da empresa, depois de agora e até 60 dias. */
@@ -263,12 +264,13 @@ export type PostListResponse = z.infer<typeof PostListResponse>;
 
 /**
  * A foto do pacote pronto para baixar (A6, Z8; P22, o passo "Baixe a foto"): a cópia que o Liame guarda, em JPEG, sem os
- * dados do celular. O endereço vale poucos minutos e baixa como arquivo (D-A6-43).
+ * dados do celular. No pacote com vídeo (A6, Z10, parte 4c), o vídeo como a loja gravou (MP4 ou MOV). O endereço vale
+ * poucos minutos e baixa como arquivo (D-A6-43).
  */
 export const PostPhotoResponse = z.strictObject({
   url: z.string().min(1),
-  /** O nome do arquivo: `liame-<rede>-<dia>.jpg`, o dia da hora marcada no fuso da empresa. */
-  filename: z.string().regex(/^[a-z0-9-]{1,80}\.jpg$/),
+  /** O nome do arquivo: `liame-<rede>-<dia>.jpg` (no vídeo, `.mp4` ou `.mov`), o dia da hora marcada no fuso da empresa. */
+  filename: z.string().regex(/^[a-z0-9-]{1,80}\.(jpg|mp4|mov)$/),
   expires_at: z.iso.datetime(),
 });
 export type PostPhotoResponse = z.infer<typeof PostPhotoResponse>;

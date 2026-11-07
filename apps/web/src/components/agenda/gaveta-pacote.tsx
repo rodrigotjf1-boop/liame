@@ -12,12 +12,14 @@ import { oQueOPostTrouxe } from './post-trouxe';
 import { PostTrouxe } from './post-trouxe-secao';
 import { PreviaDoPacote } from './previa-do-pacote';
 import { fraseDoPacote, linkCurto, NOME_DO_CANAL, NO_CANAL, noFuso, quando } from './textos';
+import { BAIXAR_O_VIDEO, ehPostComVideo, ehVideoPronto, NO_YOUTUBE_DEITADO, videoDeitado } from './video-do-post';
 
 // O pacote pronto na Agenda (mockups/prototipo-pacote.html, P22 aprovado em 21/10/2026; Z8 da A6): no TikTok e no
 // YouTube o Liame não publica. A gaveta mostra o pacote (a foto inteira e o texto) e os quatro passos: baixar a foto (a
 // cópia que o Liame guarda, por um endereço de 5 minutos que baixa como arquivo; D-A6-43), copiar o texto, publicar na
 // rede e marcar "Publiquei"; e "Tirar da Agenda". Embaixo, o link do cardápio só deste pacote, para a bio (A6, Z7;
-// D-A6-47), quando a marca tem uma loja só com o cardápio ligado.
+// D-A6-47), quando a marca tem uma loja só com o cardápio ligado. O pacote com vídeo (A6, Z10, parte 4c; D-A6-79): o
+// passo é baixar o vídeo (o arquivo que a loja enviou, pelo mesmo endereço de 5 minutos), e a prévia mostra o vídeo.
 
 type Props = {
   post: PostResponse;
@@ -73,6 +75,10 @@ export function GavetaPacote({ post, fuso, hoje, foto, podeOperar, reserva, aoMu
   const { dia, hora } = noFuso(new Date(post.publish_at), fuso);
   const pronto = post.status === 'pacote_pronto';
   const publicado = post.status === 'pacote_publicado';
+  // O pacote com vídeo (A6, Z10, parte 4c): o passo de baixar e os textos falam do vídeo.
+  const comVideo = ehPostComVideo(post);
+  const video = foto && ehVideoPronto(foto) ? foto : null;
+  const deitadoNoYoutube = canal?.channel === 'youtube' && video !== null && videoDeitado(video);
 
   /** Depois de uma recusa (o pacote mudou noutro lugar), a gaveta mostra o que está valendo agora. */
   async function reler() {
@@ -148,7 +154,9 @@ export function GavetaPacote({ post, fuso, hoje, foto, podeOperar, reserva, aoMu
         <div className="dialogo-cab">
           <div className="dlg-titulo">
             <p className="rotulo-marca">Pacote pronto</p>
-            <h2 id={`${ids}-t`}>Pacote de {quando(dia, hora, hoje)}</h2>
+            <h2 id={`${ids}-t`}>
+              Pacote {comVideo ? 'com vídeo ' : ''}de {quando(dia, hora, hoje)}
+            </h2>
           </div>
           <button className="btn btn--icon btn--ghost" type="button" ref={fecharBt} onClick={fechar} aria-label="Fechar" disabled={Boolean(ocupado)}>
             <Icone nome="x" />
@@ -171,7 +179,15 @@ export function GavetaPacote({ post, fuso, hoje, foto, podeOperar, reserva, aoMu
             canal={canal?.channel ?? ''}
             texto={canal?.text ?? ''}
             foto={foto}
-            semFoto={post.photo_id ? 'A foto deste pacote não pôde ser mostrada aqui.' : 'A foto deste pacote foi apagada nas Fotos.'}
+            semFoto={
+              comVideo
+                ? post.photo_id
+                  ? 'O vídeo deste pacote não pôde ser mostrado aqui.'
+                  : 'O vídeo deste pacote foi apagado em Fotos e vídeos.'
+                : post.photo_id
+                  ? 'A foto deste pacote não pôde ser mostrada aqui.'
+                  : 'A foto deste pacote foi apagada nas Fotos.'
+            }
             aoFalharImagem={aoFalharImagem}
           />
           <section aria-labelledby={`${ids}-passos`}>
@@ -183,14 +199,21 @@ export function GavetaPacote({ post, fuso, hoje, foto, podeOperar, reserva, aoMu
                 <span className="pk-n" aria-hidden="true">
                   1
                 </span>
-                <span>
-                  <b>Baixe a foto</b>
-                  <span>{post.photo_id ? 'A cópia que o Liame guarda, em JPEG, sem os dados do celular.' : 'A foto foi apagada nas Fotos: monte outro pacote com outra foto.'}</span>
-                </span>
+                {comVideo ? (
+                  <span>
+                    <b>{BAIXAR_O_VIDEO.titulo}</b>
+                    <span>{post.photo_id ? BAIXAR_O_VIDEO.texto : BAIXAR_O_VIDEO.apagado}</span>
+                  </span>
+                ) : (
+                  <span>
+                    <b>Baixe a foto</b>
+                    <span>{post.photo_id ? 'A cópia que o Liame guarda, em JPEG, sem os dados do celular.' : 'A foto foi apagada nas Fotos: monte outro pacote com outra foto.'}</span>
+                  </span>
+                )}
                 {podeOperar && post.photo_id && (
                   <button className="btn btn--sm" type="button" onClick={() => disparar(baixar())} disabled={Boolean(ocupado)}>
                     <Icone nome="download" pequeno />
-                    {ocupado === 'baixar' ? 'Preparando…' : 'Baixar a foto'}
+                    {ocupado === 'baixar' ? 'Preparando…' : comVideo ? BAIXAR_O_VIDEO.botao : 'Baixar a foto'}
                   </button>
                 )}
               </li>
@@ -215,7 +238,9 @@ export function GavetaPacote({ post, fuso, hoje, foto, podeOperar, reserva, aoMu
                 </span>
                 <span>
                   <b>Publique {no}</b>
-                  <span>{maiuscula(quando(dia, hora, hoje))}. O Liame não publica nessa rede: quem publica é você.</span>
+                  <span>
+                    {maiuscula(quando(dia, hora, hoje))}. O Liame não publica nessa rede: quem publica é você.{deitadoNoYoutube ? ` ${NO_YOUTUBE_DEITADO}` : ''}
+                  </span>
                 </span>
               </li>
               <li>

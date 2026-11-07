@@ -161,20 +161,30 @@ export class PostsService {
   }
 
   /**
-   * O post com vídeo (A6, Z10, parte 3a; D-A6-68 a D-A6-70): só nos canais em que o Liame publica (o pacote ainda não leva
-   * vídeo), sem o recorte (o Reels mostra o vídeo inteiro), e, no Instagram, o vídeo que cabe no Reels como está (até
-   * 1.920 px de largura e 25 Mbps; a redução ainda não existe). A capa que fica presa no pedido: uma das Fotos (com o
-   * resumo do arquivo, JPEG até 8 MB) ou a do próprio vídeo (pela versão); sem nenhuma, o quadro do meio.
+   * O post com vídeo (A6, Z10, parte 3a; D-A6-68 a D-A6-70): sem o recorte (o vídeo vai inteiro) e, no Instagram, o vídeo
+   * que cabe no Reels como está (até 1.920 px de largura e 25 Mbps; a redução ainda não existe). A capa que fica presa no
+   * pedido: uma das Fotos (com o resumo do arquivo, JPEG até 8 MB) ou a do próprio vídeo (pela versão); sem nenhuma, o
+   * quadro do meio. O pacote do TikTok e do YouTube leva o mesmo vídeo (A6, Z10, parte 4c; D-A6-79), sem capa: a capa é a
+   * do Reels, e no pacote quem escolhe é a pessoa, na rede. Só com o pacote, a capa escolhida é recusada.
    */
   private async conferirOVideo(
     quem: Quem,
     body: CreatePostRequest,
     video: { width: number; bytes: string | number; duration_ms: number | null; has_cover: boolean; cover_version: number },
     canais: readonly string[],
-    comPacote: boolean,
   ): Promise<Capa> {
-    if (comPacote) throw recusa('video-no-pacote', 'Vídeo no pacote', 'O vídeo ainda não vai no pacote do TikTok e do YouTube: escolha o Instagram e a Página do Facebook.', 'channels');
-    if (body.crop_pos !== undefined) throw recusa('recorte-so-na-foto', 'Recorte só na foto', 'O Reels mostra o vídeo inteiro: o recorte vale só para a foto.', 'crop_pos');
+    if (body.crop_pos !== undefined) throw recusa('recorte-so-na-foto', 'Recorte só na foto', 'O vídeo vai inteiro: o recorte vale só para a foto.', 'crop_pos');
+    if (!canais.some((c) => !ehCanalDoPacote(c))) {
+      if (body.cover_photo_id || body.cover_offset_ms !== undefined) {
+        throw recusa(
+          'capa-so-no-reels',
+          'Capa só no Reels',
+          'A capa escolhida vale para o Reels do Instagram e da Página. No pacote, você escolhe a capa no TikTok e no YouTube, na hora de publicar.',
+          body.cover_photo_id ? 'cover_photo_id' : 'cover_offset_ms',
+        );
+      }
+      return SEM_CAPA;
+    }
     if (canais.includes('instagram') && !cabeNoReelsDoInstagram(video.width, Number(video.bytes), video.duration_ms ?? 0)) {
       throw recusa(
         'video-grande-para-o-reels',
@@ -303,7 +313,7 @@ export class PostsService {
       const precisaDeRecorte = comInstagram && recorteDoInstagram(midia.width, midia.height) !== 'nenhum';
       recorte = precisaDeRecorte ? (body.crop_pos ?? 50) : null;
     } else {
-      capa = await this.conferirOVideo(quem, body, midia, canais, doPacote.length > 0);
+      capa = await this.conferirOVideo(quem, body, midia, canais);
     }
 
     const hora = new Date(body.publish_at);
@@ -386,12 +396,13 @@ export class PostsService {
       await tx.execute(sql`update liame.social_post set action_id = ${pedidoId}, updated_at = now() where id = ${id} and tenant_id = ${quem.tenantId}`);
     }
 
-    // Um pacote para cada rede (D-A6-40): a foto inteira (sem recorte), na mesma hora, pronto na Agenda; sem pedido.
+    // Um pacote para cada rede (D-A6-40): a foto inteira (sem recorte), na mesma hora, pronto na Agenda; sem pedido. O
+    // vídeo (A6, Z10, parte 4c): o mesmo vídeo, como a loja gravou, sem o resumo do arquivo e sem capa (D-A6-79).
     const pacotes = doPacote.map((c) => ({ id: uuidv7(), canal: uuidv7(), channel: c.channel, body: c.text }));
     if (pacotes.length) {
       await tx.execute(sql`
-        insert into liame.social_post (id, tenant_id, brand_id, kind, photo_id, photo_sha256, crop_pos, publish_at, created_by)
-        select x.id, ${quem.tenantId}, ${body.brand_id}, 'pacote', ${midia.id}, ${midia.sha256}, null, ${hora.toISOString()}, ${quem.userId}
+        insert into liame.social_post (id, tenant_id, brand_id, kind, media, photo_id, photo_sha256, crop_pos, publish_at, created_by)
+        select x.id, ${quem.tenantId}, ${body.brand_id}, 'pacote', ${ehVideo ? 'video' : 'foto'}, ${midia.id}, ${ehVideo ? null : midia.sha256}, null, ${hora.toISOString()}, ${quem.userId}
           from jsonb_to_recordset(${JSON.stringify(pacotes)}::jsonb) as x (id uuid)`);
       await tx.execute(sql`
         insert into liame.social_post_channel (id, tenant_id, post_id, channel, connected_account_id, body, status)
@@ -416,9 +427,22 @@ export class PostsService {
         crop_pos: recorte,
         // O link do post (D-A6-46): criado, ou por que não.
         link_do_post: destino === null ? null : destino.ok ? 'criado' : destino.motivo,
-        // O post com vídeo (A6, Z10): o vídeo e a capa presa no pedido (a foto da capa, ou a versão da capa do vídeo).
+        // O post com vídeo (A6, Z10): o vídeo e a capa presa no pedido (a foto da capa, ou a versão da capa do vídeo); só
+        // com o pacote, sem capa (parte 4c).
         ...(ehVideo
-          ? { media: 'video', video_id: midia.id, capa: capa.fotoId ? { foto: capa.fotoId } : capa.quadroMs !== null ? { quadro_ms: capa.quadroMs } : capa.versao !== null ? { versao: capa.versao } : 'meio' }
+          ? {
+              media: 'video',
+              video_id: midia.id,
+              capa: !ordenados.length
+                ? null
+                : capa.fotoId
+                  ? { foto: capa.fotoId }
+                  : capa.quadroMs !== null
+                    ? { quadro_ms: capa.quadroMs }
+                    : capa.versao !== null
+                      ? { versao: capa.versao }
+                      : 'meio',
+            }
           : {}),
       },
     };
@@ -681,7 +705,9 @@ export class PostsService {
   /**
    * A foto do pacote para baixar (P22, o passo "Baixe a foto"; D-A6-43): o endereço assinado da cópia que o Liame guarda
    * (JPEG, sem os dados do celular), que baixa como arquivo e vale 5 minutos. Só o pacote da empresa, pronto ou
-   * publicado; a foto que saiu das Fotos (ou mudou) não volta.
+   * publicado; a foto que saiu das Fotos (ou mudou) não volta. No pacote com vídeo (A6, Z10, parte 4c; D-A6-79), o vídeo
+   * como a loja gravou (MP4 ou MOV, o arquivo que ela enviou), pelo mesmo caminho; o vídeo que saiu das Fotos e vídeos
+   * não volta.
    */
   async fotoDoPacote(auth: AuthContext, id: string, agora: Date = new Date()): Promise<PostPhotoResponse> {
     const quem = this.quem(auth);
@@ -690,45 +716,52 @@ export class PostsService {
       throw new AppProblem(409, 'pacote-tirado', 'O pacote saiu da Agenda', 'Este pacote foi tirado da Agenda: monte outro no "Novo post".');
     }
     const fuso = await fusoDaEmpresa(currentTx(), quem.tenantId);
+    // A foto, pelo resumo guardado no pacote (a que mudou não volta); o vídeo, pelo id (ele não muda depois de pronto).
     const f = (
-      await currentTx().execute<{ chave: string; dia: string }>(sql`
-        select f.object_key as chave, to_char(p.publish_at at time zone ${fuso}, 'YYYY-MM-DD') as dia
+      await currentTx().execute<{ chave: string; dia: string; media_type: string | null }>(sql`
+        select f.object_key as chave, to_char(p.publish_at at time zone ${fuso}, 'YYYY-MM-DD') as dia, f.media_type
           from liame.social_post p
           join liame.brand_photo f on f.id = p.photo_id and f.tenant_id = p.tenant_id
          where p.id = ${id} and p.tenant_id = ${quem.tenantId}
-           and f.status = 'pronta' and f.removed_at is null and f.sha256 = p.photo_sha256`)
+           and f.status = 'pronta' and f.removed_at is null
+           and ((p.media = 'foto' and f.sha256 = p.photo_sha256) or (p.media = 'video' and f.kind = 'video'))`)
     ).rows[0];
+    if (!f && p.media === 'video') {
+      throw new AppProblem(409, 'video-apagado', 'O vídeo saiu das Fotos e vídeos', 'O vídeo deste pacote foi apagado em Fotos e vídeos: monte outro pacote com outro vídeo.');
+    }
     if (!f) throw new AppProblem(409, 'foto-apagada', 'A foto saiu das Fotos', 'A foto deste pacote foi apagada nas Fotos: monte outro pacote com outra foto.');
-    const nome = `liame-${p.canais[0] ?? 'pacote'}-${f.dia}.jpg`;
+    const extensao = p.media === 'video' ? (f.media_type === 'video/quicktime' ? 'mov' : 'mp4') : 'jpg';
+    const nome = `liame-${p.canais[0] ?? 'pacote'}-${f.dia}.${extensao}`;
     try {
       const url = await this.armazem.enderecoDeLeitura(f.chave, VALIDADE_DA_FOTO_DO_PACOTE_S, nome);
       return { url, filename: nome, expires_at: new Date(agora.getTime() + VALIDADE_DA_FOTO_DO_PACOTE_S * 1000).toISOString() };
     } catch (e) {
       if (e instanceof ArmazemIndisponivel || e instanceof FalhaDoArmazem) {
-        throw new AppProblem(503, 'fotos-indisponiveis', 'Fotos indisponíveis', 'Não deu para preparar a foto agora. Tente de novo em instantes.');
+        const oQue = p.media === 'video' ? 'o vídeo' : 'a foto';
+        throw new AppProblem(503, 'fotos-indisponiveis', 'Fotos indisponíveis', `Não deu para preparar ${oQue} agora. Tente de novo em instantes.`);
       }
       throw e;
     }
   }
 
   /** O pacote da empresa, travado até o fim da transação (o "Publiquei" e o "Tirar" ao mesmo tempo não se atropelam). */
-  private pacoteTravado(quem: Quem, id: string): Promise<{ brand_id: string; situacoes: string[]; canais: string[] }> {
+  private pacoteTravado(quem: Quem, id: string): Promise<{ brand_id: string; media: string; situacoes: string[]; canais: string[] }> {
     return this.pacoteDaEmpresa(quem, id, true);
   }
 
-  /** O pacote da empresa, com a situação de cada canal (`travar`: até o fim da transação). */
-  private async pacoteDaEmpresa(quem: Quem, id: string, travar: boolean): Promise<{ brand_id: string; situacoes: string[]; canais: string[] }> {
+  /** O pacote da empresa, com a mídia e a situação de cada canal (`travar`: até o fim da transação). */
+  private async pacoteDaEmpresa(quem: Quem, id: string, travar: boolean): Promise<{ brand_id: string; media: string; situacoes: string[]; canais: string[] }> {
     const tx = currentTx();
     const p = (
-      await tx.execute<{ brand_id: string; kind: string }>(sql`
-        select brand_id, kind from liame.social_post where id = ${id} and tenant_id = ${quem.tenantId} ${travar ? sql`for update` : sql``}`)
+      await tx.execute<{ brand_id: string; kind: string; media: string }>(sql`
+        select brand_id, kind, media from liame.social_post where id = ${id} and tenant_id = ${quem.tenantId} ${travar ? sql`for update` : sql``}`)
     ).rows[0];
     if (!p) throw new AppProblem(404, 'post-nao-encontrado', 'Não encontramos', 'Este post não está mais aqui.');
     if (p.kind !== 'pacote') throw new AppProblem(409, 'nao-e-pacote', 'Não é um pacote', 'O Liame publica este post: ele não tem "Publiquei".');
     if (!(await this.ligada(quem, p.brand_id))) throw desligada();
     const c = await tx.execute<{ channel: string; status: string }>(sql`
       select channel, status from liame.social_post_channel where post_id = ${id} and tenant_id = ${quem.tenantId} order by channel`);
-    return { brand_id: p.brand_id, situacoes: c.rows.map((x) => x.status), canais: c.rows.map((x) => x.channel) };
+    return { brand_id: p.brand_id, media: p.media, situacoes: c.rows.map((x) => x.status), canais: c.rows.map((x) => x.channel) };
   }
 
   /** Um post da empresa, com os canais e a situação. */

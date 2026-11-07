@@ -6,6 +6,7 @@ import { duracaoCurta } from '@/components/fotos/textos';
 import { Icone } from '@/components/ui/icone';
 import {
   AVISO_DO_DEITADO,
+  CAPA_NO_PACOTE,
   type CapaDoNovo,
   dicaDaCapa,
   duracaoDoVideo,
@@ -20,9 +21,14 @@ import {
 
 // O vídeo e a capa no novo post (P37, parte B; A6, Z10, parte 4a; D-A6-70): os vídeos prontos das Fotos e vídeos, como a
 // loja gravou, com a duração; o aviso do deitado; e a capa, por um quadro do próprio vídeo (cinco, o do meio marcado: é a
-// capa guardada com ele) ou por uma das Fotos. Os quadros o navegador mostra pelo tempo, sem ler os bytes do vídeo.
+// capa guardada com ele) ou por uma das Fotos. Os quadros o navegador mostra pelo tempo, sem ler os bytes do vídeo. A capa
+// é a do Reels (A6, Z10, parte 4c; D-A6-79): só com o pacote marcado, ela sai da tela, e a nota diz quem escolhe.
 
 type Props = {
+  /** Só o pacote (o TikTok e o YouTube) está marcado: a capa não vale. */
+  soPacote?: boolean;
+  /** O pacote está marcado junto com o Instagram ou a Página: a dica da capa diz o que vale no pacote. */
+  comPacote?: boolean;
   ids: string;
   videos: VideoDasFotos[];
   /** As fotos das Fotos, para a capa. */
@@ -38,7 +44,22 @@ type Props = {
   primeiro: RefObject<HTMLButtonElement | null>;
 };
 
-export function CampoDoVideo({ ids, videos, fotos, escolhido, aoEscolher, capa, aoMudarCapa, erroVideo, erroCapa, enviando, podeVerFotos, primeiro }: Props) {
+export function CampoDoVideo({
+  ids,
+  videos,
+  fotos,
+  escolhido,
+  aoEscolher,
+  capa,
+  aoMudarCapa,
+  erroVideo,
+  erroCapa,
+  enviando,
+  podeVerFotos,
+  primeiro,
+  soPacote = false,
+  comPacote = false,
+}: Props) {
   const video = videos.find((v) => v.id === escolhido) ?? null;
   return (
     <>
@@ -96,7 +117,13 @@ export function CampoDoVideo({ ids, videos, fotos, escolhido, aoEscolher, capa, 
         )}
       </div>
 
-      {video && (
+      {video && soPacote && (
+        <p className="po-nota" data-po-capa-pacote="">
+          <Icone nome="image" pequeno />
+          <span>{CAPA_NO_PACOTE}</span>
+        </p>
+      )}
+      {video && !soPacote && (
         <fieldset className="campo po-capa" aria-describedby={erroCapa ? `${ids}-capa-erro` : `${ids}-capa-d`}>
           <legend>A capa</legend>
           <div className="seg" role="group" aria-label="De onde vem a capa">
@@ -153,7 +180,7 @@ export function CampoDoVideo({ ids, videos, fotos, escolhido, aoEscolher, capa, 
             </p>
           )}
           <span className="campo-dica" id={`${ids}-capa-d`}>
-            {dicaDaCapa(capa.modo)}
+            {dicaDaCapa(capa.modo, comPacote)}
           </span>
           {erroCapa && (
             <span className="campo-erro" id={`${ids}-capa-erro`}>

@@ -39,7 +39,7 @@ import {
   capaNoPedido,
   ehVideoPronto,
   type MidiaDoPost,
-  PACOTE_SEM_VIDEO,
+  PACOTE_COM_VIDEO,
   QUADRO_DO_MEIO,
 } from './video-do-post';
 
@@ -52,8 +52,9 @@ import {
 // que acontece (mandar para aprovação, montar o pacote, ou os dois), e o pacote fica pronto na Agenda, na mesma hora.
 // O vídeo (P37, parte B; A6, Z10, parte 4a): com a função `videos`, "O post leva" Foto ou Vídeo; com o vídeo, a lista dos
 // vídeos das Fotos e vídeos, a capa (um quadro do vídeo ou uma das Fotos), os canais com o formato (Reels; na Página, o
-// vídeo comum quando deitado), sem o recorte, e a prévia do Reels. O vídeo ainda não vai no pacote (a parte 4c), e o
-// maior que o Reels do Instagram aceita vai só na Página (a redução é a parte 3b).
+// vídeo comum quando deitado), sem o recorte, e a prévia do Reels. O maior que o Reels do Instagram aceita vai só na
+// Página (a redução é a parte 3b). O pacote do TikTok e do YouTube leva o mesmo vídeo (A6, Z10, parte 4c; D-A6-79): a
+// capa é a do Reels, e só com o pacote marcado ela sai da tela; a prévia do pacote mostra o vídeo.
 
 type Props = {
   marca: string;
@@ -111,16 +112,19 @@ export function GavetaNovoPost({ marca, fotos: midias, videosLigados = false, ca
   const abaAtual = novo.canais.includes(aba) ? aba : (novo.canais[0] ?? aba);
   const quadro = foto && novo.canais.includes('instagram') ? quadroDoRecorte(foto.width, foto.height, novo.recorte) : null;
   const formato = foto ? formatoDaPrevia('instagram', foto.width, foto.height) : 'inteira';
+  // A capa é a do Reels (A6, Z10, parte 4c): só com o pacote marcado, ela não vale (e não vai no pedido).
+  const soPacote = novo.canais.length > 0 && novo.canais.every(ehDoPacote);
+  const comPacote = !soPacote && novo.canais.some(ehDoPacote);
 
   const mudar = (parcial: Partial<NovoPost>) => setNovo((n) => ({ ...n, ...parcial }));
   const tirarErro = (campo: string) => setErros((e) => (e[campo] ? Object.fromEntries(Object.entries(e).filter(([k]) => k !== campo)) : e));
 
-  /** Foto ou Vídeo: a escolha recomeça; com o vídeo, os canais do pacote saem (o vídeo ainda não vai no pacote). */
+  /** Foto ou Vídeo: a escolha recomeça (os canais ficam: o pacote leva o vídeo também). */
   function mudarMidia(m: MidiaDoPost) {
     if (m === midia) return;
     setMidia(m);
     setCapa({ modo: 'quadro', quadro: QUADRO_DO_MEIO });
-    mudar({ foto: null, recorte: 50, canais: m === 'video' ? novo.canais.filter((c) => !ehDoPacote(c)) : novo.canais });
+    mudar({ foto: null, recorte: 50 });
     tirarErro('foto');
     tirarErro('capa');
   }
@@ -169,7 +173,7 @@ export function GavetaNovoPost({ marca, fotos: midias, videosLigados = false, ca
     // O vídeo (A6, Z10): o erro fala do vídeo, e a capa por uma das Fotos pede a foto (o servidor confere de novo).
     if (midia === 'video') {
       if (e.foto) e.foto = 'Escolha o vídeo do post.';
-      if (video && capa.modo === 'foto' && !capa.foto) e.capa = 'Escolha a foto da capa, ou use um quadro do vídeo.';
+      if (video && !soPacote && capa.modo === 'foto' && !capa.foto) e.capa = 'Escolha a foto da capa, ou use um quadro do vídeo.';
     }
     setErros(e);
     if (Object.keys(e).length) return focarErro(e);
@@ -182,7 +186,7 @@ export function GavetaNovoPost({ marca, fotos: midias, videosLigados = false, ca
           photo_id: novo.foto!,
           publish_at: instanteNoFuso(novo.dia, novo.hora, fuso).toISOString(),
           ...(quadro ? { crop_pos: novo.recorte } : {}),
-          ...(video ? capaNoPedido(capa, video) : {}),
+          ...(video && !soPacote ? capaNoPedido(capa, video) : {}),
           channels: canaisNaOrdem.map((c) => ({ channel: c as 'instagram' | 'facebook' | 'tiktok' | 'youtube', text: (novo.textos[c] ?? '').trim() })),
         },
       }),
@@ -221,10 +225,10 @@ export function GavetaNovoPost({ marca, fotos: midias, videosLigados = false, ca
   /** A linha de um canal: a caixa de marcar, o nome e a conta (ou por que não dá). O canal do pacote não tem conta. */
   const caixaDoCanal = (c: string) => {
     const { conta, fora } = contas[c] ?? { conta: null, fora: null };
-    // O vídeo (A6, Z10): o canal diz o formato (Reels; na Página, o vídeo comum); o pacote ainda não leva vídeo, e o
+    // O vídeo (A6, Z10): o canal diz o formato (Reels; na Página, o vídeo comum; no YouTube, o deitado não é Shorts), e o
     // Instagram não leva o vídeo maior que o Reels aceita como está.
     const noVideo = midia === 'video' ? canalNoVideo(c, video) : null;
-    const semVideo = midia === 'video' && (ehDoPacote(c) || (c === 'instagram' && video !== null && !cabeNoInstagram(video)));
+    const semVideo = midia === 'video' && c === 'instagram' && video !== null && !cabeNoInstagram(video);
     return (
       <div key={c} className={`po-canal${fora || semVideo ? ' po-canal--fora' : ''}`}>
         <label>
@@ -319,6 +323,8 @@ export function GavetaNovoPost({ marca, fotos: midias, videosLigados = false, ca
               enviando={enviando}
               podeVerFotos={podeVerFotos}
               primeiro={primeiroCampo}
+              soPacote={soPacote}
+              comPacote={comPacote}
             />
           ) : (
           <div className="campo" role="group" aria-labelledby={`${ids}-fotos-t`} aria-describedby={erros.foto ? `${ids}-foto-erro` : `${ids}-fotos-d`}>
@@ -388,7 +394,7 @@ export function GavetaNovoPost({ marca, fotos: midias, videosLigados = false, ca
             </div>
             <span className="campo-dica" id={`${ids}-pacote-d`}>
               {midia === 'video'
-                ? PACOTE_SEM_VIDEO
+                ? PACOTE_COM_VIDEO
                 : 'No TikTok e no YouTube, o Liame não publica: ele monta o texto, a foto e a hora, e o pacote aparece na Agenda para você publicar.'}
             </span>
             {erros.canais && (
@@ -433,7 +439,7 @@ export function GavetaNovoPost({ marca, fotos: midias, videosLigados = false, ca
                 {tamanho.toLocaleString('pt-BR')} de {limite.toLocaleString('pt-BR')}
               </span>
               <span className="campo-dica" id={`${ids}-texto-d`}>
-                {dicaDoTexto(abaAtual, postLink)}
+                {dicaDoTexto(abaAtual, postLink, midia === 'video')}
                 {novo.canais.length > 1 ? ` Cada canal tem o seu texto: comece por um e copie para ${novo.canais.length > 2 ? 'os outros' : 'o outro'}.` : ''}
               </span>
               {novo.canais.length > 1 && (
@@ -526,18 +532,23 @@ export function GavetaNovoPost({ marca, fotos: midias, videosLigados = false, ca
             </span>
           )}
 
-          {video && novo.canais.length > 0 && !ehDoPacote(abaAtual) && (
+          {video && novo.canais.length > 0 && (
             <section aria-labelledby={`${ids}-previa-t`} className="po-como-sai">
               <h3 className="rotulo-marca" id={`${ids}-previa-t`}>
                 Como sai
               </h3>
-              <PreviaDoReels
-                canal={abaAtual}
-                conta={contas[abaAtual]?.conta?.name ?? null}
-                texto={(novo.textos[abaAtual] ?? '').trim() || '…'}
-                video={video}
-                capa={capaNaTela(capa, video, fotos ?? [])}
-              />
+              {/* O pacote com o vídeo (A6, Z10, parte 4c): o vídeo inteiro e o texto, sem imitar a rede. */}
+              {ehDoPacote(abaAtual) ? (
+                <PreviaDoPacote canal={abaAtual} texto={(novo.textos[abaAtual] ?? '').trim() || '…'} foto={video} />
+              ) : (
+                <PreviaDoReels
+                  canal={abaAtual}
+                  conta={contas[abaAtual]?.conta?.name ?? null}
+                  texto={(novo.textos[abaAtual] ?? '').trim() || '…'}
+                  video={video}
+                  capa={capaNaTela(capa, video, fotos ?? [])}
+                />
+              )}
             </section>
           )}
 
