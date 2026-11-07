@@ -18,6 +18,7 @@ import { ConversoesLoop } from './conversoes-loop.js';
 import { CriativoLoop } from './criativo-loop.js';
 import { FotosLoop } from './fotos-loop.js';
 import { PostsNumerosLoop } from './posts-numeros-loop.js';
+import { DoSeuInstagramLoop } from './do-seu-instagram-loop.js';
 import { EstrategistaAgenda, MARCAS_POR_VOLTA } from './estrategista-agenda.js';
 import { EstrategistaLoop } from './estrategista-loop.js';
 import { PedidosQueEsperam } from './pedidos-que-esperam.js';
@@ -82,6 +83,7 @@ export class EventsLoopService implements OnApplicationBootstrap, OnApplicationS
     private readonly comparacao: ComparacaoDmsIdLoop,
     private readonly fotos: FotosLoop,
     private readonly numerosDosPosts: PostsNumerosLoop,
+    private readonly doSeuInstagram: DoSeuInstagramLoop,
     private readonly sugestoes: SugestoesDeRespostaLoop,
     private readonly postsSugeridos: PostsSugeridosLoop,
     private readonly assinaturas: AssinaturasLoop,
@@ -157,6 +159,10 @@ export class EventsLoopService implements OnApplicationBootstrap, OnApplicationS
       // Os números de cada post nas redes (A6, Z7, parte c): cada canal publicado uma hora depois de sair e depois uma vez
       // por dia, por 30 dias; a fila é olhada de 5 em 5 minutos, só com a função dos posts ligada.
       this.loop('posts-numeros', 5, 300_000, async (n) => (await this.numerosDosPosts.executarLote(n)).length),
+      // "Do seu Instagram" (A6, Z10, parte 5): as publicações de cada conta do Instagram ligada a uma marca, com os
+      // números, uma vez por dia; a fila é olhada de 5 em 5 minutos (a conta recém-ligada é lida na volta seguinte), só
+      // com as funções `fotos` e `videos` ligadas.
+      this.loop('do-seu-instagram', 3, 300_000, async (n) => (await this.doSeuInstagram.executarLote(n)).length),
       // As sugestões de resposta do Social media (A6, Z6): a avaliação nova entra na fila na leitura do Perfil que a
       // trouxe, e o "Pedir outras" entra quando a pessoa pede, com ela esperando na tela de Aprovações (P31): por isso a
       // fila é olhada de 15 em 15 segundos (a do "Pedir outras" primeiro). Quem espera a vez (a IA desligada, o limite)

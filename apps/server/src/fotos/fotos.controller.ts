@@ -5,6 +5,8 @@ import {
   BrandPhotoUploadQuery,
   BrandVideoUploadResponse,
   CreateBrandVideoRequest,
+  InstagramMediaQuery,
+  InstagramMediaResponse,
   ProblemDetails,
   ResourceId,
   UpdateBrandPhotoRequest,
@@ -32,6 +34,7 @@ import { Auditar } from '../audit/auditar.js';
 import { Auth, Permissao } from '../auth/access.js';
 import type { AuthContext } from '../context/request-context.js';
 import { SemTransacao } from '../context/sem-transacao.js';
+import { DoSeuInstagramService } from './do-seu-instagram.service.js';
 import { ACAO_CAPA, ACAO_ENVIAR, ACAO_VIDEO_CONCLUIR, FotosService, RECURSO } from './fotos.service.js';
 
 // Fotos dos produtos (A6, Z4; ADR-021; protótipo P20, aprovado em 21/10/2026). A tela Fotos: a lista, enviar uma foto
@@ -48,7 +51,10 @@ const GRAVA_A_CAPA = 'grava a capa do vídeo no armazenamento (S3) depois de con
 @ApiCookieAuth('liame_sessao')
 @Controller('brand-photos')
 export class FotosController {
-  constructor(private readonly fotos: FotosService) {}
+  constructor(
+    private readonly fotos: FotosService,
+    private readonly doSeuInstagram: DoSeuInstagramService,
+  ) {}
 
   @Get()
   @Permissao('fotos.ver')
@@ -64,6 +70,21 @@ export class FotosController {
   @ApiServiceUnavailableResponse({ standardSchema: ProblemDetails })
   listar(@Auth() auth: AuthContext, @Query({ schema: BrandPhotosQuery }) query: BrandPhotosQuery): Promise<BrandPhotosResponse> {
     return this.fotos.listar(auth, query.brand_id);
+  }
+
+  @Get('instagram')
+  @Permissao('fotos.ver')
+  @ApiOperation({
+    summary: 'O que a loja já publicou no Instagram ("Do seu Instagram")',
+    description:
+      'As publicações mais novas (até 50) da conta do Instagram ligada à marca, com os números (visualizações, alcance, curtidas, comentários, salvamentos e compartilhamentos), a que mais rendeu primeiro. O Liame lê a conta uma vez por dia, pela rotina do worker (a conta recém-ligada, em poucos minutos); esta rota só devolve o que foi lido, sem chamar a Meta. A miniatura é a do próprio Instagram, no endereço da Meta (vale alguns dias). `situation` diz como está a leitura: `desligada` (as funções `fotos` e `videos` não estão as duas ligadas para a empresa: o resto vem vazio), `sem_conta`, `duas_contas`, `primeira_leitura`, `lido`, `sem_permissao` ou `falhou`.',
+  })
+  @ApiOkResponse({ standardSchema: InstagramMediaResponse })
+  @ApiBadRequestResponse({ standardSchema: ProblemDetails })
+  @ApiForbiddenResponse({ standardSchema: ProblemDetails })
+  @ApiNotFoundResponse({ standardSchema: ProblemDetails })
+  doInstagram(@Auth() auth: AuthContext, @Query({ schema: InstagramMediaQuery }) query: InstagramMediaQuery): Promise<InstagramMediaResponse> {
+    return this.doSeuInstagram.ler(auth, query.brand_id);
   }
 
   @Post()

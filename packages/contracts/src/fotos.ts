@@ -181,3 +181,66 @@ export const UpdateBrandPhotoRequest = z
   })
   .refine((b) => b.product !== undefined || b.description !== undefined, { error: 'Mande o produto, o que aparece na foto, ou os dois.' });
 export type UpdateBrandPhotoRequest = z.infer<typeof UpdateBrandPhotoRequest>;
+
+// "Do seu Instagram" (A6 · Z10, parte 5; D-A6-71 e D-A6-83): o que a loja já publicou na conta do Instagram ligada à
+// marca, lido uma vez por dia pelo worker, com os números. Nada aqui foi enviado para o Liame: a miniatura é a do
+// próprio Instagram, no endereço da Meta.
+
+/** Quantas publicações o Liame lê da conta: as mais novas. */
+export const INSTAGRAM_MEDIA_LIMIT = 50;
+
+export const InstagramMediaQuery = z.strictObject({ brand_id: z.uuid() });
+export type InstagramMediaQuery = z.infer<typeof InstagramMediaQuery>;
+
+/** Os números de uma publicação; nulo o que a Meta não deu (a conta que esconde as curtidas, o número que ainda não veio). */
+export const InstagramMediaMetrics = z.strictObject({
+  views: z.int().min(0).nullable(),
+  reach: z.int().min(0).nullable(),
+  likes: z.int().min(0).nullable(),
+  comments: z.int().min(0).nullable(),
+  saved: z.int().min(0).nullable(),
+  shares: z.int().min(0).nullable(),
+});
+export type InstagramMediaMetrics = z.infer<typeof InstagramMediaMetrics>;
+
+export const InstagramMedia = z.strictObject({
+  /** O id da publicação no Instagram. */
+  id: z.string().min(1).max(40),
+  /** `reels`, `foto`, `carrossel` ou `video` (o vídeo do feed de antes do Reels). A lista pode crescer. */
+  kind: Slug,
+  /** A legenda, como está no Instagram; vazia quando não há. */
+  caption: z.string(),
+  /** O endereço da publicação no Instagram. */
+  permalink: z.string().nullable(),
+  /**
+   * A miniatura, no endereço da Meta: vale alguns dias, e a leitura de cada dia traz um novo. Nula quando a Meta não
+   * manda (a tela mostra o lugar vazio e o link para o Instagram).
+   */
+  thumbnail_url: z.string().nullable(),
+  /** A Meta entrega o arquivo do vídeo. Falso no Reels com música do Instagram (a Meta não entrega o arquivo). */
+  has_file: z.boolean(),
+  published_at: z.iso.datetime(),
+  metrics: InstagramMediaMetrics,
+  /** Quando os números foram lidos; nulo antes da primeira leitura deles. */
+  metrics_read_at: z.iso.datetime().nullable(),
+});
+export type InstagramMedia = z.infer<typeof InstagramMedia>;
+
+export const InstagramMediaResponse = z.strictObject({
+  brand_id: z.uuid(),
+  /** As funções `fotos` e `videos` ligadas para a empresa. Desligadas, a conta e a lista vêm vazias. */
+  enabled: z.boolean(),
+  /** A conta do Instagram ligada à marca (o nome, como `@loja`); nula sem conta, ou com mais de uma. */
+  account: z.strictObject({ name: z.string() }).nullable(),
+  /**
+   * A situação da leitura: `desligada`, `sem_conta`, `duas_contas`, `primeira_leitura` (a conta ligada e ainda não lida),
+   * `lido`, `sem_permissao` (a autorização da Meta sem a permissão de ler) ou `falhou` (a leitura não deu certo e ainda
+   * não há o que mostrar). A lista pode crescer (V23).
+   */
+  situation: Slug,
+  /** A última leitura que deu certo. */
+  read_at: z.iso.datetime().nullable(),
+  /** As publicações, a que mais rendeu primeiro (pelas visualizações; sem o número, as mais novas depois). */
+  items: z.array(InstagramMedia),
+});
+export type InstagramMediaResponse = z.infer<typeof InstagramMediaResponse>;

@@ -81,7 +81,7 @@ type LinhaDaFoto = {
 const COLUNAS = sql`p.id, p.brand_id, p.product, p.description, p.width, p.height, p.bytes, p.object_key, p.created_at,
   p.uploaded_by, u.name as uploaded_by_name, p.kind, p.duration_ms, p.media_type, p.has_audio, p.has_cover`;
 
-function quemPede(auth: AuthContext): Quem {
+export function quemPede(auth: AuthContext): Quem {
   if (!auth.tenantId) throw new AppProblem(403, 'sem-empresa-ativa', 'Escolha uma empresa', 'Selecione uma empresa com acesso ativo.');
   return { tenantId: auth.tenantId, userId: auth.userId };
 }
@@ -118,7 +118,7 @@ function falhouAoGuardar(): AppProblem {
 }
 
 /** A marca é da empresa e não está arquivada (a RLS esconde a de outra empresa: 404). */
-async function marcaDaEmpresa(brandId: string): Promise<void> {
+export async function marcaDaEmpresa(brandId: string): Promise<void> {
   const r = await currentTx().execute<{ id: string }>(sql`select id from liame.brand where id = ${brandId} and archived_at is null`);
   if (!r.rows[0]) throw new AppProblem(404, 'nao-encontrado', 'Não encontramos', 'Marca não encontrada nesta empresa.');
 }
