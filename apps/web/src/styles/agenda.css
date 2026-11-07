@@ -76,6 +76,8 @@
 .po-foto--alta { aspect-ratio: 4 / 5; }
 .po-foto--larga { aspect-ratio: 1.91 / 1; }
 .po-foto--inteira img { height: auto; object-fit: contain; }
+/* O vídeo do pacote (A6, Z10, parte 4c): inteiro, sem passar da altura da gaveta (o em pé seria mais alto que a tela). */
+.po-foto--inteira video { display: block; width: 100%; height: auto; max-height: min(28rem, 60vh); object-fit: contain; }
 .po-texto { margin: 0; font-size: var(--text-sm); line-height: 1.5; white-space: pre-line; overflow-wrap: anywhere; }
 .po-nota { display: flex; gap: var(--sp-2); padding: var(--sp-2) var(--sp-3); border-radius: var(--radius); background: var(--bg-subtle); font-size: var(--text-xs); line-height: 1.45; color: var(--text-muted); }
 .po-nota .ic { flex: none; width: 14px; height: 14px; margin-top: 2px; color: var(--link); }

@@ -78,9 +78,9 @@ export class PostsController {
   @Get(':id/photo')
   @Permissao('campanhas.operar')
   @ApiOperation({
-    summary: 'A foto do pacote pronto, para baixar',
+    summary: 'A foto (ou o vídeo) do pacote pronto, para baixar',
     description:
-      'Só para o pacote (`kind: pacote`; o post do Liame, 409 `nao-e-pacote`), pronto ou publicado (o tirado da Agenda, 409 `pacote-tirado`): o endereço da cópia que o Liame guarda (JPEG, sem os dados do celular), que baixa como arquivo (`filename`, `liame-<rede>-<dia>.jpg`) e vale 5 minutos (`expires_at`). A foto que saiu das Fotos, ou mudou, 409 `foto-apagada`; o armazenamento fora do ar, 503 `fotos-indisponiveis`. Precisa da função `social_write` ligada (409 `funcao-desligada`).',
+      'Só para o pacote (`kind: pacote`; o post do Liame, 409 `nao-e-pacote`), pronto ou publicado (o tirado da Agenda, 409 `pacote-tirado`): o endereço da cópia que o Liame guarda (JPEG, sem os dados do celular), que baixa como arquivo (`filename`, `liame-<rede>-<dia>.jpg`) e vale 5 minutos (`expires_at`). No pacote com vídeo (`media: video`), o vídeo como a loja gravou (`liame-<rede>-<dia>.mp4` ou `.mov`). A foto que saiu das Fotos, ou mudou, 409 `foto-apagada`; o vídeo que saiu das Fotos e vídeos, 409 `video-apagado`; o armazenamento fora do ar, 503 `fotos-indisponiveis`. Precisa da função `social_write` ligada (409 `funcao-desligada`).',
   })
   @ApiOkResponse({ standardSchema: PostPhotoResponse })
   @ApiBadRequestResponse({ standardSchema: ProblemDetails })

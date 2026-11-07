@@ -104,18 +104,40 @@ export function canalNoVideo(canal: string, v: VideoDasFotos | null): { nome: st
         }
       : { nome: 'Página do Facebook, como Reels', dica: 'O mesmo vídeo, com o texto da Página.' };
   }
+  // O pacote (A6, Z10, parte 4c): quem publica é a pessoa; no YouTube, o Shorts é para vídeo em pé ou quadrado.
+  if (canal === 'youtube' && v && videoDeitado(v)) return { nome: 'YouTube', dica: NO_YOUTUBE_DEITADO };
   return null;
 }
 
-/** Os canais do pacote (o TikTok e o YouTube) ainda não levam vídeo: o porquê, ao lado deles. */
-export const PACOTE_SEM_VIDEO = 'No vídeo, o pacote do TikTok e do YouTube chega numa próxima parte: por enquanto, só o Instagram e a Página.';
+/** O vídeo deitado no YouTube (A6, Z10, parte 4c): ele entra como vídeo comum, não como Shorts. */
+export const NO_YOUTUBE_DEITADO = 'Deitado, no YouTube ele entra como vídeo comum: o Shorts é para vídeo em pé ou quadrado.';
 
-/** A dica da capa (P37), pelo modo. */
-export function dicaDaCapa(modo: CapaDoNovo['modo']): string {
-  return modo === 'quadro'
-    ? 'Vem marcado o quadro do meio. A capa é o que aparece antes de o vídeo tocar.'
-    : 'No Instagram, a foto vira a capa do Reels, recortada em pé no centro. Na Página do Facebook, a capa é a que a Meta escolhe.';
+/** O pacote do TikTok e do YouTube com o vídeo (P37, parte B; A6, Z10, parte 4c): a dica ao lado dos canais do pacote. */
+export const PACOTE_COM_VIDEO = 'TikTok e YouTube Shorts: o mesmo vídeo vai no pacote pronto, para você publicar.';
+
+/** A capa é a do Reels (A6, Z10, parte 4c; D-A6-79): no pacote, quem escolhe é a pessoa, na rede. */
+export const CAPA_NO_PACOTE = 'No pacote, você escolhe a capa no TikTok e no YouTube, na hora de publicar.';
+
+/** A dica da capa (P37), pelo modo; com o pacote também marcado, o que vale para ele. */
+export function dicaDaCapa(modo: CapaDoNovo['modo'], comPacote = false): string {
+  const dica =
+    modo === 'quadro'
+      ? 'Vem marcado o quadro do meio. A capa é o que aparece antes de o vídeo tocar.'
+      : 'No Instagram, a foto vira a capa do Reels, recortada em pé no centro. Na Página do Facebook, a capa é a que a Meta escolhe.';
+  return comPacote ? `${dica} ${CAPA_NO_PACOTE}` : dica;
 }
+
+/**
+ * O passo de baixar no pacote com vídeo (A6, Z10, parte 4c): o arquivo que a loja enviou, como foi gravado. Diferente da
+ * foto (a cópia em JPEG, sem os dados do celular), o vídeo vai com o que o aparelho pôs no arquivo (Política 4, "Vídeos
+ * da marca").
+ */
+export const BAIXAR_O_VIDEO = {
+  titulo: 'Baixe o vídeo',
+  texto: 'O arquivo que a loja enviou para Fotos, como foi gravado, com o que o celular põe nele (pode incluir o lugar da gravação).',
+  apagado: 'O vídeo foi apagado em Fotos e vídeos: monte outro pacote com outro vídeo.',
+  botao: 'Baixar o vídeo',
+} as const;
 
 /** O nome de cada quadro (o tempo), para o botão. */
 export const rotuloDoQuadro = (tempoMs: number) => `Quadro de ${duracaoCurta(tempoMs)}`;

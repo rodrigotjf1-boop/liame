@@ -323,11 +323,15 @@ describe('o armazenamento de imagens', () => {
     expect(baixar.searchParams.get('response-content-disposition')).toBe('attachment; filename="liame-tiktok-2026-10-30.jpg"');
     expect(baixar.searchParams.get('X-Amz-SignedHeaders')).toBe('host');
     // O nome fora do desenho (aspas, barra, outro final, maiúscula) não chega ao cabeçalho, em nenhum armazenamento.
-    for (const ruim of ['a"b.jpg', '../x.jpg', 'foto.png', 'Foto.jpg', '']) {
+    for (const ruim of ['a"b.jpg', '../x.jpg', 'foto.png', 'Foto.jpg', '', 'video.MP4', 'video.mp4.exe', 'video.webm']) {
       await expect(a.enderecoDeLeitura(chave, 300, ruim), ruim).rejects.toThrow('nome de arquivo fora do desenho');
       await expect(new ArmazemNaMemoria().enderecoDeLeitura(chave, 300, ruim), ruim).rejects.toThrow('nome de arquivo fora do desenho');
     }
     expect(await new ArmazemNaMemoria().enderecoDeLeitura(chave, 300, 'liame-youtube-2026-11-02.jpg')).toBe(`memoria://imagens/${chave}?valido=300&baixar=liame-youtube-2026-11-02.jpg`);
+    // O pacote com vídeo (A6 · Z10, parte 4c): o vídeo baixa como .mp4 ou .mov, com o nome na assinatura.
+    for (const nome of ['liame-tiktok-2026-11-06.mp4', 'liame-youtube-2026-11-06.mov']) {
+      expect(new URL(await a.enderecoDeLeitura(chave, 300, nome)).searchParams.get('response-content-disposition')).toBe(`attachment; filename="${nome}"`);
+    }
   });
 
   it('no S3: a recusa do S3 vira FalhaDoArmazem, só com o nome do erro (sem endereço nem credencial)', async () => {

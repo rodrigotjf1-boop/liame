@@ -20,7 +20,7 @@ import { hasDb } from './env.js';
 
 // A6 · Z10, parte 3a: o post com vídeo (D-A6-68 a D-A6-70), contra a Meta de mentira que segue as páginas oficiais lidas
 // em 06/11/2026 (a referência de `/{ig-user-id}/media`, com o Reels, e o "Reels Publishing" da Video API). O que se prova:
-//   - montar: só com a função `videos` (sem ela, o vídeo é recusado como antes); sem o pacote e sem o recorte; no
+//   - montar: só com a função `videos` (sem ela, o vídeo é recusado como antes); sem o recorte; no
 //     Instagram, só o vídeo que cabe no Reels como está (até 1.920 px de largura e 25 Mbps); a capa presa no pedido (a do
 //     próprio vídeo, pela versão, ou uma das Fotos, JPEG até 8 MB); e o estado do post de FOTO sem a chave do vídeo (o
 //     pedido de foto já aprovado não muda de plano);
@@ -30,7 +30,10 @@ import { hasDb } from './env.js';
 //   - a Página: em pé, o Reels (o começo, o envio pelo `rupload` com o token da Página e o `file_url`, e o fim com a
 //     legenda); deitado, o vídeo comum; a resposta que não chega não manda de novo; a Meta que ainda publica; a recusa
 //     do vídeo; e o limite de 30 vídeos do Liame por Página em 24 horas;
-//   - na hora de sair, o que mudou desde a aprovação não sai: o vídeo apagado e a capa trocada.
+//   - na hora de sair, o que mudou desde a aprovação não sai: o vídeo apagado e a capa trocada;
+//   - o pacote com vídeo (parte 4c; D-A6-79): o TikTok e o YouTube levam o mesmo vídeo, sem capa nem resumo (a capa
+//     escolhida só com o pacote é recusada); o 4K vai no pacote; o vídeo baixa como o arquivo enviado (.mp4 ou .mov), e
+//     o apagado em Fotos e vídeos não volta.
 
 const LEGENDA = 'Olha o smash saindo da chapa na Casa Brasa. Peça pelo link da bio.';
 const NA_PAGINA = 'O smash saindo da chapa, agora, na Casa Brasa.';
@@ -187,7 +190,7 @@ describe.skipIf(!hasDb)('o post com vídeo (A6 · Z10, parte 3a)', () => {
     expect((await pedidoDe(r.body.action_id)).before_state.video).toEqual({ id: video.id, capa: 'capa:1' });
   });
 
-  it('montar: as recusas do vídeo (o pacote, o recorte, o vídeo grande para o Reels e a capa) e o post de foto sem a chave do vídeo', async () => {
+  it('montar: as recusas do vídeo (o recorte, o vídeo grande para o Reels e a capa) e o post de foto sem a chave do vídeo', async () => {
     const e = await empresa('Brasa Video Recusas');
     const video = await videoGuardado(e, armazem);
     const recusa = async (corpo: Parameters<typeof novoPost>[2], midia = video.id) => {
@@ -195,7 +198,6 @@ describe.skipIf(!hasDb)('o post com vídeo (A6 · Z10, parte 3a)', () => {
       expect(r.status, JSON.stringify(r.body)).toBe(422);
       return r.body.code as string;
     };
-    expect(await recusa({ canais: [{ channel: 'instagram', text: LEGENDA }, { channel: 'tiktok', text: LEGENDA }] })).toBe('video-no-pacote');
     expect(await recusa({ crop: 50 })).toBe('recorte-so-na-foto');
     // O 4K em pé passa de 1.920 px de largura: no Instagram, ainda não (a redução é a parte 3b); só na Página, vai.
     const quatroK = await videoGuardado(e, armazem, { largura: 2160, altura: 3840 });
@@ -225,6 +227,85 @@ describe.skipIf(!hasDb)('o post com vídeo (A6 · Z10, parte 3a)', () => {
     expect(deFoto.body.media).toBeUndefined();
     expect(Object.keys((await pedidoDe(deFoto.body.action_id)).before_state).sort()).toEqual(['canais', 'foto', 'hora', 'hora_local', 'post', 'recorte']);
   });
+
+  // ---- O pacote com vídeo (parte 4c) -------------------------------------------------------------------------------
+
+  it('o pacote com vídeo (parte 4c; D-A6-79): o mesmo vídeo, sem capa nem resumo; a capa só vale para o Reels; o 4K vai no pacote', async () => {
+    const e = await empresa('Brasa Video Pacote');
+    const video = await videoGuardado(e, armazem);
+    const TIKTOK = [{ channel: 'tiktok', text: LEGENDA }];
+    const so = await novoPost(e, video.id, { canais: TIKTOK });
+    expect(so.status, JSON.stringify(so.body)).toBe(201);
+    expect(so.body).toMatchObject({ kind: 'pacote', media: 'video', photo_id: video.id, cover_photo_id: null, cover_offset_ms: null, crop_pos: null, action_id: null, status: 'pacote_pronto' });
+    const linha = async (id: string) =>
+      (
+        await ownerQuery<{ media: string; photo_sha256: string | null; cover_version: number | null; cover_photo_id: string | null; cover_offset_ms: number | null }>(
+          `select media, photo_sha256, cover_version, cover_photo_id, cover_offset_ms from liame.social_post where id = $1`,
+          [id],
+        )
+      )[0];
+    expect(await linha(so.body.id)).toEqual({ media: 'video', photo_sha256: null, cover_version: null, cover_photo_id: null, cover_offset_ms: null });
+    // A auditoria diz o vídeo e que o pacote não tem capa.
+    const [ev] = await ownerQuery<{ after: Record<string, unknown> }>(`select after from liame.audit_event where tenant_id = $1 and action = 'posts.criar'`, [e.tenantId]);
+    expect(ev!.after).toMatchObject({ media: 'video', video_id: video.id, capa: null, canais: [], pacotes: [{ id: so.body.id, canal: 'tiktok' }] });
+
+    // Só com o pacote, a capa escolhida (o quadro ou uma das Fotos) é recusada, sem gravar nada; o recorte também.
+    const antes = (await ownerQuery(`select 1 from liame.social_post where tenant_id = $1`, [e.tenantId])).length;
+    const umaFoto = await fotoGuardada(e, armazem, { largura: 1080, altura: 1920 });
+    for (const [corpo, code] of [
+      [{ canais: TIKTOK, quadro: 1_000 }, 'capa-so-no-reels'],
+      [{ canais: TIKTOK, capa: umaFoto.id }, 'capa-so-no-reels'],
+      [{ canais: TIKTOK, crop: 50 }, 'recorte-so-na-foto'],
+    ] as const) {
+      const r = await novoPost(e, video.id, corpo);
+      expect([r.status, r.body.code], JSON.stringify(corpo)).toEqual([422, code]);
+    }
+    expect((await ownerQuery(`select 1 from liame.social_post where tenant_id = $1`, [e.tenantId])).length).toBe(antes);
+
+    // O Instagram com o YouTube e o quadro como capa: o post leva a capa; o pacote, o mesmo vídeo sem capa.
+    const misto = await novoPost(e, video.id, { canais: [{ channel: 'youtube', text: NA_PAGINA }, { channel: 'instagram', text: LEGENDA }], quadro: 5_000 });
+    expect(misto.status, JSON.stringify(misto.body)).toBe(201);
+    expect(misto.body).toMatchObject({ kind: 'post', media: 'video', cover_offset_ms: 5_000 });
+    expect((await pedidoDe(misto.body.action_id)).before_state.canais).toEqual([expect.objectContaining({ canal: 'instagram' })]);
+    const [doYoutube] = await ownerQuery<{ id: string }>(
+      `select p.id from liame.social_post p join liame.social_post_channel c on c.post_id = p.id where p.tenant_id = $1 and p.kind = 'pacote' and c.channel = 'youtube'`,
+      [e.tenantId],
+    );
+    expect(await linha(doYoutube!.id)).toEqual({ media: 'video', photo_sha256: null, cover_version: null, cover_photo_id: null, cover_offset_ms: null });
+
+    // O 4K passa do Reels do Instagram, mas vai no pacote (quem publica é a pessoa, e a rede aceita).
+    const quatroK = await videoGuardado(e, armazem, { largura: 2160, altura: 3840 });
+    expect((await novoPost(e, quatroK.id, { canais: TIKTOK })).status).toBe(201);
+    // A Agenda: o pacote com o vídeo.
+    const lista = await api.call('GET', `/v1/posts?brand_id=${e.brandId}&from=${diaEmSaoPaulo(0)}&to=${diaEmSaoPaulo(2)}`, { cookie: e.cookie });
+    const pacotes = (lista.body.items as Array<{ kind: string; media?: string }>).filter((p) => p.kind === 'pacote');
+    expect(pacotes.length).toBe(3);
+    expect(pacotes.every((p) => p.media === 'video')).toBe(true);
+  }, 120_000);
+
+  it('o vídeo do pacote para baixar (parte 4c): o arquivo que a loja enviou, .mp4 ou .mov, por 5 minutos; o vídeo apagado não volta', async () => {
+    const e = await empresa('Brasa Video Baixar');
+    const video = await videoGuardado(e, armazem);
+    const pacote = (await novoPost(e, video.id, { canais: [{ channel: 'tiktok', text: LEGENDA }] })).body;
+    const baixar = () => api.call('GET', `/v1/posts/${pacote.id}/photo`, { cookie: e.cookie });
+    const antes = Date.now();
+    const r = await baixar();
+    expect(r.status, JSON.stringify(r.body)).toBe(200);
+    const nome = `liame-tiktok-${diaEmSaoPaulo(1)}.mp4`;
+    expect(r.body).toMatchObject({ filename: nome, url: `memoria://imagens/${video.chave}?valido=300&baixar=${nome}` });
+    expect(Date.parse(r.body.expires_at)).toBeGreaterThanOrEqual(antes + 299_000);
+    // O MOV do iPhone baixa como .mov (o arquivo é o que a loja enviou).
+    await ownerQuery(`update liame.brand_photo set media_type = 'video/quicktime' where id = $1`, [video.id]);
+    expect((await baixar()).body.filename).toBe(`liame-tiktok-${diaEmSaoPaulo(1)}.mov`);
+    // A função dos vídeos desligada depois: o pacote já montado segue baixando (como o post aprovado segue saindo).
+    await ligarFlagDaEmpresa(api, 'videos', e.tenantId, false);
+    expect((await baixar()).status).toBe(200);
+    // O vídeo apagado em Fotos e vídeos não volta, com o código do vídeo.
+    await ownerQuery(`update liame.brand_photo set removed_at = now() where id = $1`, [video.id]);
+    const apagado = await baixar();
+    expect([apagado.status, apagado.body.code]).toEqual([409, 'video-apagado']);
+    expect(apagado.body.detail).toBe('O vídeo deste pacote foi apagado em Fotos e vídeos: monte outro pacote com outro vídeo.');
+  }, 120_000);
 
   // ---- O Instagram -------------------------------------------------------------------------------------------------
 
