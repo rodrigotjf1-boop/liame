@@ -1,4 +1,5 @@
 import type {
+  ActionComment,
   ActionMessage,
   ActionPost,
   ActionProposal,
@@ -43,6 +44,8 @@ import { SOCIAL } from '../ai/social/prompt.js';
 import { abrirSegundaRodada, maisSugestoes, oQueDesligaAsSugestoes, paramsDaResposta, type SituacaoDaSugestao } from '../avaliacoes/sugestoes.js';
 import { EstadoDaAvaliacao, ParametrosDaResposta, resumoDoTexto } from './avaliacao-plano.js';
 import { BudgetService, estadoNaResposta } from './budget.service.js';
+import { comentarioDoRecurso } from './comentario-na-rede.js';
+import { EstadoDoComentario, resumoDoComentario } from './comentario-plano.js';
 import { CONNECTORS, type Connector, type ReadResult, type ResourceRef } from './connectors.js';
 import { problemaDaLeitura, recursoNaoEncontrado } from './leitura-na-plataforma.js';
 import { avisoDeMensagemLiberada, EstadoDaMensagem } from './mensagem-plano.js';
@@ -122,7 +125,23 @@ type Apresentacao = {
   segundasRodadas: Map<string, { status: SituacaoDaSugestao; reason: string | null; pedidaEm: string }>;
   /** O post de cada pedido de publicar (A6, Z5c, parte 4), como a Agenda o lê e com o fuso da empresa, pelo id do post. */
   posts: Map<string, ActionPost>;
+  /** O comentário de cada pedido sobre um comentário (A6, Z11, parte 2c), como o Liame o guarda agora, pela chave `conta:comentário`. */
+  comentarios: Map<string, ComentarioGuardado>;
+  /** O post de onde veio o comentário de cada pedido, pela chave `conta:post`. */
+  postsDosComentarios: Map<string, NonNullable<ActionComment['post']>>;
 };
+
+/** O comentário como o Liame o guarda agora (`social_comment`), com o que decide se ele mudou desde o pedido. */
+type ComentarioGuardado = {
+  current: NonNullable<ActionComment['current']>;
+  postId: string;
+  /** A última leitura do comentário na rede: o "mudou" só vale com uma leitura feita depois do pedido. */
+  lidoEm: Date;
+  resumo: string | null;
+};
+
+/** A legenda do post no pedido de comentário: até este tanto de caracteres (o resto vira reticências). */
+const LEGENDA_NO_PEDIDO_DE_COMENTARIO = 280;
 
 /** Os provedores do pedido de post (o da conta do primeiro canal: o Instagram ou a Página). */
 const PROVEDORES_DO_POST: readonly string[] = Object.values(PROVEDOR_DO_CANAL);
@@ -130,6 +149,11 @@ const PROVEDORES_DO_POST: readonly string[] = Object.values(PROVEDOR_DO_CANAL);
 /** O id do post de um pedido de post; nulo nos outros pedidos. */
 function postDoPedido(row: Pick<ActionRow, 'provider' | 'resource_id'>): string | null {
   return PROVEDORES_DO_POST.includes(row.provider) ? postDoRecurso(row.resource_id) : null;
+}
+
+/** O id do comentário (na rede) de um pedido sobre um comentário; nulo nos outros pedidos. */
+function comentarioDoPedido(row: Pick<ActionRow, 'provider' | 'resource_id'>): string | null {
+  return PROVEDORES_DO_POST.includes(row.provider) ? comentarioDoRecurso(row.resource_id) : null;
 }
 
 /** O retrato da mensagem, como a resposta o mostra (sem o plano do disparo, que é de cada pedido). */
@@ -1328,6 +1352,89 @@ export class ActionService {
   }
 
   /**
+   * O comentário de cada pedido sobre um comentário (A6, Z11, parte 2c; P38) e o post de onde ele veio, do que o Liame
+   * guarda (`social_comment`, 90 dias): o pedido não leva o texto do comentário nem nada de quem comentou, só um resumo.
+   * O post sai mesmo quando o comentário já saiu da guarda (apagado na rede), pelo id que o pedido guarda.
+   */
+  private async comentariosDosPedidos(tx: Tx, rows: ActionRow[], ap: Apresentacao): Promise<void> {
+    const alvos = rows.flatMap((r) => {
+      const id = comentarioDoPedido(r);
+      if (!id) return [];
+      const estado = EstadoDoComentario.safeParse(r.desired_state);
+      return [{ conta: r.account_id, id, postId: estado.success ? estado.data.post_id : null }];
+    });
+    if (!alvos.length) return;
+    const tenantId = rows[0]!.tenant_id;
+    const contas = [...new Set(alvos.map((a) => a.conta))];
+    const ids = [...new Set(alvos.map((a) => a.id))];
+    const lidos = await tx.execute<{
+      conta: string;
+      comment_id: string;
+      post_id: string;
+      author_name: string | null;
+      message: string;
+      published_at: Date | string;
+      kind: string | null;
+      hidden: boolean;
+      read_at: Date | string;
+      brand_reply: string | null;
+    }>(sql`
+      select c.connected_account_id::text as conta, c.comment_id, c.post_id, c.author_name, c.message, c.published_at, c.kind,
+             c.hidden, c.read_at,
+             (select r.message from liame.social_comment r
+               where r.connected_account_id = c.connected_account_id and r.parent_comment_id = c.comment_id and r.by_brand
+               order by r.published_at desc, r.comment_id desc limit 1) as brand_reply
+        from liame.social_comment c
+       where c.tenant_id = ${tenantId} and c.connected_account_id::text in ${contas} and c.comment_id in ${ids}
+         and c.parent_comment_id is null`);
+    for (const l of lidos.rows) {
+      ap.comentarios.set(`${l.conta}:${l.comment_id}`, {
+        current: {
+          author: l.author_name,
+          message: l.message,
+          published_at: new Date(l.published_at).toISOString(),
+          kind: l.kind,
+          hidden: l.hidden,
+          brand_reply: l.brand_reply,
+        },
+        postId: l.post_id,
+        lidoEm: new Date(l.read_at),
+        resumo: resumoDoComentario(l.message),
+      });
+    }
+    const postIds = [
+      ...new Set(
+        alvos.flatMap((a) => {
+          const p = ap.comentarios.get(`${a.conta}:${a.id}`)?.postId ?? a.postId;
+          return p ? [p] : [];
+        }),
+      ),
+    ];
+    if (!postIds.length) return;
+    const posts = await tx.execute<{
+      conta: string;
+      post_id: string;
+      caption: string;
+      permalink: string | null;
+      thumbnail_url: string | null;
+      published_at: Date | string;
+    }>(sql`
+      select p.connected_account_id::text as conta, p.post_id, p.caption, p.permalink, p.thumbnail_url, p.published_at
+        from liame.social_comment_post p
+       where p.tenant_id = ${tenantId} and p.connected_account_id::text in ${contas} and p.post_id in ${postIds}`);
+    for (const p of posts.rows) {
+      const letras = Array.from(p.caption);
+      ap.postsDosComentarios.set(`${p.conta}:${p.post_id}`, {
+        id: p.post_id,
+        caption: letras.length > LEGENDA_NO_PEDIDO_DE_COMENTARIO ? `${letras.slice(0, LEGENDA_NO_PEDIDO_DE_COMENTARIO).join('')}…` : p.caption,
+        permalink: p.permalink,
+        thumbnail_url: p.thumbnail_url,
+        published_at: new Date(p.published_at).toISOString(),
+      });
+    }
+  }
+
+  /**
    * Os nomes que a tela precisa, lidos de uma vez para a página inteira (sob a RLS da empresa). `comVendas`: os números
    * do caixa no retrato da recomendação (pedidos, receita, margem) só saem para quem vê as vendas.
    */
@@ -1345,8 +1452,11 @@ export class ActionService {
       avaliacoes: new Map(),
       segundasRodadas: new Map(),
       posts: new Map(),
+      comentarios: new Map(),
+      postsDosComentarios: new Map(),
     };
     if (!rows.length) return ap;
+    await this.comentariosDosPedidos(tx, rows, ap);
     // O post do pedido de publicar (A6, Z5c, parte 4): como a Agenda o lê, com o fuso da empresa (a hora se mostra nele).
     const dePost = [...new Set(rows.flatMap((r) => postDoPedido(r) ?? []))];
     if (dePost.length) {
@@ -1747,6 +1857,41 @@ function toResponse(row: ActionRow, approvals: ApprovalRow[], workflow: ActionRe
     message: mensagemDaResposta(row, ap),
     review: avaliacaoDaResposta(row, ap),
     post: postDaResposta(row, ap),
+    comment: comentarioDaResposta(row, ap),
+  };
+}
+
+/** O que a ferramenta do pedido de comentário faz, para o pedido antigo sem a `operacao` no estado desejado. */
+const OPERACAO_DA_FERRAMENTA: Record<string, string> = {
+  comentario_responder: 'responder',
+  comentario_apagar_resposta: 'apagar_resposta',
+  comentario_ocultar: 'ocultar',
+  comentario_mostrar: 'mostrar',
+};
+
+/**
+ * O comentário do pedido de responder, apagar a resposta, ocultar ou mostrar (A6, Z11, parte 2c); nulo nos outros
+ * pedidos. `changed`: o texto guardado, lido na rede DEPOIS do pedido, não é mais o da hora do pedido (pelo resumo).
+ */
+function comentarioDaResposta(row: ActionRow, ap: Apresentacao): ActionComment | null {
+  const id = comentarioDoPedido(row);
+  if (!id) return null;
+  const antes = EstadoDoComentario.safeParse(row.before_state);
+  const desejado = EstadoDoComentario.safeParse(row.desired_state);
+  const operacao = (desejado.success ? desejado.data.operacao : undefined) ?? OPERACAO_DA_FERRAMENTA[row.tool] ?? 'responder';
+  const textoDaResposta =
+    operacao === 'responder' ? (desejado.success ? (desejado.data.resposta?.texto ?? null) : null) : operacao === 'apagar_resposta' ? (antes.success ? (antes.data.resposta?.texto ?? null) : null) : null;
+  const guardado = ap.comentarios.get(`${row.account_id}:${id}`) ?? null;
+  const postId = guardado?.postId ?? (desejado.success ? desejado.data.post_id : null);
+  const canal = desejado.success ? desejado.data.canal : row.provider === PROVEDOR_DO_CANAL.facebook ? 'facebook' : 'instagram';
+  return {
+    id,
+    channel: canal,
+    operation: operacao,
+    reply_text: textoDaResposta,
+    current: guardado?.current ?? null,
+    post: postId ? (ap.postsDosComentarios.get(`${row.account_id}:${postId}`) ?? null) : null,
+    changed: Boolean(guardado && antes.success && guardado.lidoEm > new Date(row.created_at) && guardado.resumo !== antes.data.texto_resumo),
   };
 }
 

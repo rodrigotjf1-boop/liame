@@ -20112,6 +20112,134 @@
                         "timezone"
                       ],
                       "additionalProperties": false
+                    },
+                    "comment": {
+                      "type": [
+                        "object",
+                        "null"
+                      ],
+                      "properties": {
+                        "id": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 120
+                        },
+                        "channel": {
+                          "type": "string",
+                          "pattern": "^[a-z_]{2,40}$"
+                        },
+                        "operation": {
+                          "type": "string",
+                          "pattern": "^[a-z_]{2,40}$"
+                        },
+                        "reply_text": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "current": {
+                          "type": [
+                            "object",
+                            "null"
+                          ],
+                          "properties": {
+                            "author": {
+                              "type": [
+                                "string",
+                                "null"
+                              ]
+                            },
+                            "message": {
+                              "type": "string"
+                            },
+                            "published_at": {
+                              "type": "string",
+                              "format": "date-time",
+                              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+                            },
+                            "kind": {
+                              "type": [
+                                "string",
+                                "null"
+                              ],
+                              "pattern": "^[a-z_]{2,40}$"
+                            },
+                            "hidden": {
+                              "type": "boolean"
+                            },
+                            "brand_reply": {
+                              "type": [
+                                "string",
+                                "null"
+                              ]
+                            }
+                          },
+                          "required": [
+                            "author",
+                            "message",
+                            "published_at",
+                            "kind",
+                            "hidden",
+                            "brand_reply"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "post": {
+                          "type": [
+                            "object",
+                            "null"
+                          ],
+                          "properties": {
+                            "id": {
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 80
+                            },
+                            "caption": {
+                              "type": "string"
+                            },
+                            "permalink": {
+                              "type": [
+                                "string",
+                                "null"
+                              ]
+                            },
+                            "thumbnail_url": {
+                              "type": [
+                                "string",
+                                "null"
+                              ]
+                            },
+                            "published_at": {
+                              "type": "string",
+                              "format": "date-time",
+                              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+                            }
+                          },
+                          "required": [
+                            "id",
+                            "caption",
+                            "permalink",
+                            "thumbnail_url",
+                            "published_at"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "changed": {
+                          "type": "boolean"
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "channel",
+                        "operation",
+                        "reply_text",
+                        "current",
+                        "post",
+                        "changed"
+                      ],
+                      "additionalProperties": false
                     }
                   },
                   "required": [
@@ -22001,6 +22129,134 @@
                               "removal",
                               "link",
                               "timezone"
+                            ],
+                            "additionalProperties": false
+                          },
+                          "comment": {
+                            "type": [
+                              "object",
+                              "null"
+                            ],
+                            "properties": {
+                              "id": {
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 120
+                              },
+                              "channel": {
+                                "type": "string",
+                                "pattern": "^[a-z_]{2,40}$"
+                              },
+                              "operation": {
+                                "type": "string",
+                                "pattern": "^[a-z_]{2,40}$"
+                              },
+                              "reply_text": {
+                                "type": [
+                                  "string",
+                                  "null"
+                                ]
+                              },
+                              "current": {
+                                "type": [
+                                  "object",
+                                  "null"
+                                ],
+                                "properties": {
+                                  "author": {
+                                    "type": [
+                                      "string",
+                                      "null"
+                                    ]
+                                  },
+                                  "message": {
+                                    "type": "string"
+                                  },
+                                  "published_at": {
+                                    "type": "string",
+                                    "format": "date-time",
+                                    "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+                                  },
+                                  "kind": {
+                                    "type": [
+                                      "string",
+                                      "null"
+                                    ],
+                                    "pattern": "^[a-z_]{2,40}$"
+                                  },
+                                  "hidden": {
+                                    "type": "boolean"
+                                  },
+                                  "brand_reply": {
+                                    "type": [
+                                      "string",
+                                      "null"
+                                    ]
+                                  }
+                                },
+                                "required": [
+                                  "author",
+                                  "message",
+                                  "published_at",
+                                  "kind",
+                                  "hidden",
+                                  "brand_reply"
+                                ],
+                                "additionalProperties": false
+                              },
+                              "post": {
+                                "type": [
+                                  "object",
+                                  "null"
+                                ],
+                                "properties": {
+                                  "id": {
+                                    "type": "string",
+                                    "minLength": 1,
+                                    "maxLength": 80
+                                  },
+                                  "caption": {
+                                    "type": "string"
+                                  },
+                                  "permalink": {
+                                    "type": [
+                                      "string",
+                                      "null"
+                                    ]
+                                  },
+                                  "thumbnail_url": {
+                                    "type": [
+                                      "string",
+                                      "null"
+                                    ]
+                                  },
+                                  "published_at": {
+                                    "type": "string",
+                                    "format": "date-time",
+                                    "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+                                  }
+                                },
+                                "required": [
+                                  "id",
+                                  "caption",
+                                  "permalink",
+                                  "thumbnail_url",
+                                  "published_at"
+                                ],
+                                "additionalProperties": false
+                              },
+                              "changed": {
+                                "type": "boolean"
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "channel",
+                              "operation",
+                              "reply_text",
+                              "current",
+                              "post",
+                              "changed"
                             ],
                             "additionalProperties": false
                           }
@@ -24546,6 +24802,134 @@
                         "timezone"
                       ],
                       "additionalProperties": false
+                    },
+                    "comment": {
+                      "type": [
+                        "object",
+                        "null"
+                      ],
+                      "properties": {
+                        "id": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 120
+                        },
+                        "channel": {
+                          "type": "string",
+                          "pattern": "^[a-z_]{2,40}$"
+                        },
+                        "operation": {
+                          "type": "string",
+                          "pattern": "^[a-z_]{2,40}$"
+                        },
+                        "reply_text": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "current": {
+                          "type": [
+                            "object",
+                            "null"
+                          ],
+                          "properties": {
+                            "author": {
+                              "type": [
+                                "string",
+                                "null"
+                              ]
+                            },
+                            "message": {
+                              "type": "string"
+                            },
+                            "published_at": {
+                              "type": "string",
+                              "format": "date-time",
+                              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+                            },
+                            "kind": {
+                              "type": [
+                                "string",
+                                "null"
+                              ],
+                              "pattern": "^[a-z_]{2,40}$"
+                            },
+                            "hidden": {
+                              "type": "boolean"
+                            },
+                            "brand_reply": {
+                              "type": [
+                                "string",
+                                "null"
+                              ]
+                            }
+                          },
+                          "required": [
+                            "author",
+                            "message",
+                            "published_at",
+                            "kind",
+                            "hidden",
+                            "brand_reply"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "post": {
+                          "type": [
+                            "object",
+                            "null"
+                          ],
+                          "properties": {
+                            "id": {
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 80
+                            },
+                            "caption": {
+                              "type": "string"
+                            },
+                            "permalink": {
+                              "type": [
+                                "string",
+                                "null"
+                              ]
+                            },
+                            "thumbnail_url": {
+                              "type": [
+                                "string",
+                                "null"
+                              ]
+                            },
+                            "published_at": {
+                              "type": "string",
+                              "format": "date-time",
+                              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+                            }
+                          },
+                          "required": [
+                            "id",
+                            "caption",
+                            "permalink",
+                            "thumbnail_url",
+                            "published_at"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "changed": {
+                          "type": "boolean"
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "channel",
+                        "operation",
+                        "reply_text",
+                        "current",
+                        "post",
+                        "changed"
+                      ],
+                      "additionalProperties": false
                     }
                   },
                   "required": [
@@ -26252,6 +26636,134 @@
                         "timezone"
                       ],
                       "additionalProperties": false
+                    },
+                    "comment": {
+                      "type": [
+                        "object",
+                        "null"
+                      ],
+                      "properties": {
+                        "id": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 120
+                        },
+                        "channel": {
+                          "type": "string",
+                          "pattern": "^[a-z_]{2,40}$"
+                        },
+                        "operation": {
+                          "type": "string",
+                          "pattern": "^[a-z_]{2,40}$"
+                        },
+                        "reply_text": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "current": {
+                          "type": [
+                            "object",
+                            "null"
+                          ],
+                          "properties": {
+                            "author": {
+                              "type": [
+                                "string",
+                                "null"
+                              ]
+                            },
+                            "message": {
+                              "type": "string"
+                            },
+                            "published_at": {
+                              "type": "string",
+                              "format": "date-time",
+                              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+                            },
+                            "kind": {
+                              "type": [
+                                "string",
+                                "null"
+                              ],
+                              "pattern": "^[a-z_]{2,40}$"
+                            },
+                            "hidden": {
+                              "type": "boolean"
+                            },
+                            "brand_reply": {
+                              "type": [
+                                "string",
+                                "null"
+                              ]
+                            }
+                          },
+                          "required": [
+                            "author",
+                            "message",
+                            "published_at",
+                            "kind",
+                            "hidden",
+                            "brand_reply"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "post": {
+                          "type": [
+                            "object",
+                            "null"
+                          ],
+                          "properties": {
+                            "id": {
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 80
+                            },
+                            "caption": {
+                              "type": "string"
+                            },
+                            "permalink": {
+                              "type": [
+                                "string",
+                                "null"
+                              ]
+                            },
+                            "thumbnail_url": {
+                              "type": [
+                                "string",
+                                "null"
+                              ]
+                            },
+                            "published_at": {
+                              "type": "string",
+                              "format": "date-time",
+                              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+                            }
+                          },
+                          "required": [
+                            "id",
+                            "caption",
+                            "permalink",
+                            "thumbnail_url",
+                            "published_at"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "changed": {
+                          "type": "boolean"
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "channel",
+                        "operation",
+                        "reply_text",
+                        "current",
+                        "post",
+                        "changed"
+                      ],
+                      "additionalProperties": false
                     }
                   },
                   "required": [
@@ -27938,6 +28450,134 @@
                         "removal",
                         "link",
                         "timezone"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "comment": {
+                      "type": [
+                        "object",
+                        "null"
+                      ],
+                      "properties": {
+                        "id": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 120
+                        },
+                        "channel": {
+                          "type": "string",
+                          "pattern": "^[a-z_]{2,40}$"
+                        },
+                        "operation": {
+                          "type": "string",
+                          "pattern": "^[a-z_]{2,40}$"
+                        },
+                        "reply_text": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "current": {
+                          "type": [
+                            "object",
+                            "null"
+                          ],
+                          "properties": {
+                            "author": {
+                              "type": [
+                                "string",
+                                "null"
+                              ]
+                            },
+                            "message": {
+                              "type": "string"
+                            },
+                            "published_at": {
+                              "type": "string",
+                              "format": "date-time",
+                              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+                            },
+                            "kind": {
+                              "type": [
+                                "string",
+                                "null"
+                              ],
+                              "pattern": "^[a-z_]{2,40}$"
+                            },
+                            "hidden": {
+                              "type": "boolean"
+                            },
+                            "brand_reply": {
+                              "type": [
+                                "string",
+                                "null"
+                              ]
+                            }
+                          },
+                          "required": [
+                            "author",
+                            "message",
+                            "published_at",
+                            "kind",
+                            "hidden",
+                            "brand_reply"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "post": {
+                          "type": [
+                            "object",
+                            "null"
+                          ],
+                          "properties": {
+                            "id": {
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 80
+                            },
+                            "caption": {
+                              "type": "string"
+                            },
+                            "permalink": {
+                              "type": [
+                                "string",
+                                "null"
+                              ]
+                            },
+                            "thumbnail_url": {
+                              "type": [
+                                "string",
+                                "null"
+                              ]
+                            },
+                            "published_at": {
+                              "type": "string",
+                              "format": "date-time",
+                              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+                            }
+                          },
+                          "required": [
+                            "id",
+                            "caption",
+                            "permalink",
+                            "thumbnail_url",
+                            "published_at"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "changed": {
+                          "type": "boolean"
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "channel",
+                        "operation",
+                        "reply_text",
+                        "current",
+                        "post",
+                        "changed"
                       ],
                       "additionalProperties": false
                     }
@@ -29736,6 +30376,134 @@
                         "timezone"
                       ],
                       "additionalProperties": false
+                    },
+                    "comment": {
+                      "type": [
+                        "object",
+                        "null"
+                      ],
+                      "properties": {
+                        "id": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 120
+                        },
+                        "channel": {
+                          "type": "string",
+                          "pattern": "^[a-z_]{2,40}$"
+                        },
+                        "operation": {
+                          "type": "string",
+                          "pattern": "^[a-z_]{2,40}$"
+                        },
+                        "reply_text": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "current": {
+                          "type": [
+                            "object",
+                            "null"
+                          ],
+                          "properties": {
+                            "author": {
+                              "type": [
+                                "string",
+                                "null"
+                              ]
+                            },
+                            "message": {
+                              "type": "string"
+                            },
+                            "published_at": {
+                              "type": "string",
+                              "format": "date-time",
+                              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+                            },
+                            "kind": {
+                              "type": [
+                                "string",
+                                "null"
+                              ],
+                              "pattern": "^[a-z_]{2,40}$"
+                            },
+                            "hidden": {
+                              "type": "boolean"
+                            },
+                            "brand_reply": {
+                              "type": [
+                                "string",
+                                "null"
+                              ]
+                            }
+                          },
+                          "required": [
+                            "author",
+                            "message",
+                            "published_at",
+                            "kind",
+                            "hidden",
+                            "brand_reply"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "post": {
+                          "type": [
+                            "object",
+                            "null"
+                          ],
+                          "properties": {
+                            "id": {
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 80
+                            },
+                            "caption": {
+                              "type": "string"
+                            },
+                            "permalink": {
+                              "type": [
+                                "string",
+                                "null"
+                              ]
+                            },
+                            "thumbnail_url": {
+                              "type": [
+                                "string",
+                                "null"
+                              ]
+                            },
+                            "published_at": {
+                              "type": "string",
+                              "format": "date-time",
+                              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+                            }
+                          },
+                          "required": [
+                            "id",
+                            "caption",
+                            "permalink",
+                            "thumbnail_url",
+                            "published_at"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "changed": {
+                          "type": "boolean"
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "channel",
+                        "operation",
+                        "reply_text",
+                        "current",
+                        "post",
+                        "changed"
+                      ],
+                      "additionalProperties": false
                     }
                   },
                   "required": [
@@ -31512,6 +32280,134 @@
                         "removal",
                         "link",
                         "timezone"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "comment": {
+                      "type": [
+                        "object",
+                        "null"
+                      ],
+                      "properties": {
+                        "id": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 120
+                        },
+                        "channel": {
+                          "type": "string",
+                          "pattern": "^[a-z_]{2,40}$"
+                        },
+                        "operation": {
+                          "type": "string",
+                          "pattern": "^[a-z_]{2,40}$"
+                        },
+                        "reply_text": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "current": {
+                          "type": [
+                            "object",
+                            "null"
+                          ],
+                          "properties": {
+                            "author": {
+                              "type": [
+                                "string",
+                                "null"
+                              ]
+                            },
+                            "message": {
+                              "type": "string"
+                            },
+                            "published_at": {
+                              "type": "string",
+                              "format": "date-time",
+                              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+                            },
+                            "kind": {
+                              "type": [
+                                "string",
+                                "null"
+                              ],
+                              "pattern": "^[a-z_]{2,40}$"
+                            },
+                            "hidden": {
+                              "type": "boolean"
+                            },
+                            "brand_reply": {
+                              "type": [
+                                "string",
+                                "null"
+                              ]
+                            }
+                          },
+                          "required": [
+                            "author",
+                            "message",
+                            "published_at",
+                            "kind",
+                            "hidden",
+                            "brand_reply"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "post": {
+                          "type": [
+                            "object",
+                            "null"
+                          ],
+                          "properties": {
+                            "id": {
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 80
+                            },
+                            "caption": {
+                              "type": "string"
+                            },
+                            "permalink": {
+                              "type": [
+                                "string",
+                                "null"
+                              ]
+                            },
+                            "thumbnail_url": {
+                              "type": [
+                                "string",
+                                "null"
+                              ]
+                            },
+                            "published_at": {
+                              "type": "string",
+                              "format": "date-time",
+                              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+                            }
+                          },
+                          "required": [
+                            "id",
+                            "caption",
+                            "permalink",
+                            "thumbnail_url",
+                            "published_at"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "changed": {
+                          "type": "boolean"
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "channel",
+                        "operation",
+                        "reply_text",
+                        "current",
+                        "post",
+                        "changed"
                       ],
                       "additionalProperties": false
                     }
@@ -33330,6 +34226,134 @@
                         "timezone"
                       ],
                       "additionalProperties": false
+                    },
+                    "comment": {
+                      "type": [
+                        "object",
+                        "null"
+                      ],
+                      "properties": {
+                        "id": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 120
+                        },
+                        "channel": {
+                          "type": "string",
+                          "pattern": "^[a-z_]{2,40}$"
+                        },
+                        "operation": {
+                          "type": "string",
+                          "pattern": "^[a-z_]{2,40}$"
+                        },
+                        "reply_text": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "current": {
+                          "type": [
+                            "object",
+                            "null"
+                          ],
+                          "properties": {
+                            "author": {
+                              "type": [
+                                "string",
+                                "null"
+                              ]
+                            },
+                            "message": {
+                              "type": "string"
+                            },
+                            "published_at": {
+                              "type": "string",
+                              "format": "date-time",
+                              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+                            },
+                            "kind": {
+                              "type": [
+                                "string",
+                                "null"
+                              ],
+                              "pattern": "^[a-z_]{2,40}$"
+                            },
+                            "hidden": {
+                              "type": "boolean"
+                            },
+                            "brand_reply": {
+                              "type": [
+                                "string",
+                                "null"
+                              ]
+                            }
+                          },
+                          "required": [
+                            "author",
+                            "message",
+                            "published_at",
+                            "kind",
+                            "hidden",
+                            "brand_reply"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "post": {
+                          "type": [
+                            "object",
+                            "null"
+                          ],
+                          "properties": {
+                            "id": {
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 80
+                            },
+                            "caption": {
+                              "type": "string"
+                            },
+                            "permalink": {
+                              "type": [
+                                "string",
+                                "null"
+                              ]
+                            },
+                            "thumbnail_url": {
+                              "type": [
+                                "string",
+                                "null"
+                              ]
+                            },
+                            "published_at": {
+                              "type": "string",
+                              "format": "date-time",
+                              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+                            }
+                          },
+                          "required": [
+                            "id",
+                            "caption",
+                            "permalink",
+                            "thumbnail_url",
+                            "published_at"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "changed": {
+                          "type": "boolean"
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "channel",
+                        "operation",
+                        "reply_text",
+                        "current",
+                        "post",
+                        "changed"
+                      ],
+                      "additionalProperties": false
                     }
                   },
                   "required": [
@@ -35146,6 +36170,134 @@
                         "timezone"
                       ],
                       "additionalProperties": false
+                    },
+                    "comment": {
+                      "type": [
+                        "object",
+                        "null"
+                      ],
+                      "properties": {
+                        "id": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 120
+                        },
+                        "channel": {
+                          "type": "string",
+                          "pattern": "^[a-z_]{2,40}$"
+                        },
+                        "operation": {
+                          "type": "string",
+                          "pattern": "^[a-z_]{2,40}$"
+                        },
+                        "reply_text": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "current": {
+                          "type": [
+                            "object",
+                            "null"
+                          ],
+                          "properties": {
+                            "author": {
+                              "type": [
+                                "string",
+                                "null"
+                              ]
+                            },
+                            "message": {
+                              "type": "string"
+                            },
+                            "published_at": {
+                              "type": "string",
+                              "format": "date-time",
+                              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+                            },
+                            "kind": {
+                              "type": [
+                                "string",
+                                "null"
+                              ],
+                              "pattern": "^[a-z_]{2,40}$"
+                            },
+                            "hidden": {
+                              "type": "boolean"
+                            },
+                            "brand_reply": {
+                              "type": [
+                                "string",
+                                "null"
+                              ]
+                            }
+                          },
+                          "required": [
+                            "author",
+                            "message",
+                            "published_at",
+                            "kind",
+                            "hidden",
+                            "brand_reply"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "post": {
+                          "type": [
+                            "object",
+                            "null"
+                          ],
+                          "properties": {
+                            "id": {
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 80
+                            },
+                            "caption": {
+                              "type": "string"
+                            },
+                            "permalink": {
+                              "type": [
+                                "string",
+                                "null"
+                              ]
+                            },
+                            "thumbnail_url": {
+                              "type": [
+                                "string",
+                                "null"
+                              ]
+                            },
+                            "published_at": {
+                              "type": "string",
+                              "format": "date-time",
+                              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+                            }
+                          },
+                          "required": [
+                            "id",
+                            "caption",
+                            "permalink",
+                            "thumbnail_url",
+                            "published_at"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "changed": {
+                          "type": "boolean"
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "channel",
+                        "operation",
+                        "reply_text",
+                        "current",
+                        "post",
+                        "changed"
+                      ],
+                      "additionalProperties": false
                     }
                   },
                   "required": [
@@ -36832,6 +37984,134 @@
                         "removal",
                         "link",
                         "timezone"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "comment": {
+                      "type": [
+                        "object",
+                        "null"
+                      ],
+                      "properties": {
+                        "id": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 120
+                        },
+                        "channel": {
+                          "type": "string",
+                          "pattern": "^[a-z_]{2,40}$"
+                        },
+                        "operation": {
+                          "type": "string",
+                          "pattern": "^[a-z_]{2,40}$"
+                        },
+                        "reply_text": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "current": {
+                          "type": [
+                            "object",
+                            "null"
+                          ],
+                          "properties": {
+                            "author": {
+                              "type": [
+                                "string",
+                                "null"
+                              ]
+                            },
+                            "message": {
+                              "type": "string"
+                            },
+                            "published_at": {
+                              "type": "string",
+                              "format": "date-time",
+                              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+                            },
+                            "kind": {
+                              "type": [
+                                "string",
+                                "null"
+                              ],
+                              "pattern": "^[a-z_]{2,40}$"
+                            },
+                            "hidden": {
+                              "type": "boolean"
+                            },
+                            "brand_reply": {
+                              "type": [
+                                "string",
+                                "null"
+                              ]
+                            }
+                          },
+                          "required": [
+                            "author",
+                            "message",
+                            "published_at",
+                            "kind",
+                            "hidden",
+                            "brand_reply"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "post": {
+                          "type": [
+                            "object",
+                            "null"
+                          ],
+                          "properties": {
+                            "id": {
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 80
+                            },
+                            "caption": {
+                              "type": "string"
+                            },
+                            "permalink": {
+                              "type": [
+                                "string",
+                                "null"
+                              ]
+                            },
+                            "thumbnail_url": {
+                              "type": [
+                                "string",
+                                "null"
+                              ]
+                            },
+                            "published_at": {
+                              "type": "string",
+                              "format": "date-time",
+                              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+                            }
+                          },
+                          "required": [
+                            "id",
+                            "caption",
+                            "permalink",
+                            "thumbnail_url",
+                            "published_at"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "changed": {
+                          "type": "boolean"
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "channel",
+                        "operation",
+                        "reply_text",
+                        "current",
+                        "post",
+                        "changed"
                       ],
                       "additionalProperties": false
                     }
@@ -94264,6 +95544,38 @@
                               ],
                               "additionalProperties": false
                             }
+                          },
+                          "account_id": {
+                            "type": "string",
+                            "format": "uuid",
+                            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                          },
+                          "request": {
+                            "type": [
+                              "object",
+                              "null"
+                            ],
+                            "properties": {
+                              "id": {
+                                "type": "string",
+                                "format": "uuid",
+                                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                              },
+                              "tool": {
+                                "type": "string",
+                                "pattern": "^[a-z_]{2,60}$"
+                              },
+                              "status": {
+                                "type": "string",
+                                "pattern": "^[a-z_]{2,40}$"
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "tool",
+                              "status"
+                            ],
+                            "additionalProperties": false
                           }
                         },
                         "required": [
@@ -94279,7 +95591,9 @@
                           "kind",
                           "kind_source",
                           "situation",
-                          "replies"
+                          "replies",
+                          "account_id",
+                          "request"
                         ],
                         "additionalProperties": false
                       }

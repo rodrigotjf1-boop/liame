@@ -12,6 +12,8 @@ import {
 } from '@liame/contracts';
 import { Injectable } from '@nestjs/common';
 import { sql } from 'drizzle-orm';
+import { ACTIVE_ACTION_STATUSES } from '../actions/action.service.js';
+import { recursoDoComentario } from '../actions/comentario-na-rede.js';
 import { RateLimitService } from '../auth/rate-limit.service.js';
 import { contaConectada } from '../connections/conectada.js';
 import { PROVEDOR_INSTAGRAM, PROVEDOR_PAGINA } from '../connectors/meta/publicacao.js';
@@ -62,6 +64,8 @@ type LinhaDaResposta = {
   published_at: Date | string;
   hidden: boolean;
 };
+
+type LinhaDoPedido = { account_id: string; resource_id: string; id: string; tool: string; status: string };
 
 type LinhaDoPost = {
   connected_account_id: string;
@@ -170,6 +174,17 @@ export class ComentariosService {
       if (lista.length < RESPOSTAS_POR_COMENTARIO) lista.push({ id: r.comment_id, author: r.author_name, by_brand: r.by_brand, message: r.message, published_at: iso(r.published_at), hidden: r.hidden });
       respostasDe.set(chave, lista);
     }
+    // O pedido em aberto de cada comentário (A6, Z11, parte 2c): o mais novo, enquanto espera a aprovação, aprovado ou em
+    // execução (as mesmas situações que seguram um pedido novo do mesmo objeto). A tela mostra "Pedido em Aprovações".
+    const pedidos = (
+      await tx.execute<LinhaDoPedido>(sql`
+        select distinct on (r.account_id, r.resource_id) r.account_id, r.resource_id, r.id, r.tool, r.status
+          from liame.action_request r
+         where r.account_id in ${ids} and r.resource_id in ${linhas.map((l) => recursoDoComentario(l.comment_id))}
+           and r.status in ${ACTIVE_ACTION_STATUSES}
+         order by r.account_id, r.resource_id, r.created_at desc, r.id`)
+    ).rows;
+    const pedidoDe = new Map(pedidos.map((p) => [`${p.account_id}:${p.resource_id}`, { id: p.id, tool: p.tool, status: p.status }]));
     const items: SocialComment[] = linhas.map((l) => ({
       id: l.comment_id,
       channel: l.channel,
@@ -184,6 +199,8 @@ export class ComentariosService {
       kind_source: l.kind_source,
       situation: l.situation,
       replies: respostasDe.get(`${l.connected_account_id}:${l.comment_id}`) ?? [],
+      account_id: l.connected_account_id,
+      request: pedidoDe.get(`${l.connected_account_id}:${recursoDoComentario(l.comment_id)}`) ?? null,
     }));
 
     const postIds = [...new Set(linhas.map((l) => l.post_id))];

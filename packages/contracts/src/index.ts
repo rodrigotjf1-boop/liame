@@ -113,6 +113,7 @@ export {
   RiskLevel,
 } from './policy.js';
 export {
+  ActionComment,
   ActionExecution,
   ActionListQuery,
   ActionListResponse,

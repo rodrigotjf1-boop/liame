@@ -67,6 +67,15 @@ export const SocialComment = z.strictObject({
   situation: Slug,
   /** As respostas, da mais antiga para a mais nova (até 20). */
   replies: z.array(CommentReply),
+  /** A conta da rede ligada à marca de onde veio o comentário (o Instagram ou a Página): é a do pedido de responder. */
+  account_id: z.uuid(),
+  /**
+   * O pedido em aberto sobre este comentário (A6, Z11, parte 2c), o mais novo: responder, apagar a resposta, ocultar ou
+   * mostrar, esperando a aprovação, aprovado ou em execução (`status`: `aguardando_aprovacao`, `aprovada` ou
+   * `executando`; a lista pode crescer, V23). Nulo quando não há. A tela mostra "Pedido em Aprovações" em vez de pedir de
+   * novo.
+   */
+  request: z.strictObject({ id: z.uuid(), tool: z.string().regex(/^[a-z_]{2,60}$/), status: z.string().regex(/^[a-z_]{2,40}$/) }).nullable(),
 });
 export type SocialComment = z.infer<typeof SocialComment>;
 
