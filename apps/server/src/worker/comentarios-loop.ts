@@ -3,6 +3,7 @@ import { Inject, Injectable, Logger } from '@nestjs/common';
 import { sql } from 'drizzle-orm';
 import { APP_CONFIG, type AppConfig } from '../config.js';
 import { DATASET_DOS_COMENTARIOS, FLAG_DOS_COMENTARIOS, INTERVALO_DOS_COMENTARIOS_MIN } from '../comentarios/comentarios.js';
+import { FLAG_DOS_PEDIDOS } from '../comentarios/pedidos.js';
 import { type ResultadoDosComentarios, SincronizadorDosComentarios } from '../comentarios/sincronizador-dos-comentarios.js';
 import { contaConectada } from '../connections/conectada.js';
 import { ClienteConector } from '../connectors/cliente-http.js';
@@ -86,6 +87,7 @@ export class ComentariosLoop {
       appSecret: this.config.plataformas.metaAppSecret,
       versao: (capacidade) => versaoRegistrada(db, 'meta_ads', capacidade),
       ligada: (tenantId, brandId) => this.flags.isEnabled(FLAG_DOS_COMENTARIOS, this.flags.context({ tenantId, brandId })),
+      pedidosLigados: (tenantId, brandId) => this.flags.isEnabled(FLAG_DOS_PEDIDOS, this.flags.context({ tenantId, brandId })),
     });
     const resultados: ResultadoDosComentarios[] = [];
     for (const c of reservadas) {

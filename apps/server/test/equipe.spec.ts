@@ -4,7 +4,7 @@ import { WORKFLOW_DO_CRIATIVO } from '../src/ai/criativo/prompt.js';
 import { WORKFLOW_DO_CRM } from '../src/ai/crm/prompt.js';
 import { WORKFLOW_DA_REVISAO, WORKFLOW_DO_AVISO, WORKFLOW_DO_RELATORIO, WORKFLOW_DOS_RESULTADOS } from '../src/ai/explicar/explicar.service.js';
 import { WORKFLOW_DO_REVISOR } from '../src/ai/revisor/prompt.js';
-import { WORKFLOW_DO_SOCIAL, WORKFLOW_DO_SOCIAL_POST } from '../src/ai/social/prompt.js';
+import { WORKFLOW_DO_SOCIAL, WORKFLOW_DO_SOCIAL_COMENTARIO, WORKFLOW_DO_SOCIAL_POST } from '../src/ai/social/prompt.js';
 import { WORKFLOW as WORKFLOW_DA_CONVERSA } from '../src/conversa/conversa.service.js';
 import { EQUIPE, MEMBROS } from '../src/equipe/membros.js';
 import {
@@ -62,9 +62,9 @@ describe('Sua equipe (A3, I13b)', () => {
     // O Compliance segue por regra e não desliga; o fluxo dele é o do revisor de IA (o custo, quando a empresa o tem).
     expect(EQUIPE.compliance).toMatchObject({ kind: 'regra', desligavel: false, fluxos: [WORKFLOW_DO_REVISOR] });
     expect(MEMBROS.filter((m) => EQUIPE[m].kind === 'ia')).toEqual(['lia', 'analista', 'estrategista', 'pesquisador', 'criativo', 'crm', 'social']);
-    // O Social media (A6; P21): os fluxos são os das duas rotinas dele, as sugestões de resposta e os posts (o custo
-    // soma os dois), e a empresa pode desligar.
-    expect(EQUIPE.social).toMatchObject({ kind: 'ia', desligavel: true, fluxos: [WORKFLOW_DO_SOCIAL, WORKFLOW_DO_SOCIAL_POST] });
+    // O Social media (A6; P21): os fluxos são os das três rotinas dele, as sugestões de resposta, os posts e os pedidos
+    // para os comentários (Z11, parte 2d-2; o custo soma os três), e a empresa pode desligar.
+    expect(EQUIPE.social).toMatchObject({ kind: 'ia', desligavel: true, fluxos: [WORKFLOW_DO_SOCIAL, WORKFLOW_DO_SOCIAL_POST, WORKFLOW_DO_SOCIAL_COMENTARIO] });
     // O Criativo (A4; P12): o fluxo é o que o worker das peças grava, e a empresa pode desligar.
     expect(EQUIPE.criativo).toMatchObject({ kind: 'ia', desligavel: true, fluxos: [WORKFLOW_DO_CRIATIVO] });
     // O CRM e mensageria (A5; P16): o fluxo é o das chamadas que escrevem a mensagem, e a empresa pode desligar.

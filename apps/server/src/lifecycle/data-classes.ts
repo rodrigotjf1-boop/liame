@@ -227,6 +227,10 @@ export const DATA_CLASSES: Record<string, TableClassification> = {
   // guardado sai 90 dias depois de publicado (`post_comentado`).
   social_comment_post: { class: 'CONFIDENTIAL', retention: 'com a conta conectada; 90 dias depois de publicado, sem comentário guardado', purge: { job: 'post_comentado', days: 90 } },
   social_comment: { class: 'PERSONAL', retention: '90 dias depois do comentário; antes, se for apagado na rede ou se a conta for desligada', purge: { job: 'comentario', days: 90 } },
+  // Os pedidos do Social media para os comentários (A6, Z11, parte 2d-2, migration 0125): só a situação, o porquê, o que
+  // a conferência barrou (os nomes das regras) e o pedido que saiu; nenhum texto (o das sugestões fica no pedido) e nada
+  // de quem comentou. Sai com o comentário (em cascata), na guarda de 90 dias dele.
+  comment_suggestion: { class: 'INTERNAL', retention: 'com o comentário (sai com ele, na guarda de 90 dias dele)' },
   // Os posts da marca (A6, Z5b, migration 0086): a foto (pela referência e o resumo), a hora e cada canal com o texto
   // que a empresa escreveu em nome dela e o que aconteceu na rede. Conteúdo da empresa, sem dado de pessoa. Fica com a
   // marca: é o histórico da Agenda e o que diz o que saiu, onde e quando.
