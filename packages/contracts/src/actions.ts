@@ -266,6 +266,58 @@ export const ActionPost = PostResponse.extend({
 });
 export type ActionPost = z.infer<typeof ActionPost>;
 
+/**
+ * O comentário do pedido de responder, apagar a resposta, ocultar ou mostrar (A6, Z11, parte 2c; P38): o que a tela de
+ * Aprovações mostra. O pedido não guarda o texto do comentário nem nada de quem comentou (só um resumo do texto): o
+ * texto, o @ ou o nome e o post saem do que o Liame guarda do comentário agora (`social_comment`, 90 dias). Nulo nos
+ * outros pedidos.
+ */
+export const ActionComment = z.strictObject({
+  /** O id do comentário na rede (o mesmo de `GET /v1/comments`). */
+  id: z.string().min(1).max(120),
+  /** `instagram` ou `facebook`. A lista pode crescer (V23). */
+  channel: z.string().regex(/^[a-z_]{2,40}$/),
+  /** O que o pedido faz: `responder`, `apagar_resposta`, `ocultar` ou `mostrar`. A lista pode crescer (V23). */
+  operation: z.string().regex(/^[a-z_]{2,40}$/),
+  /** O texto da resposta de que o pedido trata: o que será publicado ou, no pedido de apagar, o que sai do post. */
+  reply_text: z.string().nullable(),
+  /**
+   * O comentário como o Liame o guarda agora: o @ ou o nome de quem comentou (nulo quando a rede não manda), o texto, a
+   * hora, o tipo, se está oculto e a resposta da marca que está lá. Nulo quando ele saiu da guarda do Liame (apagado na
+   * rede, a conta desligada ou passado o prazo de 90 dias).
+   */
+  current: z
+    .strictObject({
+      author: z.string().nullable(),
+      message: z.string(),
+      published_at: z.iso.datetime(),
+      kind: z.string().regex(/^[a-z_]{2,40}$/).nullable(),
+      hidden: z.boolean(),
+      brand_reply: z.string().nullable(),
+    })
+    .nullable(),
+  /**
+   * O post de onde veio o comentário (a legenda com até 280 caracteres, e reticências quando é maior); nulo quando não
+   * está mais no Liame.
+   */
+  post: z
+    .strictObject({
+      id: z.string().min(1).max(80),
+      caption: z.string(),
+      permalink: z.string().nullable(),
+      thumbnail_url: z.string().nullable(),
+      published_at: z.iso.datetime(),
+    })
+    .nullable(),
+  /**
+   * O texto do comentário, lido na rede depois do pedido, já não é o da hora do pedido (quem comentou editou, na Página).
+   * A resposta foi escrita para o texto de antes: aprovada assim, ela não é publicada (a versão mudou). Falso enquanto o
+   * Liame não leu o comentário de novo.
+   */
+  changed: z.boolean(),
+});
+export type ActionComment = z.infer<typeof ActionComment>;
+
 export const ActionExecution = z.strictObject({
   status: z.string(),
   finished_at: z.string(),
@@ -360,6 +412,8 @@ export const ActionResponse = z.strictObject({
   review: ActionReview.nullable().optional(),
   /** O post do pedido de publicar (A6, Z5c); nulo nos outros pedidos e quando o post não está mais no Liame. */
   post: ActionPost.nullable().optional(),
+  /** O comentário do pedido de responder, apagar a resposta, ocultar ou mostrar (A6, Z11); nulo nos outros pedidos. */
+  comment: ActionComment.nullable().optional(),
 });
 export type ActionResponse = z.infer<typeof ActionResponse>;
 

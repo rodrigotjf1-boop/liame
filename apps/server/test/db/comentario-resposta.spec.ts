@@ -29,7 +29,10 @@ import { hasDb, OWNER_URL } from './env.js';
 //     o texto que não passa (a compensação prometida, o nome de quem comentou); o comentário oculto; o que o Liame não leu;
 //   - o comentário que mudou depois do pedido não é respondido;
 //   - ocultar com o código, e mostrar de novo (a volta) também com o código;
-//   - na Página: sem a tarefa de moderar, o pedido não nasce; com ela, a resposta sai pelo token da Página.
+//   - na Página: sem a tarefa de moderar, o pedido não nasce; com ela, a resposta sai pelo token da Página;
+//   - parte 2c: o pedido (um e a lista) mostra o comentário, o post e a resposta, do que o Liame guarda; "mudou" só com
+//     o texto lido de novo depois do pedido; a lista dos comentários marca o pedido em aberto e o tira quando recusado;
+//     o comentário que saiu da guarda deixa o post no pedido.
 
 const RESPOSTA = 'O combo duplo sai por R$ 39,90 no cardápio. Peça pelo link da bio!';
 
@@ -235,5 +238,45 @@ describe.skipIf(!hasDb)('responder e ocultar comentários pelo trilho (A6 · Z11
     expect(naRede.filter((c) => c.parent === pergunta).map((c) => [c.message, c.deId])).toEqual([['Abrimos sim, das 18h às 23h.', pagina]]);
     expect(meta.defeitos).toEqual([]);
     expect(await situacaoNaTela(e, pergunta)).toMatchObject({ situation: 'respondido' });
+  }, 120_000);
+
+  it('Aprovações mostra o comentário do pedido, e a lista marca o pedido em aberto (parte 2c)', async () => {
+    const { e, post, pergunta } = await comPergunta('Casa Brasa Comentário em Aprovações');
+    const naLista = async () => (await situacaoNaTela(e, pergunta)) as unknown as { account_id: string; request: { id: string; tool: string; status: string } | null };
+    expect(await naLista()).toMatchObject({ account_id: e.instagram!.id, request: null });
+
+    const p = await pedir(e, 'comentario_responder', pergunta, { texto: RESPOSTA });
+    expect(p.status, JSON.stringify(p.body)).toBe(201);
+    expect((await naLista()).request).toEqual({ id: p.body.id, tool: 'comentario_responder', status: 'aguardando_aprovacao' });
+    // O comentário e o post saem do que o Liame guarda (o pedido não leva o texto nem o @), no pedido e na lista.
+    const comentario = {
+      id: pergunta,
+      channel: 'instagram',
+      operation: 'responder',
+      reply_text: RESPOSTA,
+      current: { author: 'ana_paula', message: 'Quanto custa o combo duplo?', kind: 'pergunta', hidden: false, brand_reply: null },
+      post: { id: post, caption: 'Smash duplo' },
+      changed: false,
+    };
+    expect((await ver(e, p.body.id)).comment).toMatchObject(comentario);
+    const lista = await api.call('GET', '/v1/actions?status=aguardando_aprovacao', { cookie: e.cookie });
+    expect(lista.status, JSON.stringify(lista.body)).toBe(200);
+    expect((lista.body.items as Array<{ id: string; comment?: unknown }>).find((a) => a.id === p.body.id)?.comment).toMatchObject(comentario);
+
+    // Quem comentou mudou o texto (na Página dá para editar; aqui a Meta local muda) e a rotina leu de novo: o pedido avisa.
+    meta.comentariosNoInstagram.get(post)!.find((c) => c.id === pergunta)!.text = 'Quanto custa o combo duplo com batata?';
+    expect((await ler(e, new Date(Date.now() + 20 * 60_000)))[0]).toMatchObject({ status: 'ok' });
+    meta.normalizar();
+    const mudou = await ver(e, p.body.id);
+    expect(mudou.comment).toMatchObject({ current: { message: 'Quanto custa o combo duplo com batata?' }, changed: true });
+
+    // Recusado, o pedido sai da lista dos comentários.
+    const recusa = await api.call('POST', `/v1/actions/${p.body.id}/reject`, { cookie: e.cookie, body: { plan_hash: mudou.plan_hash, reason: 'Vou responder pelo app' } });
+    expect(recusa.status, JSON.stringify(recusa.body)).toBe(200);
+    expect((await naLista()).request).toBeNull();
+
+    // Passado o prazo, a limpeza tira o comentário da guarda (90 dias): o pedido segue mostrando o post, pelo id que guarda.
+    await ownerQuery(`delete from liame.social_comment where comment_id = $1`, [pergunta]);
+    expect((await ver(e, p.body.id)).comment).toMatchObject({ id: pergunta, operation: 'responder', reply_text: RESPOSTA, current: null, post: { id: post }, changed: false });
   }, 120_000);
 });
