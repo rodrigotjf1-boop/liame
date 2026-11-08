@@ -226,6 +226,12 @@ export class ActionExecutor {
       const on = await this.flags.isEnabled(connector.writeFlag, this.flags.context({ tenantId: row.tenant_id, brandId: row.brand_id, accountId: row.account_id }));
       if (!on) return { status: 'bloqueada', reason: `escrita em ${row.provider} desligada` };
     }
+    // A flag da ferramenta, além da do conector (A6, Z11: responder e ocultar comentários).
+    const daFerramenta = TOOLS[row.tool]?.flag;
+    if (daFerramenta) {
+      const on = await this.flags.isEnabled(daFerramenta, this.flags.context({ tenantId: row.tenant_id, brandId: row.brand_id, accountId: row.account_id }));
+      if (!on) return { status: 'bloqueada', reason: `${row.tool} desligada` };
+    }
     const ref = { tenantId: row.tenant_id, accountId: row.account_id, resourceId: row.resource_id };
     const expected = row.before_version ?? 0;
     // Primeiro valida (quando o provedor oferece), depois aplica.

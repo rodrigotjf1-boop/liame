@@ -196,6 +196,12 @@ export class InstagramDeMentira {
   readonly comentariosNaPagina = new Map<string, ComentarioNaPagina[]>();
   /** A Página manda o `from` de quem comentou (o pior caso, V125: não manda). */
   paginaDevolveQuemComentou = false;
+  /** A próxima resposta a um comentário sai, mas a volta não chega (a Meta responde 503 depois de criar; Z11, parte 2). */
+  perderARespostaDoComentario = false;
+  /** A autorização sem a permissão de moderar os comentários (responder, ocultar e apagar): a recusa (#10). */
+  semPermissaoDeModerar = false;
+  /** O @ da conta do Instagram dos testes (o `empresaComCanais` liga a conta como `@casabrasa`). */
+  usuarioDaConta = 'casabrasa';
   base = '';
   /** O endereço do envio do vídeo à Página (o `rupload` de mentira, no mesmo servidor). */
   rupload = '';
@@ -237,6 +243,8 @@ export class InstagramDeMentira {
     this.recusaDoReels = null;
     this.semPermissaoDeComentarios = false;
     this.paginaDevolveQuemComentou = false;
+    this.perderARespostaDoComentario = false;
+    this.semPermissaoDeModerar = false;
     this.chamadas.length = 0;
     this.defeitos.length = 0;
   }
@@ -345,6 +353,121 @@ export class InstagramDeMentira {
     const limite = 50;
     const respostas = c.respostas.slice(0, limite).map((r) => this.comentarioDoInstagram(r, false));
     return { ...base, replies: { data: respostas, ...(c.respostas.length > limite ? { paging: { cursors: { after: String(limite) }, next: 'https://graph.facebook.com/proxima' } } : {}) } };
+  }
+
+  /** Onde está um comentário do Instagram (o de primeiro nível ou a resposta): a mídia, a lista e o pai. */
+  private noInstagram(id: string): { media: string; lista: ComentarioNoInstagram[]; c: ComentarioNoInstagram; pai: ComentarioNoInstagram | null } | null {
+    for (const [media, lista] of this.comentariosNoInstagram) {
+      for (const c of lista) {
+        if (c.id === id) return { media, lista, c, pai: null };
+        const r = c.respostas.find((x) => x.id === id);
+        if (r) return { media, lista: c.respostas, c: r, pai: c };
+      }
+    }
+    return null;
+  }
+
+  /** Onde está um comentário da Página: o post e a lista do post. */
+  private naPagina(id: string): { post: string; lista: ComentarioNaPagina[]; c: ComentarioNaPagina } | null {
+    for (const [post, lista] of this.comentariosNaPagina) {
+      const c = lista.find((x) => x.id === id);
+      if (c) return { post, lista, c };
+    }
+    return null;
+  }
+
+  /** A conta do Instagram dona de uma mídia (pelo contêiner do post). */
+  private donaDaMidia(media: string): string | null {
+    const p = this.posts.find((x) => x.id === media);
+    return p ? (this.conteineres.get(p.conteiner)?.ig ?? null) : null;
+  }
+
+  /**
+   * Um comentário sozinho (A6, Z11, parte 2), pelas referências lidas em 07/11/2026: ler (`GET /{id}`, com as respostas
+   * pelo campo `replies` no Instagram e `comments` na Página), responder (`POST /{id}/replies` no Instagram, só ao de
+   * primeiro nível e nunca ao oculto; `POST /{id}/comments` na Página), ocultar e mostrar (`POST /{id}` com `hide` no
+   * Instagram e `is_hidden` na Página) e apagar (`DELETE /{id}`). A Página pede a tarefa MODERATE; o Instagram, a
+   * permissão de comentários. Nulo para o que não é um comentário conhecido.
+   */
+  private umComentario(metodo: string, id: string, aresta: string | undefined, params: Record<string, string>, corpo: Record<string, unknown> | null): Resposta | null {
+    const ig = this.noInstagram(id);
+    const pg = ig ? null : this.naPagina(id);
+    if (!ig && !pg) return null;
+    if (aresta && aresta !== 'replies' && aresta !== 'comments') return null;
+    const moderar = metodo !== 'GET';
+    if (ig) {
+      if (this.semPermissaoDeComentarios || (moderar && this.semPermissaoDeModerar)) return erro(403, 10, '(#10) Application does not have permission for this action');
+      const c = ig.c;
+      if (metodo === 'GET' && !aresta) {
+        const comRespostas = (params.fields ?? '').includes('replies');
+        return {
+          status: 200,
+          corpo: {
+            ...this.comentarioDoInstagram(c, comRespostas),
+            ...(ig.pai ? { parent_id: ig.pai.id } : {}),
+          },
+        };
+      }
+      if (metodo === 'POST' && aresta === 'replies') {
+        if (ig.pai) return erro(400, 100, '(#100) You can only reply to top-level comments');
+        if (c.hidden) return erro(400, 100, '(#100) Cannot reply to a hidden comment');
+        const dona = this.donaDaMidia(ig.media) ?? '';
+        const r: ComentarioNoInstagram = { id: idDaMeta(), text: String(corpo?.message ?? ''), timestamp: dataDoInstagram(new Date()), username: this.usuarioDaConta, deId: dona, like_count: 0, hidden: false, respostas: [] };
+        c.respostas.push(r);
+        if (this.perderARespostaDoComentario) {
+          this.perderARespostaDoComentario = false;
+          return erro(503, 2, 'Service temporarily unavailable');
+        }
+        return { status: 200, corpo: { id: r.id } };
+      }
+      if (metodo === 'POST' && !aresta) {
+        if (params.hide !== 'true' && params.hide !== 'false') return erro(400, 100, '(#100) The parameter hide is required');
+        c.hidden = params.hide === 'true';
+        return { status: 200, corpo: { success: true } };
+      }
+      if (metodo === 'DELETE' && !aresta) {
+        ig.lista.splice(ig.lista.indexOf(c), 1);
+        return { status: 200, corpo: { success: true } };
+      }
+      return erro(400, 100, `Unsupported ${metodo.toLowerCase()} request`);
+    }
+    const p = pg!;
+    const dona = p.post.split('_')[0]!;
+    if (!(this.paginas.get(dona) ?? []).includes('MODERATE')) return erro(403, 200, 'Requires the MODERATE task on the Page');
+    const c = p.c;
+    const daPagina = (x: ComentarioNaPagina) => x.deId === dona;
+    const comoAMetaManda = (x: ComentarioNaPagina) => ({
+      id: x.id,
+      message: x.message,
+      created_time: x.created_time,
+      ...(daPagina(x) || this.paginaDevolveQuemComentou ? { from: { id: x.deId, name: x.nome } } : {}),
+      is_hidden: x.is_hidden,
+      ...(x.parent ? { parent: { id: x.parent } } : {}),
+    });
+    if (metodo === 'GET' && !aresta) {
+      const comRespostas = (params.fields ?? '').includes('comments');
+      const filhas = p.lista.filter((x) => x.parent === c.id).map(comoAMetaManda);
+      return { status: 200, corpo: { ...comoAMetaManda(c), ...(comRespostas ? { comments: { data: filhas } } : {}) } };
+    }
+    if (metodo === 'POST' && aresta === 'comments') {
+      const id2 = this.comentouNaPagina(p.post, { message: String(corpo?.message ?? ''), deId: dona, nome: 'Casa Brasa', pai: c.id });
+      if (this.perderARespostaDoComentario) {
+        this.perderARespostaDoComentario = false;
+        return erro(503, 2, 'Service temporarily unavailable');
+      }
+      return { status: 200, corpo: { id: id2 } };
+    }
+    if (metodo === 'POST' && !aresta) {
+      const valor = corpo?.is_hidden;
+      if (valor !== 'true' && valor !== 'false' && valor !== true && valor !== false) return erro(400, 100, '(#100) The parameter is_hidden is required');
+      c.is_hidden = valor === true || valor === 'true';
+      return { status: 200, corpo: { success: true } };
+    }
+    if (metodo === 'DELETE' && !aresta) {
+      p.lista.splice(p.lista.indexOf(c), 1);
+      return { status: 200, corpo: { success: true } };
+    }
+    return erro(400, 100, `Unsupported ${metodo.toLowerCase()} request`);
   }
 
   /**
@@ -535,7 +658,7 @@ export class InstagramDeMentira {
     if (falha) return falha;
 
     // Os comentários (A6, Z11, parte 1).
-    const dosComentarios = this.dosComentarios(metodo, id ?? '', aresta, params);
+    const dosComentarios = this.umComentario(metodo, id ?? '', aresta, params, corpo) ?? this.dosComentarios(metodo, id ?? '', aresta, params);
     if (dosComentarios) return dosComentarios;
 
     // O vídeo na Página (A6, Z10, parte 3a).

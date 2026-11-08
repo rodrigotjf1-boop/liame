@@ -8,6 +8,7 @@ import { DATABASE } from '../database/database.module.js';
 import { ARMAZEM_DE_IMAGENS, type ArmazemDeImagens } from '../imagens/armazem.js';
 import { KillSwitchService } from '../kill-switch/kill-switch.service.js';
 import { VaultService } from '../vault/vault.service.js';
+import { comentarioNaPaginaConnector, comentarioNoInstagramConnector, type DependenciasDoComentario } from './comentario-na-rede.js';
 import { type DependenciasDoPost, postNaPaginaConnector, postNoInstagramConnector } from './post-publicacao.js';
 
 /**
@@ -48,5 +49,17 @@ export class EscritaPosts implements OnModuleInit {
     };
     postNoInstagramConnector.ligar(deps);
     postNaPaginaConnector.ligar(deps);
+    // O comentário de um post da marca (A6, Z11, parte 2), na mesma conta e pelo mesmo cofre. O tempo limite é o da
+    // leitura que tem uma pessoa esperando (o pedido); a execução usa o do cliente.
+    const doComentario: DependenciasDoComentario = {
+      lerSegredo: deps.lerSegredo,
+      cliente: (tempoLimiteMs) =>
+        new ClienteConector(database.db, { enderecos: enderecosDasPlataformas(this.config.plataformas), tentativas: 1, ...(tempoLimiteMs ? { tempoLimiteMs } : {}) }),
+      graphUrl: deps.graphUrl,
+      appSecret: deps.appSecret,
+      versao: (capacidade) => versaoRegistrada(database.db, 'meta_ads', capacidade),
+    };
+    comentarioNoInstagramConnector.ligar(doComentario);
+    comentarioNaPaginaConnector.ligar(doComentario);
   }
 }

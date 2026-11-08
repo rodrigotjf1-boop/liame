@@ -32,6 +32,22 @@
       "version": 1,
       "hash": "1525ff57fca98f55c7ff3826830b5f40107d2ef5fba383c8f9d6ce7dfeb17499"
     },
+    "comentario_apagar_resposta": {
+      "version": 1,
+      "hash": "a651943a8f3c7f4c7b595e1f32ca40dc5e891762833b5ee961db60dc10e7c023"
+    },
+    "comentario_mostrar": {
+      "version": 1,
+      "hash": "ba8b89281955fb5624a75ec78b9aa88418353100d7a7465bb9704677be9c272f"
+    },
+    "comentario_ocultar": {
+      "version": 1,
+      "hash": "5260156b00ee4d8caa0adfb8877e38a52975d6c14d1b1e94a4bc0a318fef70a8"
+    },
+    "comentario_responder": {
+      "version": 1,
+      "hash": "4cb77977c009f765040ab63c719116445b0c424312c00beff45bb0f6246362c9"
+    },
     "como_te_acham": {
       "version": 1,
       "hash": "bc1fb3427ef8163ece5ae4677476c447ec5c9aee6716e4966faee6e50cc47d66"

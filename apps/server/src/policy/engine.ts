@@ -23,7 +23,7 @@ export const VARIACAO_MAXIMA_DA_VERBA_PCT = 10;
  */
 export const PLATFORM_POLICY: LoadedPolicy = {
   source: 'platform',
-  version: 10,
+  version: 11,
   document: {
     rules: [
       // Conteúdo político bloqueado por padrão (ADR-007; TSE 23.755/2026, base §6.1).
@@ -79,6 +79,13 @@ export const PLATFORM_POLICY: LoadedPolicy = {
       // até 24 horas depois de ele sair no outro; o pedido fica com o nome de quem tentou (a ferramenta declara
       // `directByPerson` e só existe pela rota do post, `onlyAsRetry`). O funcionário de IA continua na regra de cima.
       { type: 'autonomy', action: 'post.tentar_de_novo', actor: 'human', mode: 'AUTO' },
+      // v11 (A6, Z11, parte 2; P38, D-A6-88 e D-A6-89): responder a um comentário de um post da marca, ocultá-lo e mostrá-lo
+      // de novo só com a aprovação de uma pessoa, com o código do app, peça quem pedir; as ferramentas têm também a trava
+      // `alwaysApproval`. Apagar a resposta que o Liame publicou é direto quando quem pede é uma pessoa: ela confirma na
+      // tela, e o pedido fica com o nome dela (a ferramenta declara `directByPerson` e só existe como a volta da resposta,
+      // `onlyAsUndo`). O atendimento automático (D-A6-92) é outra regra, na parte 2e.
+      { type: 'autonomy', action: 'comentario.*', mode: 'APPROVAL' },
+      { type: 'autonomy', action: 'comentario.apagar_resposta', actor: 'human', mode: 'AUTO' },
     ],
   },
 };
