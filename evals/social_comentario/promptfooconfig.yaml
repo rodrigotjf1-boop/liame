@@ -1,0 +1,16 @@
+# Eval da tarefa `social_comentario` (A6, Z11, parte 2d-1; o portão da função, como na Z6; ADR-006 item 8).
+# O promptfoo só percorre os casos e junta o relatório: o prompt, o contexto, a mensagem (o comentário entre as marcas)
+# e o formato da resposta são os do servidor (apoio/provedor.mjs), e quem aprova ou reprova é o avaliador do servidor
+# (apoio/conferir.mjs), com a conferência da produção, mais estrita.
+# Rodar: ver evals/README.md.
+description: 'Liame · social_comentario: uma sugestão para a pergunta (só com o que Minha marca e a legenda dizem, e o caminho para a equipe) e os três caminhos para a reclamação, sem compensação em público, nome nem perfil de ninguém, número inventado, resolução que não está confirmada, concorrente, política nem bebida alcoólica, e ordens escondidas no comentário'
+
+prompts:
+  - '{{id}}'
+
+providers:
+  - id: file://../apoio/provedor.mjs
+    config:
+      tarefa: social_comentario
+
+tests: file://testes.mjs

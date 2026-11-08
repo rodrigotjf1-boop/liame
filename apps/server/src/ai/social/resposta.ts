@@ -147,26 +147,64 @@ function temAPalavra(normal: string, palavra: string): boolean {
 }
 
 /**
+ * Do que a conferência de um texto de resposta pública parte, seja a resposta a uma avaliação do Google ou a um
+ * comentário (A6, Z11): o texto de quem escreveu, as fontes dos números, o que a marca afirma, não diz e não cita, o
+ * nome de quem escreveu (lido na hora; nunca guardado) e como os achados chamam quem escreveu e onde.
+ */
+export interface BaseDoTextoDeResposta {
+  /** O texto de quem escreveu (a avaliação ou o comentário); nulo quando não há. */
+  origem: string | null;
+  /** Os textos de onde um número pode sair (o que a pessoa escreveu, a nota, os fatos da marca, a legenda do post). */
+  fontes: string[];
+  fatos: string;
+  proibidas: string[];
+  concorrentes: string[];
+  quem?: string | null;
+  /** O trecho dos achados de nome: o de quem escreveu e o que aparece no texto dela. */
+  rotulos: { quem: string; nomeNoTexto: string };
+}
+
+/**
  * Confere uma sugestão contra a base dela. As regras da resposta do P17 são as mesmas do plano da resposta
  * (`problemasDaResposta`): a sugestão que passa aqui não é recusada quando vira pedido. O número precisa estar na
  * avaliação (a nota e o que ela escreveu) ou nos fatos da marca: o funcionário não inventa prazo, preço nem horário.
  */
 export function conferirSugestao(s: SugestaoDeResposta, base: BaseDaSugestao, conhecido = ''): ConferenciaDaSugestao {
+  return conferirTextoDeResposta(
+    s,
+    {
+      origem: base.avaliacao,
+      fontes: [base.avaliacao ?? '', `${base.estrelas} estrelas`, base.fatos],
+      fatos: base.fatos,
+      proibidas: base.proibidas,
+      concorrentes: base.concorrentes,
+      quem: base.quem ?? null,
+      rotulos: { quem: 'o nome de quem avaliou', nomeNoTexto: 'um nome que aparece na avaliação' },
+    },
+    conhecido,
+  );
+}
+
+/**
+ * O miolo da conferência, o mesmo para a resposta à avaliação e ao comentário: as regras da resposta (a compensação, o
+ * nome, a resolução que não está confirmada), as da Liame e das plataformas, as da marca, os números e o tamanho.
+ */
+export function conferirTextoDeResposta(s: SugestaoDeResposta, base: BaseDoTextoDeResposta, conhecido = ''): ConferenciaDaSugestao {
   const resposta: AchadoDaSugestao[] = [];
   const liame: AchadoDaSugestao[] = [];
   const marca: AchadoDaSugestao[] = [];
   const numeros: AchadoDaSugestao[] = [];
   const tamanho: AchadoDaSugestao[] = [];
-  const nomes = nomesNaAvaliacao(base.avaliacao, `${conhecido}\n${base.fatos}`);
-  const fontes = [base.avaliacao ?? '', `${base.estrelas} estrelas`, base.fatos];
+  const nomes = nomesNaAvaliacao(base.origem, `${conhecido}\n${base.fatos}`);
+  const fontes = base.fontes;
   for (const campo of ['enfoque', 'texto'] as const) {
     const t = s[campo];
     const normal = normalizar(t);
-    // As regras da resposta (P17): a compensação, o nome de quem avaliou; e as que só valem para a IA (D-A6-28).
+    // As regras da resposta (P17): a compensação, o nome de quem escreveu; e as que só valem para a IA (D-A6-28).
     for (const trecho of compensacaoPrometida(t)) resposta.push({ tipo: 'compensacao', campo, trecho });
     for (const trecho of trechos(normal, COMPENSACAO_DA_IA)) resposta.push({ tipo: 'compensacao', campo, trecho });
-    if (citaONome(t, base.quem)) resposta.push({ tipo: 'nome', campo, trecho: 'o nome de quem avaliou' });
-    if (nomes.some((nome) => temAPalavra(normal, nome))) resposta.push({ tipo: 'nome', campo, trecho: 'um nome que aparece na avaliação' });
+    if (citaONome(t, base.quem)) resposta.push({ tipo: 'nome', campo, trecho: base.rotulos.quem });
+    if (nomes.some((nome) => temAPalavra(normal, nome))) resposta.push({ tipo: 'nome', campo, trecho: base.rotulos.nomeNoTexto });
     for (const trecho of trechos(normal, RESOLUCAO)) resposta.push({ tipo: 'resolucao_inventada', campo, trecho });
     // As regras da Liame e das plataformas: as de todo texto, o link, a bebida alcoólica e o concorrente.
     const doTexto = conferirTexto(t);
