@@ -7,6 +7,7 @@ import type {
   ActionReview,
   ActionStatus,
   ApproveActionRequest,
+  ApproveActionsBatchRequest,
   AutonomyMode,
   CreateActionRequest,
   PolicyDecision,
@@ -26,7 +27,7 @@ import { pessoasQuePodem } from '../auth/pessoa-pode.js';
 import { APP_CONFIG, type AppConfig } from '../config.js';
 import { PROVEDOR_PERFIL_GOOGLE as PROVEDOR_DO_PERFIL } from '../connectors/google-business/perfil-google.js';
 import { afterCommit, type AuthContext, auditDetail, currentTx } from '../context/request-context.js';
-import { AppProblem, issuesToErrors, ValidationProblem } from '../errors/problems.js';
+import { AppProblem, type FieldError, issuesToErrors, ValidationProblem } from '../errors/problems.js';
 import { emitEvent } from '../events/outbox.js';
 import { FlagService } from '../flags/flag.service.js';
 import { DATAS_SE_SAIR_HOJE } from '../mensageria/data-do-cupom.js';
@@ -45,7 +46,7 @@ import { abrirSegundaRodada, maisSugestoes, oQueDesligaAsSugestoes, paramsDaResp
 import { EstadoDaAvaliacao, ParametrosDaResposta, resumoDoTexto } from './avaliacao-plano.js';
 import { BudgetService, estadoNaResposta } from './budget.service.js';
 import { comentarioDoRecurso } from './comentario-na-rede.js';
-import { EstadoDoComentario, resumoDoComentario } from './comentario-plano.js';
+import { EstadoDoComentario, foraDoLote, resumoDoComentario } from './comentario-plano.js';
 import { CONNECTORS, type Connector, type ReadResult, type ResourceRef } from './connectors.js';
 import { problemaDaLeitura, recursoNaoEncontrado } from './leitura-na-plataforma.js';
 import { avisoDeMensagemLiberada, EstadoDaMensagem } from './mensagem-plano.js';
@@ -963,6 +964,97 @@ export class ActionService {
     }
     auditDetail({ after: { plan_hash: row.plan_hash, sufficient, amount_micros: amount } });
     return this.get(auth, id);
+  }
+
+  /**
+   * Aprovar vários com uma confirmação só (A6, Z11, parte 2c-2; P38, D-A6-93 e D-A6-97). Tudo ou nada: cada pedido é
+   * conferido como na aprovação de um (espera a aprovação, o plano é o que a pessoa viu) e pela regra do lote
+   * (`foraDoLote`, pelo tipo do comentário que o Liame guarda agora), TUDO antes da confirmação; com um item que não
+   * serve, nenhum é aprovado e a confirmação não é gasta. Os pedidos são travados em ordem de id (dois lotes com pedidos
+   * em comum não se travam um ao outro).
+   */
+  async approveBatch(auth: AuthContext, input: ApproveActionsBatchRequest): Promise<ActionResponse[]> {
+    const tx = currentTx();
+    const tenantId = tenantOf(auth);
+    const ids = input.items.map((i) => i.id);
+    if (new Set(ids).size !== ids.length) throw new AppProblem(400, 'lote-repetido', 'Pedido repetido no lote', 'Cada pedido entra no lote uma vez só.');
+    const rows = (await tx.execute<ActionRow>(sql`select * from liame.action_request where tenant_id = ${tenantId} and id in ${ids} order by id for update`)).rows;
+    const porId = new Map(rows.map((r) => [r.id, r]));
+    const tipos = await this.tiposDosComentarios(tx, tenantId, rows);
+    const m = await tx.execute<{ role_key: string; approve_limit_micros: string | null }>(sql`
+      select role_key, approve_limit_micros from liame.membership
+       where tenant_id = ${tenantId} and user_id = ${auth.userId} and revoked_at is null`);
+    const role = m.rows[0]?.role_key ?? auth.roleKey ?? '';
+    const limit = micros(m.rows[0]?.approve_limit_micros ?? null);
+    const basta = (row: ActionRow) => role === 'dono' || (row.mode !== 'ESCALATE' && (limit === null || Number(row.reserved_micros) <= limit));
+
+    const errors: FieldError[] = [];
+    input.items.forEach((item, i) => {
+      const row = porId.get(item.id);
+      const motivo = !row
+        ? 'pedido não encontrado nesta empresa'
+        : row.status !== 'aguardando_aprovacao'
+          ? 'não espera mais aprovação'
+          : row.plan_hash !== item.plan_hash
+            ? 'o pedido mudou depois que você abriu: confira o plano novo'
+            : (foraDoLote(row.tool, tipos.get(row.id)) ?? (basta(row) ? null : 'precisa também do dono: aprove este pedido sozinho'));
+      if (motivo) errors.push({ path: `items.${i}`, message: motivo });
+    });
+    if (errors.length) {
+      const quantos = errors.length === 1 ? 'Um pedido do lote não pode ser aprovado assim' : `${errors.length} pedidos do lote não podem ser aprovados assim`;
+      throw new AppProblem(409, 'lote-recusado', 'O lote não foi aprovado', `${quantos}: nenhum foi aprovado, e a confirmação não foi usada. Tire o pedido do lote ou decida-o sozinho.`, {}, errors);
+    }
+    await this.confirmacao.confirmar(tx, auth.userId, input);
+
+    for (const item of input.items) {
+      const row = porId.get(item.id)!;
+      await tx.execute(sql`
+        insert into liame.approval (id, tenant_id, action_request_id, plan_hash, approved_by, approver_role, approver_limit_micros, sufficient, method)
+        values (${uuidv7()}, ${tenantId}, ${row.id}, ${row.plan_hash}, ${auth.userId}, ${role}, ${limit}, true, 'totp')`);
+      const quando = await this.horaDeExecutar(tx, tenantId, row);
+      await tx.execute(sql`
+        update liame.action_request set status = 'aprovada', status_reason = null, next_attempt_at = ${quando ? quando.toISOString() : null}::timestamptz, updated_at = now()
+         where id = ${row.id}`);
+      await advance(tx, {
+        tenantId,
+        kind: 'acao',
+        subjectId: row.id,
+        steps: [
+          { name: 'aprovacao', status: 'concluido', output: { plan_hash: row.plan_hash, approved_by: auth.userId, lote: true } },
+          { name: 'execucao', status: 'aguardando' },
+        ],
+        run: 'em_andamento',
+      });
+      await emitEvent(tx, { tenantId, type: 'liame.action.approved', subject: row.id, data: { action_id: row.id, plan_hash: row.plan_hash } });
+    }
+    auditDetail({ after: { lote: input.items.map((i) => ({ id: i.id, plan_hash: i.plan_hash })) } });
+    const aprovados = (await tx.execute<ActionRow>(sql`select * from liame.action_request where tenant_id = ${tenantId} and id in ${ids}`)).rows;
+    const [approvals, flows, ap] = [await this.approvalsOf(tx, ids), await workflowOf(tx, 'acao', ids), await this.apresentacaoDe(tx, aprovados, veVendas(auth))];
+    const resposta = new Map(aprovados.map((row) => [row.id, toResponse(row, approvals, flows.get(row.id) ?? null, ap)]));
+    return ids.map((id) => resposta.get(id)!);
+  }
+
+  /**
+   * O tipo que o Liame guarda agora do comentário de cada pedido sobre um comentário, pelo id do pedido (nulo = ainda
+   * não decidido); o pedido cujo comentário não está mais guardado fica fora do mapa.
+   */
+  private async tiposDosComentarios(tx: Tx, tenantId: string, rows: ActionRow[]): Promise<Map<string, string | null>> {
+    const alvos = rows.flatMap((r) => {
+      const id = comentarioDoPedido(r);
+      return id ? [{ pedido: r.id, conta: r.account_id, id }] : [];
+    });
+    const tipos = new Map<string, string | null>();
+    if (!alvos.length) return tipos;
+    const lidos = await tx.execute<{ conta: string; comment_id: string; kind: string | null }>(sql`
+      select c.connected_account_id::text as conta, c.comment_id, c.kind from liame.social_comment c
+       where c.tenant_id = ${tenantId} and c.connected_account_id::text in ${[...new Set(alvos.map((a) => a.conta))]}
+         and c.comment_id in ${[...new Set(alvos.map((a) => a.id))]} and c.parent_comment_id is null`);
+    const porComentario = new Map(lidos.rows.map((l) => [`${l.conta}:${l.comment_id}`, l.kind]));
+    for (const a of alvos) {
+      const chave = `${a.conta}:${a.id}`;
+      if (porComentario.has(chave)) tipos.set(a.pedido, porComentario.get(chave) ?? null);
+    }
+    return tipos;
   }
 
   /** A hora em que o pedido aprovado executa, pela ferramenta (`executeAt`), no fuso da empresa; nula = na hora. */

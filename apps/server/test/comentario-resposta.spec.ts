@@ -8,6 +8,7 @@ import {
   ACAO_DE_RESPONDER,
   type EstadoDoComentario,
   FLAG_DE_RESPONDER_COMENTARIOS,
+  foraDoLote,
   jaComoOPedidoQueria,
   planoDaRespostaAoComentario,
   planoDeApagarARespostaAoComentario,
@@ -24,7 +25,8 @@ import { chooseMode, PLATFORM_POLICY } from '../src/policy/engine.js';
 // A6 · Z11, parte 2: as regras puras de responder, apagar a resposta, ocultar e mostrar um comentário (P38, D-A6-88 e
 // D-A6-89): o plano de cada operação e o que ele recusa, a conferência do texto (compensação prometida, o nome de quem
 // comentou, dado pessoal), a versão do estado, o "já está como o pedido queria" de cada operação, as ferramentas no
-// registro (a flag delas, a aprovação, a volta), a política v11 e o conector da conta que escolhe pelo recurso.
+// registro (a flag delas, a aprovação, a volta), a política v11 e o conector da conta que escolhe pelo recurso; parte
+// 2c-2: quem entra no lote de uma confirmação só (D-A6-93).
 
 const base: EstadoDoComentario = {
   tipo: 'comentario',
@@ -120,6 +122,24 @@ describe('apagar a resposta, ocultar e mostrar (D-A6-89)', () => {
     expect(jaComoOPedidoQueria({ ...base, existe: false }, { ...base, oculto: true, operacao: 'ocultar' })).toBe(false);
     // Sem a operação, nunca: o desejado antigo não decide sozinho.
     expect(jaComoOPedidoQueria(base, base)).toBe(false);
+  });
+});
+
+describe('o lote de uma confirmação só (D-A6-93, parte 2c-2)', () => {
+  it('entram a resposta a elogio, marcação e pergunta e ocultar; ficam fora a reclamação, o tipo não decidido, o comentário que saiu e as outras ferramentas', () => {
+    for (const tipo of ['elogio', 'marcacao', 'pergunta']) expect(foraDoLote('comentario_responder', tipo), tipo).toBeNull();
+    for (const tipo of ['elogio', 'marcacao', 'pergunta', 'ofensivo', 'golpe']) expect(foraDoLote('comentario_ocultar', tipo), tipo).toBeNull();
+    expect(foraDoLote('comentario_responder', 'reclamacao')).toBe('a reclamação é decidida uma por vez');
+    expect(foraDoLote('comentario_ocultar', 'reclamacao')).toBe('a reclamação é decidida uma por vez');
+    expect(foraDoLote('comentario_responder', 'ofensivo')).toBe('no lote, só a resposta a um elogio, a uma marcação ou a uma pergunta');
+    expect(foraDoLote('comentario_responder', 'golpe')).toBe('no lote, só a resposta a um elogio, a uma marcação ou a uma pergunta');
+    expect(foraDoLote('comentario_responder', null)).toMatch(/^o tipo do comentário ainda não foi decidido/);
+    expect(foraDoLote('comentario_ocultar', null)).toMatch(/^o tipo do comentário ainda não foi decidido/);
+    expect(foraDoLote('comentario_responder', undefined)).toMatch(/^o comentário não está mais no Liame/);
+    // Mostrar de novo e apagar a resposta são a volta de um pedido (uma por vez); as outras ferramentas, também fora.
+    for (const tool of ['comentario_mostrar', 'comentario_apagar_resposta', 'avaliacao_responder', 'post_publicar', 'orcamento_mudar']) {
+      expect(foraDoLote(tool, 'elogio'), tool).toBe('só a resposta a um comentário e ocultar um comentário entram no lote');
+    }
   });
 });
 

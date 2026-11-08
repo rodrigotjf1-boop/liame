@@ -43,6 +43,26 @@ export const ApproveActionRequest = z.strictObject({
 });
 export type ApproveActionRequest = z.infer<typeof ApproveActionRequest>;
 
+/** Aprovar vários com um código (A6, Z11, parte 2c-2; D-A6-93): até este tanto de pedidos por vez. */
+export const ACTIONS_BATCH_APPROVE_LIMIT = 50;
+
+/**
+ * Aprovar vários pedidos com uma confirmação só (A6, Z11, parte 2c-2; P38, D-A6-93 e D-A6-97). Hoje, só os pedidos sobre
+ * um comentário que o lote aceita: responder a um elogio, a uma marcação ou a uma pergunta, e ocultar; nunca o que é de
+ * uma reclamação (uma por vez) nem o comentário de tipo ainda não decidido. Cada item leva o hash do plano que a pessoa
+ * viu. Tudo ou nada: com um item que não serve, nenhum é aprovado e a confirmação não é gasta (409 `lote-recusado`, com
+ * o motivo de cada item em `errors`).
+ */
+export const ApproveActionsBatchRequest = z.strictObject({
+  items: z
+    .array(z.strictObject({ id: z.uuid(), plan_hash: z.string().regex(/^[0-9a-f]{64}$/) }))
+    .min(1)
+    .max(ACTIONS_BATCH_APPROVE_LIMIT),
+  code: z.string().regex(/^\d{6}$/, { error: 'Digite os 6 números do app' }).optional(),
+  passkey: ChaveNoLugarDoCodigo,
+});
+export type ApproveActionsBatchRequest = z.infer<typeof ApproveActionsBatchRequest>;
+
 /**
  * Recusar (quem pode aprovar): o pedido sai da fila, nada é executado e o motivo fica no pedido e na auditoria.
  * O plano visto vai junto, como na aprovação: se o pedido mudou, a recusa não vale para a versão nova.

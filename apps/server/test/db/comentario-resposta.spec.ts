@@ -13,7 +13,7 @@ import { KillSwitchService } from '../../src/kill-switch/kill-switch.service.js'
 import { VaultService } from '../../src/vault/vault.service.js';
 import { ActionExecutor } from '../../src/worker/action-executor.js';
 import { ComentariosLoop } from '../../src/worker/comentarios-loop.js';
-import { ownerQuery, resetIpRateLimits, startApi, type TestApi } from '../helpers/api.js';
+import { codigoErrado, ownerQuery, resetIpRateLimits, startApi, type TestApi } from '../helpers/api.js';
 import { InstagramDeMentira, SEGREDO_DO_APP, TOKEN_DO_INSTAGRAM } from '../helpers/instagram-de-mentira.js';
 import { ligarFlagDaEmpresa } from '../helpers/meta-de-mentira.js';
 import { type EmpresaComCanais, empresaComCanais } from '../helpers/posts-semeados.js';
@@ -32,7 +32,9 @@ import { hasDb, OWNER_URL } from './env.js';
 //   - na Página: sem a tarefa de moderar, o pedido não nasce; com ela, a resposta sai pelo token da Página;
 //   - parte 2c: o pedido (um e a lista) mostra o comentário, o post e a resposta, do que o Liame guarda; "mudou" só com
 //     o texto lido de novo depois do pedido; a lista dos comentários marca o pedido em aberto e o tira quando recusado;
-//     o comentário que saiu da guarda deixa o post no pedido.
+//     o comentário que saiu da guarda deixa o post no pedido;
+//   - parte 2c-2: aprovar vários com uma confirmação só (D-A6-93 e D-A6-97): tudo ou nada, a reclamação e o plano que
+//     mudou derrubam o lote sem gastar o código; o código errado não aprova nada; o lote certo sai inteiro na rede.
 
 const RESPOSTA = 'O combo duplo sai por R$ 39,90 no cardápio. Peça pelo link da bio!';
 
@@ -278,5 +280,66 @@ describe.skipIf(!hasDb)('responder e ocultar comentários pelo trilho (A6 · Z11
     // Passado o prazo, a limpeza tira o comentário da guarda (90 dias): o pedido segue mostrando o post, pelo id que guarda.
     await ownerQuery(`delete from liame.social_comment where comment_id = $1`, [pergunta]);
     expect((await ver(e, p.body.id)).comment).toMatchObject({ id: pergunta, operation: 'responder', reply_text: RESPOSTA, current: null, post: { id: post }, changed: false });
+  }, 120_000);
+
+  it('aprovar vários com um código: tudo ou nada, a reclamação fica fora, e o lote certo sai inteiro (parte 2c-2)', async () => {
+    const e = await empresa('Casa Brasa Lote de Comentários');
+    const post = meta.publicadoForaDoLiame(e.instagram!.externo, { caption: 'Smash duplo', horas: 2, comments_count: 4 });
+    const elogio = meta.comentouNoInstagram(post, { texto: 'Melhor smash da cidade, parabéns!', usuario: 'bia_lima' });
+    const pergunta = meta.comentouNoInstagram(post, { texto: 'Quanto custa o combo duplo?', usuario: 'ana_paula' });
+    const reclamacao = meta.comentouNoInstagram(post, { texto: 'Demorou demais e veio frio', usuario: 'carlos_m' });
+    const golpe = meta.comentouNoInstagram(post, { texto: 'Ganhe seguidores grátis no meu perfil', usuario: 'promo_fake' });
+    expect((await ler(e))[0]).toMatchObject({ status: 'ok', comentarios: 4 });
+    meta.normalizar();
+    const tipos = (await ownerQuery<{ comment_id: string; kind: string }>(`select comment_id, kind from liame.social_comment where connected_account_id = $1`, [e.instagram!.id])).map((l): [string, string] => [l.comment_id, l.kind]);
+    expect(new Map(tipos)).toEqual(new Map([[elogio, 'elogio'], [pergunta, 'pergunta'], [reclamacao, 'reclamacao'], [golpe, 'golpe']]));
+
+    const pedido = async (tool: string, comentario: string, params: Record<string, unknown> = {}) => {
+      const r = await pedir(e, tool, comentario, params);
+      expect(r.status, JSON.stringify(r.body)).toBe(201);
+      return r.body as Pedido;
+    };
+    const aoElogio = await pedido('comentario_responder', elogio, { texto: 'Valeu demais! Volte sempre.' });
+    const aPergunta = await pedido('comentario_responder', pergunta, { texto: RESPOSTA });
+    const ocultar = await pedido('comentario_ocultar', golpe);
+    const aReclamacao = await pedido('comentario_responder', reclamacao, { texto: 'Sentimos muito pelo atraso. Fale com a equipe pela loja.' });
+    const lote = (pedidos: Pedido[], extra: Record<string, unknown>) =>
+      api.call('POST', '/v1/actions/approve-batch', { cookie: e.cookie, body: { items: pedidos.map((p) => ({ id: p.id, plan_hash: p.plan_hash })), ...extra } });
+    const situacoes = async () => (await ownerQuery<{ id: string; status: string }>(`select id, status from liame.action_request where tenant_id = $1 order by id`, [e.tenantId])).map((l) => l.status);
+
+    // A reclamação e o plano que não é o que a pessoa viu derrubam o lote inteiro, com o motivo de cada um; nada é
+    // aprovado, e o código não é gasto (o mesmo código aprova o lote certo logo depois).
+    const codigoDeAgora = await codigo(e);
+    const comPlanoVelho = { ...aPergunta, plan_hash: 'f'.repeat(64) };
+    const recusado = await lote([aoElogio, comPlanoVelho, ocultar, aReclamacao], { code: codigoDeAgora });
+    expect([recusado.status, recusado.body.code], JSON.stringify(recusado.body)).toEqual([409, 'lote-recusado']);
+    expect(recusado.body.errors).toEqual([
+      { path: 'items.1', message: 'o pedido mudou depois que você abriu: confira o plano novo' },
+      { path: 'items.3', message: 'a reclamação é decidida uma por vez' },
+    ]);
+    expect(await situacoes()).toEqual(['aguardando_aprovacao', 'aguardando_aprovacao', 'aguardando_aprovacao', 'aguardando_aprovacao']);
+    // O mesmo pedido duas vezes no lote, e o código errado: nada é aprovado.
+    expect((await lote([aoElogio, aoElogio], { code: codigoDeAgora })).body.code).toBe('lote-repetido');
+    const errado = await lote([aoElogio, aPergunta, ocultar], { code: codigoErrado(e.secret) });
+    expect(errado.status, JSON.stringify(errado.body)).toBe(401);
+    expect(await situacoes()).toEqual(['aguardando_aprovacao', 'aguardando_aprovacao', 'aguardando_aprovacao', 'aguardando_aprovacao']);
+
+    await ownerQuery(`delete from liame.rate_limit where key = $1`, [`segundo-fator:${e.userId}`]);
+    const certo = await lote([aoElogio, aPergunta, ocultar], { code: codigoDeAgora });
+    expect(certo.status, JSON.stringify(certo.body)).toBe(200);
+    expect((certo.body.items as Array<{ id: string; status: string; approvals: unknown[] }>).map((a) => [a.id, a.status, a.approvals.length])).toEqual([
+      [aoElogio.id, 'aprovada', 1],
+      [aPergunta.id, 'aprovada', 1],
+      [ocultar.id, 'aprovada', 1],
+    ]);
+    // Cada um sai uma vez, como foi aprovado; a reclamação segue esperando, uma por vez.
+    await ciclo(e);
+    for (const p of [aoElogio, aPergunta, ocultar]) expect(await ver(e, p.id), p.id).toMatchObject({ status: 'executada' });
+    const naRede = meta.comentariosNoInstagram.get(post)!;
+    const respostas = (id: string) => naRede.find((c) => c.id === id)!.respostas.map((r) => r.text);
+    expect([respostas(elogio), respostas(pergunta), respostas(reclamacao)]).toEqual([['Valeu demais! Volte sempre.'], [RESPOSTA], []]);
+    expect(naRede.find((c) => c.id === golpe)!.hidden).toBe(true);
+    expect(meta.defeitos).toEqual([]);
+    expect(await ver(e, aReclamacao.id)).toMatchObject({ status: 'aguardando_aprovacao' });
   }, 120_000);
 });

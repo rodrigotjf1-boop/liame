@@ -216,3 +216,22 @@ export function jaComoOPedidoQueria(atual: EstadoDoComentario, desejado: unknown
       return false;
   }
 }
+
+/** Os tipos de comentário cuja resposta entra no lote de um código só (D-A6-93). */
+const TIPOS_DA_RESPOSTA_EM_LOTE: readonly string[] = ['elogio', 'marcacao', 'pergunta'];
+
+/**
+ * Por que um pedido não entra no lote de uma confirmação só (D-A6-93, P38: o "pronto" do protótipo); nulo quando
+ * entra. Entram a resposta a um elogio, a uma marcação ou a uma pergunta e ocultar um comentário; a reclamação fica
+ * fora (uma por vez: cada uma pede escolher o caminho), e também o comentário de tipo ainda não decidido, que pode ser
+ * uma reclamação. `tipo`: o que o Liame guarda do comentário agora (indefinido quando ele não está mais guardado).
+ * Função pura.
+ */
+export function foraDoLote(tool: string, tipo: string | null | undefined): string | null {
+  if (tool !== 'comentario_responder' && tool !== 'comentario_ocultar') return 'só a resposta a um comentário e ocultar um comentário entram no lote';
+  if (tipo === undefined) return 'o comentário não está mais no Liame (apagado na rede ou fora do prazo de 90 dias)';
+  if (tipo === 'reclamacao') return 'a reclamação é decidida uma por vez';
+  if (tipo === null) return 'o tipo do comentário ainda não foi decidido: decida este pedido sozinho';
+  if (tool === 'comentario_responder' && !TIPOS_DA_RESPOSTA_EM_LOTE.includes(tipo)) return 'no lote, só a resposta a um elogio, a uma marcação ou a uma pergunta';
+  return null;
+}

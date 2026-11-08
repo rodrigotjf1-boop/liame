@@ -113,6 +113,7 @@ export {
   RiskLevel,
 } from './policy.js';
 export {
+  ACTIONS_BATCH_APPROVE_LIMIT,
   ActionComment,
   ActionExecution,
   ActionListQuery,
@@ -132,6 +133,7 @@ export {
   ActionTargetsResponse,
   AdObject,
   ApproveActionRequest,
+  ApproveActionsBatchRequest,
   BudgetChangeCheck,
   BudgetEnvelope,
   BudgetLimitsRequest,

@@ -7,6 +7,7 @@ import {
   ActionTargetsQuery,
   ActionTargetsResponse,
   ApproveActionRequest,
+  ApproveActionsBatchRequest,
   BudgetLimitsRequest,
   BudgetMonthResponse,
   BudgetPolicyRequest,
@@ -161,6 +162,23 @@ export class ActionsController {
   @ApiConflictResponse({ standardSchema: ProblemDetails })
   approve(@Auth() auth: AuthContext, @Param('id', { schema: ResourceId }) id: string, @Body({ schema: ApproveActionRequest }) body: ApproveActionRequest): Promise<ActionResponse> {
     return this.actions.approve(auth, id, body);
+  }
+
+  @Post('actions/approve-batch')
+  @Permissao('acoes.aprovar')
+  @Auditar('acao.aprovar_lote', { recurso: 'action_request' })
+  @HttpCode(200)
+  @ApiOperation({
+    summary: 'Aprovar vários com uma confirmação',
+    description:
+      'Até 50 pedidos com a chave de acesso ou o código do app uma vez só, cada um com o hash do plano visto (A6, Z11; D-A6-93). Hoje, só os pedidos sobre um comentário que o lote aceita: responder a um elogio, a uma marcação ou a uma pergunta, e ocultar; nunca o de uma reclamação nem o de um comentário de tipo ainda não decidido. Tudo ou nada: com um item que não serve, nenhum é aprovado e a confirmação não é gasta (409 `lote-recusado`, com o motivo de cada item em `errors`, pelo caminho `items.<posição>`).',
+  })
+  @ApiOkResponse({ standardSchema: ActionListResponse })
+  @ApiBadRequestResponse({ standardSchema: ProblemDetails })
+  @ApiUnauthorizedResponse({ standardSchema: ProblemDetails })
+  @ApiConflictResponse({ standardSchema: ProblemDetails })
+  async approveBatch(@Auth() auth: AuthContext, @Body({ schema: ApproveActionsBatchRequest }) body: ApproveActionsBatchRequest): Promise<ActionListResponse> {
+    return { items: await this.actions.approveBatch(auth, body) };
   }
 
   @Post('actions/:id/reject')
