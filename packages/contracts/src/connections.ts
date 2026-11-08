@@ -41,6 +41,14 @@ export const META_PAGE_PUBLISH_SCOPE = 'pages_manage_posts';
 export const META_INSTAGRAM_PUBLISH_SCOPE = 'instagram_content_publish';
 
 /**
+ * As permissões dos comentários da Meta (A6, Z11; D-A6-91): no Instagram, ler, responder e ocultar; na Página, ler o
+ * que outras pessoas escrevem e responder e ocultar. Públicas: a tela de Contas confere se a autorização as tem, para
+ * oferecer a Página e o Instagram já ligados por uma autorização sem elas (V50, ERR-178).
+ */
+export const META_INSTAGRAM_COMMENTS_SCOPES: readonly string[] = ['instagram_manage_comments'];
+export const META_PAGE_COMMENTS_SCOPES: readonly string[] = ['pages_read_user_content', 'pages_manage_engagement'];
+
+/**
  * Plataforma da conta ligada. `google_business`: a loja do Perfil da Empresa no Google; `search_console`: um site do
  * Search Console (as duas vêm na autorização do Google, cada uma com a função dela ligada). `facebook_page` e
  * `instagram`: a Página e o Instagram onde o post sai (vêm na autorização da Meta com a permissão de publicar, com a

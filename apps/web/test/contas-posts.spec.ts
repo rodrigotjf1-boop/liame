@@ -3,7 +3,9 @@ import {
   type ConnectedAccountResponse,
   type ConnectionResponse,
   type DiscoveredAccount,
+  META_INSTAGRAM_COMMENTS_SCOPES,
   META_INSTAGRAM_PUBLISH_SCOPE,
+  META_PAGE_COMMENTS_SCOPES,
   META_PAGE_PUBLISH_SCOPE,
 } from '@liame/contracts';
 import { createElement } from 'react';
@@ -359,6 +361,50 @@ describe('conectar e escolher com os posts', () => {
       createElement(DialogoEscolher, { existentes, marca: 'Mister Burgers', reserva: { current: null }, aoLigar: () => {}, aoFechar: () => {}, conexao: nova }),
     );
     expect(html).toContain('<span class="lite-chip">volta a publicar</span>');
+  });
+
+  it('a Página e o Instagram ligados por uma autorização sem os comentários entram na escolha da que os tem (Z11; V50, ERR-178)', () => {
+    const COMENTA = [...PUBLICA, ...META_INSTAGRAM_COMMENTS_SCOPES, ...META_PAGE_COMMENTS_SCOPES];
+    const pagina = { ...PAGINA, linked: true };
+    const instagram = { ...INSTAGRAM, linked: true };
+    const antiga = conexao({
+      id: ANTIGA,
+      scopes: PUBLICA,
+      accounts: [conta('facebook_page', PAGINA.external_id, { connection_id: ANTIGA }), conta('instagram', INSTAGRAM.external_id, { connection_id: ANTIGA })],
+    });
+    const nova = conexao({ status: 'aguardando_escolha', scopes: COMENTA, discovered: [pagina, instagram] });
+    const existentes = contasExistentes([antiga]);
+    expect(existentes.map((e) => [e.provider, e.publica, e.comenta])).toEqual([
+      ['facebook_page', true, false],
+      ['instagram', true, false],
+    ]);
+    expect(escolhiveis(nova, existentes)).toEqual([
+      { conta: pagina, reconectar: true, comentarios: true },
+      { conta: instagram, reconectar: true, comentarios: true },
+    ]);
+    // A Página só com uma das duas permissões dela não ganha os comentários; o Instagram, com a dele, sim.
+    const soLer = conexao({ ...nova, scopes: [...PUBLICA, ...META_INSTAGRAM_COMMENTS_SCOPES, 'pages_read_user_content'] });
+    expect(escolhiveis(soLer, existentes).map((o) => o.conta.provider)).toEqual(['instagram']);
+    // A autorização de hoje que já tem os comentários, ou a que não se sabe: nada a trocar.
+    expect(escolhiveis(nova, contasExistentes([{ ...antiga, scopes: COMENTA }]))).toEqual([]);
+    expect(escolhiveis(nova, contasExistentes([{ ...antiga, scopes: [] }]))).toEqual([]);
+    // Sem publicar e sem os comentários hoje: a nova traz os dois.
+    const semNada = contasExistentes([{ ...antiga, scopes: ['ads_read', 'pages_show_list'] }]);
+    expect(escolhiveis(nova, semNada)).toEqual([
+      { conta: pagina, reconectar: true, publicar: true, comentarios: true },
+      { conta: instagram, reconectar: true, publicar: true, comentarios: true },
+    ]);
+    // Só os comentários: a faixa da volta pede para confirmar, e o diálogo marca a troca em cada um.
+    expect(faixaDaVolta({ conexao: ID, erro: null }, nova, 'Mister Burgers', { existentes })).toEqual({
+      tipo: 'escolher',
+      titulo: 'A Meta autorizou o Liame a ler e responder os comentários.',
+      texto: 'Confirme a Página e o Instagram para a leitura e as respostas dos comentários passarem a usar esta autorização.',
+    });
+    const html = renderToStaticMarkup(
+      createElement(DialogoEscolher, { existentes, marca: 'Mister Burgers', reserva: { current: null }, aoLigar: () => {}, aoFechar: () => {}, conexao: nova }),
+    );
+    expect(html.match(/<span class="lite-chip">ganha os comentários<\/span>/g)).toHaveLength(2);
+    expect(html).not.toMatch(/NaN|undefined|\[object Object\]/);
   });
 
   it('a Página ou o Instagram que a autorização não deixa publicar fica fora da escolha; o que não se sabe, não', () => {

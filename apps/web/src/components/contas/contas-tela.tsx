@@ -781,6 +781,7 @@ export function ContasTela() {
                         o.escrita ||
                         o.token ||
                         o.publicar ||
+                        o.comentarios ||
                         ((ehLojaDoPerfil(o.conta.provider) || ehSiteDoSearchConsole(o.conta.provider) || ehCanalDaMeta(o.conta.provider)) && !o.conta.linked),
                     ))
                     ? () => setDialogo({ tipo: 'escolher', conexao: c })

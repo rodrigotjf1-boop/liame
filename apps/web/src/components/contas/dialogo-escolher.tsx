@@ -46,7 +46,9 @@ export function DialogoEscolher({ conexao, existentes, marca, reserva, aoLigar, 
   const tokenNovo = new Set(opcoes.filter((o) => o.token).map((o) => chave(o.conta.provider, o.conta.external_id)));
   // A Página e o Instagram que a autorização de hoje não deixa mais publicar, e esta deixa (P19, parte B): também só troca.
   const voltaAPublicar = new Set(opcoes.filter((o) => o.publicar).map((o) => chave(o.conta.provider, o.conta.external_id)));
-  const soTrocaA = (k: string) => renovaveis.has(k) || comPermissao.has(k) || comEscrita.has(k) || tokenNovo.has(k) || voltaAPublicar.has(k);
+  // A Página e o Instagram que ganham os comentários com esta autorização (A6, Z11): também só troca.
+  const ganhamComentarios = new Set(opcoes.filter((o) => o.comentarios).map((o) => chave(o.conta.provider, o.conta.external_id)));
+  const soTrocaA = (k: string) => renovaveis.has(k) || comPermissao.has(k) || comEscrita.has(k) || tokenNovo.has(k) || voltaAPublicar.has(k) || ganhamComentarios.has(k);
   // Reconectar já vem marcado; uma conta nova só, também. Várias novas: a pessoa escolhe (nada ligado sem querer). A
   // Página e o Instagram (P19, parte B): o Instagram e a Página dele vêm marcados (sem Instagram, a primeira Página),
   // e nada se liga antes de a pessoa confirmar.
@@ -112,10 +114,15 @@ export function DialogoEscolher({ conexao, existentes, marca, reserva, aoLigar, 
     if (paginasLigadas || instagramsLigados) {
       const canais = avisoDosCanaisLigados(paginasLigadas, instagramsLigados);
       const voltou = contas.some((d) => voltaAPublicar.has(chave(d.provider, d.external_id)));
+      // Só os comentários (A6, Z11): a Página e o Instagram trocam de autorização, e os posts seguem como estavam.
+      const soComentarios = !voltou && contas.every((d) => ganhamComentarios.has(chave(d.provider, d.external_id)));
+      const quemMudou = paginasLigadas + instagramsLigados === 1 ? (paginasLigadas ? 'A Página passou' : 'O Instagram passou') : 'A Página e o Instagram passaram';
       aoLigar(
         voltou && !outrasLigadas
-          ? `${paginasLigadas + instagramsLigados === 1 ? (paginasLigadas ? 'A Página passou' : 'O Instagram passou') : 'A Página e o Instagram passaram'} para a autorização nova da Meta: os posts aprovados da marca voltam a sair ${paginasLigadas + instagramsLigados === 1 ? (paginasLigadas ? 'nela' : 'nele') : 'neles'}.`
-          : outrasLigadas
+          ? `${quemMudou} para a autorização nova da Meta: os posts aprovados da marca voltam a sair ${paginasLigadas + instagramsLigados === 1 ? (paginasLigadas ? 'nela' : 'nele') : 'neles'}.`
+          : soComentarios && !outrasLigadas
+            ? `${quemMudou} para a autorização nova da Meta: a leitura e as respostas dos comentários passam a usar esta autorização.`
+            : outrasLigadas
             ? `${outrasLigadas === 1 ? 'Conta ligada' : 'Contas ligadas'}. A primeira leitura (90 dias) começou e leva alguns minutos. ${canais}${jaLigadas}`
             : `${canais}${jaLigadas}`,
       );
@@ -211,6 +218,7 @@ export function DialogoEscolher({ conexao, existentes, marca, reserva, aoLigar, 
                     {comEscrita.has(k) && <span className="lite-chip">passa a aceitar mudanças aprovadas</span>}
                     {tokenNovo.has(k) && <span className="lite-chip">passa para o token novo</span>}
                     {voltaAPublicar.has(k) && <span className="lite-chip">volta a publicar</span>}
+                    {ganhamComentarios.has(k) && <span className="lite-chip">ganha os comentários</span>}
                     {renovaveis.has(k) && <span className="lite-chip lite-chip--atraso">a autorização atual vence antes: renovar</span>}
                     {comPermissao.has(k) && !renovaveis.has(k) && (
                       <span className="lite-chip">{d.provider === 'google_ads' ? 'passa a poder informar vendas' : 'passa para esta autorização'}</span>
