@@ -5,7 +5,9 @@ import {
   type DiscoveredAccount,
   GOOGLE_ADS_SCOPE,
   GOOGLE_ANALYTICS_SCOPE,
+  META_INSTAGRAM_COMMENTS_SCOPES,
   META_INSTAGRAM_PUBLISH_SCOPE,
+  META_PAGE_COMMENTS_SCOPES,
   META_PAGE_PUBLISH_SCOPE,
 } from '@liame/contracts';
 import { dataCompleta, dia, diasAte, quandoComHora } from '@/lib/formato';
@@ -195,12 +197,26 @@ export type ContaExistente = Pick<ConnectedAccountResponse, 'provider' | 'extern
    * não se sabe (a autorização sem as permissões lidas, ERR-179).
    */
   publica?: boolean;
+  /**
+   * A Página ou o Instagram: a autorização que hoje o alcança tem as permissões dos comentários dele (A6, Z11); ausente
+   * = não se sabe.
+   */
+  comenta?: boolean;
 };
 
 /** A permissão de publicar no canal, pela autorização; nula quando a autorização não diz (permissões não lidas). */
 function publicaPelaAutorizacao(provider: string, scopes: readonly string[] | undefined): boolean | null {
   if (!scopes?.length || (provider !== 'facebook_page' && provider !== 'instagram')) return null;
   return scopes.includes(provider === 'facebook_page' ? META_PAGE_PUBLISH_SCOPE : META_INSTAGRAM_PUBLISH_SCOPE);
+}
+
+/**
+ * As permissões dos comentários do canal (A6, Z11; D-A6-91), pela autorização: no Instagram, ler, responder e ocultar;
+ * na Página, ler e responder e ocultar (as duas). Nula quando a autorização não diz (permissões não lidas).
+ */
+export function comentaPelaAutorizacao(provider: string, scopes: readonly string[] | undefined): boolean | null {
+  if (!scopes?.length || (provider !== 'facebook_page' && provider !== 'instagram')) return null;
+  return (provider === 'facebook_page' ? META_PAGE_COMMENTS_SCOPES : META_INSTAGRAM_COMMENTS_SCOPES).every((s) => scopes.includes(s));
 }
 
 /** Meta: a autorização foi pela configuração do login que também pede para gerenciar anúncios (`requested_access`). */
@@ -222,12 +238,14 @@ export function contasExistentes(
   return conexoes.flatMap((c) =>
     c.accounts.map((a) => {
       const publica = publicaPelaAutorizacao(a.provider, c.scopes);
+      const comenta = comentaPelaAutorizacao(a.provider, c.scopes);
       return {
         ...a,
         vence_em: c.refresh_expires_at ?? null,
         ...(c.scopes ? { informa_vendas: c.scopes.includes(ESCOPO_DE_INFORMAR_VENDAS) } : {}),
         ...(c.provider === 'meta' && c.requested_access !== undefined && escritaNaMeta ? { escreve: autorizaEscrita(c) } : {}),
         ...(publica !== null ? { publica } : {}),
+        ...(comenta !== null ? { comenta } : {}),
       };
     }),
   );
@@ -237,9 +255,19 @@ export function contasExistentes(
  * `renovar`: a autorização de hoje vence antes; `permissao`: esta inclui informar vendas ao Google e a de hoje não;
  * `escrita`: esta é a de escrita da Meta e a de hoje é a de leitura (ERR-138); `token`: a conta do RegemCast passa para o
  * token novo que a distribuição registrou; `publicar`: a Página ou o Instagram que a autorização de hoje não deixa mais
- * publicar, e esta deixa (P19, parte B; V50).
+ * publicar, e esta deixa (P19, parte B; V50); `comentarios`: a Página ou o Instagram que a autorização de hoje não deixa
+ * ler e responder os comentários, e esta deixa (A6, Z11; V50, ERR-178).
  */
-export type Escolhivel = { conta: DiscoveredAccount; reconectar: boolean; renovar?: boolean; permissao?: boolean; escrita?: boolean; token?: boolean; publicar?: boolean };
+export type Escolhivel = {
+  conta: DiscoveredAccount;
+  reconectar: boolean;
+  renovar?: boolean;
+  permissao?: boolean;
+  escrita?: boolean;
+  token?: boolean;
+  publicar?: boolean;
+  comentarios?: boolean;
+};
 
 /**
  * O que a pessoa pode ligar com esta autorização: as contas novas e as que estão ligadas por outra
@@ -277,6 +305,14 @@ export function escolhiveis(
       .filter((e) => e.disconnected_at === null && e.connection_id !== c.id && e.publica === false && publicaPelaAutorizacao(e.provider, c.scopes) === true)
       .map((e) => `${e.provider}:${e.external_id}`),
   );
+  // O mesmo com os comentários (A6, Z11): a Página e o Instagram ligados por uma autorização sem as permissões deles,
+  // quando esta as tem. Ligar aqui passa o canal para esta autorização, e a leitura e as respostas usam a credencial nova
+  // (sem isso, a autorização nova chegava com "0 contas", como na ERR-178).
+  const ganhamComentarios = new Set(
+    existentes
+      .filter((e) => e.disconnected_at === null && e.connection_id !== c.id && e.comenta === false && comentaPelaAutorizacao(e.provider, c.scopes) === true)
+      .map((e) => `${e.provider}:${e.external_id}`),
+  );
   const fimDesta = c.refresh_expires_at ? new Date(c.refresh_expires_at).getTime() : Number.POSITIVE_INFINITY;
   const renovaveis = new Set(
     existentes
@@ -308,7 +344,8 @@ export function escolhiveis(
     if (recusadas.has(k) || trocaDeToken.has(k)) return [{ conta: d, reconectar: true }];
     if (renovaveis.has(k)) return [{ conta: d, reconectar: true, renovar: true, ...(ganhamPermissao.has(k) ? { permissao: true } : {}) }];
     if (ganhamEscrita.has(k)) return [{ conta: d, reconectar: true, escrita: true }];
-    if (ganhamPublicar.has(k)) return [{ conta: d, reconectar: true, publicar: true }];
+    if (ganhamPublicar.has(k)) return [{ conta: d, reconectar: true, publicar: true, ...(ganhamComentarios.has(k) ? { comentarios: true } : {}) }];
+    if (ganhamComentarios.has(k)) return [{ conta: d, reconectar: true, comentarios: true }];
     return ganhamPermissao.has(k) ? [{ conta: d, reconectar: true, permissao: true }] : [];
   });
 }
@@ -395,6 +432,15 @@ export function faixaDaVolta(
         tipo: 'escolher',
         titulo: 'A Meta autorizou o Liame a publicar de novo.',
         texto: `Confirme ${opcoes.length === 1 ? (opcoes[0]!.conta.provider === 'instagram' ? 'o Instagram' : 'a Página') : 'a Página e o Instagram'} para os posts aprovados da marca voltarem a sair ${opcoes.length === 1 ? (opcoes[0]!.conta.provider === 'instagram' ? 'nele' : 'nela') : 'neles'}.`,
+      };
+    }
+    // Só a Página e o Instagram que ganham os comentários (A6, Z11): falta confirmar que eles passam a esta autorização.
+    if (opcoes.every((o) => o.comentarios)) {
+      const uma = opcoes.length === 1;
+      return {
+        tipo: 'escolher',
+        titulo: 'A Meta autorizou o Liame a ler e responder os comentários.',
+        texto: `Confirme ${uma ? (opcoes[0]!.conta.provider === 'instagram' ? 'o Instagram' : 'a Página') : 'a Página e o Instagram'} para a leitura e as respostas dos comentários passarem a usar esta autorização.`,
       };
     }
     if (a === 'regem') {
