@@ -68,7 +68,7 @@ describe('avaliacao_responder: o registro e o conector (A6 · Z2)', () => {
   it('v2 (A6 · Z6): as sugestões do Social media vão nos parâmetros, só ele as preenche, e o que vai ao Google é só o texto', () => {
     // Só o funcionário de IA preenche as sugestões; nenhuma outra ferramenta tem parâmetro assim.
     expect(tool.agentParams).toEqual(['sugestoes']);
-    expect(Object.values(TOOLS).filter((t) => t.agentParams?.length).map((t) => t.name)).toEqual(['avaliacao_responder']);
+    expect(Object.values(TOOLS).filter((t) => t.agentParams?.length).map((t) => t.name)).toEqual(['avaliacao_responder', 'comentario_responder']);
     const sugestoes = [
       { enfoque: 'Curta', texto: TEXTO, rodada: 1 },
       { enfoque: 'Mais calorosa', texto: 'Ficamos muito felizes com a sua visita! Esperamos você de novo.', rodada: 1 },
@@ -131,7 +131,7 @@ describe('avaliacao_responder: o registro e o conector (A6 · Z2)', () => {
     // Só as duas ferramentas de avaliação existem neste provedor, e só a de apagar nasce como volta (fora das avaliações,
     // só apagar o post das redes, A6, Z5d, parte 6).
     expect(Object.values(TOOLS).filter((t) => t.providers.includes('google_business')).map((t) => t.name)).toEqual(['avaliacao_responder', 'avaliacao_apagar_resposta']);
-    expect(Object.values(TOOLS).filter((t) => t.onlyAsUndo).map((t) => t.name)).toEqual(['avaliacao_apagar_resposta', 'post_apagar']);
+    expect(Object.values(TOOLS).filter((t) => t.onlyAsUndo).map((t) => t.name)).toEqual(['avaliacao_apagar_resposta', 'post_apagar', 'comentario_apagar_resposta', 'comentario_mostrar']);
 
     const publicada = estado({ resposta: { texto: TEXTO, atualizadaEm: null, situacao: 'aprovada', violacao: null } });
     const plano = apagar.plan(publicada, {});
@@ -316,16 +316,16 @@ describe('política da distribuição, versões 7 e 8: a resposta a uma avaliaç
   });
 
   it('sempre espera a aprovação de uma pessoa, peça quem pedir; a de nota baixa, só o dono', () => {
-    expect(PLATFORM_POLICY.version).toBe(10);
-    expect(chooseMode([PLATFORM_POLICY], proposta(ACAO_DA_RESPOSTA))).toEqual({ mode: 'APPROVAL', source: 'platform', version: 10 });
+    expect(PLATFORM_POLICY.version).toBe(11);
+    expect(chooseMode([PLATFORM_POLICY], proposta(ACAO_DA_RESPOSTA))).toEqual({ mode: 'APPROVAL', source: 'platform', version: 11 });
     expect(chooseMode([PLATFORM_POLICY], proposta(ACAO_DA_RESPOSTA, { actor: 'agent' })).mode).toBe('APPROVAL');
-    expect(chooseMode([PLATFORM_POLICY], proposta(ACAO_DA_RESPOSTA_DE_NOTA_BAIXA))).toEqual({ mode: 'ESCALATE', source: 'platform', version: 10 });
+    expect(chooseMode([PLATFORM_POLICY], proposta(ACAO_DA_RESPOSTA_DE_NOTA_BAIXA))).toEqual({ mode: 'ESCALATE', source: 'platform', version: 11 });
     expect(chooseMode([PLATFORM_POLICY], proposta(ACAO_DA_RESPOSTA_DE_NOTA_BAIXA, { actor: 'agent' })).mode).toBe('ESCALATE');
   });
 
   it('versão 8: apagar a resposta é direto para uma pessoa; o funcionário de IA segue esperando a aprovação', () => {
     const apagar = (extra: Partial<ActionProposal> = {}) => proposta(ACAO_DE_APAGAR_A_RESPOSTA, { tool: 'avaliacao_apagar_resposta', risk_level: 'R1', text: null, ...extra });
-    expect(chooseMode([PLATFORM_POLICY], apagar())).toEqual({ mode: 'AUTO', source: 'platform', version: 10 });
+    expect(chooseMode([PLATFORM_POLICY], apagar())).toEqual({ mode: 'AUTO', source: 'platform', version: 11 });
     expect(chooseMode([PLATFORM_POLICY], apagar({ actor: 'agent' })).mode).toBe('APPROVAL');
     // A regra é só de apagar: responder continua esperando a aprovação, peça quem pedir.
     expect(chooseMode([PLATFORM_POLICY], proposta(ACAO_DA_RESPOSTA)).mode).toBe('APPROVAL');
@@ -347,6 +347,6 @@ describe('política da distribuição, versões 7 e 8: a resposta a uma avaliaç
     const agora = { at: new Date('2026-10-11T15:00:00Z'), timezone: 'America/Sao_Paulo' };
     const negada = evaluatePolicy([PLATFORM_POLICY, daEmpresa], proposta(ACAO_DA_RESPOSTA, { text: 'O nosso hambúrguer GOURMET agradece.' }), agora);
     expect(negada).toMatchObject({ allowed: false, violations: [{ source: 'tenant', type: 'forbidden_words', message: 'Texto com termo proibido: gourmet.' }] });
-    expect(evaluatePolicy([PLATFORM_POLICY, daEmpresa], proposta(ACAO_DA_RESPOSTA), agora)).toMatchObject({ allowed: true, mode: 'APPROVAL', versions: ['plataforma@10', 'empresa@1'] });
+    expect(evaluatePolicy([PLATFORM_POLICY, daEmpresa], proposta(ACAO_DA_RESPOSTA), agora)).toMatchObject({ allowed: true, mode: 'APPROVAL', versions: ['plataforma@11', 'empresa@1'] });
   });
 });

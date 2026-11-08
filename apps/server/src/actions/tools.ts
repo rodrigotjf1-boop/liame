@@ -2,6 +2,15 @@ import type { BudgetImpact, RiskLevel } from '@liame/contracts';
 import { z } from 'zod';
 import { emMenorUnidade } from '../connectors/meta/verba.js';
 import { type ContextoDaAvaliacao, EstadoDaAvaliacao, ehNotaBaixa, ParametrosDaResposta, planoDaResposta, planoDeApagar } from './avaliacao-plano.js';
+import {
+  type ContextoDoComentario,
+  FLAG_DE_RESPONDER_COMENTARIOS,
+  ParametrosDaRespostaAoComentario,
+  planoDaRespostaAoComentario,
+  planoDeApagarARespostaAoComentario,
+  planoDeMostrar,
+  planoDeOcultar,
+} from './comentario-plano.js';
 import { EstadoDaMensagem, faseDaMensagem, impedimentoDaMensagem } from './mensagem-plano.js';
 import { EstadoDoPost, planoDeApagarOPost, planoDeTentarDeNovo, planoDoPost, quandoSai } from '../posts/post-plano.js';
 import { motivoDoCompartilhado, orcamentoCompartilhado } from './orcamento-compartilhado.js';
@@ -114,6 +123,12 @@ export interface ToolDefinition {
    * aprovado executa na hora, como sempre. É a `next_attempt_at` do pedido: o executor só o pega quando ela chega.
    */
   executeAt?(before: ResourceState, agora: Date, fuso: string): Date | null;
+  /**
+   * A flag de escrita da ferramenta, além da do conector (A6, Z11, parte 2: `comentarios_responder` nas ferramentas do
+   * comentário, que usam o conector da conta do Instagram e da Página, cuja flag é a dos posts). Conferida no pedido, na
+   * aprovação que lê de novo e na execução, como a do conector: as duas precisam estar ligadas.
+   */
+  flag?: string;
 }
 
 /** O plano não pode ser montado com este estado (cupom que já existe, loja sem permissão): vira 422 no pedido. */
@@ -537,6 +552,103 @@ export const TOOLS: Record<string, ToolDefinition> = {
       const plano = planoDeApagarOPost(before);
       if (!plano.ok) throw new PlanoRecusado(plano.motivo);
       return { action: 'post.apagar', budgetImpact: 'none', valueMicros: null, currentValueMicros: null, reserveMicros: 0, desiredState: plano.desejado };
+    },
+  },
+  // A resposta da marca a um comentário de um post dela, no Instagram ou na Página (A6, Z11, parte 2; P38, D-A6-88). O
+  // estado do recurso é o comentário, lido da rede na hora, sem o texto dele e sem nada de quem comentou
+  // (`comentario-plano.ts`). O texto da resposta é o parâmetro: entra no hash do plano, e a aprovação vale só para ele.
+  // Sem a flag de escrita dos posts (`social_write`, a do conector) e a da ferramenta (`comentarios_responder`), nenhum
+  // pedido chega aqui. O atendimento automático (D-A6-92) vem na parte 2e.
+  comentario_responder: {
+    name: 'comentario_responder',
+    version: 1,
+    owner: 'social',
+    description:
+      'Publica a resposta da marca a um comentário de um post dela, no Instagram ou na Página do Facebook, com o texto que a pessoa aprova. A resposta é pública e fica no post, embaixo do comentário.',
+    // Fala em público em nome da marca: com a aprovação de uma pessoa (D-A6-88).
+    risk: 'R2',
+    providers: ['instagram', 'facebook_page'],
+    compensation: 'apagar_a_resposta',
+    alwaysApproval: true,
+    flag: FLAG_DE_RESPONDER_COMENTARIOS,
+    params: ParametrosDaRespostaAoComentario,
+    agentParams: ['sugestoes'],
+    plan(before, params, context) {
+      const plano = planoDaRespostaAoComentario(before, params, (context ?? null) as ContextoDoComentario | null);
+      if (!plano.ok) throw new PlanoRecusado(plano.motivo);
+      return {
+        action: plano.acao,
+        // Responder não gasta verba: nada a reservar no envelope do mês.
+        budgetImpact: 'none',
+        valueMicros: null,
+        currentValueMicros: null,
+        reserveMicros: 0,
+        desiredState: plano.desejado,
+        text: plano.texto,
+      };
+    },
+    // A volta é apagar a resposta do post. Quem já leu, leu.
+    undo: () => ({ tool: 'comentario_apagar_resposta', params: {} }),
+  },
+  comentario_apagar_resposta: {
+    name: 'comentario_apagar_resposta',
+    version: 1,
+    owner: 'social',
+    description: 'Apaga do post a resposta da marca a um comentário, que o Liame publicou. Quem já leu a resposta, leu: apagar não desfaz isso.',
+    risk: 'R1',
+    providers: ['instagram', 'facebook_page'],
+    compensation: 'sem_volta_pelo_liame',
+    // Tirar do ar o que a própria marca publicou não gasta, não envia e não fala com ninguém: uma pessoa apaga direto,
+    // com a confirmação na tela (P38). Só como a volta da resposta que o Liame publicou.
+    directByPerson: true,
+    onlyAsUndo: true,
+    flag: FLAG_DE_RESPONDER_COMENTARIOS,
+    params: NoParams,
+    plan(before) {
+      const plano = planoDeApagarARespostaAoComentario(before);
+      if (!plano.ok) throw new PlanoRecusado(plano.motivo);
+      return { action: plano.acao, budgetImpact: 'none', valueMicros: null, currentValueMicros: null, reserveMicros: 0, desiredState: plano.desejado };
+    },
+  },
+  // Ocultar um comentário de um post da marca (A6, Z11, parte 2; P38, D-A6-89): sugerido no ofensivo e no golpe, e
+  // possível em qualquer comentário de outra pessoa. Com a aprovação de uma pessoa, com o código do app; a volta é
+  // mostrar de novo, também com o código. O Liame não apaga comentário.
+  comentario_ocultar: {
+    name: 'comentario_ocultar',
+    version: 1,
+    owner: 'social',
+    description:
+      'Oculta um comentário de um post da marca, no Instagram ou na Página do Facebook: ele some para quem vê o post. Dá para mostrar de novo depois. O Liame não apaga comentário.',
+    risk: 'R1',
+    providers: ['instagram', 'facebook_page'],
+    compensation: 'mostrar_de_novo',
+    alwaysApproval: true,
+    flag: FLAG_DE_RESPONDER_COMENTARIOS,
+    params: NoParams,
+    plan(before) {
+      const plano = planoDeOcultar(before);
+      if (!plano.ok) throw new PlanoRecusado(plano.motivo);
+      return { action: plano.acao, budgetImpact: 'none', valueMicros: null, currentValueMicros: null, reserveMicros: 0, desiredState: plano.desejado };
+    },
+    undo: () => ({ tool: 'comentario_mostrar', params: {} }),
+  },
+  comentario_mostrar: {
+    name: 'comentario_mostrar',
+    version: 1,
+    owner: 'social',
+    description: 'Mostra de novo um comentário que o Liame ocultou num post da marca.',
+    risk: 'R1',
+    providers: ['instagram', 'facebook_page'],
+    compensation: 'sem_volta_pelo_liame',
+    // Mostrar de novo também é com o código do app (P38, D-A6-89): o comentário volta a falar em público no post da marca.
+    alwaysApproval: true,
+    onlyAsUndo: true,
+    flag: FLAG_DE_RESPONDER_COMENTARIOS,
+    params: NoParams,
+    plan(before) {
+      const plano = planoDeMostrar(before);
+      if (!plano.ok) throw new PlanoRecusado(plano.motivo);
+      return { action: plano.acao, budgetImpact: 'none', valueMicros: null, currentValueMicros: null, reserveMicros: 0, desiredState: plano.desejado };
     },
   },
 };

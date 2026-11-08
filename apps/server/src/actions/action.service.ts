@@ -585,7 +585,7 @@ export class ActionService {
     await this.assertNotStopped(tx, target);
     // A trava de outra ferramenta que também para esta (A6, Z5d: a do `post_publicar` para a nova tentativa do post).
     if (tool.travaTambem) await this.assertNotStopped(tx, { ...target, tool: tool.travaTambem });
-    await this.assertWriteEnabled(quem, connector, brandId, input.account_id);
+    await this.assertWriteEnabled(quem, connector, brandId, input.account_id, tool);
 
     const params = this.parseParams(tool, input.params);
     // O que só o funcionário de IA preenche (A6, Z6: as sugestões de resposta) não vem no pedido de uma pessoa.
@@ -821,9 +821,12 @@ export class ActionService {
       await conferido();
       return { resultado: 'fora' };
     }
-    if (connector.writeFlag && !(await this.flags.isEnabled(connector.writeFlag, this.flags.context({ tenantId, brandId: row.brand_id, accountId: row.account_id })))) {
-      await conferido();
-      return { resultado: 'desligada' };
+    // A flag do conector e a da ferramenta (A6, Z11: o comentário), as duas ligadas.
+    for (const flag of [connector.writeFlag, tool.flag]) {
+      if (flag && !(await this.flags.isEnabled(flag, this.flags.context({ tenantId, brandId: row.brand_id, accountId: row.account_id })))) {
+        await conferido();
+        return { resultado: 'desligada' };
+      }
     }
     let read: ReadResult;
     let plan: ToolPlan;
@@ -1124,10 +1127,15 @@ export class ActionService {
     }
   }
 
-  private async assertWriteEnabled(quem: Solicitante, connector: Connector, brandId: string | null, accountId: string): Promise<void> {
-    if (!connector.writeFlag) return;
-    const on = await this.flags.isEnabled(connector.writeFlag, this.flags.context({ tenantId: quem.tenantId, userId: quem.userId, brandId, accountId }));
-    if (!on) throw new AppProblem(403, 'escrita-desligada', 'Escrita desligada', `A escrita em ${connector.provider} não está liberada para esta conta.`);
+  private async assertWriteEnabled(quem: Solicitante, connector: Connector, brandId: string | null, accountId: string, tool?: ToolDefinition): Promise<void> {
+    const contexto = this.flags.context({ tenantId: quem.tenantId, userId: quem.userId, brandId, accountId });
+    if (connector.writeFlag && !(await this.flags.isEnabled(connector.writeFlag, contexto))) {
+      throw new AppProblem(403, 'escrita-desligada', 'Escrita desligada', `A escrita em ${connector.provider} não está liberada para esta conta.`);
+    }
+    // A flag da ferramenta, além da do conector (A6, Z11: responder e ocultar comentários).
+    if (tool?.flag && !(await this.flags.isEnabled(tool.flag, contexto))) {
+      throw new AppProblem(403, 'escrita-desligada', 'Escrita desligada', `A ação ${tool.name} não está liberada para esta conta.`);
+    }
   }
 
   /**

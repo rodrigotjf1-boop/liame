@@ -1,5 +1,6 @@
 import type { Tx } from '@liame/database';
 import { sql } from 'drizzle-orm';
+import { comentarioDoRecurso, comentarioNaPaginaConnector, comentarioNoInstagramConnector } from './comentario-na-rede.js';
 import { googleAnunciosConnector } from './google-anuncios.js';
 import { metaAnunciosConnector } from './meta-anuncios.js';
 import { perfilAvaliacaoConnector } from './perfil-avaliacao.js';
@@ -112,6 +113,42 @@ export class SandboxConnector implements Connector {
   }
 }
 
+/**
+ * Dois conectores na mesma conta da rede (A6, Z11, parte 2): o do post e o do comentário, escolhidos pelo recurso do
+ * pedido (`comentario:<id>` é do comentário; o resto, do post). O registro guarda um conector por provedor, e a conta do
+ * Instagram e a da Página servem aos dois: assim, a trava por provedor e a flag de escrita do conector (`social_write`)
+ * alcançam os dois, e o do post fica como estava. A flag própria do comentário é da ferramenta (`flag`).
+ */
+export class ConectorPorRecurso implements Connector {
+  readonly provider: string;
+  readonly writeFlag: string | null;
+  readonly requiresSpendLimits: boolean;
+  readonly needsWriteAuthorization?: boolean;
+
+  constructor(
+    private readonly doPost: Connector,
+    private readonly doComentario: Connector,
+  ) {
+    this.provider = doPost.provider;
+    this.writeFlag = doPost.writeFlag;
+    this.requiresSpendLimits = doPost.requiresSpendLimits;
+    if (doPost.needsWriteAuthorization !== undefined) this.needsWriteAuthorization = doPost.needsWriteAuthorization;
+  }
+
+  /** O conector do recurso: o do comentário para `comentario:<id>`, o do post para o resto. */
+  de(resourceId: string): Connector {
+    return comentarioDoRecurso(resourceId) ? this.doComentario : this.doPost;
+  }
+
+  read(tx: Tx, ref: ResourceRef): Promise<ReadResult | null> {
+    return this.de(ref.resourceId).read(tx, ref);
+  }
+
+  apply(tx: Tx, ref: ResourceRef, desired: ResourceState, expectedVersion: number, options?: ApplyOptions): Promise<ApplyResult> {
+    return this.de(ref.resourceId).apply(tx, ref, desired, expectedVersion, options);
+  }
+}
+
 export const CONNECTORS: Record<string, Connector> = {
   sandbox: new SandboxConnector(),
   regem: regemCupomConnector,
@@ -123,6 +160,8 @@ export const CONNECTORS: Record<string, Connector> = {
   google_business: perfilAvaliacaoConnector,
   // A6, Z5b: o post da marca, pelo provedor da conta do primeiro canal (o Instagram ou a Página). Só com a flag de
   // escrita `social_write` ligada. O Instagram publica desde a parte 2; a Página é a parte 3 (o post com ela recusa).
-  instagram: postNoInstagramConnector,
-  facebook_page: postNaPaginaConnector,
+  // A6, Z11, parte 2: o comentário de um post da marca (responder, ocultar e mostrar), na mesma conta, pelo recurso
+  // `comentario:<id>`. Só com a flag do conector (`social_write`) e a da ferramenta (`comentarios_responder`) ligadas.
+  instagram: new ConectorPorRecurso(postNoInstagramConnector, comentarioNoInstagramConnector),
+  facebook_page: new ConectorPorRecurso(postNaPaginaConnector, comentarioNaPaginaConnector),
 };
