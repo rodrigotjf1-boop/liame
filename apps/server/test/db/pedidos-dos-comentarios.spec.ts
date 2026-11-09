@@ -203,7 +203,7 @@ describe.skipIf(!hasDb)('os pedidos do Social media para os comentários (A6 · 
     const outra = meta.comentouNoInstagram(post, { texto: 'Vocês entregam na Lapa?', usuario: 'rui_s' });
     expect((await ler(e))[0]).toMatchObject({ status: 'ok', pedidos: 2 });
     meta.normalizar();
-    // A IA que não atende (aqui, desligada para a empresa; na produção, até a rodada paga do eval, a tarefa sem rota): a
+    // A IA que não atende (aqui, desligada para a empresa; na produção, até a migration 0126, a tarefa sem rota): a
     // vez espera, com o porquê, sem chamar modelo nem contar tentativa. A rota da tarefa é compartilhada entre os
     // arquivos de teste e não se mexe nela (V76).
     await ia.rotaCompartilhada(modelos, 'social_comentario', simulado);
