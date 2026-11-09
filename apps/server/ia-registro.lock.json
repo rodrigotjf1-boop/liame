@@ -150,6 +150,10 @@
       "version": 2,
       "hash": "c0493d5919c202500cc36e07af38d1633739c9e83a3085dca5d5c8a27cc2b0d6"
     },
+    "social.comentario_tipo": {
+      "version": 1,
+      "hash": "4bf4867da331b2edab4336d3d422c4f6f47c4043290a070a0d9a0c95e3a326db"
+    },
     "social.post": {
       "version": 1,
       "hash": "f51f6c5a179099375dd82c5454350c26f91f4eba8f748f78284e78e7f2fd9364"
@@ -185,8 +189,8 @@
       "hash": "53f2fd3448fcda22b2f51a40c4619017b4a1c1883d28b9a668acd766c96a77a6"
     },
     "social": {
-      "version": 3,
-      "hash": "01dd255be5c11ff056cfbd611b7fb11c2dd3b5ab6734c8c09d9fe9b9f62a9773"
+      "version": 4,
+      "hash": "659f18885e4ca387def54ad5f6f45da25ff37adb7b14a40657e9d71a37a26111"
     }
   }
 }

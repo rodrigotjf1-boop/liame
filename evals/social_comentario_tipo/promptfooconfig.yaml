@@ -1,0 +1,16 @@
+# Eval da tarefa `social_comentario_tipo` (A6, Z11, parte 2d-4a; o portão da função, como nas outras tarefas; ADR-006 item 8).
+# O promptfoo só percorre os casos e junta o relatório: o prompt, o contexto, a mensagem (o comentário entre as marcas,
+# sem o @ de ninguém) e o formato da resposta são os do servidor (apoio/provedor.mjs), e quem aprova ou reprova é o
+# avaliador do servidor (apoio/conferir.mjs), com a conferência da produção.
+# Rodar: ver evals/README.md.
+description: 'Liame · social_comentario_tipo: o tipo do comentário que a regra do Liame deixa sem tipo (pergunta, reclamação, elogio, marcação de amigo, ofensivo, golpe ou nenhum), com a ironia como reclamação, a marcação só com o @ de outra pessoa e as ordens escondidas no comentário sem efeito'
+
+prompts:
+  - '{{id}}'
+
+providers:
+  - id: file://../apoio/provedor.mjs
+    config:
+      tarefa: social_comentario_tipo
+
+tests: file://testes.mjs
