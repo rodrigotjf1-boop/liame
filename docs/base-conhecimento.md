@@ -26,6 +26,7 @@
 16. [Interface: padrões de mercado e plataforma web](#16-interface-padrões-de-mercado-e-plataforma-web)
 17. [Acesso, ciclo de vida, versões de API e modelos de mídia](#17-acesso-ciclo-de-vida-versões-de-api-e-modelos-de-mídia)
 18. [Cobrança do Liame: meios de pagamento, Pix Automático e nota de serviço](#18-cobrança-do-liame-meios-de-pagamento-pix-automático-e-nota-de-serviço)
+19. [Dados da região: fontes públicas e o padrão de pesquisa pelo endereço](#19-dados-da-região-fontes-públicas-e-o-padrão-de-pesquisa-pelo-endereço)
 
 ---
 
@@ -912,6 +913,7 @@ Destino único para **conversões offline**, **Customer Match** e **enhanced con
 
 | Data | Atualização |
 | --- | --- |
+| 09/11/2026 | §19 (nova): **dados da região, pelo endereço da loja** (pedido do dono: reconhecer a região de cada empresa e montar a estratégia em cima dos dados, valendo para qualquer endereço). Cada fonte conferida com uma chamada real: ViaCEP; IBGE pela API de agregados (tabelas 4714, 6579, 10295, 5938, 9528 e 7060) e pelos arquivos por bairro do Censo 2022 (básico e renda do responsável); BrasilAPI (feriados e CPTEC); Open-Meteo (só não comercial); OpenStreetMap (Overpass e Nominatim, com as regras de uso); Meta `reachestimate` e `custom_locations` (documentação oficial); o bloqueio do planejador de palavras-chave no nível Explorer (§3.1). Referências do setor por imprensa [S]: IFB (tíquete médio nacional), Abrasel (conjuntura) e iFood (horários). Receita Federal (CNPJ) sem endereço confirmado [NC]. O plano que usa estes dados: `docs/plano-regiao.md` (proposta). |
 | 23/10/2026 | §18.5: **as lacunas da releitura (W2a, parte 2)**, pelas páginas oficiais já lidas: o corpo do aviso de cobrança (o `id` do evento, o `event` e o `payment`, com `paymentDate`, `clientPaymentDate` e `confirmedDate`); o que a leitura devolve para a cobrança removida e o que acontece ao remover a já recebida não estão escritos [NC], e o código trata o pior caso |
 | 23/10/2026 | §9 e §15.1: **o Node 24.22.1, pelo boletim de segurança do Node de 21/10/2026** (nodejs.org; a OpenCVE para a biblioteca Brotli): a falha do decodificador Brotli (CVE-2026-111497, execução remota de código, sem contorno) e as autoridades certificadoras comprometidas da eMudhra; onde o Liame decodifica Brotli (o leitor de corpo da API, o `safeGet` do Pesquisador e o `fetch`); a imagem `node:24.22.1-bookworm-slim` já com o `perl-base` corrigido; e o setup-node do CI, que com `24` usava a 24.21.0 guardada no executor |
 | 24/10/2026 | §9: **avisos novos de dependência, acusados pelo osv-scanner do CI** (osv.dev): `body-parser` 2.3.0 (GHSA-27r3-jxmh-p828, 7,5; corrigido na 2.4.0, de 22/10/2026), `fast-uri` 3.1.8 (quatro avisos; 3.1.9), `multer` 2.4.0 (GHSA-q7qp-rjg7-q26m, 7,5; 2.5.0, de 22/10/2026), `undici` 7.29.1 (três avisos; 7.30.1) e `zod` 4.6.5 (GHSA-mrhx-c7xc-m3w5, 8,2; 4.6.6). O `@nestjs/platform-express` 12, até a 12.2.0, fixa o `multer` em 2.4.0: a correção entra por `overrides` no `pnpm-workspace.yaml` |
@@ -1823,3 +1825,69 @@ Destino único para **conversões offline**, **Customer Match** e **enhanced con
   - o corpo inteiro dos eventos das instruções;
   - as permissões de escrita da chave;
   - o que o app do banco mostra ao pagador e se o banco avisa antes do débito.
+
+---
+
+## 19. Dados da região: fontes públicas e o padrão de pesquisa pelo endereço
+
+*Verificado em 09/11/2026, com uma chamada real a cada fonte. O exemplo é o município do Rio de Janeiro (código IBGE 3304557).*
+
+Para que serve: reconhecer a região de cada empresa pelo endereço da loja (gente, renda, concorrência, preços, clima, datas e a demanda da própria loja) e montar a estratégia de mídia em cima desses números, em qualquer município. O plano que usa estes dados está em `docs/plano-regiao.md` (proposta de 09/11/2026).
+
+Como isto se encaixa nas decisões que já existem:
+
+- é dado público, agregado e sem pessoa: entra como tabela do sistema, gravada só pelo sistema, com a fonte e o período de cada número e o endereço fixo no código. É o mesmo padrão da cotação PTAX (D-A3-14, §10.1) e do calendário comercial (§16.5);
+- o Pesquisador continua sem busca aberta (D-A3-8): cada fonte abaixo tem um endereço fixo, consultado por código geográfico;
+- o modelo continua sem receber endereço nem CEP (D-A3-4): recebe o nome do bairro e do município e os números já calculados;
+- número de imprensa [S] nunca decide sozinho: aparece como "referência do setor", com a fonte e a data.
+
+### 19.1 O padrão de pesquisa: do endereço às fontes
+
+1. **CEP → códigos.** O ViaCEP devolve o código IBGE do município (`ibge`, 7 dígitos), o `bairro`, a `uf` e o `ddd` [O, testado].
+2. **Coordenada da loja.** Primeiro a do Perfil da Empresa no Google (o local tem `latlng`, `storefrontAddress` e `serviceArea` [NC]: o conector lê hoje só `name,title,websiteUri,metadata`; conferir na documentação antes do código). Reserva: o Nominatim (19.2). **A BrasilAPI não serve para isso:** para um CEP da Vila Militar (RJ), a CEP v2 devolveu a coordenada do centro do Rio (-22,906; -43,182) [O, testado].
+3. **Bairro do Censo.** Casar o `bairro` do ViaCEP com o `NM_BAIRRO` do arquivo do IBGE dentro do mesmo `CD_MUN`. O nome dos Correios pode ser diferente do nome do IBGE: normalizar (acento, caixa, "da/de") e, se não casar, a pessoa escolhe na lista dos bairros do município.
+4. **Consultas.** Com os códigos (UF com 2 dígitos, município com 7, bairro com 10, região metropolitana), cada fonte da tabela é lida pelo seu endereço fixo. Nada depende da cidade do piloto: uma empresa nova em outro município usa o mesmo caminho.
+
+### 19.2 Catálogo das fontes
+
+| Dado | Fonte e endereço | Recorte | Período mais novo | Exemplo conferido em 09/11/2026 | Confiança |
+| --- | --- | --- | --- | --- | --- |
+| Código do município, bairro, UF, DDD | ViaCEP: `viacep.com.br/ws/{cep}/json/` (sem chave) | CEP | atual | CEP 21615-000 → `ibge` 3304557, bairro "Vila Militar" | [O] |
+| População, área e densidade | IBGE, Censo 2022, tabela 4714 (variáveis 93, 6318 e 614): `servicodados.ibge.gov.br/api/v3/agregados/4714/periodos/2022/variaveis/93\|614?localidades=N6[{município}]` | Brasil, UF, município | 2022 | Rio: 6.211.223 pessoas; 5.174,6 hab./km² | [O] |
+| População estimada | IBGE, Estimativas de População, tabela 6579 (variável 9324) | Brasil, UF, município | 2026 | Rio: 6.731.133 (2026) | [O] |
+| Renda domiciliar per capita (média e mediana) | IBGE, Censo 2022, tabela 10295 (13431 = média, 13534 = mediana) | Brasil, UF, município | 2022 (valor nominal) | Rio: média R$ 2.515,32; mediana R$ 1.212,00 | [O] |
+| População, domicílios e área por bairro | IBGE, Censo 2022, agregados por setor censitário, arquivo por bairro: `ftp.ibge.gov.br/Censos/Censo_Demografico_2022/Agregados_por_Setores_Censitarios/Agregados_por_Bairro_csv/Agregados_por_bairros_basico_BR_20260520.zip` (`v0001` pessoas, `v0002` domicílios, `AREA_KM2`) | bairro (17.576 no Brasil) | 2022 (arquivo de 20/05/2026) | Tijuca (RJ): 142.909 pessoas em 9,94 km² | [O] |
+| Renda do responsável pelo domicílio, por bairro | IBGE, Censo 2022: `…/Agregados_por_Setores_Censitarios_Rendimento_do_Responsavel/Agregados_por_bairros_renda_responsavel_BR_20260508_csv.zip` (`V06004` média, `V06006` mediana; dicionário no mesmo diretório) | bairro (17.378 com renda), distrito, município e setor censitário | 2022 (arquivo de 08/05/2026) | Tijuca (RJ): média R$ 8.056,52; mediana R$ 5.500 | [O] |
+| PIB do município | IBGE, PIB dos Municípios, tabela 5938 (variável 37, mil reais) | município | 2023 | Rio: R$ 418,5 bilhões | [O] |
+| Concorrência: estabelecimentos por atividade | IBGE, Cadastro Central de Empresas, tabela 9528 (variável 706; classificação 12762, categoria 117551 = CNAE 56.11-2 "restaurantes e outros estabelecimentos de serviços de alimentação e bebidas"; 117549 = divisão 56) | Brasil, UF, município | 2024 | Rio: 16.242 unidades locais na 56.11-2 | [O] |
+| Inflação de comer fora (refeição e lanche) | IBGE, IPCA, tabela 7060 (variável 2265 = 12 meses; subitens 1201 "Alimentação fora do domicílio", 1201001 "Refeição", 1201003 "Lanche") | Brasil, região metropolitana (N7), capital (N6) | set/2026 (mensal) | 12 meses até set/2026: lanche +7,75% na RM do Rio × +7,59% no Brasil; refeição +2,66% × +5,01% | [O] |
+| Feriados nacionais | BrasilAPI: `brasilapi.com.br/api/feriados/v1/{ano}` | Brasil | ano | 2026: 14 feriados | [O] (projeto comunitário, sem garantia de serviço) |
+| Previsão do tempo por dia | CPTEC/INPE pela BrasilAPI: `/api/cptec/v1/cidade/{nome}` e `/api/cptec/v1/clima/previsao/{id}/{dias}` | cidade | diária | Rio (id 241): "Chuva" para 09/11/2026 | [O] |
+| Previsão do tempo por hora | Open-Meteo: `api.open-meteo.com/v1/forecast` | coordenada | horária | 24 horas com a chance de chuva | [O]: **o uso gratuito é só não comercial** (menos de 10.000 chamadas por dia; open-meteo.com/en/terms). No Liame, só com plano pago |
+| Concorrentes num raio | OpenStreetMap pela Overpass API (`amenity` = restaurant, fast_food, cafe, bar, pub; consulta `around:{metros},{lat},{lon}`) | raio | atual | 2 km na zona norte do Rio: 33 pontos (13 fast food, 10 restaurantes, 7 bares, 3 cafés); só 2 com horário de funcionamento; resposta em 45 s | [O]: cobertura incompleta; **o servidor público não é para uso comercial** ("Commercial use should use self-hosted or paid Overpass servers", wiki.openstreetmap.org/wiki/Overpass_API); dados sob a licença ODbL, com atribuição ao OpenStreetMap |
+| Coordenada a partir de um texto | OpenStreetMap, Nominatim: `nominatim.openstreetmap.org/search` | endereço | atual | um bairro do Rio em 0,8 s | [O]: no máximo 1 pedido por segundo, User-Agent próprio, cache obrigatório, uso pesado proibido; o acesso pode ser retirado (operations.osmfoundation.org/policies/nominatim) |
+| Tamanho do público de um recorte | Meta Marketing API: `GET /act_{id}/reachestimate` com `targeting_spec` (exige `countries`); devolve `users_lower_bound` e `users_upper_bound`; -1 quando a estimativa não está disponível, o que não quer dizer público vazio | o recorte pedido | atual | documentação v25.0, lida em 09/11/2026 | [O] |
+| Raio na Meta | `geo_locations.custom_locations` com `latitude`/`longitude` ou `address_string` e `radius` de 1 a 80 km (`distance_unit`), até 200 pontos; em `cities` o raio vai de 17 a 80 km; raio em vários pontos pode dar o erro 100/1815946 | — | — | página "basic targeting", lida em 09/11/2026 (exemplos em v24 a v27) | [O] |
+| Volume de busca por cidade | Google Ads, `KeywordPlanIdeaService` | cidade, região | mensal | **bloqueado no nível Explorer** (§3.1); abre com o nível Basic | [O] |
+| Interesse de busca ao longo do tempo | Google Trends API | — | — | em alfa, só por inscrição (developers.google.com/search/apis/trends; anunciada em 24/07/2025) | [S] |
+| Tíquete médio e vendas do foodservice | Instituto Foodservice Brasil (IFB), Índice de Desempenho Foodservice, mensal, divulgado à imprensa (sem API) | Brasil (vendas também por grande região) | mensal | tíquete médio de R$ 46,70 em mar/2026 (+2,9% em 12 meses) e de R$ 44,70 em jun/2026; delivery com 25,3% das vendas em out/2025 | [S] (mercadoeconsumo.com.br, 11/05/2026; gironews.com) |
+| Conjuntura de bares e restaurantes | Abrasel, pesquisa mensal (nacional e pelas seccionais nos estados), divulgada à imprensa | Brasil, UF | mensal | mar/2026: 33% com lucro, 42% no equilíbrio, 25% no prejuízo; projeção de R$ 540 bilhões de faturamento em 2026 | [S] |
+| Horários de pico do delivery | iFood, retrospectivas e notícias por categoria e por cidade | Brasil, algumas cidades | eventual | 2025: jantar com 487,7 milhões de pedidos × almoço com 278 milhões; sexta a domingo cerca de 37% acima dos outros dias; pizza: metade dos pedidos entre 20h e 22h; hambúrguer: pico do lanche da tarde perto das 17h; Goiânia: 46,6% entre 18h e 22h (pico às 20h); Fortaleza: pico às 19h, domingo 69% acima da segunda | [S]: os números variam entre as notícias; só ponto de partida até haver o dado da loja |
+| Horário, dia e tíquete da própria loja | Regem do cliente, já lido pelo Liame (`order_fact.placed_at` e a receita) | loja | tempo real | o código ainda não agrega por hora nem calcula o tíquete médio | [O] (código do Liame) |
+| Concorrentes por endereço (CNPJ, CNAE e CEP) | Receita Federal, dados abertos do CNPJ | endereço | — | `arquivos.receitafederal.gov.br/dados/cnpj/dados_abertos_cnpj/` (404) e `dadosabertos.rfb.gov.br/CNPJ/` (sem resposta) em 09/11/2026: **endereço atual não encontrado** | [NC] |
+| Anúncios dos concorrentes | Biblioteca de anúncios da Meta | — | — | o site mostra todos; a API cobre só anúncios políticos e de temas sociais | [S] |
+
+### 19.3 Regras que viram código
+
+- **Todo número leva a fonte e o período** (já é regra no §7.3). O valor do Censo é nominal de 2022: para comparar com preço de hoje, corrigir pelo IPCA e dizer que foi corrigido (a série do número-índice do IPCA também está na API de agregados [S]: conferir a tabela antes do código).
+- **Renovação por fonte:** Censo, fixo (até o próximo); estimativa de população, PIB e Cadastro Central de Empresas, uma vez por ano; IPCA, todo mês; clima, todo dia; OpenStreetMap, todo mês; notícias do setor (IFB, Abrasel, iFood), na revisão de 90 dias desta base.
+- **Onde guardar:** a tabela pública do sistema (sem empresa, só o sistema grava) guarda os números por código geográfico, indicador e período; por empresa fica só o recorte resolvido (códigos, coordenada, raio) e o retrato com a data. Os arquivos do Censo por bairro (menos de 1 MB cada, zipados) entram uma vez e não mudam.
+- **Uso justo das fontes abertas:** Nominatim com cache e uma consulta por loja; Overpass só num servidor próprio (a infraestrutura da DMS já roda o OSRM, §11) ou pago; Open-Meteo só com plano pago.
+- **Texto de anúncio nunca afirma atributo pessoal** de quem lê (renda, bairro de quem lê, condição): a renda serve para escolher oferta e verba, nunca vai para o texto (políticas da Meta, §7.1 e §6.2).
+
+### 19.4 O que não tem fonte pública gratuita
+
+- tíquete médio por cidade ou bairro, e horário de pico por cidade para todas as categorias (só notícias soltas do iFood; o dado certo é o da própria loja);
+- movimento de pessoas por hora (o "horários de pico" do Google Maps não tem API) [S];
+- feriados estaduais e municipais (a BrasilAPI dá só os nacionais) [S];
+- concorrentes com nota e avaliações (a API do Google Places é paga) [S].
