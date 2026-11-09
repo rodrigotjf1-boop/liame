@@ -15,10 +15,12 @@ import { responderPlano } from './responder-plano.js';
 import { responderParecer } from './responder-revisor.js';
 import { responderSugestoes } from './responder-social.js';
 import { responderSugestoesDoComentario } from './responder-social-comentario.js';
+import { responderTipoDoComentario } from './responder-social-comentario-tipo.js';
 import { responderPost } from './responder-social-post.js';
 import { avaliarParecer, type CasoDoRevisor, carregarCasosDoRevisor } from './revisor.js';
 import { avaliarSugestoes, type CasoDoSocial, carregarCasosDoSocial } from './social.js';
 import { avaliarSugestoesDoComentario, type CasoDoComentario, carregarCasosDoComentario } from './social-comentario.js';
+import { avaliarTipoDoComentario, type CasoDoTipo, carregarCasosDoTipo } from './social-comentario-tipo.js';
 import { avaliarPost, type CasoDoPost, carregarCasosDoPost } from './social-post.js';
 
 // As tarefas com eval (A3, I3, I9, I10c, I11c e I12b; A4, X6; A5, Y6; A6, Z6, as respostas e os posts; A6, Z11, os comentários): como ler os casos, qual é a saída gravada (a boa ou a primeira ruim), como
@@ -108,6 +110,13 @@ const socialComentario: TarefaDeEval<CasoDoComentario> = {
   responder: responderSugestoesDoComentario,
 };
 
+const socialComentarioTipo: TarefaDeEval<CasoDoTipo> = {
+  carregar: carregarCasosDoTipo,
+  gravada: (caso, qual) => (qual === 'ruim' ? (caso.gravadas.ruins[0]?.resposta ?? caso.gravadas.boa) : caso.gravadas.boa),
+  avaliar: avaliarTipoDoComentario,
+  responder: responderTipoDoComentario,
+};
+
 export const TAREFAS: Record<string, TarefaDeEval<{ id: string; grupo: string }>> = {
   explicar_resultados: explicar as unknown as TarefaDeEval<{ id: string; grupo: string }>,
   conversa_lia: conversa as unknown as TarefaDeEval<{ id: string; grupo: string }>,
@@ -119,4 +128,5 @@ export const TAREFAS: Record<string, TarefaDeEval<{ id: string; grupo: string }>
   social_resposta: social as unknown as TarefaDeEval<{ id: string; grupo: string }>,
   social_post: socialPost as unknown as TarefaDeEval<{ id: string; grupo: string }>,
   social_comentario: socialComentario as unknown as TarefaDeEval<{ id: string; grupo: string }>,
+  social_comentario_tipo: socialComentarioTipo as unknown as TarefaDeEval<{ id: string; grupo: string }>,
 };
