@@ -316,6 +316,20 @@ As rodadas pagas do `social_post` (o portão da função, A6-12), com o gasto au
 
 O Haiku 5.5 não serve aqui: as três falhas são a mesma, citar o link que o post não tem. Em produção a conferência (`postDaResposta`) barra esse post, e o dia ficaria sem sugestão. Tokens de cada rodada do Sonnet: 64 mil de entrada e 4,2 mil de saída, cerca de US$ 0,19 (perto de US$ 0,009 por post). As duas rodadas somaram cerca de US$ 0,40 com o Haiku, pelos preços publicados. A rota de modelo da tarefa entrou com a nota das duas rodadas (migration 0116), sem modelo econômico; ligar os posts numa empresa (as funções `posts_sugeridos` e `social_write`) é decisão do dono.
 
+### O Social media nas respostas aos comentários (08 e 09/11/2026)
+
+As rodadas pagas do `social_comentario` (o portão da função, A6-12), com o gasto autorizado pelo dono (abaixo de US$ 1), na chave do workspace de testes. O mesmo modelo e as mesmas opções das rotas no ar, **Sonnet 5.5, esforço `low`, `AI_INFERENCE_GEO=us`**, sem o Haiku 5.5: o volume da tarefa é pequeno (uma chamada por pergunta ou reclamação, só com a função ligada), e o gasto ficou com as rodadas do Sonnet.
+
+| Rodada | Sonnet 5.5 |
+| --- | --- |
+| 1ª (08/11, prompt v1) | 19 de 24, reprovado: em três reclamações, o "Explicar o que houve e chamar no privado" (e, em duas, o "Agradecer o aviso e dizer o que muda") sem desculpa nem agradecimento, e o de explicar contava como a casa trabalha ("o pão é feito na casa todo dia") numa reclamação de batata que faltou; nas duas perguntas de cupom, a palavra escrita para negar ("Cupom a gente não passa por aqui"), que a conferência da produção barra |
+| 2ª (09/11, prompt v2) | **24 de 24, aprovado** |
+| Confirmação (09/11, prompt v2) | **24 de 24, aprovado** |
+
+O que mudou no prompt (`social.comentario` v2): as três sugestões de uma reclamação começam reconhecendo o que a pessoa conta, com "desculpa", "sentimos" ou "obrigado pelo aviso"; no caminho de explicar, a loja diz que quer entender o que houve com o pedido e nunca usa o espaço para elogiar o produto ou a casa; e as palavras de compensação não aparecem nem para negar (a pergunta por cupom se responde com as ofertas do dossiê ou da legenda, sem a palavra, e com o caminho para a equipe). A régua não mudou.
+
+Tokens de cada rodada da v2: 83 mil de entrada e 4,2 mil de saída, cerca de US$ 0,23 (perto de US$ 0,01 por comentário). As três rodadas somaram cerca de US$ 0,67, pelos preços publicados. A rota de modelo da tarefa entrou com a nota das duas rodadas da v2 (migration 0126), sem modelo econômico; a rotina só chama o modelo na empresa com as funções `comentarios_sugeridos` e `comentarios_responder` ligadas, e o pedido vai a Aprovações.
+
 ## O que ainda falta
 
 - Dividir as instruções das tarefas de chamada única para o cache valer entre empresas quando houver volume (hoje o cache fica só no laço da Conversa e do Estrategista).

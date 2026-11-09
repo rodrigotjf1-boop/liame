@@ -66,7 +66,8 @@ export interface FuncionarioDef {
  * depois da rodada do eval com modelo de verdade, e até lá nenhuma chamada sai. Os posts dele (`social.post`, A6, Z6,
  * os posts) entram do mesmo jeito: o prompt e o eval antes da rotina; a rota da tarefa `social_post` entrou depois das
  * duas rodadas, na migration 0116. As respostas aos comentários (`social.comentario`, A6, Z11, parte 2d-1) também: o
- * prompt e o eval antes da rotina; a rota da tarefa `social_comentario` só depois da rodada paga, que é decisão do dono.
+ * prompt e o eval antes da rotina; a rota da tarefa `social_comentario` entrou depois das duas rodadas pagas, autorizadas
+ * pelo dono, na migration 0126, com a versão 2 do prompt (a 1 reprovou na primeira rodada).
  */
 export const PROMPTS: PromptDef[] = [
   PROMPT_EXPLICAR_RESULTADOS,

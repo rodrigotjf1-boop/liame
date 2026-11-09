@@ -128,10 +128,16 @@ describe('as respostas prontas do elogio e da marcação (sem IA)', () => {
 });
 
 describe('o registro (A6, Z11)', () => {
-  it('o prompt novo, o Social media na versão 3 com as três tarefas, e a trava em dia', () => {
+  it('o prompt na v2, o Social media na versão 3 com as três tarefas, e a trava em dia', () => {
     expect([TAREFA_SOCIAL_COMENTARIO, WORKFLOW_DO_SOCIAL_COMENTARIO]).toEqual(['social_comentario', 'social.comentario']);
     expect(PROMPTS).toContain(PROMPT_SOCIAL_COMENTARIO);
-    expect(PROMPT_SOCIAL_COMENTARIO).toMatchObject({ key: 'social.comentario', version: 1, task: TAREFA_SOCIAL_COMENTARIO });
+    expect(PROMPT_SOCIAL_COMENTARIO).toMatchObject({ key: 'social.comentario', version: 2, task: TAREFA_SOCIAL_COMENTARIO });
+    // A v2 (a primeira rodada paga do eval, 08/11/2026): as três da reclamação começam reconhecendo o problema com as
+    // palavras que o eval confere, o "Explicar o que houve" não vira propaganda, e a compensação não aparece nem negada.
+    const texto = PROMPT_SOCIAL_COMENTARIO.content;
+    expect(texto).toContain('As três começam reconhecendo o que a pessoa conta, com "desculpa", "sentimos" ou "obrigado pelo aviso"');
+    expect(texto).toContain('numa reclamação, nada de propaganda');
+    expect(texto).toContain('Não escreva essas palavras nem para negar ou dizer que não há');
     expect(SOCIAL.version).toBe(3);
     expect(SOCIAL.tarefas.map((t) => t.task)).toEqual(['social_resposta', 'social_post', 'social_comentario']);
     expect(SOCIAL.ferramentas).toEqual([]);
