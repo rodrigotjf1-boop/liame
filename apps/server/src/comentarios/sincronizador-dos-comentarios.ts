@@ -7,6 +7,7 @@ import { contaConectada } from '../connections/conectada.js';
 import { type ClienteConector, ErroConector } from '../connectors/cliente-http.js';
 import { PROVEDOR_INSTAGRAM, PROVEDOR_PAGINA, tokenDaPagina } from '../connectors/meta/publicacao.js';
 import { CAMPOS_DA_LISTA, esperaDaFalhaDoInstagram } from '../fotos/do-seu-instagram.js';
+import { abrirVezDosPedidos } from './pedidos.js';
 import {
   CAMPOS_DO_COMENTARIO_NA_PAGINA,
   CAMPOS_DO_COMENTARIO_NO_INSTAGRAM,
@@ -48,6 +49,11 @@ export type DependenciasDosComentarios = {
   versao: (capacidade: Capacidade) => Promise<string>;
   /** A função `comentarios` da empresa, conferida na vez. */
   ligada: (tenantId: string, brandId: string) => Promise<boolean>;
+  /**
+   * A função dos pedidos do Social media (`comentarios_sugeridos`, A6, Z11, parte 2d-2): ligada, a leitura que deu certo
+   * abre a vez de cada comentário que pede uma ação da marca. Ausente = desligada.
+   */
+  pedidosLigados?: (tenantId: string, brandId: string) => Promise<boolean>;
 };
 
 /** Como terminou a vez de uma conta. */
@@ -57,6 +63,8 @@ export type ResultadoDosComentarios = {
   posts?: number;
   lidos?: number;
   comentarios?: number;
+  /** Quantos comentários entraram na fila dos pedidos do Social media nesta leitura (só com a função ligada). */
+  pedidos?: number;
   erro?: string;
 };
 
@@ -152,11 +160,14 @@ export class SincronizadorDosComentarios {
       return { conta: contaId, status: erro.tipo === 'permissao' ? 'sem_permissao' : 'falhou', erro: erro.message };
     }
 
-    // 3. A gravação: os posts (o que saiu da lista sai daqui), os comentários de cada post lido e o estado.
-    await withTenant(db, tenantId, async (tx) => {
+    // 3. A gravação: os posts (o que saiu da lista sai daqui), os comentários de cada post lido e o estado; com os pedidos
+    // do Social media ligados, a vez dos comentários que pedem uma ação da marca abre na mesma transação.
+    const pedidos = await withTenant(db, tenantId, async (tx) => {
       await this.gravarPosts(tx, conta, tenantId, leitura.posts, leitura.corte, agora);
       for (const l of leitura.lidos) await this.gravarComentarios(tx, conta, tenantId, l, agora);
       await this.marcar(tx, contaId, tenantId, { sucesso: true, erro: null, cursor: { proxima: depois(INTERVALO_DOS_COMENTARIOS_MIN * 60_000), falhas_seguidas: 0 } }, agora);
+      if (!(await this.deps.pedidosLigados?.(tenantId, conta.brand_id))) return null;
+      return abrirVezDosPedidos(tx, { tenantId, brandId: conta.brand_id, connectedAccountId: contaId }, agora);
     });
     return {
       conta: contaId,
@@ -164,6 +175,7 @@ export class SincronizadorDosComentarios {
       posts: leitura.posts.length,
       lidos: leitura.lidos.length,
       comentarios: leitura.lidos.reduce((n, l) => n + l.comentarios.length, 0),
+      ...(pedidos === null ? {} : { pedidos }),
     };
   }
 

@@ -141,6 +141,9 @@ type ComentarioGuardado = {
   resumo: string | null;
 };
 
+/** As ferramentas que o funcionário pede em nome do dono, pela rotina das respostas (A6, Z6 e Z11). */
+const FERRAMENTAS_DE_RESPOSTA_DO_FUNCIONARIO: readonly string[] = ['avaliacao_responder', 'comentario_responder', 'comentario_ocultar'];
+
 /** A legenda do post no pedido de comentário: até este tanto de caracteres (o resto vira reticências). */
 const LEGENDA_NO_PEDIDO_DE_COMENTARIO = 280;
 
@@ -351,10 +354,12 @@ export class ActionService {
    * mesmo trilho do pedido de uma pessoa (trava, flag de escrita, política, a avaliação lida no Google, o plano) e
    * sempre espera a aprovação de uma pessoa com o código do app (a trava `alwaysApproval`); a de 1 ou 2 estrelas, só a
    * do dono (D-A6-4). `emNomeDe` é o dono da empresa: é ele quem responde pelo que o funcionário propõe em público.
+   * Desde a A6, Z11 (parte 2d-2; D-A6-88 e D-A6-89), também a resposta a um comentário (a pronta ou com as sugestões) e
+   * ocultar um comentário, pelo mesmo trilho e sempre com a aprovação de uma pessoa (`alwaysApproval`).
    */
   async pedirRespostaPeloFuncionario(alvo: { tenantId: string; agentKey: string; agentLabel: string; emNomeDe: string }, input: CreateActionRequest): Promise<string> {
-    if (input.tool !== 'avaliacao_responder') {
-      throw new AppProblem(400, 'ferramenta-nao-e-de-resposta', 'Não é uma resposta a avaliação', 'Por aqui o funcionário só pede a resposta a uma avaliação do Google.');
+    if (!FERRAMENTAS_DE_RESPOSTA_DO_FUNCIONARIO.includes(input.tool)) {
+      throw new AppProblem(400, 'ferramenta-nao-e-de-resposta', 'Não é uma resposta', 'Por aqui o funcionário só pede a resposta a uma avaliação do Google ou a um comentário, ou ocultar um comentário.');
     }
     return this.pedirEmNomeDoFuncionario(alvo, input, {});
   }

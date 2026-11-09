@@ -81,6 +81,8 @@ import { ComparacaoDmsIdLoop } from './comparacao-dms-id.js';
 import { RotinaDoCrmService } from './rotina-do-crm.service.js';
 import { SugestoesDeRespostaLoop } from './sugestoes-de-resposta-loop.js';
 import { SugestoesDeRespostaService } from './sugestoes-de-resposta.service.js';
+import { PedidosDosComentariosLoop } from './pedidos-dos-comentarios-loop.js';
+import { PedidosDosComentariosService } from './pedidos-dos-comentarios.service.js';
 import { PostsService } from '../posts/posts.service.js';
 import { PostsSugeridosLoop } from './posts-sugeridos-loop.js';
 import { PostsSugeridosService } from './posts-sugeridos.service.js';
@@ -231,6 +233,12 @@ import { WebhookDeliverer } from './webhook-deliverer.js';
     // as flags `respostas_sugeridas`, `ia` e `perfil_google_write` ligadas e ele ativo na marca; nada é publicado daqui.
     SugestoesDeRespostaService,
     SugestoesDeRespostaLoop,
+    // Os pedidos do Social media para os comentários (A6, Z11, parte 2d-2): a leitura dos comentários abre a vez; a
+    // resposta pronta ao elogio e à marcação, as sugestões à pergunta e à reclamação e o ocultar do golpe e do ofensivo
+    // vão em pedidos em Aprovações, pelo Action Service. Só com `comentarios_sugeridos`, `comentarios`, `social_write` e
+    // `comentarios_responder` ligadas (a IA, só na pergunta e na reclamação) e ele ativo na marca; nada sai daqui.
+    PedidosDosComentariosService,
+    PedidosDosComentariosLoop,
     // Os posts do Social media (A6, Z6, os posts; D-A6-60): a vez de cada dia da pauta aprovada abre de hora em hora, ele
     // escreve, o código confere, e o que passa vira o post na Agenda e o pedido em Aprovações, pelo mesmo caminho do
     // "Novo post" (o serviço dos posts). Só com as flags `posts_sugeridos`, `ia` e `social_write` ligadas e ele ativo na
