@@ -335,6 +335,16 @@ export const ActionComment = z.strictObject({
    * Liame não leu o comentário de novo.
    */
   changed: z.boolean(),
+  /**
+   * O porquê, em código, quando o Social media tirou o pedido de Aprovações porque o comentário mudou (A6, Z11, parte
+   * 2d-5): `respondido_na_rede`, `oculto_na_rede`, `ja_oculto`, `comentario_mudou` ou `comentario_sumiu`. Nulo nos
+   * outros pedidos. A lista pode crescer (V23).
+   */
+  withdrawn: z
+    .string()
+    .regex(/^[a-z_]{2,40}$/)
+    .nullable()
+    .optional(),
 });
 export type ActionComment = z.infer<typeof ActionComment>;
 

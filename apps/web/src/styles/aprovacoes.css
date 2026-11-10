@@ -171,6 +171,15 @@
 .inbox-det .av-bloco .av-fala { padding: var(--sp-3) var(--sp-4); border-radius: var(--radius); background: var(--surface-2); color: var(--text); white-space: pre-line; }
 .inbox-det .av-bloco .av-fala--resposta { background: var(--primary-soft); }
 .inbox-det .av-bloco .av-item-txt--vazio { color: var(--text-muted); font-style: italic; }
+/* O pedido sobre um comentário (P38; A6, Z11, parte 3a): o canal, com o ícone da rede, e o tipo do comentário. */
+.inbox-det .co-canal { display: inline-flex; align-items: center; gap: 5px; height: 22px; padding: 0 8px; border-radius: 6px; background: var(--bg-subtle); color: var(--text); font-size: 11px; font-weight: 600; white-space: nowrap; }
+.inbox-det .co-canal .ic { width: 13px; height: 13px; }
+.inbox-det .co-canal--ig .ic { color: var(--marca-violeta); }
+.inbox-det .co-canal--fb .ic { color: var(--link); }
+.inbox-det .co-tipo { display: inline-flex; align-items: center; min-height: 22px; padding: 1px 8px; border-radius: var(--radius-full); border: 1px solid var(--border); color: var(--text-muted); font-size: 11px; font-weight: 600; }
+.inbox-det .co-tipo--reclamacao { border-color: color-mix(in srgb, var(--warning) 45%, var(--border)); color: var(--warning); }
+.inbox-det .co-tipo--golpe { border-color: color-mix(in srgb, var(--danger) 45%, var(--border)); color: var(--danger); }
+.inbox-det .co-tipo--pergunta { border-color: color-mix(in srgb, var(--fio) 45%, var(--border)); color: var(--link); }
 .inbox-det .av-editar { display: grid; gap: var(--sp-2); }
 .inbox-det .av-editar textarea { width: 100%; min-height: 132px; padding: var(--sp-3); border: 1px solid var(--border-strong); border-radius: var(--radius); background: var(--surface); color: var(--text); font: inherit; font-size: var(--text-sm); resize: vertical; outline: none; }
 .inbox-det .av-editar textarea:focus-visible { border-color: var(--foco); box-shadow: var(--focus-ring); }

@@ -25,6 +25,8 @@ import { marcasAtivas, planosDasMarcas } from './buscar-planos';
 import { DetalheAnuncio, type Volta } from './detalhe-anuncio';
 import { DetalheMensagem, type Feito } from './detalhe-mensagem';
 import { type AcaoDeMensagem, ehPedidoDeMensagem, etiquetaDaMensagem, mensagemApresentada } from './mensagem-textos';
+import { type AcaoDeComentario, canalETipoDaLista, comentarioApresentado, ehPedidoDeComentario, etiquetaDoComentario, operacaoDo } from './comentario-textos';
+import { DetalheComentario } from './detalhe-comentario';
 import { DetalhePedido } from './detalhe-pedido';
 import { DetalhePlano } from './detalhe-plano';
 import { DetalhePost } from './detalhe-post';
@@ -273,7 +275,9 @@ export function AprovacoesTela() {
           ? respostaApresentada(a, nomeDe(a))
           : ehPedidoDePost(a)
             ? postApresentado(a, agora)
-            : apresentar(a);
+            : ehPedidoDeComentario(a)
+              ? comentarioApresentado(a)
+              : apresentar(a);
   const planos = carga.tipo === 'ok' ? carga.planos : [];
   const marcas = carga.tipo === 'ok' ? carga.marcas : [];
   const grupos = montarLista(acoes, planos, agora);
@@ -514,6 +518,17 @@ export function AprovacoesTela() {
     return { ok: true };
   }
 
+  // ---- a resposta a um comentário (P38): o texto se edita como o da resposta à avaliação (o plano é outro, e a
+  // aprovação vale para ele); as sugestões do Social media ficam no pedido.
+  async function salvarTextoDoComentario(acao: AcaoDeComentario, texto: string): Promise<Feito> {
+    const r = await chamar(() => api.PATCH('/v1/actions/{id}', { params: { path: { id: acao.id } }, body: { params: { texto } } }));
+    if (!r.ok) return { ok: false, texto: r.problema.status >= 500 ? mensagemDe(r.problema) : erroDoTexto(r.problema) };
+    avisar('Texto salvo e conferido de novo. A aprovação vale para este texto.');
+    await carregar();
+    focarOTitulo();
+    return { ok: true };
+  }
+
   // ---- as sugestões do Social media (P31): escolher outra sugestão e salvar a versão ajustada alteram o texto do pedido
   // (o plano é outro, e a aprovação vale para ele); o foco fica com o detalhe, que o leva à lista das opções.
   async function alterarTextoDaSugestao(acao: AcaoDeResposta, texto: string, aviso: string): Promise<Feito> {
@@ -673,6 +688,8 @@ export function AprovacoesTela() {
     const mensagem = ehPedidoDeMensagem(a) ? a : null;
     const resposta = ehPedidoDeResposta(a) ? a : null;
     const post = ehPedidoDePost(a) ? a : null;
+    // O comentário (P38): o canal e o tipo vêm à frente, e o ícone diz se é responder ou ocultar.
+    const comentario = ehPedidoDeComentario(a) ? a : null;
     const risco = anuncio ? textosDoAnuncio(anuncio, mes).risco : riscoDe(a);
     // Na resposta a uma avaliação, a nota vem à frente, e a de 1 ou 2 estrelas diz que só o dono aprova (P17); o post
     // diz que é público, e os canais vêm à frente (P19).
@@ -685,7 +702,7 @@ export function AprovacoesTela() {
       <li key={i.chave}>
         <button className="ap-item" type="button" aria-current={atual} onClick={() => abrir(i.chave, true)}>
           <span className={quem.funcionario ? 'ap-av ap-av--func' : 'ap-av'} aria-hidden="true">
-            {quem.funcionario ? <Icone nome={a.agent_key === 'social' ? 'message' : 'megaphone'} /> : iniciais(a.requested_by.name)}
+            {quem.funcionario ? <Icone nome={comentario && operacaoDo(comentario) === 'ocultar' ? 'eye-off' : a.agent_key === 'social' ? 'message' : 'megaphone'} /> : iniciais(a.requested_by.name)}
           </span>
           <span>
             <span className="ap-titulo">{p.titulo}</span>
@@ -694,6 +711,7 @@ export function AprovacoesTela() {
                 <>
                   {p.impacto && <span className="dinheiro">{p.impacto}</span>}
                   {post && <span>{canaisDaLista(post.post)}</span>}
+                  {comentario && <span>{canalETipoDaLista(comentario)}</span>}
                   {estrelas && <span>{estrelasEscritas(estrelas)}</span>}
                   {sugestoes > 0 && <span>{sugestoes === 1 ? '1 sugestão' : `${sugestoes} sugestões`}</span>}
                   <span className={`risco risco--${riscoEscrito.classe}`}>{riscoEscrito.rotulo}</span>
@@ -702,7 +720,19 @@ export function AprovacoesTela() {
               ) : (
                 <>
                   <span>{quem.nome}</span>
-                  <span>{anuncio ? etiquetaDoAnuncio(anuncio) : mensagem ? etiquetaDaMensagem(mensagem) : resposta ? etiquetaDaResposta(resposta) : post ? etiquetaDoPost(post) : etiquetaDoDecidido(a)}</span>
+                  <span>
+                    {anuncio
+                      ? etiquetaDoAnuncio(anuncio)
+                      : mensagem
+                        ? etiquetaDaMensagem(mensagem)
+                        : resposta
+                          ? etiquetaDaResposta(resposta)
+                          : post
+                            ? etiquetaDoPost(post)
+                            : comentario
+                              ? etiquetaDoComentario(comentario)
+                              : etiquetaDoDecidido(a)}
+                  </span>
                 </>
               )}
             </span>
@@ -914,6 +944,28 @@ export function AprovacoesTela() {
         aoRecusar={recusar}
         aoConferir={conferirMensagem}
         aoPausar={pausarMensagem}
+      />
+    );
+  } else if (aberta?.tipo === 'acao' && ehPedidoDeComentario(aberta.acao)) {
+    // O pedido sobre um comentário (P38): responder (com o texto editável) ou ocultar, como a resposta à avaliação.
+    const comentario = aberta.acao;
+    detalhe = (
+      <DetalheComentario
+        acao={comentario}
+        grupo={grupoDe(comentario, agora)}
+        agora={agora}
+        pro={pro}
+        euPedi={comentario.requested_by.id === me.user.id}
+        podeDecidir={podeDecidir}
+        podeOperar={podeOperar}
+        temApp={temApp}
+        temChave={temChave}
+        titulo={tituloDoDetalhe}
+        campoCodigo={campoCodigo}
+        aoVoltar={voltarParaALista}
+        aoAprovar={aprovar}
+        aoRecusar={recusar}
+        aoSalvarTexto={salvarTextoDoComentario}
       />
     );
   } else if (aberta?.tipo === 'acao') {

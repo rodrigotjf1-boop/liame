@@ -1989,6 +1989,8 @@ function comentarioDaResposta(row: ActionRow, ap: Apresentacao): ActionComment |
     current: guardado?.current ?? null,
     post: postId ? (ap.postsDosComentarios.get(`${row.account_id}:${postId}`) ?? null) : null,
     changed: Boolean(guardado && antes.success && guardado.lidoEm > new Date(row.created_at) && guardado.resumo !== antes.data.texto_resumo),
+    // O Social media tirou o pedido de Aprovações (A6, Z11, parte 2d-5): o porquê, para a tela dizer o que houve.
+    withdrawn: retiradaDe(row),
   };
 }
 
