@@ -8,6 +8,7 @@ import { type ClienteConector, ErroConector } from '../connectors/cliente-http.j
 import { PROVEDOR_INSTAGRAM, PROVEDOR_PAGINA, tokenDaPagina } from '../connectors/meta/publicacao.js';
 import { CAMPOS_DA_LISTA, esperaDaFalhaDoInstagram } from '../fotos/do-seu-instagram.js';
 import { abrirVezDosPedidos } from './pedidos.js';
+import { abrirVezDosTipos } from './tipos.js';
 import {
   CAMPOS_DO_COMENTARIO_NA_PAGINA,
   CAMPOS_DO_COMENTARIO_NO_INSTAGRAM,
@@ -65,6 +66,8 @@ export type ResultadoDosComentarios = {
   comentarios?: number;
   /** Quantos comentários entraram na fila dos pedidos do Social media nesta leitura (só com a função ligada). */
   pedidos?: number;
+  /** Quantos comentários sem tipo entraram na fila do tipo pela IA nesta leitura (só com a função ligada). */
+  tipos?: number;
   erro?: string;
 };
 
@@ -161,13 +164,15 @@ export class SincronizadorDosComentarios {
     }
 
     // 3. A gravação: os posts (o que saiu da lista sai daqui), os comentários de cada post lido e o estado; com os pedidos
-    // do Social media ligados, a vez dos comentários que pedem uma ação da marca abre na mesma transação.
-    const pedidos = await withTenant(db, tenantId, async (tx) => {
+    // do Social media ligados, a vez dos comentários que pedem uma ação da marca abre na mesma transação, e a do tipo pela
+    // IA (A6, Z11, parte 2d-4c) para os que a regra deixou sem tipo.
+    const vezes = await withTenant(db, tenantId, async (tx) => {
       await this.gravarPosts(tx, conta, tenantId, leitura.posts, leitura.corte, agora);
       for (const l of leitura.lidos) await this.gravarComentarios(tx, conta, tenantId, l, agora);
       await this.marcar(tx, contaId, tenantId, { sucesso: true, erro: null, cursor: { proxima: depois(INTERVALO_DOS_COMENTARIOS_MIN * 60_000), falhas_seguidas: 0 } }, agora);
       if (!(await this.deps.pedidosLigados?.(tenantId, conta.brand_id))) return null;
-      return abrirVezDosPedidos(tx, { tenantId, brandId: conta.brand_id, connectedAccountId: contaId }, agora);
+      const daConta = { tenantId, brandId: conta.brand_id, connectedAccountId: contaId };
+      return { pedidos: await abrirVezDosPedidos(tx, daConta, agora), tipos: await abrirVezDosTipos(tx, daConta, agora) };
     });
     return {
       conta: contaId,
@@ -175,7 +180,7 @@ export class SincronizadorDosComentarios {
       posts: leitura.posts.length,
       lidos: leitura.lidos.length,
       comentarios: leitura.lidos.reduce((n, l) => n + l.comentarios.length, 0),
-      ...(pedidos === null ? {} : { pedidos }),
+      ...(vezes === null ? {} : vezes),
     };
   }
 
