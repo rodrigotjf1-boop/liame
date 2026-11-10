@@ -6,7 +6,7 @@ import { ANALISTA } from '../ai/explicar/prompt.js';
 import { PESQUISADOR } from '../ai/pesquisador/prompt.js';
 import { WORKFLOW_DO_REVISOR } from '../ai/revisor/prompt.js';
 import type { FuncionarioDef } from '../ai/registro/definicoes.js';
-import { SOCIAL, WORKFLOW_DO_SOCIAL, WORKFLOW_DO_SOCIAL_COMENTARIO, WORKFLOW_DO_SOCIAL_POST } from '../ai/social/prompt.js';
+import { SOCIAL, WORKFLOW_DO_SOCIAL, WORKFLOW_DO_SOCIAL_COMENTARIO, WORKFLOW_DO_SOCIAL_COMENTARIO_TIPO, WORKFLOW_DO_SOCIAL_POST } from '../ai/social/prompt.js';
 
 // A equipe da A3 (I13b; protótipo P7, aprovado em 03/10/2026): quem trabalha para a marca. Os funcionários de IA têm
 // definição no registro (`ai/registro/definicoes.ts`) e a ativação da distribuição; Relatórios, Compliance e o Gestor
@@ -70,8 +70,15 @@ export const EQUIPE: Record<Membro, DefinicaoDoMembro> = {
   crm: { key: CRM_DA_EQUIPE, kind: 'ia', funcionario: CRM, fluxos: [WORKFLOW_DO_CRM], desligavel: true },
   // A chave é a do funcionário no registro, a do pedido que ele faz (`action_request.agent_key`) e a da pausa que as
   // rotinas dele conferem (`oQueDesligaAsSugestoes`, `oQueDesligaOsPosts` e `oQueDesligaOsPedidos`): desligado aqui, ele
-  // não sugere resposta, não propõe post nem pede nada pelos comentários nesta marca. O custo soma os três trabalhos: as respostas, os posts e os comentários (A6, Z11, parte 2d-2).
-  social: { key: SOCIAL_DA_EQUIPE, kind: 'ia', funcionario: SOCIAL, fluxos: [WORKFLOW_DO_SOCIAL, WORKFLOW_DO_SOCIAL_POST, WORKFLOW_DO_SOCIAL_COMENTARIO], desligavel: true },
+  // não sugere resposta, não propõe post nem pede nada pelos comentários nesta marca. O custo soma os três trabalhos: as
+  // respostas, os posts e os comentários (A6, Z11, parte 2d-2), com o tipo do comentário que ele decide (parte 2d-4c).
+  social: {
+    key: SOCIAL_DA_EQUIPE,
+    kind: 'ia',
+    funcionario: SOCIAL,
+    fluxos: [WORKFLOW_DO_SOCIAL, WORKFLOW_DO_SOCIAL_POST, WORKFLOW_DO_SOCIAL_COMENTARIO, WORKFLOW_DO_SOCIAL_COMENTARIO_TIPO],
+    desligavel: true,
+  },
 };
 
 export const ehMembro = (key: string): key is Membro => (MEMBROS as readonly string[]).includes(key);

@@ -37,6 +37,7 @@ import { SombraLoop } from './sombra-loop.js';
 import { PostsSugeridosLoop } from './posts-sugeridos-loop.js';
 import { SugestoesDeRespostaLoop } from './sugestoes-de-resposta-loop.js';
 import { PedidosDosComentariosLoop } from './pedidos-dos-comentarios-loop.js';
+import { TiposDosComentariosLoop } from './tipos-dos-comentarios-loop.js';
 import { VendasLoop } from './vendas-loop.js';
 import { InboxProcessor } from './inbox-processor.js';
 import { OutboxPublisher } from './outbox-publisher.js';
@@ -88,6 +89,7 @@ export class EventsLoopService implements OnApplicationBootstrap, OnApplicationS
     private readonly doSeuInstagram: DoSeuInstagramLoop,
     private readonly comentarios: ComentariosLoop,
     private readonly pedidosDosComentarios: PedidosDosComentariosLoop,
+    private readonly tiposDosComentarios: TiposDosComentariosLoop,
     private readonly sugestoes: SugestoesDeRespostaLoop,
     private readonly postsSugeridos: PostsSugeridosLoop,
     private readonly assinaturas: AssinaturasLoop,
@@ -175,6 +177,9 @@ export class EventsLoopService implements OnApplicationBootstrap, OnApplicationS
       // um que pede uma ação da marca (com a função `comentarios_sugeridos` ligada); a fila é olhada a cada 30 segundos.
       // Quem espera a vez (uma chave desligada, sem a rota do modelo, o limite) volta em uma hora.
       this.loop('pedidos-dos-comentarios', 5, 30_000, async (n) => (await this.pedidosDosComentarios.executarLote(n)).length),
+      // O tipo do comentário pela IA (A6, Z11, parte 2d-4c): a mesma leitura abre a vez do comentário que a regra deixou
+      // sem tipo; com o tipo decidido, a vez do pedido abre junto e entra na fila de cima. Olhada a cada 30 segundos.
+      this.loop('tipos-dos-comentarios', 5, 30_000, async (n) => (await this.tiposDosComentarios.executarLote(n)).length),
       // As sugestões de resposta do Social media (A6, Z6): a avaliação nova entra na fila na leitura do Perfil que a
       // trouxe, e o "Pedir outras" entra quando a pessoa pede, com ela esperando na tela de Aprovações (P31): por isso a
       // fila é olhada de 15 em 15 segundos (a do "Pedir outras" primeiro). Quem espera a vez (a IA desligada, o limite)

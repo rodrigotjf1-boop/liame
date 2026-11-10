@@ -231,6 +231,10 @@ export const DATA_CLASSES: Record<string, TableClassification> = {
   // a conferência barrou (os nomes das regras) e o pedido que saiu; nenhum texto (o das sugestões fica no pedido) e nada
   // de quem comentou. Sai com o comentário (em cascata), na guarda de 90 dias dele.
   comment_suggestion: { class: 'INTERNAL', retention: 'com o comentário (sai com ele, na guarda de 90 dias dele)' },
+  // A vez do tipo pela IA de cada comentário que a regra deixou sem tipo (A6, Z11, parte 2d-4c, migration 0128): a
+  // situação, o tipo que saiu (ou "nenhum"), o porquê em código e a marca do texto julgado (o SHA-256, não o texto); nada
+  // de quem comentou. Sai com o comentário (em cascata), na guarda de 90 dias dele.
+  comment_kind_check: { class: 'INTERNAL', retention: 'com o comentário (sai com ele, na guarda de 90 dias dele)' },
   // Os posts da marca (A6, Z5b, migration 0086): a foto (pela referência e o resumo), a hora e cada canal com o texto
   // que a empresa escreveu em nome dela e o que aconteceu na rede. Conteúdo da empresa, sem dado de pessoa. Fica com a
   // marca: é o histórico da Agenda e o que diz o que saiu, onde e quando.
