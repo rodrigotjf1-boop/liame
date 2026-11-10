@@ -68,7 +68,8 @@ export interface FuncionarioDef {
  * duas rodadas, na migration 0116. As respostas aos comentários (`social.comentario`, A6, Z11, parte 2d-1) também: o
  * prompt e o eval antes da rotina; a rota da tarefa `social_comentario` entrou depois das duas rodadas pagas, autorizadas
  * pelo dono, na migration 0126, com a versão 2 do prompt (a 1 reprovou na primeira rodada). O tipo do comentário pela
- * IA (`social.comentario_tipo`, A6, Z11, parte 2d-4a) do mesmo jeito: o prompt e o eval antes da rotina e da rota.
+ * IA (`social.comentario_tipo`, A6, Z11, parte 2d-4a) do mesmo jeito: o prompt e o eval antes da rotina; a rota entrou
+ * depois das duas rodadas pagas, na migration 0127, com o Haiku 5.5 (o mais barato que passou).
  */
 export const PROMPTS: PromptDef[] = [
   PROMPT_EXPLICAR_RESULTADOS,

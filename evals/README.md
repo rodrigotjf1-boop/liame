@@ -337,6 +337,17 @@ O que mudou no prompt (`social.comentario` v2): as três sugestões de uma recla
 
 Tokens de cada rodada da v2: 83 mil de entrada e 4,2 mil de saída, cerca de US$ 0,23 (perto de US$ 0,01 por comentário). As três rodadas somaram cerca de US$ 0,67, pelos preços publicados. A rota de modelo da tarefa entrou com a nota das duas rodadas da v2 (migration 0126), sem modelo econômico; a rotina só chama o modelo na empresa com as funções `comentarios_sugeridos` e `comentarios_responder` ligadas, e o pedido vai a Aprovações.
 
+### O tipo do comentário pela IA (10/11/2026)
+
+As rodadas pagas do `social_comentario_tipo` (o portão da função, A6-12), com o gasto autorizado pelo dono (teto de US$ 0,50), na chave do workspace de testes: **esforço `low`, `AI_INFERENCE_GEO=us`**, o **Haiku 5.5** (o "modelo econômico" da D-A6-87, o candidato) e o **Sonnet 5.5** para comparar. O prompt é o `social.comentario_tipo` v1 que está no ar, sem mudança.
+
+| Rodada | Haiku 5.5 | Sonnet 5.5 |
+| --- | --- | --- |
+| 1ª | **24 de 24, aprovado** (US$ 0,004) | **24 de 24, aprovado** (US$ 0,085) |
+| Confirmação | **24 de 24, aprovado** (US$ 0,004) | não rodou: o Haiku passou nas duas, e ele é o modelo da rota |
+
+Os dois modelos deram os mesmos tipos. A resposta é uma palavra, e os tokens de saída de cada caso (14 a 16) se repetem entre as rodadas, mas cada rodada chamou o seu modelo, sem cache (`--no-cache`; o modelo de cada resposta está na saída do promptfoo). Tokens de cada rodada: 37 mil de entrada e 362 de saída, cerca de US$ 0,0002 por comentário no Haiku. As três rodadas somaram cerca de US$ 0,09, pelos preços publicados. A rota de modelo da tarefa entrou com o Haiku 5.5 como modelo principal, sem reserva nem econômico (migration 0127); nenhuma rotina chama a tarefa ainda (a rotina vem na parte 2d-4c).
+
 ## O que ainda falta
 
 - Dividir as instruções das tarefas de chamada única para o cache valer entre empresas quando houver volume (hoje o cache fica só no laço da Conversa e do Estrategista).
