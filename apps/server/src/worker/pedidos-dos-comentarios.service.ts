@@ -3,6 +3,7 @@ import { Inject, Injectable, Logger } from '@nestjs/common';
 import { sql } from 'drizzle-orm';
 import { ActionService } from '../actions/action.service.js';
 import { recursoDoComentario } from '../actions/comentario-na-rede.js';
+import { EstadoDoComentario, resumoDoComentario } from '../actions/comentario-plano.js';
 import { AiError, AiGateway } from '../ai/gateway.js';
 import { naTransacaoDaEmpresa } from '../ai/na-empresa.js';
 import { registrarRecusa } from '../ai/recusas.js';
@@ -22,11 +23,15 @@ import {
   FERRAMENTA_DA_OPERACAO,
   lerVez,
   MINUTOS_DE_ESPERA_DOS_PEDIDOS,
+  marcarVezOlhada,
   marcarVezPronta,
+  marcarVezRetirada,
+  motivoDaRetirada,
   type OperacaoDoPedido,
   operacaoDoTipo,
   oQueDesligaOsPedidos,
   PEDIDO_EM_ANDAMENTO,
+  type RetiradaDoComentario,
   TENTATIVAS_DOS_PEDIDOS,
 } from '../comentarios/pedidos.js';
 import { contaConectada } from '../connections/conectada.js';
@@ -89,6 +94,11 @@ type Lido = {
   /** Só na pergunta e na reclamação: o que vai ao Social media, a base da conferência e o que a marca já escreve. */
   ia: { pedido: PedidoDeComentarioDoSocial; base: BaseDoTextoDeResposta; conhecido: string } | null;
 };
+
+/** O que a conferência da retirada fez com o pedido (A6, Z11, parte 2d-5). */
+export type VezDaRetiradaDoComentario = { status: 'retirada'; motivo: RetiradaDoComentario; pedido: string } | { status: 'igual' } | { status: 'fora' };
+
+const ehUuid = (v: string): boolean => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(v);
 
 /** A vez acabou enquanto o pedido era montado (outra volta da rotina a tratou): o pedido não pode ficar. */
 class ForaDaFila extends Error {}
@@ -197,6 +207,63 @@ export class PedidosDosComentariosService {
       const ate = new Date(agora.getTime() + minutosAteATentativa(s.attempts) * MINUTO_MS);
       if (!(await adiarVez(tx, alvo, codigo, ate, agora))) return { status: 'fora' };
       return { status: 'falhou', motivo: codigo, deVez: false };
+    });
+  }
+
+  /**
+   * A retirada (A6, Z11, parte 2d-5; D-A6-102): o pedido do Social media sobre um comentário, que ainda espera a decisão,
+   * sai de Aprovações quando o comentário deixou de ser o que o pedido leu (respondido direto na rede, ocultado, editado,
+   * apagado). O pedido sai pelo Action Service, em nome do Social media (a reserva volta, nada é executado, o porquê fica
+   * no motivo), e a vez acaba retirada. Nada mudou: a vez fica marcada como olhada, até a próxima leitura. Tudo numa
+   * transação da empresa; o pedido é travado pelo Action Service: duas voltas ao mesmo tempo não retiram em dobro.
+   */
+  async retirarSeMudou(alvo: { tenantId: string; actionId: string }, agora = new Date()): Promise<VezDaRetiradaDoComentario> {
+    return naTransacaoDaEmpresa<VezDaRetiradaDoComentario>(this.banco(), { tenantId: alvo.tenantId, userId: null }, async () => {
+      const tx = currentTx();
+      const p = (
+        await tx.execute<{ status: string; actor_type: string; agent_key: string | null; tool: string; account_id: string | null; resource_id: string | null; before_state: unknown }>(sql`
+          select status, actor_type, agent_key, tool, account_id, resource_id, before_state
+            from liame.action_request where id = ${alvo.actionId} and tenant_id = ${alvo.tenantId}`)
+      ).rows[0];
+      if (!p || p.status !== 'aguardando_aprovacao' || p.actor_type !== 'agent' || p.agent_key !== SOCIAL.key) return { status: 'fora' };
+      if (p.tool !== FERRAMENTA_DA_OPERACAO.responder && p.tool !== FERRAMENTA_DA_OPERACAO.ocultar) return { status: 'fora' };
+      const prefixo = recursoDoComentario('');
+      const commentId = p.resource_id?.startsWith(prefixo) ? p.resource_id.slice(prefixo.length) : null;
+      if (!commentId || !p.account_id || !ehUuid(p.account_id)) return { status: 'fora' };
+      const c = (
+        await tx.execute<{ message: string; hidden: boolean; respondido: boolean }>(sql`
+          select c.message, c.hidden,
+                 exists (select 1 from liame.social_comment r
+                          where r.connected_account_id = c.connected_account_id and r.parent_comment_id = c.comment_id and r.by_brand) as respondido
+            from liame.social_comment c
+           where c.connected_account_id = ${p.account_id}::uuid and c.comment_id = ${commentId} and c.tenant_id = ${alvo.tenantId}`)
+      ).rows[0];
+      // A vez sai com o comentário (em cascata): o pedido do comentário que sumiu do Liame não tem mais vez.
+      const vez = (
+        await tx.execute<{ id: string }>(sql`
+          select id from liame.comment_suggestion where action_id = ${alvo.actionId} and tenant_id = ${alvo.tenantId} and status = 'pronta' for update`)
+      ).rows[0];
+      const antes = EstadoDoComentario.safeParse(p.before_state);
+      const motivo = motivoDaRetirada(
+        { ferramenta: p.tool, resumoDoPedido: antes.success ? antes.data.texto_resumo : null },
+        c ? { oculto: c.hidden, respondido: c.respondido, resumoAgora: resumoDoComentario(c.message) } : null,
+      );
+      if (!motivo) {
+        if (vez) await marcarVezOlhada(tx, { tenantId: alvo.tenantId, id: vez.id }, agora);
+        return { status: 'igual' };
+      }
+      const quem = { tenantId: alvo.tenantId, agentKey: SOCIAL.key, agentLabel: SOCIAL.name };
+      // Quem decidiu antes (aprovou, recusou) ganha: o Action Service não retira o que já não espera.
+      if (!(await this.acoes.retirarPeloFuncionario(quem, alvo.actionId, motivo))) return { status: 'fora' };
+      if (vez) {
+        const daVez = { tenantId: alvo.tenantId, id: vez.id };
+        if (!(await marcarVezRetirada(tx, daVez, motivo, agora))) throw new ForaDaFila();
+        await this.auditar(tx, daVez, 'comentario.retirar_pedido', { reason: motivo, action_id: alvo.actionId });
+      }
+      return { status: 'retirada', motivo, pedido: alvo.actionId };
+    }).catch((err: unknown) => {
+      if (err instanceof ForaDaFila) return { status: 'fora' as const };
+      throw err;
     });
   }
 
