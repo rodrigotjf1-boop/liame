@@ -84,6 +84,9 @@ export function FormularioDoTexto({
   inicial,
   podeCancelar,
   comConta = false,
+  dica = DICA_DO_TEXTO,
+  maximo = TAMANHO_DA_RESPOSTA,
+  validar = textoDaRespostaValido,
   aoSalvar,
   aoCancelar,
 }: {
@@ -91,6 +94,11 @@ export function FormularioDoTexto({
   inicial: string;
   podeCancelar: boolean;
   comConta?: boolean;
+  /** A dica embaixo do campo; a da resposta à avaliação por padrão (a do comentário fala de quem comentou). */
+  dica?: string;
+  /** O limite do campo e a conferência antes de salvar: os da resposta à avaliação por padrão. */
+  maximo?: number;
+  validar?: (texto: string) => string | null;
   aoSalvar: (texto: string) => Promise<Feito>;
   aoCancelar: () => void;
 }) {
@@ -108,7 +116,7 @@ export function FormularioDoTexto({
 
   async function salvar(e: FormEvent) {
     e.preventDefault();
-    const invalido = textoDaRespostaValido(texto);
+    const invalido = validar(texto);
     if (invalido) return setErro(invalido);
     setErro(null);
     setOcupado(true);
@@ -125,7 +133,7 @@ export function FormularioDoTexto({
       <textarea
         ref={campo}
         id={`${ids}-texto`}
-        maxLength={TAMANHO_DA_RESPOSTA}
+        maxLength={maximo}
         value={texto}
         disabled={ocupado}
         aria-invalid={erro ? true : undefined}
@@ -146,7 +154,7 @@ export function FormularioDoTexto({
         </p>
       ) : (
         <p className="eixo-nota" id={`${ids}-texto-dica`}>
-          {DICA_DO_TEXTO}
+          {dica}
         </p>
       )}
       <div className="av-editar-acoes">

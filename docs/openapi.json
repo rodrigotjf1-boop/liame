@@ -20228,6 +20228,13 @@
                         },
                         "changed": {
                           "type": "boolean"
+                        },
+                        "withdrawn": {
+                          "type": [
+                            "string",
+                            "null"
+                          ],
+                          "pattern": "^[a-z_]{2,40}$"
                         }
                       },
                       "required": [
@@ -22247,6 +22254,13 @@
                               },
                               "changed": {
                                 "type": "boolean"
+                              },
+                              "withdrawn": {
+                                "type": [
+                                  "string",
+                                  "null"
+                                ],
+                                "pattern": "^[a-z_]{2,40}$"
                               }
                             },
                             "required": [
@@ -24918,6 +24932,13 @@
                         },
                         "changed": {
                           "type": "boolean"
+                        },
+                        "withdrawn": {
+                          "type": [
+                            "string",
+                            "null"
+                          ],
+                          "pattern": "^[a-z_]{2,40}$"
                         }
                       },
                       "required": [
@@ -26752,6 +26773,13 @@
                         },
                         "changed": {
                           "type": "boolean"
+                        },
+                        "withdrawn": {
+                          "type": [
+                            "string",
+                            "null"
+                          ],
+                          "pattern": "^[a-z_]{2,40}$"
                         }
                       },
                       "required": [
@@ -28568,6 +28596,13 @@
                         },
                         "changed": {
                           "type": "boolean"
+                        },
+                        "withdrawn": {
+                          "type": [
+                            "string",
+                            "null"
+                          ],
+                          "pattern": "^[a-z_]{2,40}$"
                         }
                       },
                       "required": [
@@ -30492,6 +30527,13 @@
                         },
                         "changed": {
                           "type": "boolean"
+                        },
+                        "withdrawn": {
+                          "type": [
+                            "string",
+                            "null"
+                          ],
+                          "pattern": "^[a-z_]{2,40}$"
                         }
                       },
                       "required": [
@@ -32430,6 +32472,13 @@
                               },
                               "changed": {
                                 "type": "boolean"
+                              },
+                              "withdrawn": {
+                                "type": [
+                                  "string",
+                                  "null"
+                                ],
+                                "pattern": "^[a-z_]{2,40}$"
                               }
                             },
                             "required": [
@@ -34407,6 +34456,13 @@
                         },
                         "changed": {
                           "type": "boolean"
+                        },
+                        "withdrawn": {
+                          "type": [
+                            "string",
+                            "null"
+                          ],
+                          "pattern": "^[a-z_]{2,40}$"
                         }
                       },
                       "required": [
@@ -36351,6 +36407,13 @@
                         },
                         "changed": {
                           "type": "boolean"
+                        },
+                        "withdrawn": {
+                          "type": [
+                            "string",
+                            "null"
+                          ],
+                          "pattern": "^[a-z_]{2,40}$"
                         }
                       },
                       "required": [
@@ -38295,6 +38358,13 @@
                         },
                         "changed": {
                           "type": "boolean"
+                        },
+                        "withdrawn": {
+                          "type": [
+                            "string",
+                            "null"
+                          ],
+                          "pattern": "^[a-z_]{2,40}$"
                         }
                       },
                       "required": [
@@ -40111,6 +40181,13 @@
                         },
                         "changed": {
                           "type": "boolean"
+                        },
+                        "withdrawn": {
+                          "type": [
+                            "string",
+                            "null"
+                          ],
+                          "pattern": "^[a-z_]{2,40}$"
                         }
                       },
                       "required": [

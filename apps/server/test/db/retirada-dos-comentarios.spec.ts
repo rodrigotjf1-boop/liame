@@ -149,6 +149,12 @@ describe.skipIf(!hasDb)('a retirada do pedido do Social media quando o comentár
     expect(await pedido(pedidoDe.get(respondido)!)).toEqual({ status: 'cancelada', status_reason: `${PREFIXO_RETIRADA}respondido_na_rede` });
     expect(await pedido(pedidoDe.get(apagado)!)).toEqual({ status: 'cancelada', status_reason: `${PREFIXO_RETIRADA}comentario_sumiu` });
     expect((await pedido(pedidoDe.get(igual)!)).status).toBe('aguardando_aprovacao');
+    // A rota do pedido diz o porquê no comentário (`comment.withdrawn`), para Aprovações dizer o que houve (parte 3a).
+    const visto = await api.call('GET', `/v1/actions/${pedidoDe.get(respondido)}`, { cookie: e.cookie });
+    expect(visto.status, JSON.stringify(visto.body)).toBe(200);
+    expect((visto.body as { comment: { withdrawn: string | null } }).comment.withdrawn).toBe('respondido_na_rede');
+    const esperando = await api.call('GET', `/v1/actions/${pedidoDe.get(igual)}`, { cookie: e.cookie });
+    expect((esperando.body as { comment: { withdrawn: string | null } }).comment.withdrawn).toBeNull();
     // A vez acaba retirada, com o porquê (a do comentário apagado saiu com ele); a do que não mudou segue pronta.
     const depois = new Map((await vezes(e)).map((v) => [v.comment_id, [v.status, v.reason]]));
     expect([respondido, editado, golpe, ocultado, igual].map((id) => depois.get(id))).toEqual([
