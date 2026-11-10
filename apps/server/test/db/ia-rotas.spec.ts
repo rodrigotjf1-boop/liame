@@ -71,7 +71,7 @@ describe.skipIf(!hasDb)('rotas de modelo da distribuição (A3, I3; A4, X6; A5, 
       [TAREFA_REVISAO, TAREFA_CONVERSA, TAREFA_CRIATIVO_TEXTO, TAREFA_CRM_MENSAGEM, TAREFA_ESTRATEGISTA, TAREFA_EXPLICAR_RESULTADOS, TAREFA_PESQUISADOR, TAREFA_SOCIAL_COMENTARIO, TAREFA_SOCIAL_COMENTARIO_TIPO, TAREFA_SOCIAL_POST, TAREFA_SOCIAL_RESPOSTA].sort(),
     );
     for (const x of r) {
-      expect({ task: x.task, ...x }).toMatchObject({ task: x.task, provider: 'anthropic', model: MODELO_DA_TAREFA(x.task), effort: 'low', fallback: [], eval_threshold: 0.95 });
+      expect(x).toMatchObject({ task: x.task, provider: 'anthropic', model: MODELO_DA_TAREFA(x.task), effort: 'low', fallback: [], eval_threshold: 0.95 });
       if (COM_ECONOMICO.has(x.task) && x.version === 2) expect(x.economy_model).toBe('claude-haiku-5-5');
       else expect(x).toMatchObject({ version: 1, economy_model: null });
       // A que entrou valendo tem a data da publicação; o rascunho, não.
