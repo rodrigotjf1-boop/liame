@@ -177,6 +177,51 @@ export async function barrarVez(tx: Tx, alvo: DonoDaVez, oQueBarrou: readonly st
   return r.rows.length === 1;
 }
 
+// ---- A retirada (A6, Z11, parte 2d-5; D-A6-102) --------------------------------------------------------------------
+// O pedido do Social media que ainda espera a decisão sai de Aprovações quando o comentário deixa de ser o que o pedido
+// leu: respondido direto na rede, ocultado, editado ou apagado. A vez acaba `retirada`, com o porquê; o comentário segue
+// com o "Responder" de sempre. Aprovar um pedido assim já não faria nada (a execução confere a versão do comentário),
+// mas ele ocuparia Aprovações à toa.
+
+/** Os porquês da retirada, em código (vão no motivo do pedido, depois de `PREFIXO_RETIRADA`, e na vez). */
+export const RETIRADAS_DO_COMENTARIO = ['comentario_sumiu', 'respondido_na_rede', 'oculto_na_rede', 'ja_oculto', 'comentario_mudou'] as const;
+export type RetiradaDoComentario = (typeof RETIRADAS_DO_COMENTARIO)[number];
+
+/**
+ * Por que o pedido do Social media sobre um comentário não serve mais, ou nulo se ele ainda serve. `resumoDoPedido` é o
+ * resumo do texto que o pedido leu na rede (`before_state.texto_resumo`); `resumoAgora`, o do texto que a leitura guardou
+ * (os dois pelo mesmo `resumoDoComentario`, sobre o mesmo texto limpo). O comentário nulo é o que saiu do Liame.
+ */
+export function motivoDaRetirada(
+  pedido: { ferramenta: string; resumoDoPedido: string | null },
+  comentario: { oculto: boolean; respondido: boolean; resumoAgora: string | null } | null,
+): RetiradaDoComentario | null {
+  if (!comentario) return 'comentario_sumiu';
+  if (pedido.ferramenta === FERRAMENTA_DA_OPERACAO.ocultar) return comentario.oculto ? 'ja_oculto' : null;
+  if (comentario.respondido) return 'respondido_na_rede';
+  if (comentario.oculto) return 'oculto_na_rede';
+  if (pedido.resumoDoPedido !== null && comentario.resumoAgora !== pedido.resumoDoPedido) return 'comentario_mudou';
+  return null;
+}
+
+/** O pedido saiu de Aprovações: a vez pronta acaba retirada, com o porquê. Devolve se aconteceu. */
+export async function marcarVezRetirada(tx: Tx, alvo: DonoDaVez, motivo: RetiradaDoComentario, agora: Date): Promise<boolean> {
+  exigirCodigo(motivo, 'o motivo');
+  const r = await tx.execute(sql`
+    update liame.comment_suggestion
+       set status = 'retirada', reason = ${motivo}, updated_at = ${agora.toISOString()}::timestamptz
+     where id = ${alvo.id} and tenant_id = ${alvo.tenantId} and status = 'pronta'
+    returning id`);
+  return r.rows.length === 1;
+}
+
+/** Nada mudou no comentário desde a última conferência: a vez fica marcada como olhada (até a próxima leitura). */
+export async function marcarVezOlhada(tx: Tx, alvo: DonoDaVez, agora: Date): Promise<void> {
+  await tx.execute(sql`
+    update liame.comment_suggestion set updated_at = ${agora.toISOString()}::timestamptz
+     where id = ${alvo.id} and tenant_id = ${alvo.tenantId} and status = 'pronta'`);
+}
+
 /** O pedido está em Aprovações: a vez acaba pronta, ligada a ele, com quantas sugestões foram (nulo no ocultar). */
 export async function marcarVezPronta(tx: Tx, alvo: DonoDaVez, feito: { pedido: string; sugestoes: number | null; usageId: string | null }, agora: Date): Promise<boolean> {
   const quando = sql`${agora.toISOString()}::timestamptz`;
