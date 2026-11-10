@@ -10,14 +10,14 @@ import { TAREFA_EXPLICAR_RESULTADOS } from '../../src/ai/explicar/prompt.js';
 import { aceitaGeo } from '../../src/ai/modelos.js';
 import { TAREFA_PESQUISADOR } from '../../src/ai/pesquisador/prompt.js';
 import { TAREFA_REVISAO } from '../../src/ai/revisor/prompt.js';
-import { TAREFA_SOCIAL_COMENTARIO, TAREFA_SOCIAL_POST, TAREFA_SOCIAL_RESPOSTA } from '../../src/ai/social/prompt.js';
+import { TAREFA_SOCIAL_COMENTARIO, TAREFA_SOCIAL_COMENTARIO_TIPO, TAREFA_SOCIAL_POST, TAREFA_SOCIAL_RESPOSTA } from '../../src/ai/social/prompt.js';
 import { ownerQuery } from '../helpers/api.js';
 import { hasDb, OWNER_URL } from './env.js';
 
 // As rotas de modelo que a distribuição publica (migration 0046, as cinco tarefas da A3; 0051, o Criativo de texto; 0061, o
 // funcionário de CRM e mensageria; 0084, o Social media nas respostas às avaliações; 0113, a versão 2 com o Haiku 5.5 como
 // modelo econômico do Compliance, do Pesquisador e do Criativo de texto; 0116, o Social media nos posts; 0126, o Social
-// media nas respostas aos comentários): uma
+// media nas respostas aos comentários; 0127, o tipo do comentário, com o Haiku 5.5 como modelo da rota): uma
 // por tarefa de IA do código, com o modelo que passou no eval da tarefa. No banco de teste a linha da distribuição pode
 // estar em três situações: ativa (banco novo), aposentada (outro arquivo a tirou do caminho para usar o modelo simulado)
 // ou rascunho (a migration achou uma rota de teste ativa na tarefa e não a derrubou). Em produção não há rota de teste:
@@ -46,8 +46,12 @@ type Rota = {
 
 // As tarefas em que o Haiku 5.5 passou nas duas rodadas (28/10 e 03/11/2026) e virou o modelo econômico (migration 0113).
 const COM_ECONOMICO = new Set([TAREFA_REVISAO, TAREFA_PESQUISADOR, TAREFA_CRIATIVO_TEXTO]);
+// O modelo de cada tarefa: o Sonnet 5.5, menos o tipo do comentário, que classifica e roda no Haiku 5.5 (D-A6-87; o mais
+// barato que passou nas duas rodadas de 10/11/2026, migration 0127), com a saída de uma palavra.
+const MODELO_DA_TAREFA = (task: string): string => (task === TAREFA_SOCIAL_COMENTARIO_TIPO ? 'claude-haiku-5-5' : 'claude-sonnet-5-5');
+const SAIDA_MINIMA = (task: string): number => (task === TAREFA_SOCIAL_COMENTARIO_TIPO ? 300 : 1500);
 
-describe.skipIf(!hasDb)('rotas de modelo da distribuição (A3, I3; A4, X6; A5, Y6; A6, Z6 e Z11; migrations 0046, 0051, 0061, 0084, 0113, 0116 e 0126) e o preço novo do Sonnet (0083)', () => {
+describe.skipIf(!hasDb)('rotas de modelo da distribuição (A3, I3; A4, X6; A5, Y6; A6, Z6 e Z11; migrations 0046, 0051, 0061, 0084, 0113, 0116, 0126 e 0127) e o preço novo do Sonnet (0083)', () => {
   /** A versão mais nova da distribuição em cada tarefa (a 0113 aposenta a 1 e põe a 2 nas tarefas com o econômico). */
   const rotas = () =>
     ownerQuery<Rota>(
@@ -64,10 +68,10 @@ describe.skipIf(!hasDb)('rotas de modelo da distribuição (A3, I3; A4, X6; A5, 
     const r = await rotas();
     // As tarefas são as do código: tarefa nova sem rota, ou rota de tarefa que não existe, aparece aqui.
     expect(r.map((x) => x.task)).toEqual(
-      [TAREFA_REVISAO, TAREFA_CONVERSA, TAREFA_CRIATIVO_TEXTO, TAREFA_CRM_MENSAGEM, TAREFA_ESTRATEGISTA, TAREFA_EXPLICAR_RESULTADOS, TAREFA_PESQUISADOR, TAREFA_SOCIAL_COMENTARIO, TAREFA_SOCIAL_POST, TAREFA_SOCIAL_RESPOSTA].sort(),
+      [TAREFA_REVISAO, TAREFA_CONVERSA, TAREFA_CRIATIVO_TEXTO, TAREFA_CRM_MENSAGEM, TAREFA_ESTRATEGISTA, TAREFA_EXPLICAR_RESULTADOS, TAREFA_PESQUISADOR, TAREFA_SOCIAL_COMENTARIO, TAREFA_SOCIAL_COMENTARIO_TIPO, TAREFA_SOCIAL_POST, TAREFA_SOCIAL_RESPOSTA].sort(),
     );
     for (const x of r) {
-      expect(x).toMatchObject({ provider: 'anthropic', model: 'claude-sonnet-5-5', effort: 'low', fallback: [], eval_threshold: 0.95 });
+      expect(x).toMatchObject({ task: x.task, provider: 'anthropic', model: MODELO_DA_TAREFA(x.task), effort: 'low', fallback: [], eval_threshold: 0.95 });
       if (COM_ECONOMICO.has(x.task) && x.version === 2) expect(x.economy_model).toBe('claude-haiku-5-5');
       else expect(x).toMatchObject({ version: 1, economy_model: null });
       // A que entrou valendo tem a data da publicação; o rascunho, não.
@@ -78,8 +82,9 @@ describe.skipIf(!hasDb)('rotas de modelo da distribuição (A3, I3; A4, X6; A5, 
       // D-A3-13: só entra em rota o modelo que aceita rodar só nos Estados Unidos (o gateway não chamaria outro).
       expect(aceitaGeo(x.provider, x.model)).toBe(true);
       // O da rodada do eval de cada tarefa: 2.000 nas da A3, A4 e A5; 1.500 nas sugestões de resposta (uma ou duas, curtas),
-      // nos posts (o texto de cada canal e a foto) e nas respostas aos comentários (até três, curtas).
-      expect(x.max_output_tokens).toBeGreaterThanOrEqual(1500);
+      // nos posts (o texto de cada canal e a foto) e nas respostas aos comentários (até três, curtas); 300 no tipo do
+      // comentário (uma palavra).
+      expect({ task: x.task, cabe: x.max_output_tokens >= SAIDA_MINIMA(x.task) }).toEqual({ task: x.task, cabe: true });
       expect(x.timeout_ms).toBeGreaterThanOrEqual(30_000);
       expect(x.max_cost).toBeGreaterThan(0);
     }
@@ -98,27 +103,32 @@ describe.skipIf(!hasDb)('rotas de modelo da distribuição (A3, I3; A4, X6; A5, 
       // E nas respostas aos comentários: as sugestões públicas de uma pergunta ou de uma reclamação (migration 0126, sem
       // modelo econômico: o volume é pequeno e o Haiku 5.5 não foi medido nesta tarefa).
       [TAREFA_SOCIAL_COMENTARIO]: 'texto',
+      // O tipo do comentário classifica, não escreve (migration 0127).
+      [TAREFA_SOCIAL_COMENTARIO_TIPO]: 'analise',
       [TAREFA_ESTRATEGISTA]: 'analise',
       [TAREFA_EXPLICAR_RESULTADOS]: 'analise',
       [TAREFA_PESQUISADOR]: 'analise',
     });
-    // Sem preço cadastrado o gateway não chama o modelo (custo que não se mede não se gasta).
-    const [preco] = await ownerQuery<{ n: number }>(
-      `select count(*)::int as n from liame.ai_model_price where provider = 'anthropic' and model = 'claude-sonnet-5-5' and valid_from <= (now() at time zone 'UTC')::date`,
-    );
-    expect(preco!.n).toBeGreaterThan(0);
+    // Sem preço cadastrado o gateway não chama o modelo (custo que não se mede não se gasta): cada modelo de rota tem o dele.
+    for (const modelo of new Set(r.map((x) => x.model))) {
+      const [preco] = await ownerQuery<{ n: number }>(
+        `select count(*)::int as n from liame.ai_model_price where provider = 'anthropic' and model = $1 and valid_from <= (now() at time zone 'UTC')::date`,
+        [modelo],
+      );
+      expect({ modelo, n: preco!.n > 0 }).toEqual({ modelo, n: true });
+    }
   });
 
   it('a migration é idempotente: rodar de novo não duplica a rota nem reativa a que saiu do caminho', async () => {
     const antes = await ownerQuery<{ task: string; status: string }>(`select task, status from liame.ai_model_route where ${DA_DISTRIBUICAO} order by task`);
-    for (const arquivo of ['0046_rotas_de_modelo.sql', '0051_rota_do_criativo.sql', '0061_rota_do_crm.sql', '0084_rota_do_social.sql', '0113_haiku_economico.sql', '0116_rota_dos_posts.sql', '0126_rota_dos_comentarios.sql']) {
+    for (const arquivo of ['0046_rotas_de_modelo.sql', '0051_rota_do_criativo.sql', '0061_rota_do_crm.sql', '0084_rota_do_social.sql', '0113_haiku_economico.sql', '0116_rota_dos_posts.sql', '0126_rota_dos_comentarios.sql', '0127_rota_do_tipo_do_comentario.sql']) {
       const sql = readFileSync(resolve(MIGRATIONS, arquivo), 'utf8');
       await ownerQuery(sql);
       await ownerQuery(sql);
     }
     const depois = await ownerQuery<{ task: string; status: string }>(`select task, status from liame.ai_model_route where ${DA_DISTRIBUICAO} order by task`);
     expect(depois.map((x) => x.task)).toEqual(antes.map((x) => x.task));
-    expect(new Set(depois.map((x) => x.task)).size).toBe(10);
+    expect(new Set(depois.map((x) => x.task)).size).toBe(11);
     // Nunca duas ativas na mesma tarefa (o índice único garante; aqui fica dito).
     const ativas = await ownerQuery<{ task: string; n: number }>(`select task, count(*)::int as n from liame.ai_model_route where status = 'ativa' group by task having count(*) > 1`);
     expect(ativas).toEqual([]);
