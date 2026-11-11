@@ -76,7 +76,14 @@ describe.skipIf(!hasDb)('a campanha nova na Meta (A4 · X5, parte 1)', () => {
       [randomUUID(), randomUUID(), e.tenantId, e.brandId, pagina, instagram, JSON.stringify({ instagram_id: instagram })],
     );
     const { unitId } = await lojaComCardapio(e, 'Loja Centro', CARDAPIO);
-    await ownerQuery(`update liame.unit set latitude = -22.906847, longitude = -43.172897, location_precision = 'endereco' where id = $1`, [unitId]);
+    // O ponto no endereço vem com o endereço inteiro (a regra da 0132): o CEP, a cidade, a UF, o código IBGE e a origem.
+    await ownerQuery(
+      `update liame.unit set address_postal_code = '20040002', address_street = 'Rua da Assembleia', address_number = '10', address_district = 'Centro',
+              address_city = 'Rio de Janeiro', address_state = 'RJ', ibge_city_code = '3304557', location_source = 'cep',
+              latitude = -22.906847, longitude = -43.172897, location_precision = 'endereco'
+        where id = $1`,
+      [unitId],
+    );
     const pedidoDePeca = randomUUID();
     const peca = randomUUID();
     await ownerQuery(
