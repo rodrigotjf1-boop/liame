@@ -204,7 +204,7 @@ export class ActionsController {
   @ApiOperation({
     summary: 'Pedir outras sugestões',
     description:
-      'No pedido de resposta que o Social media fez e que espera a decisão (A6, Z6), pede outras sugestões, uma vez por avaliação: as novas chegam no mesmo pedido, antes das que já estavam (`review.suggestions` com `round` 2), e `review.more_suggestions` diz se ele ainda está escrevendo. A de 1 ou 2 estrelas, só o dono pede. Já pedidas, desligadas para a loja ou pedido sem sugestões: 409.',
+      'No pedido de resposta que o Social media fez e que espera a decisão (A6, Z6), pede outras sugestões, uma vez por avaliação: as novas chegam no mesmo pedido, antes das que já estavam (`review.suggestions` com `round` 2), e `review.more_suggestions` diz se ele ainda está escrevendo. A de 1 ou 2 estrelas, só o dono pede. No pedido de responder a um comentário (A6, Z11, parte 3c), o mesmo, uma vez por comentário, em `comment.suggestions` e `comment.more_suggestions`: só na pergunta e na reclamação (o elogio e a marcação têm a resposta pronta). Já pedidas, desligadas para a marca ou pedido sem sugestões: 409.',
   })
   @ApiOkResponse({ standardSchema: ActionResponse })
   @ApiForbiddenResponse({ standardSchema: ProblemDetails })

@@ -43,10 +43,11 @@ import type { AcaoSombra } from '../sombra/regras.js';
 import { advance, workflowOf } from '../workflow/workflow.js';
 import { SOCIAL } from '../ai/social/prompt.js';
 import { abrirSegundaRodada, maisSugestoes, oQueDesligaAsSugestoes, paramsDaResposta, type SituacaoDaSugestao } from '../avaliacoes/sugestoes.js';
+import { abrirSegundaRodadaDoComentario, FERRAMENTA_DA_OPERACAO, oQueDesligaOsPedidos } from '../comentarios/pedidos.js';
 import { EstadoDaAvaliacao, ParametrosDaResposta, resumoDoTexto } from './avaliacao-plano.js';
 import { BudgetService, estadoNaResposta } from './budget.service.js';
 import { comentarioDoRecurso } from './comentario-na-rede.js';
-import { EstadoDoComentario, foraDoLote, resumoDoComentario } from './comentario-plano.js';
+import { EstadoDoComentario, foraDoLote, ParametrosDaRespostaAoComentario, resumoDoComentario } from './comentario-plano.js';
 import { CONNECTORS, type Connector, type ReadResult, type ResourceRef } from './connectors.js';
 import { problemaDaLeitura, recursoNaoEncontrado } from './leitura-na-plataforma.js';
 import { avisoDeMensagemLiberada, EstadoDaMensagem } from './mensagem-plano.js';
@@ -130,6 +131,8 @@ type Apresentacao = {
   comentarios: Map<string, ComentarioGuardado>;
   /** O post de onde veio o comentário de cada pedido, pela chave `conta:post`. */
   postsDosComentarios: Map<string, NonNullable<ActionComment['post']>>;
+  /** A rodada 2 do Social media no comentário (o "Pedir outra", A6, Z11, parte 3c), pela chave `conta:comentário`. */
+  segundasDosComentarios: Map<string, { status: SituacaoDaSugestao; reason: string | null; pedidaEm: string }>;
 };
 
 /** O comentário como o Liame o guarda agora (`social_comment`), com o que decide se ele mudou desde o pedido. */
@@ -410,6 +413,7 @@ export class ActionService {
     const tx = currentTx();
     const tenantId = tenantOf(auth);
     const row = await this.lock(tx, tenantId, id);
+    if (row.tool === FERRAMENTA_DA_OPERACAO.responder) return this.pedirOutraAoComentario(tx, tenantId, auth, row);
     const reviewId = row.provider === PROVEDOR_DO_PERFIL ? avaliacaoDoRecurso(row.resource_id) : null;
     const semSugestoes = () => new AppProblem(409, 'sem-sugestoes', 'Este pedido não tem sugestões', 'Só o pedido de resposta que o Social media fez tem outras sugestões para pedir.');
     if (row.tool !== 'avaliacao_responder' || row.agent_key !== SOCIAL.key || !reviewId || !row.brand_id) throw semSugestoes();
@@ -433,6 +437,39 @@ export class ActionService {
   }
 
   /**
+   * O "Pedir outra" no comentário (A6, Z11, parte 3c; D-A6-88 e D-A6-103): no pedido de responder que o Social media
+   * escreveu (a pergunta e a reclamação: o elogio e a marcação têm a resposta pronta, sem sugestões) e que espera a
+   * decisão, uma vez por comentário. Abre a rodada 2, que a rotina dos pedidos trata: as novas chegam no mesmo pedido,
+   * antes das que já estavam. Com os pedidos ou a IA desligados para a marca, 409.
+   */
+  private async pedirOutraAoComentario(tx: Tx, tenantId: string, auth: AuthContext, row: ActionRow): Promise<ActionResponse> {
+    const commentId = comentarioDoPedido(row);
+    const params = ParametrosDaRespostaAoComentario.safeParse(row.params);
+    const semSugestoes = () =>
+      new AppProblem(409, 'sem-sugestoes', 'Este pedido não tem sugestões', 'Só o pedido de resposta que o Social media escreveu (a uma pergunta ou a uma reclamação) tem outra sugestão para pedir.');
+    if (row.agent_key !== SOCIAL.key || !commentId || !row.brand_id || !params.success || !params.data.sugestoes) throw semSugestoes();
+    if (row.status !== 'aguardando_aprovacao') throw new AppProblem(409, 'acao-nao-aguarda', 'Não espera aprovação', 'Este pedido não está esperando aprovação.');
+    await this.exigirODono(tx, tenantId, auth, row, 'pedir outras sugestões para');
+    const conta = { tenantId, brandId: row.brand_id, connectedAccountId: row.account_id };
+    const desligado = (await oQueDesligaOsPedidos(tx, this.flags, conta)) ?? ((await this.flags.isEnabled('ia', this.flags.context({ tenantId, brandId: row.brand_id, accountId: row.account_id }))) ? null : 'ia_desligada');
+    if (desligado) {
+      throw new AppProblem(409, 'sugestoes-desligadas', 'Sugestões desligadas', 'As sugestões do Social media para os comentários não estão ligadas para esta marca agora. Ajuste o texto ou escreva do zero.');
+    }
+    const aberta = await abrirSegundaRodadaDoComentario(tx, { tenantId, contaId: row.account_id, commentId, pedido: row.id, quem: auth.userId }, new Date());
+    if (aberta === 'ja_pedida') {
+      throw new AppProblem(
+        409,
+        'outras-ja-pedidas',
+        'Outra sugestão já foi pedida',
+        'Para este comentário, outra sugestão já foi pedida (uma vez por comentário). Para outro texto, ajuste uma das sugestões ou escreva do zero.',
+      );
+    }
+    if (aberta === 'sem_primeira') throw semSugestoes();
+    auditDetail({ after: { round: 2, comment_id: commentId } });
+    return this.get(auth, row.id);
+  }
+
+  /**
    * A segunda rodada do Social media chega ao pedido (A6, Z6; P31): as sugestões novas vêm antes das da primeira, e o
    * texto escolhido passa a ser o da primeira nova, a menos que a pessoa já o tenha ajustado (o texto não é nenhuma das
    * sugestões: o dela fica). O plano é montado de novo, como numa alteração (a avaliação lida no Google agora, a política
@@ -444,7 +481,8 @@ export class ActionService {
     const r = await tx.execute<ActionRow>(sql`select * from liame.action_request where id = ${id} and tenant_id = ${alvo.tenantId} for update`);
     const row = r.rows[0];
     if (!row || row.status !== 'aguardando_aprovacao' || row.actor_type !== 'agent' || row.agent_key !== alvo.agentKey) return false;
-    const antes = ParametrosDaResposta.safeParse(row.params);
+    // A resposta à avaliação (Z6) e ao comentário (Z11, parte 3c): o mesmo desenho, cada uma com os limites dela.
+    const antes = (row.tool === FERRAMENTA_DA_OPERACAO.responder ? ParametrosDaRespostaAoComentario : ParametrosDaResposta).safeParse(row.params);
     if (!antes.success || !antes.data.sugestoes) return false;
     const { tool, connector } = this.resolve(row.tool, row.provider);
     const daPrimeira = antes.data.sugestoes.filter((s) => s.rodada === 1);
@@ -1499,6 +1537,11 @@ export class ActionService {
         resumo: resumoDoComentario(l.message),
       });
     }
+    // O "Pedir outra" do Social media (A6, Z11, parte 3c): a rodada 2 de cada comentário, quando há.
+    const r2 = await tx.execute<{ conta: string; comment_id: string; status: SituacaoDaSugestao; reason: string | null; created_at: string | Date }>(sql`
+      select connected_account_id::text as conta, comment_id, status, reason, created_at from liame.comment_suggestion
+       where tenant_id = ${tenantId} and round = 2 and connected_account_id::text in ${contas} and comment_id in ${ids}`);
+    for (const l of r2.rows) ap.segundasDosComentarios.set(`${l.conta}:${l.comment_id}`, { status: l.status, reason: l.reason, pedidaEm: new Date(l.created_at).toISOString() });
     const postIds = [
       ...new Set(
         alvos.flatMap((a) => {
@@ -1551,6 +1594,7 @@ export class ActionService {
       posts: new Map(),
       comentarios: new Map(),
       postsDosComentarios: new Map(),
+      segundasDosComentarios: new Map(),
     };
     if (!rows.length) return ap;
     await this.comentariosDosPedidos(tx, rows, ap);
@@ -1981,6 +2025,12 @@ function comentarioDaResposta(row: ActionRow, ap: Apresentacao): ActionComment |
   const guardado = ap.comentarios.get(`${row.account_id}:${id}`) ?? null;
   const postId = guardado?.postId ?? (desejado.success ? desejado.data.post_id : null);
   const canal = desejado.success ? desejado.data.canal : row.provider === PROVEDOR_DO_CANAL.facebook ? 'facebook' : 'instagram';
+  // As sugestões do Social media (A6, Z11, partes 2d e 3c): as do pedido de responder que ele fez, como estão nos
+  // parâmetros (as da rodada 2 antes das da rodada 1). O pedido de uma pessoa não as traz.
+  const pedido = operacao === 'responder' ? ParametrosDaRespostaAoComentario.safeParse(row.params) : null;
+  const sugestoes = pedido?.success && pedido.data.sugestoes ? pedido.data.sugestoes.map((s) => ({ focus: s.enfoque, text: s.texto, round: s.rodada })) : null;
+  const segunda = ap.segundasDosComentarios.get(`${row.account_id}:${id}`) ?? null;
+  const mais = row.agent_key === SOCIAL.key && sugestoes ? maisSugestoes(segunda, row.status === 'aguardando_aprovacao') : null;
   return {
     id,
     channel: canal,
@@ -1991,6 +2041,9 @@ function comentarioDaResposta(row: ActionRow, ap: Apresentacao): ActionComment |
     changed: Boolean(guardado && antes.success && guardado.lidoEm > new Date(row.created_at) && guardado.resumo !== antes.data.texto_resumo),
     // O Social media tirou o pedido de Aprovações (A6, Z11, parte 2d-5): o porquê, para a tela dizer o que houve.
     withdrawn: retiradaDe(row),
+    suggestions: sugestoes,
+    more_suggestions: mais,
+    more_suggestions_asked_at: mais !== null && segunda ? segunda.pedidaEm : null,
   };
 }
 

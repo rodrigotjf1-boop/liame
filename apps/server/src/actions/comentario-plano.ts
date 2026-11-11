@@ -34,8 +34,11 @@ const SugestaoDoPedido = z.strictObject({
   rodada: z.union([z.literal(1), z.literal(2)]),
 });
 
-/** Quantas sugestões cabem num pedido: três na reclamação (D-A6-94), e mais uma rodada do "Pedir outra". */
-export const SUGESTOES_NO_PEDIDO = 4;
+/**
+ * Quantas sugestões cabem num pedido: três na reclamação (D-A6-94), e mais as do "Pedir outra" (uma vez): na reclamação,
+ * outras três, uma para cada caminho; na pergunta, uma (D-A6-103).
+ */
+export const SUGESTOES_NO_PEDIDO = 6;
 
 /**
  * O texto que a marca publica como resposta, como parâmetro da ferramenta. No pedido do Social media, vêm também as
