@@ -23,6 +23,8 @@ export const FLAG_DA_CAMPANHA_NOVA = 'campanha_nova';
 
 /** As situações do pedido que encerram sem criar: recusado (cancelado), expirado ou que falhou. */
 const ENCERRADOS = sql`('cancelada', 'expirada', 'falhou')`;
+/** As situações do pedido ainda em aberto: esperando a decisão, aprovado esperando a vez, ou executando. */
+const EM_ABERTO = sql`('aguardando_aprovacao', 'aprovada', 'executando')`;
 
 type Quem = { tenantId: string; userId: string };
 
@@ -54,6 +56,9 @@ type LinhaDaCampanhaNova = {
   status: NewCampaignResponse['status'];
   action_id: string | null;
   error: string | null;
+  active: boolean;
+  activated_at: Date | null;
+  pending_action_id: string | null;
   meta_campaign_id: string | null;
   meta_adset_id: string | null;
   meta_video_id: string | null;
@@ -79,6 +84,9 @@ function resposta(l: LinhaDaCampanhaNova): NewCampaignResponse {
     status: l.status,
     action_id: l.action_id,
     error: l.error,
+    active: l.active,
+    activated_at: l.activated_at ? new Date(l.activated_at).toISOString() : null,
+    pending_action_id: l.pending_action_id,
     meta: { campaign_id: l.meta_campaign_id, adset_id: l.meta_adset_id, video_id: l.meta_video_id, creative_id: l.meta_creative_id, ad_id: l.meta_ad_id },
     created_at: new Date(l.created_at).toISOString(),
   };
@@ -236,6 +244,48 @@ export class CampanhasNovasService {
     return this.obter(auth, id);
   }
 
+  /**
+   * Pede para ativar a campanha nova criada e pausada (A4, X5, parte 3; D-A4-31): o pedido `campanha_nova_ativar`
+   * espera a aprovação com o código do app, com os limites da empresa e a verba do mês (volta a gastar). Um pedido de
+   * ativar ou pausar em aberto por campanha.
+   */
+  async ativar(auth: AuthContext, id: string): Promise<NewCampaignResponse> {
+    const tx = currentTx();
+    const quem = this.quem(auth);
+    const c = (
+      await tx.execute<{ brand_id: string; ad_account_id: string; status: string; active: boolean; daily_budget_micros: string }>(sql`
+        select brand_id, ad_account_id, status, active, daily_budget_micros::text from liame.ad_campaign_new
+         where id = ${id} and tenant_id = ${quem.tenantId}
+           for update`)
+    ).rows[0];
+    if (!c) throw new AppProblem(404, 'nao-encontrado', 'Não encontramos', 'Esta campanha nova não está aqui.');
+    const ligada = await this.flags.isEnabled(FLAG_DA_CAMPANHA_NOVA, this.flags.context({ tenantId: quem.tenantId, userId: quem.userId, brandId: c.brand_id }));
+    if (!ligada) throw conflito('funcao-desligada', 'Função desligada', 'A campanha nova não está ligada para esta empresa.');
+    if (c.status !== 'criada') throw conflito('ainda-nao-criada', 'Ainda não foi criada', 'A campanha nova ainda não existe na Meta: ative depois que ela for criada, pausada.');
+    if (c.active) throw conflito('ja-ativa', 'Já está ativa', 'Esta campanha nova já está ativa. Para parar, desfaça a ativação em Aprovações.');
+    const aberto = await tx.execute(sql`
+      select 1 from liame.action_request
+       where tenant_id = ${quem.tenantId} and resource_id = ${recursoDaCampanhaNova(id)} and tool in ('campanha_nova_ativar', 'campanha_nova_pausar')
+         and status in ${EM_ABERTO}
+       limit 1`);
+    if (aberto.rows[0]) throw conflito('pedido-em-aberto', 'Já há um pedido em aberto', 'Esta campanha nova já tem um pedido de ativar ou pausar esperando: decida esse antes.');
+    const { policies } = await this.policies.load(tx, quem.tenantId, c.brand_id);
+    const teto = tetoDaVerba(policies, 'meta_ads');
+    if (teto !== null && Number(c.daily_budget_micros) > teto) {
+      throw recusa('acima-do-teto', 'Acima do teto por campanha', `A verba diária passa do teto por campanha, que é de R$ ${(teto / 1_000_000).toFixed(2).replace('.', ',')} por dia. Quem muda o teto é o Dono ou o Administrador, em Verba do mês.`);
+    }
+    const pedido = await this.actions.pedirPelaRota(auth, {
+      tool: 'campanha_nova_ativar',
+      brand_id: c.brand_id,
+      provider: 'meta_ads',
+      account_id: c.ad_account_id,
+      resource_id: recursoDaCampanhaNova(id),
+      params: {},
+    });
+    auditDetail({ resourceId: id, before: { active: false }, after: { brand_id: c.brand_id, action_id: pedido } });
+    return this.obter(auth, id);
+  }
+
   /** Uma campanha nova da empresa. */
   async obter(auth: AuthContext, id: string): Promise<NewCampaignResponse> {
     const quem = this.quem(auth);
@@ -247,7 +297,12 @@ export class CampanhasNovasService {
                   then (case when c.status = 'criando' then 'nao_criada' else 'cancelada' end) else c.status end as status,
              c.action_id,
              case when c.status = 'criando' and r.status in ${ENCERRADOS} then coalesce(r.status_reason, 'A criação parou antes do fim.') else c.error end as error,
-             c.meta_campaign_id, c.meta_adset_id, c.meta_video_id, c.meta_creative_id, c.meta_ad_id, c.created_at
+             c.meta_campaign_id, c.meta_adset_id, c.meta_video_id, c.meta_creative_id, c.meta_ad_id, c.created_at,
+             c.active, c.activated_at,
+             (select a.id from liame.action_request a
+               where a.tenant_id = c.tenant_id and a.resource_id = ${recursoDaCampanhaNova(id)} and a.tool in ('campanha_nova_ativar', 'campanha_nova_pausar')
+                 and a.status in ${EM_ABERTO}
+               order by a.created_at desc limit 1) as pending_action_id
         from liame.ad_campaign_new c
         left join liame.action_request r on r.id = c.action_id and r.tenant_id = c.tenant_id
        where c.id = ${id} and c.tenant_id = ${quem.tenantId}`);

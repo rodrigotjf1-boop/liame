@@ -50,13 +50,14 @@ export type DependenciasDaCampanhaNova = {
   cliente: () => ClienteConector;
   graphUrl: string;
   appSecret: string | null;
-  versao: (capacidade: 'anuncio_criar' | 'anuncio_video') => Promise<string>;
+  versao: (capacidade: 'anuncio_criar' | 'anuncio_video' | 'entity_state' | 'entity_update') => Promise<string>;
   armazem: Pick<ArmazemDeImagens, 'enderecoDeLeitura'>;
 };
 
 type Linha = {
   id: string;
   status: string;
+  active: boolean;
   version: number;
   error: string | null;
   meta_campaign_id: string | null;
@@ -83,6 +84,7 @@ const MIDIA_SAIU = 'A foto ou o vídeo desta campanha saiu de Fotos: a campanha 
 const VIDEO_SEM_PREPARO = 'A Meta não terminou de preparar o vídeo em 15 minutos: a campanha não foi criada. Peça de novo; se repetir, use outro vídeo.';
 const VIDEO_RECUSADO = 'A Meta não aceitou o vídeo: a campanha não foi criada. Use outro vídeo de Fotos.';
 const FICOU_PAUSADO = 'O que já foi criado na Meta ficou pausado: nada aparece para ninguém nem gasta.';
+const APAGADA_NA_META = 'A campanha foi apagada ou arquivada no Gerenciador de Anúncios: nada foi mudado.';
 
 /**
  * A campanha nova do pedido (sob a RLS da empresa) e o estado dela, como o pedido guarda: a peça na versão pedida, a
@@ -121,7 +123,7 @@ export async function lerCampanhaNova(tx: Tx, ref: ResourceRef, travar = false):
       timezone: string | null;
     }
   >(sql`
-    select c.id, c.status, c.version, c.error, c.meta_campaign_id, c.meta_adset_id, c.meta_video_id, c.meta_creative_id, c.meta_ad_id,
+    select c.id, c.status, c.active, c.version, c.error, c.meta_campaign_id, c.meta_adset_id, c.meta_video_id, c.meta_creative_id, c.meta_ad_id,
            (extract(epoch from now() - c.video_waiting_since) * 1000)::bigint as video_esperando_ms,
            c.brand_id, c.name, c.objective, c.radius_km::text, c.daily_budget_micros::text, c.end_date::text as end_date, c.link,
            c.piece_id, c.piece_version, v.title, v.body, v.button,
@@ -160,6 +162,7 @@ export async function lerCampanhaNova(tx: Tx, ref: ResourceRef, travar = false):
     fuso: l.timezone ?? 'America/Sao_Paulo',
     link: l.link,
     situacao: l.status,
+    ativa: l.active,
   });
   return { linha: { ...l, version: Number(l.version), video_esperando_ms: l.video_esperando_ms === null ? null : Number(l.video_esperando_ms) }, estado };
 }
@@ -187,8 +190,16 @@ export class CampanhaNovaNaMetaConnector implements Connector {
     const lida = await lerCampanhaNova(tx, ref, true);
     if (!lida) return recusado(SUMIU);
     const { linha, estado } = lida;
-    // Já criada (a tentativa anterior terminou e a resposta se perdeu): nada a fazer.
-    if (linha.status === 'criada') return { ok: true, state: { ...estado, situacao: 'criada' } as unknown as ResourceState, version: linha.version };
+    // A campanha já criada: ativar ou pausar (parte 3). Já como o pedido quer (a criação que terminou e a resposta se
+    // perdeu, a ativação repetida): nada a fazer.
+    if (linha.status === 'criada') {
+      const ativar = desired.ativa === true;
+      if (ativar === linha.active) return { ok: true, state: estado as unknown as ResourceState, version: linha.version };
+      if (linha.version !== expectedVersion) return { ok: false, reason: 'estado-mudou', current: { state: estado as unknown as ResourceState, version: linha.version } };
+      if (options.validateOnly) return { ok: true, state: desired, version: linha.version };
+      if (!this.deps) return recusado(FORA_DO_AMBIENTE);
+      return this.mudarSituacao(tx, linha, estado, ativar, this.deps);
+    }
     if (linha.status === 'cancelada') return recusado('Esta campanha nova foi cancelada: nada foi criado na Meta.');
     if (linha.status === 'nao_criada') return recusado(linha.error ?? 'Esta campanha nova não foi criada.');
     // Alguém mudou o pedido desde a aprovação: nada é criado com o que não foi aprovado.
@@ -225,6 +236,61 @@ export class CampanhaNovaNaMetaConnector implements Connector {
       if (!motivo) throw err;
       return this.naoCriou(tx, linha, `${motivo} ${FICOU_PAUSADO}`);
     }
+  }
+
+  /**
+   * Ativar ou pausar a campanha nova (A4, X5, parte 3; D-A4-31). Ativar põe o anúncio, o conjunto e a campanha em
+   * ACTIVE, nesta ordem (nada roda antes de os três estarem ativos); pausar põe a campanha em PAUSED (os filhos herdam).
+   * Antes, cada objeto é lido na Meta: o apagado ou arquivado no Gerenciador de Anúncios não volta (quem está na Meta
+   * manda, D-A4-5). Depois, a validação da Meta em cada um e a mudança. A versão da campanha nova sobe: a volta confere
+   * por ela que ninguém mexeu depois.
+   */
+  private async mudarSituacao(tx: Tx, linha: Linha, estado: EstadoDaCampanhaNova, ativar: boolean, deps: DependenciasDaCampanhaNova): Promise<ApplyResult> {
+    const ids = ativar ? [linha.meta_ad_id, linha.meta_adset_id, linha.meta_campaign_id] : [linha.meta_campaign_id];
+    if (ids.some((id) => !id)) return recusado('O Liame não guardou os objetos desta campanha na Meta: confira no Gerenciador de Anúncios.');
+    const token = await this.token(tx, linha, deps);
+    const g: Grafo = { deps, conta: linha.conta_externa, token, versao: await deps.versao('entity_update') };
+    const leitura = await deps.versao('entity_state');
+    const alvo = ativar ? 'ACTIVE' : 'PAUSED';
+    try {
+      for (const id of ids as string[]) {
+        const r = await deps.cliente().requisitar<{ id?: unknown; status?: unknown; account_id?: unknown } | null>({
+          provider: PROVIDER,
+          conta: g.conta,
+          url: this.endereco(g, leitura, id, { fields: 'id,status,account_id' }),
+          endpoint: 'entity_state',
+          apiVersion: leitura,
+          cabecalhos: { authorization: `Bearer ${token}` },
+        });
+        const s = r.corpo?.status;
+        if (`act_${String(r.corpo?.account_id ?? '')}` !== g.conta || s === 'DELETED' || s === 'ARCHIVED') return recusado(APAGADA_NA_META);
+      }
+      for (const passo of ['validar', 'mudar'] as const) {
+        for (const id of ids as string[]) {
+          const r = await deps.cliente().requisitar<{ success?: unknown } | null>({
+            provider: PROVIDER,
+            conta: g.conta,
+            url: this.endereco(g, g.versao, id, passo === 'validar' ? { status: alvo, execution_options: JSON.stringify(['validate_only']) } : { status: alvo }),
+            metodo: 'POST',
+            endpoint: 'entity_update',
+            apiVersion: g.versao,
+            cabecalhos: { authorization: `Bearer ${token}` },
+            custo: 3,
+          });
+          if (r.corpo?.success !== true) return recusado('A Meta não confirmou a mudança. Confira a campanha no Gerenciador de Anúncios antes de pedir de novo.');
+        }
+      }
+    } catch (err) {
+      if (err instanceof ErroConector && err.tipo === 'definitivo' && err.codigoProvider === '100' && err.subcodigo === '33') return recusado(APAGADA_NA_META);
+      const motivo = err instanceof ErroConector && err.tipo === 'autenticacao' ? SEM_ACESSO : recusaDaMeta(err);
+      if (!motivo) throw err;
+      return recusado(motivo);
+    }
+    await tx.execute(sql`
+      update liame.ad_campaign_new
+         set active = ${ativar}, activated_at = case when ${ativar} then now() else activated_at end, version = version + 1, updated_at = now()
+       where id = ${linha.id}`);
+    return { ok: true, state: { ...estado, ativa: ativar } as unknown as ResourceState, version: linha.version + 1 };
   }
 
   /** A criação que não vai adiante: a campanha nova fica "não criada", com o motivo; o que existe na Meta fica pausado. */

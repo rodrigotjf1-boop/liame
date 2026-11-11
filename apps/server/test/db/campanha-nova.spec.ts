@@ -276,6 +276,61 @@ describe.skipIf(!hasDb)('a campanha nova na Meta (A4 · X5, parte 1)', () => {
     expect(daCampanha(id, 'adcreatives')[0]!.params.url_tags).toBeUndefined();
   }, 120_000);
 
+  it('ativar e a volta (parte 3): com os limites, os três objetos em ativo; a volta pausa a campanha; o apagado na Meta não volta', async () => {
+    const e = await cenario('Brasa Campanha Ativa');
+    const foto = await fotoGuardada(e, armazem, { largura: 1080, altura: 1350 });
+    const r = await pedir(e, { media_id: foto.id });
+    const id = r.body.id as string;
+    // Antes de criada, não ativa.
+    expect((await api.call('POST', `/v1/new-campaigns/${id}/activate`, { cookie: e.cookie })).body.code).toBe('ainda-nao-criada');
+    await aprovar(e, r.body.action_id as string);
+    await executar(e);
+    const linha = await linhaDe(id);
+    expect(linha.status).toBe('criada');
+    // Os limites da empresa: o teto do mês e o por campanha (ativar volta a gastar).
+    await ownerQuery(`update liame.app_user set totp_last_step = null where id = $1`, [e.userId]);
+    expect((await api.call('PUT', '/v1/budget/limits', { cookie: e.cookie, body: { month_micros: 3_000_000_000, campaign_daily_micros: 50_000_000 } })).status).toBe(200);
+
+    const pedido = await api.call('POST', `/v1/new-campaigns/${id}/activate`, { cookie: e.cookie });
+    expect(pedido.status, JSON.stringify(pedido.body)).toBe(201);
+    expect(pedido.body).toMatchObject({ active: false, pending_action_id: expect.any(String) });
+    const ativacao = pedido.body.pending_action_id as string;
+    expect(await pedidoDe(ativacao)).toMatchObject({ status: 'aguardando_aprovacao', tool: 'campanha_nova_ativar' });
+    expect((await api.call('POST', `/v1/new-campaigns/${id}/activate`, { cookie: e.cookie })).body.code).toBe('pedido-em-aberto');
+    await aprovar(e, ativacao);
+    const antes = meta.chamadas.length;
+    await executar(e);
+    expect((await pedidoDe(ativacao)).status).toBe('executada');
+    const ids = [linha.meta_ad_id!, linha.meta_adset_id!, linha.meta_campaign_id!];
+    expect(ids.map((i) => meta.objetos.get(i)?.status)).toEqual(['ACTIVE', 'ACTIVE', 'ACTIVE']);
+    // Lê os três, valida os três e escreve, o anúncio primeiro e a campanha por último.
+    const feitas = meta.chamadas.slice(antes).map((c) => `${c.metodo === 'GET' ? 'ler' : c.validar ? 'validar' : 'escrever'}:${ids.indexOf(c.id)}`);
+    expect(feitas).toEqual(['ler:0', 'ler:1', 'ler:2', 'validar:0', 'validar:1', 'validar:2', 'escrever:0', 'escrever:1', 'escrever:2']);
+    expect((await api.call('GET', `/v1/new-campaigns/${id}`, { cookie: e.cookie })).body).toMatchObject({ active: true, activated_at: expect.any(String), pending_action_id: null });
+    expect((await api.call('POST', `/v1/new-campaigns/${id}/activate`, { cookie: e.cookie })).body.code).toBe('ja-ativa');
+
+    // A volta: pausar a campanha (os filhos herdam), com o código do app.
+    const volta = await api.call('POST', `/v1/actions/${ativacao}/undo`, { cookie: e.cookie });
+    expect(volta.status, JSON.stringify(volta.body)).toBe(201);
+    expect(volta.body).toMatchObject({ tool: 'campanha_nova_pausar', status: 'aguardando_aprovacao' });
+    await aprovar(e, volta.body.id as string);
+    await executar(e);
+    expect((await pedidoDe(volta.body.id as string)).status).toBe('executada');
+    expect(meta.objetos.get(linha.meta_campaign_id!)?.status).toBe('PAUSED');
+    expect((await api.call('GET', `/v1/new-campaigns/${id}`, { cookie: e.cookie })).body.active).toBe(false);
+
+    // Apagada no Gerenciador de Anúncios depois: ativar de novo não a traz de volta.
+    meta.objetos.get(linha.meta_campaign_id!)!.status = 'DELETED';
+    const outra = await api.call('POST', `/v1/new-campaigns/${id}/activate`, { cookie: e.cookie });
+    expect(outra.status, JSON.stringify(outra.body)).toBe(201);
+    await aprovar(e, outra.body.pending_action_id as string);
+    await executar(e);
+    const recusada = await pedidoDe(outra.body.pending_action_id as string);
+    expect(recusada.status).toBe('falhou');
+    expect(recusada.status_reason).toContain('apagada ou arquivada no Gerenciador de Anúncios');
+    expect(meta.defeitos).toEqual([]);
+  }, 120_000);
+
   it('a recusa da Meta encerra com o motivo; o que já foi criado fica pausado', async () => {
     const e = await cenario('Brasa Campanha Recusa');
     const foto = await fotoGuardada(e, armazem, { largura: 1080, altura: 1350 });

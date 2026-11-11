@@ -46,6 +46,25 @@ export class CampanhasNovasController {
     return this.campanhas.criar(auth, body);
   }
 
+  @Post(':id/activate')
+  @HttpCode(201)
+  @Permissao('campanhas.operar')
+  @Auditar('campanha_nova.ativar', { recurso: 'ad_campaign_new' })
+  @ApiOperation({
+    summary: 'Pedir para ativar a campanha nova',
+    description:
+      'A campanha nova criada e pausada passa a rodar: um pedido em Aprovações (a ferramenta `campanha_nova_ativar`) que espera o código do app e, por voltar a gastar, pede os limites da empresa e cabe na verba do mês. Aprovado, o Liame lê o anúncio, o conjunto e a campanha na Meta (o que foi apagado ou arquivado lá não volta) e põe os três em ativo; a Meta revisa o anúncio antes de mostrar. A volta é pausar (`POST /v1/actions/{id}/undo`). `pending_action_id` traz o pedido. Precisa da função `campanha_nova` (409 `funcao-desligada`). Conflitos (409): `ainda-nao-criada`, `ja-ativa`, `pedido-em-aberto`. Recusa (422): `acima-do-teto`. O trilho também pode recusar (os limites, a política, a trava).',
+  })
+  @ApiCreatedResponse({ standardSchema: NewCampaignResponse })
+  @ApiBadRequestResponse({ standardSchema: ProblemDetails })
+  @ApiForbiddenResponse({ standardSchema: ProblemDetails })
+  @ApiNotFoundResponse({ standardSchema: ProblemDetails })
+  @ApiConflictResponse({ standardSchema: ProblemDetails })
+  @ApiUnprocessableEntityResponse({ standardSchema: ProblemDetails })
+  ativar(@Auth() auth: AuthContext, @Param('id', { schema: ResourceId }) id: string): Promise<NewCampaignResponse> {
+    return this.campanhas.ativar(auth, id);
+  }
+
   @Get(':id')
   @Permissao('campanhas.ver')
   @ApiOperation({

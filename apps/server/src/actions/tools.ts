@@ -22,7 +22,7 @@ import {
   planoDaRespostaNoDirect,
 } from './direct-plano.js';
 import { EstadoDaMensagem, faseDaMensagem, impedimentoDaMensagem } from './mensagem-plano.js';
-import { planoDaCampanhaNova } from '../campanhas/campanha-nova-plano.js';
+import { planoDaCampanhaNova, planoDeAtivar, planoDePausar } from '../campanhas/campanha-nova-plano.js';
 import { EstadoDoPost, planoDeApagarOPost, planoDeTentarDeNovo, planoDoPost, quandoSai } from '../posts/post-plano.js';
 import { motivoDoCompartilhado, orcamentoCompartilhado } from './orcamento-compartilhado.js';
 
@@ -349,6 +349,49 @@ export const TOOLS: Record<string, ToolDefinition> = {
         desiredState: plano.desejado as unknown as ResourceState,
       };
     },
+  },
+  // Ativar a campanha nova (A4, X5, parte 3; D-A4-31): o anúncio, o conjunto e a campanha passam a rodar e a gastar a
+  // verba diária, depois da revisão da Meta. Volta a gastar: os limites da empresa e a verba do mês valem (D-A4-19), como
+  // em retomar. Só pela rota da campanha nova (`POST /v1/new-campaigns/{id}/activate`); a volta é pausar.
+  campanha_nova_ativar: {
+    name: 'campanha_nova_ativar',
+    version: 1,
+    owner: 'midia',
+    description:
+      'Ativa na Meta a campanha nova que o Liame criou pausada: o anúncio, o conjunto e a campanha passam a rodar e a gastar a verba diária, depois da revisão da Meta. A volta é pausar.',
+    risk: 'R2',
+    providers: ['meta_ads'],
+    compensation: 'pausar_se_inalterado',
+    alwaysApproval: true,
+    onlyByRoute: true,
+    flag: 'campanha_nova',
+    params: NoParams,
+    plan(before) {
+      const plano = planoDeAtivar(before);
+      if (!plano.ok) throw new PlanoRecusado(plano.motivo);
+      const verba = plano.desejado.verba_diaria_micros;
+      return { action: 'campanha.ativar', budgetImpact: 'new_spend', valueMicros: verba, currentValueMicros: null, reserveMicros: verba, desiredState: plano.desejado as unknown as ResourceState };
+    },
+    undo: () => ({ tool: 'campanha_nova_pausar', params: {} }),
+  },
+  // A volta de ativar: a campanha nova para de rodar e de gastar (a campanha em pausa; os filhos herdam).
+  campanha_nova_pausar: {
+    name: 'campanha_nova_pausar',
+    version: 1,
+    owner: 'midia',
+    description: 'Pausa na Meta a campanha nova que o Liame ativou: ela para de aparecer e de gastar (reversível).',
+    risk: 'R1',
+    providers: ['meta_ads'],
+    compensation: 'reativar_se_inalterado',
+    onlyAsUndo: true,
+    flag: 'campanha_nova',
+    params: NoParams,
+    plan(before) {
+      const plano = planoDePausar(before);
+      if (!plano.ok) throw new PlanoRecusado(plano.motivo);
+      return { action: 'campanha.pausar', budgetImpact: 'decrease', valueMicros: null, currentValueMicros: null, reserveMicros: 0, desiredState: plano.desejado as unknown as ResourceState };
+    },
+    undo: () => ({ tool: 'campanha_nova_ativar', params: {} }),
   },
   regem_cupom_criar: {
     name: 'regem_cupom_criar',

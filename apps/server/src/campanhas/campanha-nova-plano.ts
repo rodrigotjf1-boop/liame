@@ -51,6 +51,8 @@ export const EstadoDaCampanhaNova = z.object({
   fuso: z.string().min(1),
   link: z.string().url().nullable(),
   situacao: SituacaoDaCampanhaNova,
+  /** Ativada pelo Liame (A4, X5, parte 3): a campanha, o conjunto e o anúncio rodando na Meta. */
+  ativa: z.boolean(),
 });
 export type EstadoDaCampanhaNova = z.infer<typeof EstadoDaCampanhaNova>;
 
@@ -69,6 +71,28 @@ export function planoDaCampanhaNova(before: unknown): PlanoDaCampanhaNova {
   if (e.situacao === 'nao_criada') return { ok: false, motivo: 'Esta campanha nova não foi criada: peça de novo pela peça.' };
   if ((e.objetivo === 'cardapio') !== (e.link !== null)) return { ok: false, motivo: 'O destino da campanha não bate com o objetivo.' };
   return { ok: true, desejado: { ...e, situacao: 'criada' } };
+}
+
+/**
+ * O plano de ativar (A4, X5, parte 3; D-A4-31): a campanha nova criada e pausada passa a rodar. Gasta a verba diária
+ * depois da revisão da Meta; a volta é pausar. Função pura.
+ */
+export function planoDeAtivar(before: unknown): PlanoDaCampanhaNova {
+  const lido = EstadoDaCampanhaNova.safeParse(before);
+  if (!lido.success) return { ok: false, motivo: 'Esta ferramenta é para uma campanha nova do Liame.' };
+  const e = lido.data;
+  if (e.situacao !== 'criada') return { ok: false, motivo: 'A campanha nova ainda não foi criada na Meta: ative depois que ela existir, pausada.' };
+  if (e.ativa) return { ok: false, motivo: 'Esta campanha nova já está ativa.' };
+  return { ok: true, desejado: { ...e, ativa: true } };
+}
+
+/** O plano de pausar (a volta de ativar): a campanha nova ativa para de rodar e de gastar. Função pura. */
+export function planoDePausar(before: unknown): PlanoDaCampanhaNova {
+  const lido = EstadoDaCampanhaNova.safeParse(before);
+  if (!lido.success) return { ok: false, motivo: 'Esta ferramenta é para uma campanha nova do Liame.' };
+  const e = lido.data;
+  if (e.situacao !== 'criada' || !e.ativa) return { ok: false, motivo: 'Esta campanha nova não está ativa: não há o que pausar.' };
+  return { ok: true, desejado: { ...e, ativa: false } };
 }
 
 // ------------------------------------------------------------ os objetos na Meta (D-A4-40)
