@@ -49,6 +49,9 @@ describe('ferramentas de anúncio (A4 · X2)', () => {
       campanha_retomar: ['R2', 'meta_ads+google_ads', 'pausar_se_inalterado'],
       // A campanha nova (A4, X5): nasce pausada e não gasta; o que foi criado fica pausado na Meta (D-A4-31).
       campanha_criar: ['R1', 'meta_ads', 'fica_pausada_na_meta'],
+      // Ativar a campanha nova volta a gastar; a volta é pausar (A4, X5, parte 3).
+      campanha_nova_ativar: ['R2', 'meta_ads', 'pausar_se_inalterado'],
+      campanha_nova_pausar: ['R1', 'meta_ads', 'reativar_se_inalterado'],
     });
     for (const t of Object.values(TOOLS)) expect(t.params.safeParse({ qualquer: 1 }).success, t.name).toBe(false);
   });

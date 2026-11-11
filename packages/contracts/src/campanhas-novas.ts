@@ -62,6 +62,11 @@ export const NewCampaignResponse = z.strictObject({
   action_id: z.uuid().nullable(),
   /** O porquê de `nao_criada`, em palavras. */
   error: z.string().nullable(),
+  /** Ativada pelo Liame (A4, X5, parte 3): rodando na Meta, depois da revisão dela. A volta é pausar. */
+  active: z.boolean(),
+  activated_at: z.iso.datetime({ offset: true }).nullable(),
+  /** O pedido de ativar (ou a volta, pausar) que ainda espera a decisão ou a execução, se houver. */
+  pending_action_id: z.uuid().nullable(),
   /** O que já existe na Meta (os ids), na ordem em que o Liame cria. */
   meta: z.strictObject({
     campaign_id: z.string().nullable(),

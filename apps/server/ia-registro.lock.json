@@ -28,6 +28,14 @@
       "version": 1,
       "hash": "6d98ffed714e06bcf39c8f8a6a4d376ebca7496732dae967c1ac3d0d1312f5aa"
     },
+    "campanha_nova_ativar": {
+      "version": 1,
+      "hash": "569135226340f45938087911a8cc5f974151d3ca1f71ff302f555c213f75ad02"
+    },
+    "campanha_nova_pausar": {
+      "version": 1,
+      "hash": "0420c770e038b81a9de08505175891a4bb2584d1f71b099edc74cb8f6f259ca7"
+    },
     "campanha_pausar": {
       "version": 1,
       "hash": "205d193e3500871f763fbf2e50cf5d643466ae2cd5b2ba2ac95adf3312456009"

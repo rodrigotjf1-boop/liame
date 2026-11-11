@@ -63,6 +63,7 @@ describe('pedido de mensagem: as ferramentas e o plano (A5 · Y5)', () => {
     // mensagens não aceitam parâmetro.
     expect(Object.values(TOOLS).filter((t) => t.alwaysApproval).map((t) => t.name)).toEqual([
       'campanha_criar',
+      'campanha_nova_ativar',
       'mensagem_disparar',
       'avaliacao_responder',
       'post_publicar',

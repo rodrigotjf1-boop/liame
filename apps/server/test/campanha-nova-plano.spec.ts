@@ -9,6 +9,8 @@ import {
   parametrosDoConjunto,
   parametrosDoCriativo,
   planoDaCampanhaNova,
+  planoDeAtivar,
+  planoDePausar,
   rastreioDoAnuncio,
   recursoDaCampanhaNova,
   verbaNaMenorUnidade,
@@ -37,6 +39,7 @@ const estado = (o: Partial<EstadoDaCampanhaNova> = {}): EstadoDaCampanhaNova => 
   fuso: 'America/Sao_Paulo',
   link: 'https://cardapio.exemplo.com.br/mister-centro',
   situacao: 'pedida',
+  ativa: false,
   ...o,
 });
 
@@ -51,6 +54,17 @@ describe('a campanha nova (A4 · X5, parte 1)', () => {
     expect(planoDaCampanhaNova(estado({ situacao: 'cancelada' })).ok).toBe(false);
     expect(planoDaCampanhaNova(estado({ objetivo: 'whatsapp' })).ok).toBe(false);
     expect(planoDaCampanhaNova({ qualquer: 1 }).ok).toBe(false);
+  });
+
+  it('ativar e pausar (parte 3): só a criada ativa; a ativa pausa; o resto não', () => {
+    const criada = estado({ situacao: 'criada' });
+    const a = planoDeAtivar(criada);
+    expect(a.ok && a.desejado.ativa).toBe(true);
+    expect(planoDeAtivar(estado())).toEqual({ ok: false, motivo: 'A campanha nova ainda não foi criada na Meta: ative depois que ela existir, pausada.' });
+    expect(planoDeAtivar(estado({ situacao: 'criada', ativa: true }))).toEqual({ ok: false, motivo: 'Esta campanha nova já está ativa.' });
+    const p = planoDePausar(estado({ situacao: 'criada', ativa: true }));
+    expect(p.ok && p.desejado.ativa).toBe(false);
+    expect(planoDePausar(criada).ok).toBe(false);
   });
 
   it('a campanha: Tráfego para o cardápio, Engajamento para o WhatsApp; sem categoria especial, sem verba própria, pausada', () => {
