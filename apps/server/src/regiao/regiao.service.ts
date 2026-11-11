@@ -1,0 +1,270 @@
+import type {
+  AddressLookupRequest,
+  AddressLookupResponse,
+  GoogleProfileAddressRequest,
+  GoogleProfileAddressResponse,
+  SaveStoreLocationRequest,
+  SaveStoreLocationResponse,
+  StoreAddress,
+  StoreCoordinates,
+  StoreLocation,
+  StoreLocationsResponse,
+} from '@liame/contracts';
+import type { Database } from '@liame/database';
+import { Inject, Injectable, Logger } from '@nestjs/common';
+import { sql } from 'drizzle-orm';
+import { naTransacaoDaEmpresa } from '../ai/na-empresa.js';
+import { APP_CONFIG, type AppConfig } from '../config.js';
+import { contaConectada } from '../connections/conectada.js';
+import { acessoGoogle, type CredencialGuardada } from '../connections/oauth.js';
+import { ClienteConector, ErroConector } from '../connectors/cliente-http.js';
+import { enderecosDasPlataformas } from '../connectors/enderecos.js';
+import { BALDE_DO_PERFIL_GOOGLE, criarConectorPerfilGoogle, type EnderecoDoPerfil } from '../connectors/google-business/conector-perfil-google.js';
+import { FLAG_PERFIL_GOOGLE, PROVEDOR_PERFIL_GOOGLE } from '../connectors/google-business/perfil-google.js';
+import { type AuthContext, auditDetail, currentTx } from '../context/request-context.js';
+import { DATABASE } from '../database/database.module.js';
+import { AppProblem } from '../errors/problems.js';
+import { FlagService } from '../flags/flag.service.js';
+import { VaultService } from '../vault/vault.service.js';
+import { buscarCep, cepNormalizado, type EnderecoDoCep } from './cep.js';
+import { type Coordenada, ProcuraDeCoordenada } from './coordenada.js';
+import { areasDeEntrega, ATRIBUICAO, FLAG_DA_REGIAO, type LinhaDaLoja, lojaNoMapa, ruaENumero } from './regiao.js';
+
+// A loja no mapa na API (plano da região, R1). Listar e salvar rodam na transação da requisição; conferir um endereço
+// e ler o do Perfil do Google chamam serviços de fora (ViaCEP, OpenStreetMap, Google) e por isso rodam sem transação
+// aberta: o banco numa transação curta, os serviços depois. Nenhuma dessas duas grava nada. O endereço da loja nunca
+// vai para o modelo de IA (D-A3-4, D-RG-2).
+
+const TEMPO_DO_GOOGLE_MS = 8_000;
+const ESPERA_PELA_COTA_MS = 2_000;
+
+const COLUNAS_DA_LOJA = sql`u.id, u.name, u.address_postal_code, u.address_street, u.address_number, u.address_district, u.address_city,
+  u.address_state, u.ibge_city_code, u.latitude, u.longitude, u.location_precision, u.location_source, u.delivery_radius_km,
+  u.delivery_areas, u.location_set_at, p.id as user_id, p.name as user_name`;
+
+function desligada(): AppProblem {
+  return new AppProblem(409, 'funcao-desligada', 'Função desligada', 'A região ainda não está ligada para esta empresa.');
+}
+
+function marcaNaoEncontrada(): AppProblem {
+  return new AppProblem(404, 'nao-encontrado', 'Não encontramos', 'Marca não encontrada nesta empresa.');
+}
+
+function cepInvalido(): AppProblem {
+  return new AppProblem(422, 'cep-invalido', 'CEP fora do formato', 'Informe os 8 números do CEP, com ou sem o hífen.');
+}
+
+function cepNaoAchado(): AppProblem {
+  return new AppProblem(422, 'cep-nao-encontrado', 'CEP não encontrado', 'Esse CEP não existe nos Correios. Confira os números.');
+}
+
+function cepForaDoAr(): AppProblem {
+  return new AppProblem(503, 'cep-fora-do-ar', 'Consulta do CEP fora do ar', 'O serviço de CEP não respondeu agora. Tente de novo em instantes.');
+}
+
+const paraCoordenadas = (c: Coordenada | null): StoreCoordinates | null => (c ? { latitude: c.latitude, longitude: c.longitude, precision: c.precisao } : null);
+
+function paraEndereco(cep: EnderecoDoCep, rua: string | null, numero: string | null, bairro: string | null): StoreAddress {
+  return { postal_code: cep.cep, street: rua, number: numero, district: bairro, city: cep.cidade, state: cep.uf, ibge_city_code: cep.codigoIbge };
+}
+
+@Injectable()
+export class RegiaoService {
+  private readonly logger = new Logger('regiao');
+  private readonly procura = new ProcuraDeCoordenada();
+
+  constructor(
+    @Inject(APP_CONFIG) private readonly config: AppConfig,
+    @Inject(DATABASE) private readonly database: Database | null,
+    private readonly flags: FlagService,
+    private readonly vault: VaultService,
+  ) {}
+
+  private banco(): Database {
+    if (!this.database) throw new Error('região: sem banco');
+    return this.database;
+  }
+
+  private ligada(auth: AuthContext, brandId: string, flag = FLAG_DA_REGIAO): Promise<boolean> {
+    return this.flags.isEnabled(flag, this.flags.context({ tenantId: auth.tenantId, userId: auth.userId, brandId }));
+  }
+
+  private quem(auth: AuthContext): { tenantId: string; userId: string } {
+    if (!auth.tenantId) throw new AppProblem(403, 'sem-empresa-ativa', 'Escolha uma empresa', 'Selecione uma empresa com acesso ativo.');
+    return { tenantId: auth.tenantId, userId: auth.userId };
+  }
+
+  private async marca(brandId: string): Promise<void> {
+    const r = await currentTx().execute<{ id: string }>(sql`select id from liame.brand where id = ${brandId} and archived_at is null`);
+    if (!r.rows[0]) throw marcaNaoEncontrada();
+  }
+
+  /** As lojas da marca com o que se sabe de onde cada uma fica, e os Perfis do Google ligados a ela. */
+  async lojas(auth: AuthContext, brandId: string, agora = new Date()): Promise<StoreLocationsResponse> {
+    const tx = currentTx();
+    await this.marca(brandId);
+    const base = { brand_id: brandId, attribution: ATRIBUICAO, generated_at: agora.toISOString() };
+    if (!(await this.ligada(auth, brandId))) {
+      return { ...base, availability: { status: 'desligado_pela_liame' }, stores: [], google_profiles: [], can_edit: false };
+    }
+    const lojas = await tx.execute<LinhaDaLoja>(sql`
+      select ${COLUNAS_DA_LOJA}
+        from liame.unit u left join liame.app_user p on p.id = u.location_set_by
+       where u.brand_id = ${brandId}
+       order by u.created_at, u.id`);
+    const perfis = (await this.ligada(auth, brandId, FLAG_PERFIL_GOOGLE))
+      ? (
+          await tx.execute<{ id: string; name: string }>(sql`
+            select a.id, a.name from liame.connected_account a
+             where a.provider = ${PROVEDOR_PERFIL_GOOGLE} and a.brand_id = ${brandId} and ${contaConectada('a')}
+             order by a.name, a.id limit 20`)
+        ).rows
+      : [];
+    return {
+      ...base,
+      availability: { status: 'disponivel' },
+      stores: lojas.rows.map(lojaNoMapa),
+      google_profiles: perfis.map((p) => ({ account_id: p.id, name: p.name })),
+      can_edit: auth.permissions.has('dossie.editar'),
+    };
+  }
+
+  /** A marca existe e a função está ligada: a transação curta antes de chamar os serviços de fora. */
+  private async conferirAntes(auth: AuthContext, brandId: string): Promise<void> {
+    await naTransacaoDaEmpresa(this.banco(), this.quem(auth), async () => {
+      await this.marca(brandId);
+      if (!(await this.ligada(auth, brandId))) throw desligada();
+    });
+  }
+
+  /** Confere um endereço pelo CEP (ViaCEP) e acha a coordenada (OpenStreetMap). Não grava nada. */
+  async conferirEndereco(auth: AuthContext, body: AddressLookupRequest): Promise<AddressLookupResponse> {
+    const cep = cepNormalizado(body.postal_code);
+    if (!cep) throw cepInvalido();
+    await this.conferirAntes(auth, body.brand_id);
+    const lido = await buscarCep(cep);
+    if (lido.situacao === 'nao_achado') throw cepNaoAchado();
+    if (lido.situacao === 'fora_do_ar') throw cepForaDoAr();
+    const e = lido.endereco;
+    const rua = e.rua ?? (body.street?.trim() || null);
+    const numero = body.number?.trim() || null;
+    const coordenada = await this.procura.procurar({ rua, numero, bairro: e.bairro, cidade: e.cidade, uf: e.uf });
+    return {
+      address: paraEndereco(e, rua, numero, e.bairro),
+      coordinates: paraCoordenadas(coordenada),
+      coordinates_status: coordenada ? 'achada' : 'nao_achada',
+      needs_street: rua === null,
+      attribution: ATRIBUICAO,
+    };
+  }
+
+  /** O endereço e as áreas de entrega de um Perfil do Google da marca, lidos agora; o CEP dele é conferido no ViaCEP. Não grava nada. */
+  async enderecoDoPerfil(auth: AuthContext, body: GoogleProfileAddressRequest): Promise<GoogleProfileAddressResponse> {
+    const conta = await naTransacaoDaEmpresa(this.banco(), this.quem(auth), async () => {
+      const tx = currentTx();
+      await this.marca(body.brand_id);
+      if (!(await this.ligada(auth, body.brand_id))) throw desligada();
+      if (!(await this.ligada(auth, body.brand_id, FLAG_PERFIL_GOOGLE))) throw perfilNaoEncontrado();
+      const r = await tx.execute<{ external_id: string; name: string; credential_secret_id: string | null }>(sql`
+        select a.external_id, a.name, a.credential_secret_id from liame.connected_account a
+         where a.id = ${body.account_id} and a.provider = ${PROVEDOR_PERFIL_GOOGLE} and a.brand_id = ${body.brand_id} and ${contaConectada('a')}`);
+      const l = r.rows[0];
+      if (!l) throw perfilNaoEncontrado();
+      const guardada = l.credential_secret_id ? await this.vault.readSecret(tx, l.credential_secret_id) : null;
+      const credencial = guardada ? (JSON.parse(guardada) as CredencialGuardada) : null;
+      if (credencial?.tipo !== 'google') throw perfilSemAcesso();
+      return { loja: l.external_id, nome: l.name, renovacao: credencial.refresh_token };
+    });
+
+    let lido: EnderecoDoPerfil;
+    try {
+      const cliente = new ClienteConector(this.banco().db, {
+        enderecos: enderecosDasPlataformas(this.config.plataformas, this.config.produtos),
+        balde: BALDE_DO_PERFIL_GOOGLE,
+        tentativas: 1,
+        esperaMaximaMs: ESPERA_PELA_COTA_MS,
+        tempoLimiteMs: TEMPO_DO_GOOGLE_MS,
+      });
+      const conector = await criarConectorPerfilGoogle(this.banco().db, cliente, this.config.plataformas);
+      const accessToken = await acessoGoogle(this.config, this.config.oauth.google?.tokenUrl ?? '', conta.renovacao);
+      lido = await conector.lerEnderecoDaLoja({ accessToken }, { loja: conta.loja }, { tempoLimiteMs: TEMPO_DO_GOOGLE_MS });
+    } catch (err) {
+      // Só o tipo da falha vai para o registro: nada do que o Google respondeu.
+      const tipo = err instanceof ErroConector ? err.tipo : 'erro interno';
+      this.logger.warn(`endereço do Perfil do Google: ${tipo}`);
+      if (err instanceof ErroConector && err.tipo === 'permissao') throw perfilSemAcesso();
+      throw new AppProblem(503, 'perfil-fora-do-ar', 'Perfil do Google fora do ar', 'O Google não respondeu agora. Tente de novo em instantes ou informe pelo CEP.');
+    }
+
+    const areas = areasDeEntrega(lido.areas);
+    const nome = lido.nome ?? conta.nome;
+    const semEndereco = { profile_name: nome, address: null, coordinates: null, coordinates_status: 'nao_achada', delivery_areas: areas, needs_street: false, attribution: ATRIBUICAO };
+    if (!lido.cep) return semEndereco;
+    const doCep = await buscarCep(lido.cep);
+    // O CEP do perfil que o ViaCEP não acha (ou que ele não responde agora) não vira endereço: a pessoa informa pelo CEP.
+    if (doCep.situacao !== 'achado') return semEndereco;
+    const e = doCep.endereco;
+    const { rua: ruaDoPerfil, numero } = ruaENumero(lido.linhas[0]);
+    const rua = ruaDoPerfil ?? e.rua;
+    const bairro = lido.bairro ?? e.bairro;
+    const doGoogle = lido.latitude !== null && lido.longitude !== null && lido.latitude >= -34 && lido.latitude <= 6 && lido.longitude >= -75 && lido.longitude <= -28;
+    const coordenada: Coordenada | null = doGoogle
+      ? { latitude: Number(lido.latitude!.toFixed(6)), longitude: Number(lido.longitude!.toFixed(6)), precisao: 'endereco' }
+      : await this.procura.procurar({ rua, numero, bairro, cidade: e.cidade, uf: e.uf });
+    return {
+      profile_name: nome,
+      address: paraEndereco(e, rua, numero, bairro),
+      coordinates: paraCoordenadas(coordenada),
+      coordinates_status: coordenada ? 'achada' : 'nao_achada',
+      delivery_areas: areas,
+      needs_street: rua === null,
+      attribution: ATRIBUICAO,
+    };
+  }
+
+  /** Salva onde a loja fica, o raio e as áreas de entrega (o Dono e o Administrador), com o antes e o depois na auditoria. */
+  async salvar(auth: AuthContext, unitId: string, body: SaveStoreLocationRequest): Promise<SaveStoreLocationResponse> {
+    const tx = currentTx();
+    const antes = (
+      await tx.execute<LinhaDaLoja & { brand_id: string }>(sql`
+        select ${COLUNAS_DA_LOJA}, u.brand_id
+          from liame.unit u join liame.brand b on b.id = u.brand_id and b.archived_at is null
+          left join liame.app_user p on p.id = u.location_set_by
+         where u.id = ${unitId}
+         for update of u`)
+    ).rows[0];
+    if (!antes) throw new AppProblem(404, 'loja-nao-encontrada', 'Não encontramos', 'Loja não encontrada nesta empresa.');
+    if (!(await this.ligada(auth, antes.brand_id))) throw desligada();
+    const a = body.address;
+    const c = body.coordinates;
+    const areas = areasDeEntrega(body.delivery_areas);
+    await tx.execute(sql`
+      update liame.unit set
+             address_postal_code = ${a.postal_code}, address_street = ${a.street}, address_number = ${a.number},
+             address_district = ${a.district}, address_city = ${a.city}, address_state = ${a.state}, ibge_city_code = ${a.ibge_city_code},
+             latitude = ${c ? c.latitude : null}, longitude = ${c ? c.longitude : null}, location_precision = ${c ? c.precision : null},
+             location_source = ${body.source}, delivery_radius_km = ${body.delivery_radius_km}, delivery_areas = ${JSON.stringify(areas)}::jsonb,
+             location_set_at = now(), location_set_by = ${auth.userId}
+       where id = ${unitId}`);
+    const depois = (
+      await tx.execute<LinhaDaLoja>(sql`
+        select ${COLUNAS_DA_LOJA} from liame.unit u left join liame.app_user p on p.id = u.location_set_by where u.id = ${unitId}`)
+    ).rows[0]!;
+    const store = lojaNoMapa(depois);
+    auditDetail({ resourceId: unitId, before: paraAuditoria(lojaNoMapa(antes)), after: paraAuditoria(store) });
+    return { store };
+  }
+}
+
+/** O que vai para a auditoria: onde a loja fica, o raio e as áreas (quem e quando a auditoria já guarda). */
+function paraAuditoria(l: StoreLocation): Record<string, unknown> {
+  return { address: l.address, coordinates: l.coordinates, source: l.source, delivery_radius_km: l.delivery_radius_km, delivery_areas: l.delivery_areas };
+}
+
+function perfilNaoEncontrado(): AppProblem {
+  return new AppProblem(404, 'perfil-nao-encontrado', 'Não encontramos', 'Esse Perfil do Google não está ligado a esta marca.');
+}
+
+function perfilSemAcesso(): AppProblem {
+  return new AppProblem(409, 'perfil-sem-acesso', 'Sem acesso ao perfil', 'O Liame não tem mais acesso a esse Perfil do Google. Conecte de novo em Contas conectadas ou informe pelo CEP.');
+}

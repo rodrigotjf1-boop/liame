@@ -47,6 +47,56 @@ const PAGINA_DE_LOJAS = 100;
 const PAGINA_DE_AVALIACOES = 50;
 /** O que o Liame lê de cada loja ao listar (o `readMask` é obrigatório). */
 const CAMPOS_DA_LOJA = 'name,title,websiteUri,metadata';
+/** O que a loja no mapa lê de uma loja (plano da região, R1): o nome, o endereço, a coordenada e as áreas atendidas. */
+const CAMPOS_DO_ENDERECO = 'title,storefrontAddress,latlng,serviceArea';
+
+/** O endereço de uma loja do Perfil, como o Google dá (cada parte já conferida e encurtada). */
+export type EnderecoDoPerfil = {
+  nome: string | null;
+  cep: string | null;
+  /** As linhas do endereço ("Rua X, 123"), até cinco. */
+  linhas: string[];
+  bairro: string | null;
+  cidade: string | null;
+  /** A UF, quando o Google a dá como sigla. */
+  uf: string | null;
+  latitude: number | null;
+  longitude: number | null;
+  /** Os nomes das áreas atendidas (até 20). */
+  areas: string[];
+};
+
+/** Lê a resposta do `locations.get` sem confiar em nada: o que não tem o formato esperado fica de fora. */
+export function enderecoDoPerfil(corpo: unknown): EnderecoDoPerfil {
+  const o = (corpo && typeof corpo === 'object' ? corpo : {}) as {
+    title?: unknown;
+    storefrontAddress?: { postalCode?: unknown; addressLines?: unknown; sublocality?: unknown; locality?: unknown; administrativeArea?: unknown; regionCode?: unknown };
+    latlng?: { latitude?: unknown; longitude?: unknown };
+    serviceArea?: { places?: { placeInfos?: unknown } };
+  };
+  const a = o.storefrontAddress ?? {};
+  const doBrasil = a.regionCode === undefined || a.regionCode === 'BR';
+  const cepCru = textoCurto(a.postalCode, 20);
+  const digitos = cepCru ? [...cepCru].filter((c) => c >= '0' && c <= '9').join('') : '';
+  const linhas = Array.isArray(a.addressLines) ? a.addressLines.flatMap((l) => textoCurto(l, 200) ?? []).slice(0, 5) : [];
+  const ufCru = textoCurto(a.administrativeArea, 60);
+  const uf = ufCru && ufCru.length === 2 && ufCru === ufCru.toUpperCase() ? ufCru : null;
+  const lat = typeof o.latlng?.latitude === 'number' ? o.latlng.latitude : null;
+  const lng = typeof o.latlng?.longitude === 'number' ? o.latlng.longitude : null;
+  const lugares = Array.isArray(o.serviceArea?.places?.placeInfos) ? (o.serviceArea.places.placeInfos as Array<{ placeName?: unknown }>) : [];
+  const areas = [...new Set(lugares.flatMap((p) => textoCurto(p?.placeName, 80) ?? []))].slice(0, 20);
+  return {
+    nome: textoCurto(o.title, 300),
+    cep: doBrasil && digitos.length === 8 ? digitos : null,
+    linhas: doBrasil ? linhas : [],
+    bairro: doBrasil ? textoCurto(a.sublocality, 120) : null,
+    cidade: doBrasil ? textoCurto(a.locality, 120) : null,
+    uf: doBrasil ? uf : null,
+    latitude: lat !== null && lng !== null ? lat : null,
+    longitude: lat !== null && lng !== null ? lng : null,
+    areas,
+  };
+}
 
 export type LojaDoPerfil = {
   /** A conta do Perfil da Empresa (`accounts/123`). */
@@ -308,6 +358,27 @@ export class ConectorPerfilGoogle {
       if (err instanceof ErroConector && err.status === 404) return;
       throw err;
     }
+  }
+
+  /**
+   * O endereço da loja, as áreas que ela atende e a coordenada, lidos agora (plano da região, R1; Business Information
+   * API, `locations.get`). Só leitura: o Liame nunca muda o endereço no Google (D-A6-18). A coordenada quase nunca vem:
+   * o Google só a devolve quando ela foi digitada ao criar o perfil (base §19.1). Quem chama não guarda nada daqui sem
+   * a pessoa confirmar.
+   */
+  async lerEnderecoDaLoja(credencial: Credencial, alvo: { loja: string }, opcoes: { tempoLimiteMs?: number } = {}): Promise<EnderecoDoPerfil> {
+    const loja = recurso('locations', alvo.loja);
+    const q = new URLSearchParams({ readMask: CAMPOS_DO_ENDERECO });
+    const r = await this.cliente.requisitar<unknown>({
+      provider: PROVIDER,
+      conta: this.chaveDaCota,
+      url: `${this.bases.lojas}/${this.versoes.lojas}/${loja}?${q.toString()}`,
+      endpoint: 'locations.get',
+      apiVersion: this.versoes.lojas,
+      cabecalhos: { authorization: `Bearer ${credencial.accessToken}` },
+      ...(opcoes.tempoLimiteMs ? { tempoLimiteMs: opcoes.tempoLimiteMs } : {}),
+    });
+    return enderecoDoPerfil(r.corpo);
   }
 
   /** Os números do perfil por dia, na janela [inicio, fim] (AAAA-MM-DD). O dia que o Google ainda não fechou não vem. */

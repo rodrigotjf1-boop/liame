@@ -294,6 +294,24 @@ export {
   UseBrandDossierSuggestionRequest,
 } from './marca.js';
 export {
+  AddressLookupRequest,
+  AddressLookupResponse,
+  DELIVERY_AREAS_MAX,
+  DELIVERY_RADIUS_KM,
+  GoogleProfileAddressRequest,
+  GoogleProfileAddressResponse,
+  LOCATION_PRECISIONS,
+  LOCATION_SOURCES,
+  OSM_ATTRIBUTION,
+  SaveStoreLocationRequest,
+  SaveStoreLocationResponse,
+  StoreAddress,
+  StoreCoordinates,
+  StoreLocation,
+  StoreLocationsQuery,
+  StoreLocationsResponse,
+} from './regiao.js';
+export {
   CONVERSATION_MESSAGE_MAX,
   CONVERSATION_RETENTION_DAYS,
   ConversationBlock,

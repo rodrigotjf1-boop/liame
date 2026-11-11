@@ -81,7 +81,7 @@ describe('A1-4: toda rota declara o acesso e nega sem sessão', () => {
     }
   });
 
-  it('fora da transação da requisição só rodam as rotas revisadas: as que esperam um modelo de IA (A3, I4 e I10), a que lê o objeto na plataforma de anúncio (A4, X8), as duas que leem as conversões da conta no Google (A5, Y1), o começo de uma conexão (o pedido empurrado do RegemCast, Hub DMS B1), o envio de uma foto (A6, Z4), o PIX de uma fatura (A7, W2a), o logo da agência e o relatório que ela manda ao cliente (A7, W7), a conferência e a capa do vídeo das Fotos (A6, Z10)', () => {
+  it('fora da transação da requisição só rodam as rotas revisadas: as que esperam um modelo de IA (A3, I4 e I10), a que lê o objeto na plataforma de anúncio (A4, X8), as duas que leem as conversões da conta no Google (A5, Y1), o começo de uma conexão (o pedido empurrado do RegemCast, Hub DMS B1), o envio de uma foto (A6, Z4), o PIX de uma fatura (A7, W2a), o logo da agência e o relatório que ela manda ao cliente (A7, W7), a conferência e a capa do vídeo das Fotos (A6, Z10), e as duas conferências do endereço da loja no mapa (plano da região, R1)', () => {
     const semTransacao = listRoutes(api.app)
       .filter((r) => r.semTransacao)
       .map((r) => `${r.method} ${r.path}`)
@@ -113,6 +113,8 @@ describe('A1-4: toda rota declara o acesso e nega sem sessão', () => {
     // o tamanho e o cabeçalho do vídeo no armazenamento sem transação aberta, e marca o vídeo pronto com o evento de
     // auditoria (manual) noutra transação curta (o recusado sai da lista, sem auditoria, como a foto que falha).
     // `PUT /v1/brand-photos/:id/cover`: o caminho do logo, para a capa do vídeo (a miniatura, com a auditoria manual).
+    // As duas da loja no mapa (plano da região, R1): conferem a marca e a função numa transação curta e depois chamam o
+    // ViaCEP, o OpenStreetMap (uma consulta por segundo) e, numa delas, o Google, sem transação aberta; não gravam nada.
     expect(semTransacao).toEqual([
       'GET /v1/actions/options',
       'GET /v1/agency-logos/:arquivo',
@@ -130,6 +132,8 @@ describe('A1-4: toda rota declara o acesso e nega sem sessão', () => {
       'POST /v1/brand-photos/:id/video',
       'POST /v1/connections',
       'POST /v1/conversations/messages',
+      'POST /v1/region/address-lookup',
+      'POST /v1/region/google-profile-address',
       'PUT /v1/agency/brand/logo',
       'PUT /v1/brand-photos/:id/cover',
       'PUT /v1/conversions/google/destination',
