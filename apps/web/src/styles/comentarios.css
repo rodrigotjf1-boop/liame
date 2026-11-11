@@ -1,0 +1,19 @@
+/* Os comentários (P38; A6, Z11, partes 3a e 3b): o canal, com o ícone da rede, e o tipo do comentário, no pedido de
+   Aprovações e na tela Comentários; e o que é só da tela (a lista usa as classes da lista das Avaliações). */
+.co-canal { display: inline-flex; align-items: center; gap: 5px; height: 22px; padding: 0 8px; border-radius: 6px; background: var(--bg-subtle); color: var(--text); font-size: 11px; font-weight: 600; white-space: nowrap; }
+.co-canal .ic { width: 13px; height: 13px; }
+.co-canal--ig .ic { color: var(--marca-violeta); }
+.co-canal--fb .ic { color: var(--link); }
+.co-tipo { display: inline-flex; align-items: center; min-height: 22px; padding: 1px 8px; border-radius: var(--radius-full); border: 1px solid var(--border); color: var(--text-muted); font-size: 11px; font-weight: 600; }
+.co-tipo--reclamacao { border-color: color-mix(in srgb, var(--warning) 45%, var(--border)); color: var(--warning); }
+.co-tipo--golpe { border-color: color-mix(in srgb, var(--danger) 45%, var(--border)); color: var(--danger); }
+.co-tipo--pergunta { border-color: color-mix(in srgb, var(--fio) 45%, var(--border)); color: var(--link); }
+
+/* A tela Comentários: o cabeçalho com a leitura e o "Ler agora", a busca e as respostas que já estão na rede. */
+.com-leitura { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-2) var(--sp-3); }
+.com-busca { display: flex; flex-wrap: wrap; align-items: end; gap: var(--sp-3); margin-bottom: var(--sp-3); }
+.com-busca .res-campo { min-width: 0; flex: 1 1 220px; max-width: 360px; }
+.com-post { margin-top: var(--sp-1); font-size: var(--text-xs); color: var(--text-muted); overflow-wrap: anywhere; }
+.com-respostas { display: grid; gap: var(--sp-1); margin: var(--sp-2) 0 0; padding: 0 0 0 var(--sp-3); border-left: 2px solid var(--border); list-style: none; }
+.com-respostas li { font-size: var(--text-xs); color: var(--text-muted); overflow-wrap: anywhere; }
+.com-respostas b { color: var(--text); font-weight: 600; }

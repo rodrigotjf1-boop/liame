@@ -37,8 +37,8 @@ import { type Grupo, identidadeDoPlano, prazoDe, riscoDe } from './textos';
 const DICA_DO_COMENTARIO = 'A resposta é pública. Sem desconto, brinde ou reembolso prometido, e sem o nome de quem comentou: o Compliance confere de novo quando você salvar.';
 const motivosDe = (lista: string[]) => lista.map((m) => ({ valor: m, rotulo: m }));
 
-/** O canal do comentário, com o ícone da rede (P38). */
-function Canal({ canal }: { canal: string }) {
+/** O canal do comentário, com o ícone da rede (P38). Também na tela Comentários. */
+export function Canal({ canal }: { canal: string }) {
   return (
     <span className={`co-canal co-canal--${canal === 'facebook' ? 'fb' : 'ig'}`}>
       <Icone nome={canal === 'facebook' ? 'facebook' : 'instagram'} pequeno />

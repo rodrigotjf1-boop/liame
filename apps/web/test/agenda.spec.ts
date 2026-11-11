@@ -127,7 +127,9 @@ describe('a Agenda: o menu e a semana', () => {
   it('a Agenda fica logo abaixo de Avaliações, para quem acompanha as campanhas, uma tela só nos dois modos (D-A6-24)', () => {
     const agencia = NAVEGACAO.find((g) => g.id === 'agencia')!;
     const hrefs = agencia.itens.map((i) => i.href);
-    expect(hrefs.indexOf('/agenda')).toBe(hrefs.indexOf('/avaliacoes') + 1);
+    // Desde a Z11 (P38, D-A6-84), Comentários fica logo depois de Avaliações, e a Agenda logo depois de Comentários.
+    expect(hrefs.indexOf('/agenda')).toBe(hrefs.indexOf('/comentarios') + 1);
+    expect(hrefs.indexOf('/comentarios')).toBe(hrefs.indexOf('/avaliacoes') + 1);
     expect(agencia.itens.find((i) => i.href === '/agenda')).toMatchObject({ rotulo: 'Agenda', icone: 'calendar', permissao: 'campanhas.ver' });
     expect(tituloDa('/agenda')).toBe('Agenda');
     expect(temModos('/agenda', () => true)).toBe(false);
