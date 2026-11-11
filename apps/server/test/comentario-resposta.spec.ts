@@ -6,6 +6,7 @@ import {
   ACAO_DE_MOSTRAR,
   ACAO_DE_OCULTAR,
   ACAO_DE_RESPONDER,
+  ACAO_DE_RESPONDER_SOZINHO,
   type EstadoDoComentario,
   FLAG_DE_RESPONDER_COMENTARIOS,
   foraDoLote,
@@ -144,14 +145,20 @@ describe('o lote de uma confirmação só (D-A6-93, parte 2c-2)', () => {
 });
 
 describe('as ferramentas, a política e o conector da conta', () => {
-  it('as quatro ferramentas: a flag delas, a aprovação, a volta e quem só existe como volta', () => {
+  it('as cinco ferramentas: a flag delas, a aprovação, a volta, quem só existe como volta e a resposta automática (2e-1)', () => {
     const doComentario = Object.values(TOOLS).filter((t) => t.name.startsWith('comentario_'));
-    expect(doComentario.map((t) => [t.name, t.flag, Boolean(t.alwaysApproval), Boolean(t.directByPerson), Boolean(t.onlyAsUndo), t.undo?.({}).tool ?? null])).toEqual([
-      ['comentario_responder', FLAG_DE_RESPONDER_COMENTARIOS, true, false, false, 'comentario_apagar_resposta'],
-      ['comentario_apagar_resposta', FLAG_DE_RESPONDER_COMENTARIOS, false, true, true, null],
-      ['comentario_ocultar', FLAG_DE_RESPONDER_COMENTARIOS, true, false, false, 'comentario_mostrar'],
-      ['comentario_mostrar', FLAG_DE_RESPONDER_COMENTARIOS, true, false, true, null],
+    expect(
+      doComentario.map((t) => [t.name, t.flag, Boolean(t.alwaysApproval), Boolean(t.directByPerson), Boolean(t.onlyAsUndo), t.undo?.({}).tool ?? null, Boolean(t.atendimentoAutomatico)]),
+    ).toEqual([
+      ['comentario_responder', FLAG_DE_RESPONDER_COMENTARIOS, true, false, false, 'comentario_apagar_resposta', false],
+      // A resposta automática não tem a trava da aprovação: só sai pelo atendimento automático, com o portão dele.
+      ['comentario_responder_auto', FLAG_DE_RESPONDER_COMENTARIOS, false, false, false, 'comentario_apagar_resposta', true],
+      ['comentario_apagar_resposta', FLAG_DE_RESPONDER_COMENTARIOS, false, true, true, null, false],
+      ['comentario_ocultar', FLAG_DE_RESPONDER_COMENTARIOS, true, false, false, 'comentario_mostrar', false],
+      ['comentario_mostrar', FLAG_DE_RESPONDER_COMENTARIOS, true, false, true, null, false],
     ]);
+    // Só ela é do atendimento automático.
+    expect(Object.values(TOOLS).filter((t) => t.atendimentoAutomatico).map((t) => t.name)).toEqual(['comentario_responder_auto']);
     for (const t of doComentario) expect(t.providers, t.name).toEqual(['instagram', 'facebook_page']);
     // Só elas têm flag própria.
     expect(Object.values(TOOLS).filter((t) => t.flag).map((t) => t.name)).toEqual(doComentario.map((t) => t.name));
@@ -159,7 +166,7 @@ describe('as ferramentas, a política e o conector da conta', () => {
     expect(TOOLS.comentario_responder!.agentParams).toEqual(['sugestoes']);
   });
 
-  it('a política v11: responder, ocultar e mostrar com aprovação, peça quem pedir; apagar a resposta, direto para a pessoa', () => {
+  it('a política v12: responder, ocultar e mostrar com aprovação, peça quem pedir; apagar a resposta, direto para a pessoa; a resposta automática, só para o funcionário', () => {
     const proposta = (action: string, actor: 'human' | 'agent' = 'human') =>
       ActionProposal.parse({
         tool: action === ACAO_DE_RESPONDER ? 'comentario_responder' : 'comentario_ocultar',
@@ -172,12 +179,15 @@ describe('as ferramentas, a política e o conector da conta', () => {
         current_value_micros: null,
         actor,
       });
-    expect(PLATFORM_POLICY.version).toBe(11);
+    expect(PLATFORM_POLICY.version).toBe(12);
     for (const acao of [ACAO_DE_RESPONDER, ACAO_DE_OCULTAR, ACAO_DE_MOSTRAR]) {
-      for (const actor of ['human', 'agent'] as const) expect(chooseMode([PLATFORM_POLICY], proposta(acao, actor)), `${acao} ${actor}`).toEqual({ mode: 'APPROVAL', source: 'platform', version: 11 });
+      for (const actor of ['human', 'agent'] as const) expect(chooseMode([PLATFORM_POLICY], proposta(acao, actor)), `${acao} ${actor}`).toEqual({ mode: 'APPROVAL', source: 'platform', version: 12 });
     }
-    expect(chooseMode([PLATFORM_POLICY], proposta(ACAO_DE_APAGAR_A_RESPOSTA))).toEqual({ mode: 'AUTO', source: 'platform', version: 11 });
-    expect(chooseMode([PLATFORM_POLICY], proposta(ACAO_DE_APAGAR_A_RESPOSTA, 'agent'))).toEqual({ mode: 'APPROVAL', source: 'platform', version: 11 });
+    expect(chooseMode([PLATFORM_POLICY], proposta(ACAO_DE_APAGAR_A_RESPOSTA))).toEqual({ mode: 'AUTO', source: 'platform', version: 12 });
+    expect(chooseMode([PLATFORM_POLICY], proposta(ACAO_DE_APAGAR_A_RESPOSTA, 'agent'))).toEqual({ mode: 'APPROVAL', source: 'platform', version: 12 });
+    // v12 (parte 2e-1): a resposta automática sai sozinha só para o funcionário de IA; uma pessoa cai na Aprovação.
+    expect(chooseMode([PLATFORM_POLICY], proposta(ACAO_DE_RESPONDER_SOZINHO, 'agent'))).toEqual({ mode: 'AUTO', source: 'platform', version: 12 });
+    expect(chooseMode([PLATFORM_POLICY], proposta(ACAO_DE_RESPONDER_SOZINHO, 'human'))).toEqual({ mode: 'APPROVAL', source: 'platform', version: 12 });
   });
 
   it('o recurso do comentário, e o conector da conta escolhe pelo recurso, com a flag e a trava do conector do post', () => {

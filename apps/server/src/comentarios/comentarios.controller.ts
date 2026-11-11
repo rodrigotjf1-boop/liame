@@ -1,5 +1,15 @@
-import { CommentsQuery, CommentsRefreshRequest, CommentsRefreshResponse, CommentsResponse, CommentsWaitingResponse, ProblemDetails } from '@liame/contracts';
-import { Body, Controller, Get, HttpCode, Post, Query } from '@nestjs/common';
+import {
+  CommentAutoReplyQuery,
+  CommentAutoReplyRequest,
+  CommentAutoReplyResponse,
+  CommentsQuery,
+  CommentsRefreshRequest,
+  CommentsRefreshResponse,
+  CommentsResponse,
+  CommentsWaitingResponse,
+  ProblemDetails,
+} from '@liame/contracts';
+import { Body, Controller, Get, HttpCode, Post, Put, Query } from '@nestjs/common';
 import {
   ApiAcceptedResponse,
   ApiBadRequestResponse,
@@ -11,6 +21,7 @@ import {
   ApiOperation,
   ApiTags,
   ApiTooManyRequestsResponse,
+  ApiUnprocessableEntityResponse,
 } from '@nestjs/swagger';
 import { Auditar } from '../audit/auditar.js';
 import { Auth, Permissao } from '../auth/access.js';
@@ -52,6 +63,40 @@ export class ComentariosController {
   @ApiForbiddenResponse({ standardSchema: ProblemDetails })
   esperando(@Auth() auth: AuthContext): Promise<CommentsWaitingResponse> {
     return this.comentarios.esperando(auth);
+  }
+
+  @Get('auto-reply')
+  @Permissao('campanhas.ver')
+  @ApiOperation({
+    summary: 'O atendimento automático da marca',
+    description:
+      'Como está o atendimento automático dos comentários da marca (A6, Z11, parte 2e-1; P38 versão 2; D-A6-92): `available` (a função `comentarios_automatico` liberada para a empresa), ligado ou não, os tipos que ele responde sozinho (`elogio` e `marcacao` hoje), quem pode ligar (`can_enable`: o Dono ou um Administrador) e desligar (`can_disable`: quem aprova), a última mudança e as respostas automáticas da última hora, com o teto. Nasce desligado. Só leitura.',
+  })
+  @ApiOkResponse({ standardSchema: CommentAutoReplyResponse })
+  @ApiBadRequestResponse({ standardSchema: ProblemDetails })
+  @ApiForbiddenResponse({ standardSchema: ProblemDetails })
+  @ApiNotFoundResponse({ standardSchema: ProblemDetails })
+  verAutomatico(@Auth() auth: AuthContext, @Query({ schema: CommentAutoReplyQuery }) query: CommentAutoReplyQuery): Promise<CommentAutoReplyResponse> {
+    return this.comentarios.verAutomatico(auth, query);
+  }
+
+  @Put('auto-reply')
+  @Permissao('acoes.aprovar')
+  @Auditar('comentarios.atendimento_automatico', { recurso: 'brand' })
+  @ApiOperation({
+    summary: 'Ligar, desligar ou mudar o atendimento automático',
+    description:
+      'Liga, desliga ou muda os tipos do atendimento automático da marca (D-A6-92). Com ele ligado, o Liame responde sozinho, sem pedido de aprovação, os comentários dos tipos marcados, com o aviso " · resposta automática" no fim; a reclamação, o golpe e a ofensa sempre esperam uma pessoa; uma resposta por pessoa em cada post; no máximo 30 por hora. **Ligar e somar um tipo:** o Dono ou um Administrador (403 `so-dono-ou-administrador`), com a função liberada para a empresa (409 `funcao-desligada`) e a confirmação (`code` do app ou `passkey`). **Desligar e tirar um tipo:** quem aprova, na hora e sem código; desligar segura também o que já estava na fila. Ligado pede pelo menos um tipo (422 `sem-tipo`). A mudança fica na auditoria, com o antes e o depois.',
+  })
+  @ApiOkResponse({ standardSchema: CommentAutoReplyResponse })
+  @ApiBadRequestResponse({ standardSchema: ProblemDetails })
+  @ApiForbiddenResponse({ standardSchema: ProblemDetails })
+  @ApiNotFoundResponse({ standardSchema: ProblemDetails })
+  @ApiConflictResponse({ standardSchema: ProblemDetails })
+  @ApiUnprocessableEntityResponse({ standardSchema: ProblemDetails })
+  @ApiTooManyRequestsResponse({ standardSchema: ProblemDetails })
+  mudarAutomatico(@Auth() auth: AuthContext, @Body({ schema: CommentAutoReplyRequest }) body: CommentAutoReplyRequest): Promise<CommentAutoReplyResponse> {
+    return this.comentarios.mudarAutomatico(auth, body);
   }
 
   @Post('refresh')

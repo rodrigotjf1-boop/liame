@@ -176,6 +176,8 @@ describe('ferramentas de anúncio (A4 · X2)', () => {
     expect(TOOLS.orcamento_ajustar!.undo!(objeto('conjunto', { daily_budget_micros: 45 * REAL }))).toEqual({ tool: 'orcamento_ajustar', params: { daily_budget_micros: 45 * REAL } });
     // Nenhuma ferramenta de anúncio na Meta fica sem volta; o cupom do Regem não se desfaz pelo Liame (desativa-se no Regem).
     // A mensagem enviada não volta: a volta do envio é pausar o que ainda não saiu, e a pausa não tem volta pelo Liame.
-    for (const t of Object.values(TOOLS)) expect(Boolean(t.undo), t.name).toBe(t.providers.includes('meta_ads') || t.name === 'mensagem_disparar' || t.name === 'avaliacao_responder' || t.name === 'comentario_responder' || t.name === 'comentario_ocultar');
+    // A resposta automática a um comentário (A6, Z11, parte 2e-1) tem a mesma volta da resposta: apagar a resposta.
+    const comVolta = ['mensagem_disparar', 'avaliacao_responder', 'comentario_responder', 'comentario_responder_auto', 'comentario_ocultar'];
+    for (const t of Object.values(TOOLS)) expect(Boolean(t.undo), t.name).toBe(t.providers.includes('meta_ads') || comVolta.includes(t.name));
   });
 });

@@ -15,6 +15,15 @@ import { type BaseDoTextoDeResposta, RespostaDoSocial } from '../ai/social/respo
 import { activeTraceId, writeAudit } from '../audit/audit.js';
 import { achadosQueBarraram, codigoDoMotivo, esperaDaIa, itensQueBarraram, minutosAteATentativa, SEGUNDA_RODADA_DO_PEDIDO_RETIRADO } from '../avaliacoes/sugestoes.js';
 import {
+  comAviso,
+  FERRAMENTA_DA_RESPOSTA_AUTOMATICA,
+  jaRespondeuAPessoaNoPost,
+  oQueSeguraOAutomatico,
+  RESPOSTAS_AUTOMATICAS_POR_HORA,
+  respostasAutomaticasNaHora,
+  TIPOS_DO_AUTOMATICO,
+} from '../comentarios/automatico.js';
+import {
   adiarVez,
   barrarVez,
   DIAS_DOS_PEDIDOS,
@@ -75,6 +84,9 @@ export type VezDoPedido =
 type LinhaDoComentario = {
   brand_id: string;
   provider: string;
+  post_id: string;
+  /** Só para a regra de uma resposta automática por pessoa em cada post: nunca vai ao modelo. */
+  author_name: string | null;
   kind: string | null;
   message: string;
   hidden: boolean;
@@ -97,6 +109,8 @@ type Lido = {
   pedidoAtual: string | null;
   /** O dono da empresa, em nome de quem o pedido nasce (só na rodada 1). */
   dono: string | null;
+  /** O atendimento automático responde este sozinho (A6, Z11, parte 2e-1): o portão, a pessoa no post e o teto da hora. */
+  automatico: boolean;
   /** Só na pergunta e na reclamação: o que vai ao Social media, a base da conferência e o que a marca já escreve. */
   ia: { pedido: PedidoDeComentarioDoSocial; base: BaseDoTextoDeResposta; conhecido: string } | null;
 };
@@ -130,8 +144,13 @@ export class PedidosDosComentariosService {
 
     // O golpe e o ofensivo: o pedido de ocultar, sem texto e sem IA (D-A6-89).
     if (lido.operacao === 'ocultar') return this.criar(alvo, lido, {}, null, null, agora);
-    // O elogio e a marcação: a resposta pronta, sem IA, a mesma para o mesmo comentário (D-A6-88).
-    if (lido.tipo === 'elogio' || lido.tipo === 'marcacao') return this.criar(alvo, lido, { texto: respostaPronta(lido.tipo, lido.commentId) }, 1, null, agora);
+    // O elogio e a marcação: a resposta pronta, sem IA, a mesma para o mesmo comentário (D-A6-88). Com o atendimento
+    // automático, ela sai sozinha, com o aviso de resposta automática (parte 2e-1).
+    if (lido.tipo === 'elogio' || lido.tipo === 'marcacao') {
+      const pronta = respostaPronta(lido.tipo, lido.commentId);
+      if (lido.automatico) return this.responderSozinho(alvo, lido, pronta, agora);
+      return this.criar(alvo, lido, { texto: pronta }, 1, null, agora);
+    }
     const ia = lido.ia!;
 
     // ---- 2. O Social media: sem ferramenta; o comentário vai na mensagem, entre marcas.
@@ -287,7 +306,7 @@ export class PedidosDosComentariosService {
     if (!s || s.status !== 'esperando') return { status: 'fora' };
     const c = (
       await tx.execute<LinhaDoComentario>(sql`
-        select c.brand_id, a.provider, c.kind, c.message, c.hidden, c.published_at, p.caption,
+        select c.brand_id, a.provider, c.post_id, c.author_name, c.kind, c.message, c.hidden, c.published_at, p.caption,
                exists (select 1 from liame.social_comment r
                         where r.connected_account_id = c.connected_account_id and r.parent_comment_id = c.comment_id and r.by_brand) as respondido,
                coalesce(${contaConectada('a')}, false) as conectada, (b.archived_at is null) as marca_viva
@@ -350,6 +369,22 @@ export class PedidosDosComentariosService {
       dono = linha.user_id;
     }
 
+    // O atendimento automático (A6, Z11, parte 2e-1; D-A6-92): o elogio e a marcação dos tipos que a marca marcou saem
+    // sozinhos. A segunda resposta à mesma pessoa no mesmo post vai para uma pessoa; passado o teto da hora, a vez
+    // espera a vaga (o comentário fica sem pedido até lá, e uma pessoa pode responder antes, pela tela).
+    let automatico = false;
+    if (s.round === 1 && operacao === 'responder' && (TIPOS_DO_AUTOMATICO as readonly string[]).includes(c.kind ?? '')) {
+      const alvoDoAutomatico = { tenantId: alvo.tenantId, brandId: c.brand_id, connectedAccountId: s.connected_account_id, commentId: s.comment_id };
+      if (!(await oQueSeguraOAutomatico(tx, this.flags, alvoDoAutomatico))) {
+        const pessoa = { tenantId: alvo.tenantId, connectedAccountId: s.connected_account_id, commentId: s.comment_id, postId: c.post_id, autor: c.author_name };
+        if (!(await jaRespondeuAPessoaNoPost(tx, pessoa))) {
+          const hora = await respostasAutomaticasNaHora(tx, c.brand_id, agora);
+          if (hora.n >= RESPOSTAS_AUTOMATICAS_POR_HORA) return this.esperar(tx, alvo, 'teto_por_hora', hora.vagaEm ?? new Date(agora.getTime() + 60 * MINUTO_MS), agora);
+          automatico = true;
+        }
+      }
+    }
+
     const base: Omit<Lido, 'ia'> = {
       brandId: c.brand_id,
       contaId: s.connected_account_id,
@@ -360,6 +395,7 @@ export class PedidosDosComentariosService {
       rodada: s.round,
       pedidoAtual,
       dono,
+      automatico,
     };
     if (operacao === 'ocultar' || c.kind === 'elogio' || c.kind === 'marcacao') return { ...base, ia: null };
 
@@ -422,6 +458,37 @@ export class PedidosDosComentariosService {
       if (err instanceof ForaDaFila) return { status: 'fora' };
       if (!(err instanceof AppProblem)) throw err;
       return this.pedidoRecusado(alvo, err, usageId, agora);
+    }
+  }
+
+  /**
+   * A resposta automática (A6, Z11, parte 2e-1; D-A6-92): a resposta pronta, com o aviso de resposta automática, sai pelo
+   * Action Service sem pedido de aprovação (o portão é conferido de novo lá, na mesma transação, e no executor), e a vez
+   * acaba pronta, ligada a ela. Se o portão fechou no meio (desligaram, tiraram o tipo, a política da empresa pede
+   * aprovação), o comentário vai para uma pessoa: o pedido de sempre, em Aprovações.
+   */
+  private async responderSozinho(alvo: DonoDaVez, lido: Lido, texto: string, agora: Date): Promise<VezDoPedido> {
+    const funcionario = { tenantId: alvo.tenantId, agentKey: SOCIAL.key, agentLabel: SOCIAL.name, emNomeDe: lido.dono! };
+    try {
+      return await naTransacaoDaEmpresa<VezDoPedido>(this.banco(), { tenantId: alvo.tenantId, userId: null }, async () => {
+        const tx = currentTx();
+        const pedido = await this.acoes.responderSozinhoPeloFuncionario(funcionario, {
+          tool: FERRAMENTA_DA_RESPOSTA_AUTOMATICA,
+          brand_id: lido.brandId,
+          provider: lido.provider === PROVEDOR_PAGINA ? PROVEDOR_PAGINA : PROVEDOR_INSTAGRAM,
+          account_id: lido.contaId,
+          resource_id: recursoDoComentario(lido.commentId),
+          params: { texto: comAviso(texto) },
+        });
+        if (!(await marcarVezPronta(tx, alvo, { pedido, sugestoes: 1, usageId: null }, agora))) throw new ForaDaFila();
+        await this.auditar(tx, alvo, 'comentario.responder_sozinho', { operation: lido.operacao, kind: lido.tipo, action_id: pedido });
+        return { status: 'pronta', pedido, sugestoes: 1 };
+      });
+    } catch (err) {
+      if (err instanceof ForaDaFila) return { status: 'fora' };
+      if (err instanceof AppProblem && err.code === 'automatico-segurado') return this.criar(alvo, { ...lido, automatico: false }, { texto }, 1, null, agora);
+      if (!(err instanceof AppProblem)) throw err;
+      return this.pedidoRecusado(alvo, err, null, agora);
     }
   }
 

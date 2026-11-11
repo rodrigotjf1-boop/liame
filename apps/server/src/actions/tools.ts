@@ -3,9 +3,12 @@ import { z } from 'zod';
 import { emMenorUnidade } from '../connectors/meta/verba.js';
 import { type ContextoDaAvaliacao, EstadoDaAvaliacao, ehNotaBaixa, ParametrosDaResposta, planoDaResposta, planoDeApagar } from './avaliacao-plano.js';
 import {
+  ACAO_DE_RESPONDER_SOZINHO,
+  AVISO_DE_RESPOSTA_AUTOMATICA,
   type ContextoDoComentario,
   FLAG_DE_RESPONDER_COMENTARIOS,
   ParametrosDaRespostaAoComentario,
+  ParametrosDaRespostaAutomatica,
   planoDaRespostaAoComentario,
   planoDeApagarARespostaAoComentario,
   planoDeMostrar,
@@ -129,6 +132,13 @@ export interface ToolDefinition {
    * aprovação que lê de novo e na execução, como a do conector: as duas precisam estar ligadas.
    */
   flag?: string;
+  /**
+   * A resposta automática dos comentários (A6, Z11, parte 2e-1; D-A6-92 e D-A6-104): só o funcionário de IA pede, só pelo
+   * atendimento automático (a rotina, que confere o portão antes), e o pedido nasce aprovado, sem o código do app e sem o
+   * `autopilot`, pela regra própria da política (`comentario.responder_automatico`, só para o funcionário). O executor
+   * confere o portão de novo antes de publicar: desligar ou tirar o tipo segura na hora o que está na fila.
+   */
+  atendimentoAutomatico?: boolean;
 }
 
 /** O plano não pode ser montado com este estado (cupom que já existe, loja sem permissão): vira 422 no pedido. */
@@ -589,6 +599,41 @@ export const TOOLS: Record<string, ToolDefinition> = {
       };
     },
     // A volta é apagar a resposta do post. Quem já leu, leu.
+    undo: () => ({ tool: 'comentario_apagar_resposta', params: {} }),
+  },
+  // A resposta automática a um comentário (A6, Z11, parte 2e-1; P38 versão 2; D-A6-92 e D-A6-104): o atendimento
+  // automático, que o Dono ou um Administrador liga na marca com o código do app, responde sozinho os tipos marcados,
+  // sem pedido de aprovação. Só o Social media pede, pela rotina, que confere o portão antes; o executor confere de
+  // novo antes de publicar. O texto termina com o aviso de resposta automática (Termos 6.3). A volta é a de sempre:
+  // apagar a resposta, direto, por quem aprova.
+  comentario_responder_auto: {
+    name: 'comentario_responder_auto',
+    version: 1,
+    owner: 'social',
+    description:
+      'Publica sozinho, pelo atendimento automático que a marca ligou, a resposta da marca a um comentário de um post dela, no Instagram ou na Página do Facebook, com o aviso de resposta automática no fim. A resposta é pública e fica no post.',
+    // Fala em público em nome da marca sem uma pessoa ver antes: só pelo atendimento automático, com o portão dele.
+    risk: 'R2',
+    providers: ['instagram', 'facebook_page'],
+    compensation: 'apagar_a_resposta',
+    atendimentoAutomatico: true,
+    flag: FLAG_DE_RESPONDER_COMENTARIOS,
+    params: ParametrosDaRespostaAutomatica,
+    plan(before, params, context) {
+      const texto = typeof params.texto === 'string' ? params.texto : '';
+      if (!texto.endsWith(AVISO_DE_RESPOSTA_AUTOMATICA)) throw new PlanoRecusado('A resposta automática termina com o aviso de resposta automática.');
+      const plano = planoDaRespostaAoComentario(before, params, (context ?? null) as ContextoDoComentario | null);
+      if (!plano.ok) throw new PlanoRecusado(plano.motivo);
+      return {
+        action: ACAO_DE_RESPONDER_SOZINHO,
+        budgetImpact: 'none',
+        valueMicros: null,
+        currentValueMicros: null,
+        reserveMicros: 0,
+        desiredState: plano.desejado,
+        text: plano.texto,
+      };
+    },
     undo: () => ({ tool: 'comentario_apagar_resposta', params: {} }),
   },
   comentario_apagar_resposta: {

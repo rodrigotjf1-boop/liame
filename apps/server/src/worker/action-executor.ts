@@ -3,9 +3,11 @@ import { Inject, Injectable, Logger } from '@nestjs/common';
 import { sql } from 'drizzle-orm';
 import type { ActionRow } from '../actions/action.service.js';
 import { BudgetService } from '../actions/budget.service.js';
+import { recursoDoComentario } from '../actions/comentario-na-rede.js';
 import { type ApplyResult, CONNECTORS } from '../actions/connectors.js';
 import { TOOLS } from '../actions/tools.js';
 import { writeAudit } from '../audit/audit.js';
+import { oQueSeguraOAutomatico } from '../comentarios/automatico.js';
 import { ErroConector } from '../connectors/cliente-http.js';
 import { CONTEINER_EM_PREPARO, COTA_DE_POSTS, VIDEO_EM_PREPARO } from '../connectors/meta/publicacao.js';
 import { DATABASE } from '../database/database.module.js';
@@ -219,6 +221,11 @@ export class ActionExecutor {
     const tambem = TOOLS[row.tool]?.travaTambem;
     const stop = (await this.switches.check(tx, alvo)) ?? (tambem ? await this.switches.check(tx, { ...alvo, tool: tambem }) : null);
     if (stop) return { status: 'bloqueada', reason: `trava ativa (${stop.level}): ${stop.reason}` };
+    // A resposta automática (A6, Z11, parte 2e-1): o portão do atendimento de novo, agora; desligar ou tirar o tipo segura.
+    if (TOOLS[row.tool]?.atendimentoAutomatico) {
+      const segura = await this.portaoDoAutomatico(tx, row);
+      if (segura) return { status: 'bloqueada', reason: `atendimento automático: ${segura}` };
+    }
     if (!approvalId && !(await this.autoApproved(row))) return { status: 'bloqueada', reason: 'sem aprovação válida para o plano atual' };
     const connector = CONNECTORS[row.provider];
     if (!connector) return { status: 'falhou', reason: `provedor ${row.provider} sem connector` };
@@ -327,9 +334,22 @@ export class ActionExecutor {
    * Aprovada pela política (autonomia) e o autopilot continua ligado agora; ou a ação que uma pessoa pediu e que a
    * ferramenta deixa direta (`directByPerson`: pausar um envio de mensagem), que não depende do autopilot.
    */
+  /**
+   * O portão do atendimento automático na hora de publicar (A6, Z11, parte 2e-1): o mesmo da criação do pedido. Nulo
+   * quando vale; senão, o porquê. Só o pedido do funcionário de IA, de um comentário de uma marca, passa.
+   */
+  private async portaoDoAutomatico(tx: Tx, row: ActionRow): Promise<string | null> {
+    const prefixo = recursoDoComentario('');
+    const commentId = row.resource_id?.startsWith(prefixo) ? row.resource_id.slice(prefixo.length) : null;
+    if (row.actor_type !== 'agent' || !row.brand_id || !commentId || !row.account_id) return 'fora_do_automatico';
+    return oQueSeguraOAutomatico(tx, this.flags, { tenantId: row.tenant_id, brandId: row.brand_id, connectedAccountId: row.account_id, commentId });
+  }
+
   private async autoApproved(row: ActionRow): Promise<boolean> {
     if (row.mode !== 'LIMITED_AUTO' && row.mode !== 'AUTO') return false;
     if (row.actor_type === 'human' && TOOLS[row.tool]?.directByPerson) return true;
+    // A resposta automática: o portão foi conferido logo antes, em `run` (e na criação); não depende do `autopilot`.
+    if (row.actor_type === 'agent' && TOOLS[row.tool]?.atendimentoAutomatico) return true;
     return this.flags.isEnabled('autopilot', this.flags.context({ tenantId: row.tenant_id, brandId: row.brand_id }));
   }
 

@@ -21,11 +21,23 @@ export const FLAG_DE_RESPONDER_COMENTARIOS = 'comentarios_responder';
 /** O tamanho máximo da resposta a um comentário: um limite do Liame (as referências da Meta não dizem um). */
 export const TAMANHO_DA_RESPOSTA_AO_COMENTARIO = 1000;
 
-/** As ações para a política (`policy/engine.ts`, v11). */
+/** As ações para a política (`policy/engine.ts`, v11; a resposta automática, v12). */
 export const ACAO_DE_RESPONDER = 'comentario.responder';
+export const ACAO_DE_RESPONDER_SOZINHO = 'comentario.responder_automatico';
 export const ACAO_DE_APAGAR_A_RESPOSTA = 'comentario.apagar_resposta';
 export const ACAO_DE_OCULTAR = 'comentario.ocultar';
 export const ACAO_DE_MOSTRAR = 'comentario.mostrar';
+
+/** O aviso no fim de cada resposta automática (A6, Z11, parte 2e-1; Termos 6.3: quem fala com um funcionário de IA é avisado). */
+export const AVISO_DE_RESPOSTA_AUTOMATICA = ' · resposta automática';
+
+/**
+ * O texto da resposta automática, como parâmetro da ferramenta (A6, Z11, parte 2e-1; D-A6-92): só o texto, que termina
+ * com o aviso de resposta automática (o plano da ferramenta recusa o que não termina). Sem sugestões: ninguém escolhe.
+ */
+export const ParametrosDaRespostaAutomatica = z.strictObject({
+  texto: z.string().min(1).max(TAMANHO_DA_RESPOSTA_AO_COMENTARIO),
+});
 
 /** Uma sugestão do Social media (Z11, parte 2d), como o pedido a guarda. Os limites são os da conferência dele. */
 const SugestaoDoPedido = z.strictObject({

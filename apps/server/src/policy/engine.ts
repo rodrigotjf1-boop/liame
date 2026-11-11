@@ -23,7 +23,7 @@ export const VARIACAO_MAXIMA_DA_VERBA_PCT = 10;
  */
 export const PLATFORM_POLICY: LoadedPolicy = {
   source: 'platform',
-  version: 11,
+  version: 12,
   document: {
     rules: [
       // Conteúdo político bloqueado por padrão (ADR-007; TSE 23.755/2026, base §6.1).
@@ -86,6 +86,12 @@ export const PLATFORM_POLICY: LoadedPolicy = {
       // `onlyAsUndo`). O atendimento automático (D-A6-92) é outra regra, na parte 2e.
       { type: 'autonomy', action: 'comentario.*', mode: 'APPROVAL' },
       { type: 'autonomy', action: 'comentario.apagar_resposta', actor: 'human', mode: 'AUTO' },
+      // v12 (A6, Z11, parte 2e-1; P38 versão 2; D-A6-92 e D-A6-104): a resposta automática a um comentário sai sem pedido
+      // de aprovação, só quando quem pede é o funcionário de IA, pelo atendimento automático que o Dono ou um
+      // Administrador ligou na marca com o código do app. O portão do atendimento (a função, a marca ligada, o tipo do
+      // comentário entre os marcados) é conferido no pedido e de novo na execução; a ferramenta só se pede por ele. Uma
+      // pessoa que pedisse esta ação cairia na regra de cima (Aprovação).
+      { type: 'autonomy', action: 'comentario.responder_automatico', actor: 'agent', mode: 'AUTO' },
     ],
   },
 };
