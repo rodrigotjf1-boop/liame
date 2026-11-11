@@ -1,0 +1,1910 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Região P40</title>
+<!--
+@prototipo Liame · Região · P40 · A loja no mapa (R1) e Sua região (R2) (APROVADO PELO DONO em 11/11/2026, com as D-RG-11 a D-RG-20 como recomendadas)
+pedido: o plano "tráfego pela região" (docs/plano-regiao.md), aprovado pelo dono em 11/11/2026 com as decisões D-RG-1 a
+      D-RG-10 na recomendação. Cada entrega tem protótipo aprovado antes de tela nova: este é o das duas primeiras, R1
+      (a loja no mapa) e R2 (o raio-x da região). Acréscimo do mesmo dia: a marca sem loja (sem o Regem), vários Perfis
+      do Google na marca e a atribuição do OpenStreetMap onde aparece coordenada ou desenho do mapa.
+base: o P39 (Direct, aprovado em 11/11/2026): os tokens, o menu, a faixa do protótipo, os componentes, a gaveta e o
+      painel das decisões vêm de lá, sem cor nova. Minha marca segue o P6 (aprovado em 03/10/2026); o resumo sem IA
+      segue o bloco "Resumo do sistema" dos protótipos aprovados (P4 em diante).
+o que tem: (1) a página Minha marca › Região, aberta pela parte Região do dossiê; (2) "A loja no mapa", por loja: o
+           endereço (rua, número, bairro, município, UF e CEP), de onde veio (o Perfil da Empresa no Google ou a pessoa,
+           pelo CEP), o ponto no mapa e a precisão em palavras (pelo endereço ou no centro do bairro), o raio de entrega
+           e as áreas de entrega, e a prévia dos anéis em escala (núcleo até 2 km, expansão até o raio); (3) a gaveta
+           de pôr a loja no mapa: do Perfil do Google (com a lista quando a marca tem mais de um perfil) ou pelo CEP
+           (o sistema completa rua, bairro, município e UF), o raio de 1 a 15 km em passos de 0,5 km, as áreas (tirar e
+           acrescentar) e, na marca sem loja, o nome da loja que nasce ao salvar; (4) "Sua região", por loja, calculado
+           sem IA: gente, bolso, concorrência, preço de comer fora, a semana que vem, a referência do setor (imprensa)
+           e o que ainda não dá para mostrar, com o porquê; cada número com a fonte e o período; (5) a gaveta "Ver as
+           fontes"; (6) como a LIA responde "como é a minha região?" por regra; (7) os estados (abaixo); (8) as
+           decisões D-RG-11 a D-RG-20, no pé da tela.
+fatos (conferidos): os números de Sua região são os da base de conhecimento, §19 (lidos nas fontes em 09/11/2026):
+      Tijuca (RJ) 142.909 pessoas em 9,94 km² e renda do responsável com mediana de R$ 5.500 e média de R$ 8.056,52
+      (Censo 2022, agregados por bairro); Rio de Janeiro 6.211.223 pessoas no Censo 2022 e 6.731.133 estimadas para
+      2026, renda domiciliar per capita mediana de R$ 1.212,00 e média de R$ 2.515,32 (Censo 2022), 16.242 unidades na
+      CNAE 56.11-2 (Cadastro Central de Empresas, 2024); IPCA 12 meses até set/2026: lanche +7,75% na região
+      metropolitana do Rio × +7,59% no Brasil, refeição +2,66% × +5,01%. O bairro típico do Rio (R$ 2.000) e a posição
+      da Tijuca (acima de 87% dos 162 bairros) vieram do pedido do protótipo. O CEP 20520-054 foi conferido no ViaCEP em
+      11/11/2026 (Rua Conde de Bonfim, de 188 a 528, lado par, Tijuca, código IBGE 3304557), e o 21020-290 também (Rua
+      Montevidéu, Penha). 11/11/2026 é uma quarta-feira.
+de exemplo (não conferido): as lojas, os números das ruas, as coordenadas, os Perfis do Google e as áreas deles, a
+      previsão do tempo (a semana que vem ainda não aconteceu), as horas de leitura e as pessoas.
+estados: seletor "Região" na faixa do topo; ?estado=<id> abre direto num estado; ?modo=pro abre no Pro. Na gaveta do
+         CEP, 00000-000 faz o papel do CEP que não existe, 99999-999 o do serviço fora do ar, e qualquer outro CEP de 8
+         números devolve a Rua Conde de Bonfim, Tijuca; o número "s/n" faz o papel do número que o mapa não acha (o
+         ponto vai para o centro do bairro). Hoje é quarta, 11/11/2026, 14:05.
+regras: o endereço da loja nunca vai para a IA (D-RG-2): ela recebe só o bairro, o município e os números; Sua região
+        não usa IA; todo número leva a fonte e o período; a renda nunca vai para o texto de anúncio (§19.3); estado
+        sempre com palavra; nenhuma cor nova; a coordenada e o desenho levam "© OpenStreetMap" (licença ODbL).
+conferência: os cenários `p40-*` em window.uiuxCenarios, em 1440 e 375 px, claro e escuro, sem rolagem lateral em
+        nenhum elemento, com a gaveta aberta nos cenários que a abrem.
+fontes: docs/plano-regiao.md (seções 2 a 7), docs/base-conhecimento.md §19, docs/ux-modelo-interface.md, o P39 e o P6,
+        o código de Minha marca (apps/web/src/components/minha-marca, packages/contracts/src/marca.ts) e as
+        permissões do dossiê (migration 0033: o Dono e o Administrador mudam; o Gestor, o Aprovador e o Somente
+        leitura veem).
+-->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+/* ===== 1. TOKENS: marca Liame (manual v1.0) nos papéis semânticos, iguais aos protótipos aprovados ===== */
+:root {
+  color-scheme: light dark;
+
+  /* superfícies */
+  --bg: light-dark(#F4F2EC, #0B0D17);
+  --bg-subtle: light-dark(#ECE9E1, #10131F);
+  --surface: light-dark(#FFFFFF, #151A2E);
+  --surface-2: light-dark(#FAF8F3, #1A2038);
+  --surface-hover: light-dark(#F2EFE8, #1F2645);
+  --elevated: light-dark(#FFFFFF, #1B2140);
+  --overlay: light-dark(rgb(11 13 23 / .34), rgb(3 4 10 / .66));
+  --border: light-dark(#E5E1D7, #262C49);
+  --border-strong: light-dark(#D0CBBF, #3A4166);
+
+  /* texto */
+  --text: light-dark(#0B0D17, #F4F2EC);
+  --text-muted: light-dark(#4A5068, #9AA0B4);
+  --text-subtle: light-dark(#646A80, #878EAB);
+
+  /* ação = Ciano Link (botão ciano com tinta Noite nos dois temas) */
+  --primary: #2DD4DE;
+  --primary-hover: light-dark(#26C4CE, #62E1E8);
+  --primary-fg: #0B0D17;
+  --primary-soft: light-dark(#DCF6F8, #0E2B33);
+  --link: light-dark(#0A6C75, #2DD4DE);
+
+  /* foco e fio: o ciano some no fundo claro (1,6:1); no claro entra o petróleo escuro */
+  --foco: light-dark(#008796, #2DD4DE);
+  --fio: light-dark(#009AAA, #2DD4DE);
+
+  /* Violeta IA: aqui só no fundo das notas de diálogo, como no protótipo aprovado de Contas */
+  --ai: light-dark(#5A43D8, #A08FFF);
+  --ai-fill: #7B61FF;
+  --ai-soft: light-dark(#EEEAFF, #211C45);
+
+  /* status (nunca é cor de ação); texto sobre o fundo suave passa de 4,5:1 nos dois temas */
+  --success: light-dark(#0C6F5B, #46BC9F);
+  --success-soft: light-dark(#E2F3EE, #0F2C26);
+  --warning: light-dark(#8A5F00, #FFC24B);
+  --warning-soft: light-dark(#FFF1D1, #2E2610);
+  --danger: light-dark(#B42F2F, #FF6B6B);
+  --danger-soft: light-dark(#FFE3E3, #361A1F);
+
+  /* gráficos (paleta validada com a skill dataviz; ênfase = caixa, contexto = plataforma) */
+  --chart-foco: light-dark(#009AAA, #16A0AF);
+  --chart-contexto: light-dark(#7E8499, #7C83A3);
+  --chart-grade: light-dark(#ECE9E1, #252B48);
+
+  /* QR: módulo escuro sobre fundo claro nos dois temas (leitor de QR precisa disso) */
+  --qr-fundo: #FFFFFF;
+  --qr-tinta: #0B0D17;
+
+  /* marca (logo) */
+  --logo-ink: light-dark(#0B0D17, #F4F2EC);
+  --logo-pin: light-dark(#7B61FF, #FFFFFF);
+  --marca-violeta: #7B61FF;
+  --marca-ciano: #2DD4DE;
+  --marca-lavanda: #A08FFF;
+  --marca-lavanda-clara: #CFC6FF;
+  --marca-petroleo: #1BA8B8;
+  --marca-ambar: #FFC24B;
+  --marca-coral: #FF6B6B;
+
+  /* forma */
+  --radius-sm: 8px;
+  --radius: 10px;
+  --radius-lg: 16px;
+  --radius-xl: 22px;
+  --radius-full: 999px;
+  --shadow-sm: 0 1px 2px light-dark(rgb(11 13 23 / .06), rgb(0 0 0 / .35));
+  --shadow: 0 1px 2px light-dark(rgb(11 13 23 / .05), rgb(0 0 0 / .4)), 0 10px 28px -14px light-dark(rgb(11 13 23 / .2), rgb(0 0 0 / .7));
+  --shadow-lg: 0 28px 56px -20px light-dark(rgb(11 13 23 / .32), rgb(0 0 0 / .75)), 0 2px 8px light-dark(rgb(11 13 23 / .08), rgb(0 0 0 / .4));
+  --focus-ring: 0 0 0 2px var(--surface), 0 0 0 4px var(--foco);
+
+  /* tipografia (kit: Poppins 700/500/400; 600 só em título de cartão e número) */
+  --font-sans: var(--font-poppins), ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-mono: var(--font-jetbrains), ui-monospace, "Cascadia Code", Consolas, monospace;
+  --text-xs: .75rem;
+  --text-sm: .8125rem;
+  --text-base: .875rem;
+  --text-md: 1rem;
+  --text-lg: 1.125rem;
+  --text-xl: 1.375rem;
+  --text-2xl: 1.75rem;
+  --text-hero: clamp(2.6rem, 4.2vw, 3.25rem);
+
+  /* espaço (base 4 px) */
+  --sp-1: 4px;
+  --sp-2: 8px;
+  --sp-3: 12px;
+  --sp-4: 16px;
+  --sp-5: 20px;
+  --sp-6: 24px;
+  --sp-8: 32px;
+  --sp-10: 40px;
+  --sp-12: 48px;
+  --sp-16: 64px;
+
+  /* layout */
+  --sidebar-w: 256px;
+  --rail-w: 76px;
+  --topbar-h: 60px;
+  --content-max: 1320px;
+
+  /* movimento */
+  --ease: cubic-bezier(.2, .8, .2, 1);
+  --dur-fast: 140ms;
+  --dur: 220ms;
+  --dur-slow: 360ms;
+}
+:root[data-theme="light"] { color-scheme: light; }
+:root[data-theme="dark"] { color-scheme: dark; }
+
+/* ===== 2. BASE ===== */
+:root { --font-poppins: "Poppins"; --font-jetbrains: "JetBrains Mono"; }
+*, *::before, *::after { box-sizing: border-box; }
+body { margin: 0; }
+p, ul, ol, dl, dd, h1, h2, h3, figure, fieldset { margin: 0; }
+ul, ol { padding: 0; list-style: none; }
+button, input, select, textarea { font: inherit; color: inherit; }
+[hidden] { display: none !important; }
+html { height: 100%; -webkit-text-size-adjust: 100%; }
+body {
+  height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  font-family: var(--font-sans);
+  font-size: var(--text-base);
+  line-height: 1.5;
+  color: var(--text);
+  background: var(--bg);
+  -webkit-font-smoothing: antialiased;
+}
+h1, h2, h3, h4 { line-height: 1.2; letter-spacing: -.015em; font-weight: 600; text-wrap: balance; }
+h1 { font-weight: 700; }
+a { color: var(--link); }
+:focus-visible { outline: 2px solid var(--foco); outline-offset: 2px; }
+h1[tabindex="-1"]:focus, h2[tabindex="-1"]:focus, h3[tabindex="-1"]:focus { outline: none; }
+code { font-family: var(--font-mono); font-size: .92em; }
+.mono, .num { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+.rotulo-marca { font-family: var(--font-mono); font-size: 11px; font-weight: 500; letter-spacing: .14em; text-transform: uppercase; color: var(--text-subtle); }
+.spacer { flex: 1; }
+.sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+.skip-link { position: absolute; left: var(--sp-3); top: -60px; z-index: 100; padding: var(--sp-2) var(--sp-4); border-radius: var(--radius); background: var(--primary); color: var(--primary-fg); font-weight: 600; text-decoration: none; }
+.skip-link:focus { top: var(--sp-3); }
+
+/* ===== Movimento ===== */
+@keyframes surgir { from { opacity: 0; transform: translateY(10px); } }
+@keyframes surgir-fundo { from { opacity: 0; } }
+@keyframes entrar { from { opacity: 0; transform: translateY(8px); } }
+@keyframes pisca { 50% { opacity: .35; } }
+@keyframes varre { from { background-position: 100% 0; } to { background-position: -100% 0; } }
+@keyframes gira { to { transform: rotate(360deg); } }
+.anima { animation: surgir .5s var(--ease) both; animation-delay: calc(var(--i, 0) * 55ms); }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    animation-delay: 0ms !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* ===== 3. FAIXA DO PROTÓTIPO (só do protótipo; não vai para o app) ===== */
+.revisao { position: relative; z-index: 50; flex: none; display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; padding: 8px 16px; border-bottom: 1px dashed var(--border-strong); background: var(--bg-subtle); font-size: var(--text-xs); }
+.revisao-marca { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; min-width: 0; }
+.revisao-marca b { font-family: var(--font-mono); font-weight: 600; letter-spacing: .06em; text-transform: uppercase; }
+.revisao-marca span { color: var(--text-muted); }
+.revisao label { flex: 1 1 280px; display: inline-flex; align-items: center; gap: 8px; min-width: 0; max-width: 520px; }
+.revisao select { flex: 1; min-width: 0; min-height: 30px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--surface); padding: 0 8px; }
+.revisao .btn { min-height: 30px; }
+
+/* ===== 4. SHELL: menu lateral, trilho no tablet, gaveta no celular (igual ao aprovado) ===== */
+.app { flex: 1 1 auto; min-height: 0; display: grid; grid-template-columns: var(--sidebar-w) minmax(0, 1fr); overflow: hidden; background: var(--bg); }
+
+.sidebar { position: relative; display: flex; flex-direction: column; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: var(--sp-5) var(--sp-3) var(--sp-3); border-right: 1px solid var(--border); background: var(--bg); scrollbar-width: thin; }
+.sidebar > * { flex-shrink: 0; }
+.sidebar > nav { width: 100%; }
+.sb-logo { display: flex; align-items: center; gap: var(--sp-2); height: 44px; padding: 0 var(--sp-2); margin-bottom: var(--sp-4); }
+.logo-completo { display: block; width: 116px; height: auto; }
+.logo-simbolo { display: none; width: 40px; height: 40px; }
+.sidebar .sb-fechar { display: none; margin-left: auto; }
+
+.ctx { width: 100%; display: flex; align-items: center; gap: var(--sp-3); padding: var(--sp-2); border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); text-align: left; cursor: default; }
+.ctx-av { width: 32px; height: 32px; flex: none; display: grid; place-items: center; border-radius: 9px; background: var(--bg-subtle); font-weight: 600; font-size: var(--text-xs); }
+.ctx-txt { flex: 1; min-width: 0; display: grid; line-height: 1.25; }
+.ctx-txt b { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ctx-txt span { font-size: var(--text-xs); color: var(--text-muted); }
+
+.nav-grupo { margin-top: var(--sp-5); }
+.nav-grupo-rot { padding: 0 var(--sp-3); margin-bottom: var(--sp-2); }
+.nav-lista { display: grid; gap: 2px; }
+.nav-item { position: relative; width: 100%; display: flex; align-items: center; gap: var(--sp-3); height: 40px; padding: 0 var(--sp-3); border: 0; border-radius: var(--radius); background: transparent; color: var(--text-muted); font-weight: 500; text-align: left; text-decoration: none; cursor: pointer; transition: background var(--dur-fast) var(--ease), color var(--dur-fast) var(--ease); }
+.nav-item:hover { background: var(--surface-hover); color: var(--text); }
+.nav-item[aria-current="page"] { background: var(--surface); color: var(--text); box-shadow: var(--shadow-sm); }
+.nav-item .ic { width: 18px; height: 18px; }
+.nav-item .rot { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.nav-no { position: absolute; left: 4px; top: 50%; width: 6px; height: 6px; margin-top: -3px; border-radius: 50%; background: var(--fio); box-shadow: 0 0 0 3px color-mix(in srgb, var(--fio) 22%, transparent); }
+.nav-cont { min-width: 20px; height: 20px; padding: 0 6px; display: inline-grid; place-items: center; border-radius: var(--radius-full); background: var(--danger-soft); color: var(--danger); font-size: 11px; font-weight: 600; }
+.nav-mais { margin-top: var(--sp-4); }
+.nav-mais .ic { transition: transform var(--dur) var(--ease); }
+.nav-mais[aria-expanded="true"] .ic { transform: rotate(180deg); }
+.nav-mais-n { min-width: 20px; height: 20px; padding: 0 6px; border-radius: var(--radius-full); display: inline-grid; place-items: center; background: var(--bg-subtle); color: var(--text-muted); font-size: 11px; font-weight: 600; }
+
+.sb-rodape { margin-top: auto; padding-top: var(--sp-5); display: grid; gap: var(--sp-3); }
+.usuario { display: flex; align-items: center; gap: var(--sp-2); padding: var(--sp-1) var(--sp-1) 0 var(--sp-2); }
+.av-user { width: 32px; height: 32px; flex: none; display: grid; place-items: center; border-radius: 50%; background: var(--surface); border: 1px solid var(--border); font-size: var(--text-xs); font-weight: 600; }
+.usuario-txt { flex: 1; min-width: 0; display: grid; line-height: 1.25; margin-right: var(--sp-1); }
+.usuario-txt b { font-weight: 600; font-size: var(--text-sm); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.usuario-txt span { font-size: var(--text-xs); color: var(--text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* seletor Lite/Pro (protótipo geral aprovado): no topo; na gaveta do celular, no rodapé do menu */
+.modo { display: grid; grid-template-columns: 1fr 1fr; padding: 3px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--bg-subtle); }
+.modo button { height: 30px; border: 0; border-radius: calc(var(--radius) - 3px); background: transparent; color: var(--text-muted); font-size: var(--text-sm); font-weight: 500; cursor: pointer; transition: background var(--dur-fast) var(--ease), color var(--dur-fast) var(--ease); }
+.modo button[aria-pressed="true"] { background: var(--surface); color: var(--text); box-shadow: var(--shadow-sm); }
+.modo button:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+.modo-top { display: inline-grid; grid-template-columns: auto auto; }
+.modo-top button { min-width: 48px; padding: 0 12px; }
+.sb-rodape .modo { display: none; }
+
+.principal { container: principal / inline-size; display: flex; flex-direction: column; min-width: 0; min-height: 0; }
+.topbar { flex: none; position: relative; z-index: 5; display: flex; align-items: center; gap: var(--sp-2); height: var(--topbar-h); padding: 0 var(--sp-6); border-bottom: 1px solid var(--border); background: color-mix(in srgb, var(--bg) 88%, transparent); backdrop-filter: blur(10px); }
+.topbar .tb-menu { display: none; }
+.trilha { display: flex; align-items: center; gap: var(--sp-2); min-width: 0; }
+.trilha-pai { color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.trilha-sep { color: var(--text-subtle); }
+.trilha strong { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.conteudo { position: relative; flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; outline: none; }
+.pagina { container: pagina / inline-size; max-width: var(--content-max); margin: 0 auto; padding: var(--sp-6) var(--sp-8) var(--sp-16); }
+
+.veu { position: fixed; inset: 0; z-index: 55; background: var(--overlay); animation: surgir-fundo var(--dur) var(--ease); }
+.toast-region { position: fixed; right: var(--sp-4); bottom: var(--sp-4); z-index: 90; display: grid; gap: var(--sp-2); width: min(380px, calc(100vw - 2 * var(--sp-4))); }
+
+@container principal (max-width: 820px) {
+  .trilha-pai, .trilha-sep { display: none; }
+  .topbar { padding: 0 var(--sp-4); }
+}
+
+/* tablet: trilho só com ícones */
+@media (min-width: 769px) and (max-width: 1024px) {
+  .app { grid-template-columns: var(--rail-w) minmax(0, 1fr); }
+  .sidebar { align-items: center; padding: var(--sp-4) var(--sp-2) var(--sp-3); }
+  .sb-logo { padding: 0; justify-content: center; }
+  .sidebar .logo-completo { display: none; }
+  .sidebar .logo-simbolo { display: block; }
+  .ctx { width: 44px; padding: 5px; justify-content: center; }
+  .ctx-txt { display: none; }
+  .nav-grupo { width: 100%; margin-top: var(--sp-3); }
+  .nav-grupo-rot { height: 1px; margin: 0 var(--sp-3) var(--sp-3); padding: 0; overflow: hidden; color: transparent; background: var(--border); }
+  .nav-item { justify-content: center; padding: 0; height: 44px; }
+  .nav-item .rot { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+  .nav-item .nav-cont, .nav-item .nav-mais-n { position: absolute; top: 4px; right: 8px; min-width: 16px; height: 16px; padding: 0 4px; font-size: 10px; }
+  .usuario { flex-direction: column; padding: 0; }
+  .usuario-txt { display: none; }
+}
+
+/* celular: o menu vira gaveta */
+@media (max-width: 768px) {
+  .app { grid-template-columns: minmax(0, 1fr); }
+  .sidebar { position: fixed; inset: 0 auto 0 0; z-index: 70; width: min(300px, 86vw); padding-top: calc(var(--sp-5) + env(safe-area-inset-top, 0px)); padding-bottom: calc(var(--sp-4) + env(safe-area-inset-bottom, 0px)); box-shadow: var(--shadow-lg); transform: translateX(-102%); visibility: hidden; transition: transform var(--dur-slow) var(--ease), visibility 0s linear var(--dur-slow); }
+  /* Ao abrir, a visibilidade muda na hora (sem o atraso de quem fecha): o foco já pode entrar no menu. */
+  .app.gaveta .sidebar { transform: none; visibility: visible; transition: transform var(--dur-slow) var(--ease), visibility 0s linear 0s; }
+  .sidebar .sb-fechar { display: inline-flex; }
+  .sb-rodape .modo { display: grid; }
+  .topbar .modo-top { display: none; }
+  .topbar { padding: 0 var(--sp-3); }
+  .topbar .tb-menu { display: inline-flex; }
+  .trilha-pai, .trilha-sep { display: none; }
+  .pagina { padding: var(--sp-5) var(--sp-4) calc(var(--sp-12) + env(safe-area-inset-bottom)); }
+}
+
+/* Com movimento reduzido, a regra global troca 0s por 0.01ms e criaria uma transição de visibilidade:
+   até o próximo quadro o menu contaria como oculto e o foco não entraria nele. Abre sem transição (V27). */
+@media (prefers-reduced-motion: reduce) {
+  .app.gaveta .sidebar { transition: none !important; }
+}
+
+@media (prefers-contrast: more), (prefers-reduced-transparency: reduce) {
+  .topbar { backdrop-filter: none; background: var(--elevated); }
+}
+
+/* ===== 5. MODOS DE EXIBIÇÃO (protótipo geral aprovado): Lite e Pro ===== */
+.modo-lite .so-pro:not(.aberto .so-pro) { display: none; }
+.modo-pro .so-lite { display: none; }
+
+/* ===== 6. COMPONENTES ===== */
+.ic { width: 18px; height: 18px; flex: none; fill: none; stroke: currentColor; stroke-width: 1.75; stroke-linecap: round; stroke-linejoin: round; }
+.ic-sm { width: 15px; height: 15px; }
+
+.btn { display: inline-flex; align-items: center; justify-content: center; gap: var(--sp-2); min-height: 38px; padding: 0 var(--sp-4); border-radius: var(--radius); border: 1px solid var(--border); background: var(--surface); color: var(--text); font-weight: 500; text-decoration: none; cursor: pointer; white-space: nowrap; transition: background var(--dur-fast) var(--ease), border-color var(--dur-fast) var(--ease), box-shadow var(--dur-fast) var(--ease), transform var(--dur-fast) var(--ease); }
+.btn:hover { background: var(--surface-hover); }
+.btn:active { transform: translateY(1px); }
+.btn:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+.btn:disabled { opacity: .6; cursor: not-allowed; }
+.btn[aria-disabled="true"] { opacity: .62; cursor: not-allowed; }
+.btn--primary { background: var(--primary); border-color: var(--primary); color: var(--primary-fg); font-weight: 600; }
+.btn--primary:hover { background: var(--primary-hover); border-color: var(--primary-hover); }
+.btn--ghost { background: transparent; border-color: transparent; color: var(--text-muted); }
+.btn--ghost:hover { background: var(--surface-hover); color: var(--text); }
+.btn--perigo { color: var(--danger); border-color: color-mix(in srgb, var(--danger) 40%, var(--border)); }
+.btn--perigo:hover { background: var(--danger-soft); }
+.btn--perigo-cheio, .btn--perigo-cheio:hover { background: var(--danger); border-color: var(--danger); color: var(--surface); font-weight: 600; }
+.btn--icon { width: 38px; padding: 0; }
+.btn--sm { min-height: 32px; padding: 0 var(--sp-3); font-size: var(--text-sm); }
+.btn--sm.btn--icon { width: 32px; }
+.link-bt { padding: 0; border: 0; background: none; color: var(--link); font: inherit; font-weight: 600; text-decoration: underline; text-underline-offset: 2px; cursor: pointer; }
+.link-bt:focus-visible { outline: 2px solid var(--foco); outline-offset: 2px; border-radius: 2px; }
+
+.input { min-height: 40px; width: 100%; padding: 0 var(--sp-3); border-radius: var(--radius); border: 1px solid var(--border); background: var(--surface-2); outline: none; }
+.input::placeholder { color: var(--text-subtle); }
+.input:focus-visible { border-color: var(--foco); box-shadow: var(--focus-ring); }
+.input[aria-invalid="true"] { border-color: var(--danger); }
+.input[readonly] { color: var(--text-muted); }
+select.input { padding-right: var(--sp-2); }
+
+.card { position: relative; min-width: 0; display: flex; flex-direction: column; gap: var(--sp-3); padding: var(--sp-5); background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); }
+.card-cab { display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: var(--sp-2) var(--sp-3); }
+.card-cab h2 { font-size: var(--text-md); }
+.card-sub { margin-top: 2px; font-size: var(--text-sm); color: var(--text-muted); }
+.card-titulo { font-size: var(--text-md); }
+
+.view-cab { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: var(--sp-4); margin-bottom: var(--sp-6); }
+.view-cab h1 { font-size: var(--text-2xl); }
+.view-cab p { margin-top: var(--sp-1); max-width: 64ch; color: var(--text-muted); }
+
+.st { display: inline-flex; align-items: center; gap: 6px; min-height: 24px; padding: 2px 9px; border-radius: var(--radius-full); font-size: 11px; font-weight: 600; white-space: nowrap; }
+.st .dot { width: 6px; height: 6px; flex: none; border-radius: 50%; background: currentColor; }
+.st--aguardando { background: var(--warning-soft); color: var(--warning); }
+.st--concluido { background: var(--success-soft); color: var(--success); }
+.st--espera { background: var(--bg-subtle); color: var(--text-muted); }
+.st--perigo { background: var(--danger-soft); color: var(--danger); }
+.st--info { background: var(--primary-soft); color: var(--link); }
+.lite-chip { display: inline-flex; align-items: center; gap: 6px; min-height: 24px; padding: 2px 9px; border-radius: var(--radius-full); background: var(--bg-subtle); color: var(--text-muted); font-size: var(--text-xs); font-weight: 500; }
+.lite-frase { max-width: 70ch; font-size: var(--text-sm); line-height: 1.55; color: var(--text-muted); }
+.lite-frase b { color: var(--text); font-weight: 600; }
+.lite-frase--grande { font-size: var(--text-md); color: var(--text); }
+.eixo-nota { font-size: var(--text-xs); color: var(--text-subtle); }
+
+/* "Ver detalhes" do Lite: abre o Pro ali mesmo (nada some no Lite) */
+.detalhes-bt { align-self: flex-start; display: inline-flex; align-items: center; gap: 6px; min-height: 32px; padding: 0 var(--sp-2); margin-left: calc(-1 * var(--sp-2)); border: 0; border-radius: var(--radius-sm); background: transparent; color: var(--link); font-size: var(--text-sm); font-weight: 600; cursor: pointer; }
+.detalhes-bt:hover { background: var(--surface-hover); }
+.detalhes-bt:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+.detalhes-bt .ic { width: 15px; height: 15px; transition: transform var(--dur) var(--ease); }
+.detalhes-bt[aria-expanded="true"] .ic { transform: rotate(180deg); }
+
+/* tabela */
+.table-wrap { position: relative; width: 100%; overflow-x: auto; border: 1px solid var(--border); border-radius: var(--radius); }
+.tabela { width: 100%; border-collapse: collapse; font-size: var(--text-sm); }
+.tabela th { padding: 10px var(--sp-4); border-bottom: 1px solid var(--border); background: var(--surface-2); text-align: left; font-family: var(--font-mono); font-size: 10.5px; font-weight: 500; letter-spacing: .08em; text-transform: uppercase; color: var(--text-muted); white-space: nowrap; }
+.tabela td, .tabela tbody th, .tabela tfoot th { padding: 12px var(--sp-4); border-bottom: 1px solid var(--border); white-space: nowrap; vertical-align: middle; }
+.tabela tbody th, .tabela tfoot th { font-family: var(--font-sans); font-size: var(--text-sm); letter-spacing: 0; text-transform: none; color: var(--text); background: transparent; font-weight: 600; }
+.tabela tbody tr:last-child td, .tabela tbody tr:last-child th { border-bottom: 0; }
+.tabela tfoot td, .tabela tfoot th { border-top: 1px solid var(--border-strong); border-bottom: 0; background: var(--surface-2); font-weight: 600; }
+.tabela .n { text-align: right; }
+.tabela td.acoes { text-align: right; }
+.tabela .sub { display: block; margin-top: 2px; font-family: var(--font-sans); font-size: 11px; font-weight: 400; color: var(--text-subtle); white-space: nowrap; }
+.tabela .forte { font-weight: 600; }
+
+/* campos */
+.campo { display: grid; gap: var(--sp-2); min-width: 0; margin: 0; padding: 0; border: 0; }
+.campo > label, .campo > legend { padding: 0; font-size: var(--text-sm); font-weight: 600; }
+.campo-dica { font-size: var(--text-xs); font-weight: 400; color: var(--text-muted); }
+.campo-erro { font-size: var(--text-sm); font-weight: 500; color: var(--danger); }
+.campo-linha { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-2) var(--sp-3); font-size: var(--text-sm); }
+.check { display: flex; align-items: flex-start; gap: var(--sp-2); font-size: var(--text-sm); cursor: pointer; }
+.check input { width: 16px; height: 16px; margin: 3px 0 0; flex: none; accent-color: var(--link); }
+.opcoes { display: grid; gap: var(--sp-2); }
+.opcao { display: grid; grid-template-columns: 18px minmax(0, 1fr); align-items: start; gap: var(--sp-3); padding: var(--sp-3); border: 1px solid var(--border); border-radius: var(--radius); cursor: pointer; transition: border-color var(--dur-fast) var(--ease), background var(--dur-fast) var(--ease); }
+.opcao:has(input:checked) { border-color: var(--foco); background: var(--primary-soft); }
+.opcao input { width: 16px; height: 16px; margin: 3px 0 0; accent-color: var(--link); }
+.opcao-txt { display: grid; gap: 2px; font-size: var(--text-sm); }
+.opcao-txt b { font-weight: 600; }
+.opcao-txt span { color: var(--text-muted); }
+.datas { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--sp-3); }
+.datas label { display: grid; gap: 4px; font-size: var(--text-sm); font-weight: 500; }
+@media (max-width: 420px) { .datas { grid-template-columns: minmax(0, 1fr); } }
+
+/* diálogo (nativo, com @starting-style) */
+.dialogo { width: min(560px, calc(100vw - 32px)); max-height: min(760px, 92vh); margin: auto; padding: 0; border: 1px solid var(--border); border-radius: var(--radius-xl); background: var(--elevated); color: var(--text); box-shadow: var(--shadow-lg);
+  opacity: 1; transform: none;
+  transition: opacity var(--dur) var(--ease), transform var(--dur) var(--ease), overlay var(--dur) allow-discrete, display var(--dur) allow-discrete; }
+.dialogo:not([open]) { opacity: 0; transform: translateY(8px) scale(.98); }
+@starting-style { .dialogo[open] { opacity: 0; transform: translateY(8px) scale(.98); } }
+.dialogo::backdrop { background: var(--overlay); backdrop-filter: blur(3px); }
+.dialogo[open] { display: flex; }
+.dialogo--largo { width: min(720px, calc(100vw - 32px)); }
+.dialogo-form { display: flex; flex-direction: column; flex: 1; min-width: 0; min-height: 0; }
+.dialogo-cab { display: flex; align-items: center; justify-content: space-between; gap: var(--sp-3); padding: var(--sp-3) var(--sp-3) var(--sp-3) var(--sp-5); border-bottom: 1px solid var(--border); flex: none; }
+.dialogo-cab h2 { font-size: var(--text-lg); min-width: 0; overflow-wrap: anywhere; }
+.dialogo-corpo { position: relative; flex: 1; min-height: 0; overflow-y: auto; display: grid; align-content: start; gap: var(--sp-5); padding: var(--sp-5); }
+.dialogo-acoes { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: var(--sp-2); padding: var(--sp-3) var(--sp-5); border-top: 1px solid var(--border); background: var(--surface-2); flex: none; }
+.dialogo-nota { display: flex; gap: var(--sp-2); padding: var(--sp-3); border-radius: var(--radius); background: var(--ai-soft); font-size: var(--text-sm); }
+.dialogo-nota .ic { flex: none; margin-top: 2px; color: var(--ai); }
+.dialogo-erro { display: flex; gap: var(--sp-2); padding: var(--sp-3); border-radius: var(--radius); background: var(--danger-soft); color: var(--danger); font-size: var(--text-sm); font-weight: 500; }
+
+/* gaveta à direita (detalhe), também um <dialog> nativo: foco preso, Esc fecha */
+.dialogo--lado { width: min(520px, 100vw); max-width: 100vw; height: 100dvh; max-height: 100dvh; margin: 0 0 0 auto; border-width: 0 0 0 1px; border-radius: var(--radius-xl) 0 0 var(--radius-xl); }
+.dialogo--lado:not([open]) { opacity: 0; transform: translateX(28px); }
+@starting-style { .dialogo--lado[open] { opacity: 0; transform: translateX(28px); } }
+
+/* toast */
+.toast { display: flex; align-items: center; gap: var(--sp-3); padding: 11px var(--sp-3) 11px var(--sp-4); border-radius: var(--radius-lg); background: var(--text); color: var(--bg); box-shadow: var(--shadow-lg); font-size: var(--text-sm); animation: entrar var(--dur) var(--ease); }
+.toast span { flex: 1; }
+.toast--perigo { background: var(--danger); color: var(--surface); }
+.toast.saindo { opacity: 0; transform: translateY(6px); transition: opacity var(--dur) var(--ease), transform var(--dur) var(--ease); }
+
+/* estados: vazio, erro e carregando */
+.vazio { display: grid; justify-items: center; gap: var(--sp-3); padding: var(--sp-12) var(--sp-6); text-align: center; }
+.vazio h2, .vazio h3 { font-size: var(--text-lg); outline: none; }
+.vazio p { max-width: 48ch; color: var(--text-muted); }
+.vazio-ic { width: 48px; height: 48px; display: grid; place-items: center; border-radius: 14px; background: var(--bg-subtle); color: var(--text-muted); }
+.vazio-ic--perigo { background: var(--danger-soft); color: var(--danger); }
+.vazio-ic--ok { background: var(--success-soft); color: var(--success); }
+.vazio-acoes { display: flex; flex-wrap: wrap; justify-content: center; gap: var(--sp-2); margin-top: var(--sp-2); }
+.vazio--compacto { padding: var(--sp-8) var(--sp-4); }
+.esqueleto { display: block; height: 14px; border-radius: var(--radius-sm); background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--surface-hover) 80%, transparent), transparent) var(--bg-subtle); background-size: 200% 100%; animation: varre 1.4s linear infinite; }
+.esqueleto--curto { width: 38%; }
+.esqueleto--medio { width: 62%; }
+.esqueleto--alto { height: 44px; width: 30%; }
+.esqueleto--bloco { height: 120px; }
+.girando { width: 18px; height: 18px; border-radius: 50%; border: 2px solid var(--border-strong); border-top-color: var(--fio); animation: gira .9s linear infinite; }
+@media (prefers-reduced-motion: reduce) { .girando { animation: none; border-top-color: var(--border-strong); } }
+
+/* faixa de aviso (Contas aprovada) + variações de atenção e informação */
+.faixa { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-3) var(--sp-4); margin-bottom: var(--sp-5); padding: var(--sp-4); border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--surface); }
+.faixa--acao { border-color: color-mix(in srgb, var(--fio) 45%, var(--border)); background: var(--primary-soft); }
+.faixa--perigo { border-color: color-mix(in srgb, var(--danger) 40%, var(--border)); background: var(--danger-soft); }
+.faixa--atencao { border-color: color-mix(in srgb, var(--warning) 40%, var(--border)); background: var(--warning-soft); }
+.faixa-ic { width: 36px; height: 36px; flex: none; display: grid; place-items: center; border-radius: 10px; background: var(--surface); }
+.faixa--perigo .faixa-ic { color: var(--danger); }
+.faixa--atencao .faixa-ic { color: var(--warning); }
+.faixa--acao .faixa-ic { color: var(--link); }
+.faixa-txt { flex: 1; min-width: min(100%, 260px); display: grid; gap: 2px; }
+.faixa-txt span { font-size: var(--text-sm); color: var(--text-muted); }
+.faixa--atencao .faixa-txt span, .faixa--perigo .faixa-txt span { color: var(--text); }
+.faixa .btn { flex: none; }
+
+/* filtros e chips (Contas aprovada) */
+.filtros { display: flex; flex-wrap: wrap; gap: var(--sp-2); margin-bottom: var(--sp-3); }
+.chip { display: inline-flex; align-items: center; gap: 6px; min-height: 32px; padding: 0 var(--sp-3); border: 1px solid var(--border); border-radius: var(--radius-full); background: var(--surface); color: var(--text-muted); font-size: var(--text-sm); font-weight: 500; cursor: pointer; }
+.chip[aria-pressed="true"] { border-color: var(--text); background: var(--text); color: var(--bg); }
+.chip:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+.chip .num { font-size: 11px; opacity: .8; }
+
+/* plataforma (ponto de cor + nome) */
+.plat { display: inline-flex; align-items: center; height: 22px; padding: 0 8px; border-radius: 6px; font-size: 11px; font-weight: 600; white-space: nowrap; background: var(--bg-subtle); color: var(--text); }
+.plat::before { content: ""; width: 6px; height: 6px; margin-right: 6px; border-radius: 50%; background: var(--plat-cor, var(--text-subtle)); }
+.plat--meta { --plat-cor: var(--marca-violeta); }
+.plat--google { --plat-cor: var(--marca-petroleo); }
+.plat--ga4 { --plat-cor: var(--marca-ambar); }
+.plat--regem { --plat-cor: var(--marca-coral); }
+.plat--regemcast { --plat-cor: var(--marca-lavanda); }
+
+/* segmentado (período) */
+.seg { display: inline-flex; flex-wrap: wrap; padding: 3px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); }
+.seg button { min-height: 32px; padding: 0 12px; border: 0; border-radius: calc(var(--radius) - 3px); background: transparent; color: var(--text-muted); font-size: var(--text-sm); font-weight: 500; cursor: pointer; transition: background var(--dur-fast) var(--ease), color var(--dur-fast) var(--ease); }
+.seg button:hover { color: var(--text); }
+.seg button[aria-pressed="true"] { background: var(--text); color: var(--bg); }
+.seg button:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+
+/* frescor */
+.ponto { width: 7px; height: 7px; flex: none; border-radius: 50%; background: var(--success); }
+.ponto--atraso { background: var(--warning); }
+.ponto--off { background: transparent; box-shadow: inset 0 0 0 1.5px var(--text-subtle); }
+
+/* confirmação na própria linha (Contas aprovada) */
+.seg-acoes { display: flex; flex-wrap: wrap; gap: var(--sp-2); }
+.confirma-linha { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: var(--sp-2); }
+.confirma-txt { flex-basis: 100%; font-size: var(--text-xs); font-weight: 500; color: var(--danger); text-align: right; white-space: normal; }
+
+@media (max-width: 768px) {
+  .toast-region { bottom: calc(var(--sp-4) + env(safe-area-inset-bottom)); }
+}
+@media (max-width: 480px) {
+  .dialogo, .dialogo--largo { width: 100vw; max-width: 100vw; height: 100dvh; max-height: 100dvh; margin: 0; border: 0; border-radius: 0; }
+  .dialogo--lado { border-radius: 0; }
+}
+/* ===================== Região · P40 · A loja no mapa (R1) e Sua região (R2) ===================== */
+/* Nenhuma cor nova: os dois cinzas de gráfico são os do app (chart-cinza-1 e chart-cinza-2, em globals.css desde
+   07/10/2026; ux-modelo-interface §6). O que é nota do protótipo leva a borda tracejada. Nada rola para o lado:
+   o arranjo muda pela largura da própria peça (consulta de contêiner). */
+:root {
+  --chart-cinza-1: light-dark(#C3C6D2, #454B6C);
+  --chart-cinza-2: light-dark(#6B7189, #9AA0B4);
+  --marca-branco: #FFFFFF;
+}
+
+.p40 { display: grid; gap: var(--sp-4); min-width: 0; }
+.p40 > * { min-width: 0; }
+.p40 > .faixa { margin-bottom: 0; }
+/* CEP, coordenada e código não quebram no hífen nem no ponto e vírgula */
+.p40 span.num, .dialogo span.num { white-space: nowrap; }
+.p40-proto { border-style: dashed; border-color: var(--border-strong); background: var(--surface-2); }
+.p40-volta { display: inline-flex; align-items: center; gap: 4px; margin-bottom: var(--sp-2); }
+.p40-cab-acoes { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-2); }
+/* botão com texto longo quebra a linha no estreito (o .btn da base é nowrap) */
+.p40 .vazio-acoes .btn, .p40-cab-acoes .btn, .p40-resp-acoes .btn { white-space: normal; text-align: center; }
+
+/* cartões da página: o arranjo de dentro muda pela largura do cartão */
+.p40-card { container: p40card / inline-size; }
+.p40-card-cab { display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: var(--sp-2) var(--sp-3); }
+.p40-card-cab > div { min-width: 0; flex: 1 1 280px; }
+.p40-card-cab h2 { font-size: var(--text-lg); display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-2); }
+.p40-card-cab .card-sub { max-width: 72ch; }
+.p40-frescor { display: inline-flex; align-items: center; gap: 6px; font-size: var(--text-xs); color: var(--text-muted); white-space: normal; }
+.p40-nota { display: flex; gap: var(--sp-2); font-size: var(--text-sm); color: var(--text-muted); min-width: 0; }
+.p40-nota .ic { flex: none; width: 16px; height: 16px; margin-top: 2px; }
+.p40-nota b { color: var(--text); font-weight: 600; }
+.p40-nota span { min-width: 0; overflow-wrap: anywhere; }
+.p40-ia { display: flex; gap: var(--sp-2); padding: var(--sp-3); border-radius: var(--radius); background: var(--ai-soft); font-size: var(--text-sm); }
+.p40-ia .ic { flex: none; margin-top: 2px; color: var(--ai); }
+.p40-ia span { min-width: 0; overflow-wrap: anywhere; }
+
+/* A · as lojas no mapa */
+.p40-lojas { display: grid; gap: var(--sp-3); margin: 0; padding: 0; list-style: none; }
+.p40-loja { display: grid; grid-template-columns: minmax(0, 1fr) minmax(220px, 290px); gap: var(--sp-4) var(--sp-5); padding: var(--sp-4); border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--surface-2); }
+.p40-loja > * { min-width: 0; }
+.p40-loja-info { display: grid; align-content: start; gap: var(--sp-3); }
+.p40-loja-cab { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-2); }
+.p40-loja-cab h3 { font-size: var(--text-md); overflow-wrap: anywhere; }
+.p40-end { display: grid; gap: 2px; font-size: var(--text-sm); }
+.p40-end b { font-size: var(--text-base); font-weight: 600; overflow-wrap: anywhere; }
+.p40-end span { color: var(--text-muted); overflow-wrap: anywhere; }
+.p40-dl { display: grid; gap: var(--sp-2); margin: 0; font-size: var(--text-sm); }
+.p40-dl > div { display: grid; grid-template-columns: minmax(0, 9.5rem) minmax(0, 1fr); gap: 2px var(--sp-3); align-items: baseline; }
+.p40-dl dt { color: var(--text-muted); }
+.p40-dl dd { margin: 0; min-width: 0; overflow-wrap: anywhere; }
+.p40-dl dd .link-bt { font-size: var(--text-sm); }
+.p40-precisao { display: inline-flex; align-items: center; gap: 6px; }
+.p40-tags { display: flex; flex-wrap: wrap; gap: 6px; margin: 0; padding: 0; list-style: none; }
+.p40-tags li { display: inline-flex; align-items: center; min-height: 26px; padding: 2px 10px; border-radius: var(--radius-full); background: var(--bg-subtle); font-size: var(--text-xs); font-weight: 500; overflow-wrap: anywhere; }
+.p40-loja-acoes { display: flex; flex-wrap: wrap; gap: var(--sp-2); }
+.p40-loja-acoes .btn { white-space: normal; }
+.p40-loja .faixa { margin-bottom: 0; padding: var(--sp-3); }
+
+/* a prévia dos anéis (desenho em escala, sem mapa de fundo) */
+.p40-mapa { display: grid; gap: var(--sp-2); align-content: start; justify-items: center; margin: 0; }
+.p40-aneis { display: block; width: 100%; max-width: 260px; height: auto; aspect-ratio: 1; }
+.p40-aneis .anel-exp { fill: color-mix(in srgb, var(--chart-cinza-1) 45%, transparent); stroke: var(--chart-cinza-2); stroke-width: 1.5; stroke-dasharray: 5 4; vector-effect: non-scaling-stroke; }
+.p40-aneis .anel-nucleo { fill: color-mix(in srgb, var(--chart-foco) 26%, transparent); stroke: var(--chart-foco); stroke-width: 2; vector-effect: non-scaling-stroke; }
+.p40-aneis .anel-centro { fill: var(--text); }
+.p40-aneis .anel-centro--bairro { fill: var(--surface); stroke: var(--text); stroke-width: 2; vector-effect: non-scaling-stroke; }
+.p40-aneis .anel-escala { stroke: var(--text); stroke-width: 2; vector-effect: non-scaling-stroke; }
+.p40-aneis text { fill: var(--text-muted); font-family: var(--font-mono); }
+.p40-legenda { display: grid; gap: 4px; width: 100%; max-width: 290px; margin: 0; padding: 0; list-style: none; font-size: var(--text-xs); }
+.p40-legenda li { display: grid; grid-template-columns: 14px minmax(0, 1fr); gap: var(--sp-2); align-items: start; }
+.p40-legenda i { width: 14px; height: 14px; margin-top: 1px; border-radius: 50%; }
+.p40-legenda .lg-nucleo { background: color-mix(in srgb, var(--chart-foco) 26%, transparent); border: 2px solid var(--chart-foco); }
+.p40-legenda .lg-exp { background: color-mix(in srgb, var(--chart-cinza-1) 45%, transparent); border: 1.5px dashed var(--chart-cinza-2); }
+.p40-osm { font-size: 11px; color: var(--text-subtle); text-align: center; }
+.p40-osm a { color: var(--link); }
+
+@container p40card (max-width: 640px) {
+  .p40-loja { grid-template-columns: minmax(0, 1fr); }
+  .p40-dl > div { grid-template-columns: minmax(0, 1fr); }
+}
+
+/* B · Sua região */
+.p40-lojas-seg { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-2) var(--sp-3); }
+.p40-lojas-seg .seg button { white-space: normal; text-align: left; }
+.p40-grupos { display: grid; gap: var(--sp-5); }
+.p40-grupo { display: grid; gap: var(--sp-3); min-width: 0; padding-top: var(--sp-4); border-top: 1px solid var(--border); }
+.p40-grupo:first-child { padding-top: 0; border-top: 0; }
+.p40-grupo-cab { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 2px var(--sp-3); }
+.p40-grupo-cab h3 { font-size: var(--text-md); }
+.p40-grupo-cab p { font-size: var(--text-xs); color: var(--text-subtle); }
+.p40-nums { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 190px), 1fr)); gap: var(--sp-3); }
+.p40-num { display: grid; align-content: start; gap: 4px; min-width: 0; padding: var(--sp-3) var(--sp-4); border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); }
+.p40-num-v { font-size: var(--text-xl); font-weight: 600; line-height: 1.15; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.p40-num-v small { font-size: var(--text-sm); font-weight: 500; color: var(--text-muted); }
+.p40-num-o { font-size: var(--text-sm); overflow-wrap: anywhere; }
+.p40-num-f { font-size: var(--text-xs); color: var(--text-subtle); overflow-wrap: anywhere; }
+.p40-num-c { font-family: var(--font-mono); font-size: 11px; color: var(--text-subtle); overflow-wrap: anywhere; }
+.p40-num--largo { grid-column: 1 / -1; }
+.p40-num--falta { border-style: dashed; background: var(--surface-2); }
+.p40-num--falta .p40-num-v { font-size: var(--text-md); color: var(--text-muted); }
+
+/* a régua dos bairros (onde a Tijuca fica entre os 162 bairros do Rio) */
+.p40-regua { position: relative; height: 34px; margin: var(--sp-2) 0 0; }
+.p40-regua-trilho { position: absolute; left: 0; right: 0; top: 14px; height: 6px; border-radius: var(--radius-full); background: var(--chart-cinza-1); }
+.p40-regua-marca { position: absolute; top: 6px; width: 2px; height: 22px; margin-left: -1px; background: var(--text); }
+.p40-regua-ponto { position: absolute; top: 9px; width: 16px; height: 16px; margin-left: -8px; border-radius: 50%; background: var(--chart-foco); box-shadow: 0 0 0 3px var(--surface); }
+.p40-regua-rot { display: flex; justify-content: space-between; gap: var(--sp-2); font-size: var(--text-xs); color: var(--text-muted); }
+.p40-regua-rot span { min-width: 0; overflow-wrap: anywhere; }
+.p40-regua-rot span:last-child { text-align: right; }
+.p40-regua-chave { display: flex; flex-wrap: wrap; gap: 4px var(--sp-4); font-size: var(--text-xs); color: var(--text-muted); }
+.p40-regua-chave span { display: inline-flex; align-items: center; gap: 6px; min-width: 0; overflow-wrap: anywhere; }
+.p40-regua-chave .ch-marca { flex: none; width: 2px; height: 12px; background: var(--text); }
+.p40-regua-chave .ch-ponto { flex: none; width: 10px; height: 10px; border-radius: 50%; background: var(--chart-foco); }
+
+/* preço de comer fora: a região do Rio (foco) e o Brasil (cinza), cada um com o nome e o valor escritos */
+.p40-barras { display: grid; gap: var(--sp-3); margin: 0; padding: 0; list-style: none; }
+.p40-barra-item { display: grid; gap: 6px; min-width: 0; }
+.p40-barra-item > b { font-size: var(--text-sm); font-weight: 600; }
+.p40-barra { display: grid; grid-template-columns: minmax(0, 8.5rem) minmax(0, 1fr) 4.2rem; align-items: center; gap: var(--sp-2); font-size: var(--text-xs); }
+.p40-barra span:first-child { color: var(--text-muted); overflow-wrap: anywhere; }
+.p40-barra-trilho { height: 12px; border-radius: 3px; background: var(--chart-grade); overflow: hidden; }
+.p40-barra-trilho i { display: block; height: 100%; width: var(--v, 0%); border-radius: 3px; background: var(--chart-cinza-2); }
+.p40-barra--foco .p40-barra-trilho i { background: var(--chart-foco); }
+.p40-barra .num { text-align: right; font-weight: 600; font-size: var(--text-sm); }
+@container p40card (max-width: 420px) {
+  .p40-barra { grid-template-columns: minmax(0, 1fr) 4.2rem; }
+  .p40-barra-trilho { grid-column: 1 / -1; grid-row: 2; }
+}
+
+/* a semana que vem */
+.p40-tempo { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 104px), 1fr)); gap: var(--sp-2); margin: 0; padding: 0; list-style: none; }
+.p40-dia { display: grid; justify-items: start; gap: 2px; padding: var(--sp-2) var(--sp-3); border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); font-size: var(--text-xs); min-width: 0; }
+.p40-dia b { font-size: var(--text-sm); font-weight: 600; }
+.p40-dia .ic { width: 20px; height: 20px; color: var(--text-muted); }
+.p40-dia span { color: var(--text-muted); overflow-wrap: anywhere; }
+.p40-dia .num { color: var(--text); }
+.p40-datas { display: grid; gap: var(--sp-2); margin: 0; padding: 0; list-style: none; }
+.p40-data { display: grid; grid-template-columns: 5.5rem minmax(0, 1fr); gap: var(--sp-3); align-items: baseline; font-size: var(--text-sm); }
+.p40-data .num { color: var(--text-muted); font-size: var(--text-xs); }
+.p40-data span { min-width: 0; overflow-wrap: anywhere; }
+.p40-data small { display: block; font-size: var(--text-xs); color: var(--text-subtle); }
+.p40-duas { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--sp-4); }
+.p40-duas > div { display: grid; align-content: start; gap: var(--sp-2); min-width: 0; }
+.p40-duas h4 { font-size: var(--text-sm); font-weight: 600; }
+@container p40card (max-width: 620px) { .p40-duas { grid-template-columns: minmax(0, 1fr); } }
+
+/* referência do setor e o que ainda não dá */
+.p40-ref { display: grid; gap: var(--sp-2); margin: 0; padding: 0; list-style: none; }
+.p40-ref li { display: grid; gap: 2px; padding: var(--sp-3) var(--sp-4); border-left: 3px solid var(--border-strong); background: var(--surface-2); border-radius: 0 var(--radius) var(--radius) 0; font-size: var(--text-sm); min-width: 0; overflow-wrap: anywhere; }
+.p40-ref small { font-size: var(--text-xs); color: var(--text-subtle); }
+.p40-ainda { display: grid; gap: var(--sp-2); margin: 0; padding: 0; list-style: none; }
+.p40-ainda li { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: var(--sp-1) var(--sp-3); align-items: start; padding: var(--sp-3) var(--sp-4); border: 1px dashed var(--border-strong); border-radius: var(--radius); font-size: var(--text-sm); }
+.p40-ainda li > span:last-child { min-width: 0; overflow-wrap: anywhere; }
+.p40-ainda b { font-weight: 600; }
+.p40-ainda small { display: block; color: var(--text-muted); font-size: var(--text-xs); }
+@container p40card (max-width: 420px) { .p40-ainda li { grid-template-columns: minmax(0, 1fr); } }
+.st--ia { background: var(--ai-soft); color: var(--ai); }
+
+/* um bloco que falhou (a fonte não respondeu) e o que está sendo lido */
+.p40-falhou { display: flex; gap: var(--sp-2); padding: var(--sp-3) var(--sp-4); border: 1px solid color-mix(in srgb, var(--danger) 35%, var(--border)); border-radius: var(--radius); background: var(--danger-soft); font-size: var(--text-sm); }
+.p40-falhou .ic { flex: none; color: var(--danger); margin-top: 2px; }
+.p40-falhou span { min-width: 0; overflow-wrap: anywhere; }
+.p40-lendo { display: grid; gap: var(--sp-4); }
+.p40-lendo-cab { display: flex; align-items: center; gap: var(--sp-3); }
+.p40-lendo-cab h3 { font-size: var(--text-md); outline: none; }
+.p40-passos { display: grid; gap: var(--sp-2); margin: 0; padding: 0; list-style: none; }
+.p40-passos li { display: grid; grid-template-columns: 22px minmax(0, 1fr) auto; gap: var(--sp-2) var(--sp-3); align-items: center; padding: var(--sp-2) var(--sp-3); border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); font-size: var(--text-sm); }
+.p40-passos li > span:nth-child(2) { min-width: 0; overflow-wrap: anywhere; }
+.p40-passos .ic { width: 18px; height: 18px; }
+.p40-passos .ok .ic, .p40-passos li.ok > .ic { color: var(--success); }
+@container p40card (max-width: 460px) { .p40-passos li { grid-template-columns: 22px minmax(0, 1fr); } .p40-passos li > .st { grid-column: 2; justify-self: start; } }
+.p40-esq-nums { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 190px), 1fr)); gap: var(--sp-3); }
+.p40-esq-nums > span { display: grid; gap: var(--sp-2); padding: var(--sp-3) var(--sp-4); border: 1px solid var(--border); border-radius: var(--radius); }
+
+/* a LIA, por regra */
+.p40-conversa { display: grid; gap: var(--sp-3); }
+.p40-fala { display: grid; gap: 4px; max-width: min(88%, 640px); }
+.p40-fala--pessoa { justify-self: end; justify-items: end; }
+.p40-fala--pessoa .p40-bolha { background: var(--primary-soft); border-bottom-right-radius: 4px; }
+.p40-bolha { padding: var(--sp-2) var(--sp-3); border-radius: 16px; background: var(--bg-subtle); overflow-wrap: anywhere; font-size: var(--text-sm); }
+.p40-resp { display: grid; gap: var(--sp-3); padding: var(--sp-4); border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--surface); min-width: 0; }
+.p40-resp-cab { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-2) var(--sp-3); }
+.p40-resp-cab h3 { font-size: var(--text-md); }
+.p40-resp-cab p { display: flex; flex-wrap: wrap; align-items: center; gap: 4px var(--sp-2); font-size: var(--text-xs); color: var(--text-muted); }
+.av-sistema { width: 32px; height: 32px; flex: none; display: grid; place-items: center; border-radius: 10px; background: var(--bg-subtle); color: var(--text-muted); }
+.av-sistema .ic { width: 16px; height: 16px; }
+.p40-resp-texto { display: grid; gap: var(--sp-2); font-size: var(--text-sm); line-height: 1.6; }
+.p40-resp-texto p { overflow-wrap: anywhere; }
+.p40-resp-texto small { color: var(--text-subtle); font-size: var(--text-xs); }
+.p40-resp-nota { padding-top: var(--sp-3); border-top: 1px solid var(--border); font-size: var(--text-xs); color: var(--text-muted); }
+.p40-resp-acoes { display: flex; flex-wrap: wrap; gap: var(--sp-2); }
+.p40-resp-acoes .btn { white-space: normal; }
+
+/* a parte Região como aparece em Minha marca (nota do protótipo) */
+.p40-mk { display: grid; gap: var(--sp-3); max-width: 560px; padding: var(--sp-4); border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--surface); }
+.p40-mk-cab { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-2) var(--sp-3); }
+.p40-mk-cab h3 { flex: 1; min-width: min(100%, 140px); font-size: var(--text-md); }
+.p40-mk-ic { width: 32px; height: 32px; flex: none; display: grid; place-items: center; border-radius: 10px; background: var(--bg-subtle); color: var(--text-muted); }
+.p40-mk-ic .ic { width: 16px; height: 16px; }
+.p40-mk-resumo { display: grid; gap: var(--sp-2); font-size: var(--text-sm); }
+.p40-mk-resumo p { overflow-wrap: anywhere; }
+.p40-mk-novo { display: flex; gap: var(--sp-2); padding: var(--sp-2) var(--sp-3); border-radius: var(--radius-sm); background: var(--primary-soft); }
+.p40-mk-novo .ic { flex: none; width: 15px; height: 15px; margin-top: 3px; color: var(--link); }
+.p40-detalhe { display: grid; gap: var(--sp-3); }
+.p40-detalhe summary { cursor: pointer; font-weight: 600; }
+.p40-detalhe summary:focus-visible { outline: 2px solid var(--foco); outline-offset: 2px; border-radius: 4px; }
+
+/* as decisões propostas (nota do protótipo; o formato do P39) */
+.p40-decisoes { display: grid; gap: var(--sp-3); }
+.p40-decisoes h2 { font-size: var(--text-md); }
+.p40-dec-lista { display: grid; gap: var(--sp-3); margin: 0; padding: 0; list-style: none; }
+.p40-dec { display: grid; gap: 4px; padding: var(--sp-3) var(--sp-4); border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); font-size: var(--text-sm); min-width: 0; }
+.p40-dec-cab { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px var(--sp-2); }
+.p40-dec-cab code { font-weight: 600; }
+.p40-dec p { color: var(--text-muted); overflow-wrap: anywhere; }
+.p40-dec .rec { color: var(--text); font-weight: 600; }
+.p40-fato { font-size: var(--text-xs); color: var(--text-subtle); overflow-wrap: anywhere; }
+
+/* a gaveta: pôr a loja no mapa */
+.dlg-titulo { display: grid; gap: 2px; min-width: 0; }
+.p40-g-bloco { display: grid; gap: var(--sp-3); min-width: 0; margin: 0; padding: 0; border: 0; }
+.p40-g-bloco > legend, .p40-g-bloco > h3 { padding: 0; font-size: var(--text-sm); font-weight: 600; }
+.p40-cep { display: grid; grid-template-columns: minmax(0, 11rem) auto; gap: var(--sp-2); align-items: end; }
+.p40-cep .campo { min-width: 0; }
+.p40-num-compl { display: grid; grid-template-columns: minmax(0, 8rem) minmax(0, 1fr); gap: var(--sp-3); }
+@media (max-width: 420px) { .p40-num-compl { grid-template-columns: minmax(0, 1fr); } .p40-cep { grid-template-columns: minmax(0, 1fr) auto; } }
+.p40-achado { display: grid; gap: var(--sp-2); padding: var(--sp-3); border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface-2); font-size: var(--text-sm); }
+.p40-achado .p40-dl > div { grid-template-columns: minmax(0, 6.5rem) minmax(0, 1fr); }
+.p40-perfis { display: grid; gap: var(--sp-2); }
+.p40-perfis .opcao[aria-disabled="true"] { opacity: .7; cursor: not-allowed; }
+.p40-raio { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: var(--sp-2); align-items: center; }
+.p40-raio input[type="range"] { width: 100%; min-width: 0; accent-color: var(--link); }
+.p40-raio-valor { font-size: var(--text-lg); font-weight: 600; font-variant-numeric: tabular-nums; }
+.p40-g-mapa { display: grid; grid-template-columns: minmax(0, 150px) minmax(0, 1fr); gap: var(--sp-3); align-items: center; }
+.p40-g-mapa .p40-aneis { max-width: 150px; }
+@media (max-width: 420px) { .p40-g-mapa { grid-template-columns: minmax(0, 1fr); justify-items: center; } }
+.p40-areas { display: flex; flex-wrap: wrap; gap: 6px; margin: 0; padding: 0; list-style: none; }
+.p40-areas li { display: inline-flex; align-items: center; gap: 2px; min-height: 30px; padding: 0 2px 0 10px; border: 1px solid var(--border); border-radius: var(--radius-full); background: var(--surface); font-size: var(--text-sm); }
+.p40-areas li .btn { min-height: 26px; width: 26px; border: 0; border-radius: 50%; }
+.p40-add { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: var(--sp-2); }
+
+/* a gaveta das fontes */
+.p40-fontes { display: grid; gap: var(--sp-2); margin: 0; padding: 0; list-style: none; }
+.p40-fonte { display: grid; gap: 4px; padding: var(--sp-3) var(--sp-4); border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); font-size: var(--text-sm); min-width: 0; }
+.p40-fonte-cab { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 4px var(--sp-2); }
+.p40-fonte-cab b { font-weight: 600; overflow-wrap: anywhere; }
+.p40-fonte p { color: var(--text-muted); overflow-wrap: anywhere; }
+.p40-fonte .p40-dl > div { grid-template-columns: minmax(0, 6rem) minmax(0, 1fr); }
+.p40-fonte--falhou { border-color: color-mix(in srgb, var(--danger) 35%, var(--border)); }
+
+@media (max-width: 480px) {
+  .p40-loja { padding: var(--sp-3); }
+  .p40-fala { max-width: 94%; }
+}
+</style>
+</head>
+<body data-pagina="regiao">
+<script>document.documentElement.classList.add('modo-lite');</script>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false">
+  <symbol id="i-menu" viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h16"/></symbol>
+  <symbol id="i-x" viewBox="0 0 24 24"><path d="M18 6 6 18M6 6l12 12"/></symbol>
+  <symbol id="i-atencao" viewBox="0 0 24 24"><path d="M12 3v2M12 19v2M5 12H3M21 12h-2M6.3 6.3 4.9 4.9M19.1 19.1l-1.4-1.4M6.3 17.7l-1.4 1.4M19.1 4.9l-1.4 1.4"/><circle cx="12" cy="12" r="4"/></symbol>
+  <symbol id="i-chart" viewBox="0 0 24 24"><path d="M3 3v18h18"/><path d="M18 17V9M13 17V5M8 17v-3"/></symbol>
+  <symbol id="i-plug" viewBox="0 0 24 24"><path d="M12 22v-5M9 8V2M15 8V2"/><path d="M18 8v5a4 4 0 0 1-4 4h-4a4 4 0 0 1-4-4V8Z"/></symbol>
+  <symbol id="i-user-plus" viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M19 8v6M22 11h-6"/></symbol>
+  <symbol id="i-shield" viewBox="0 0 24 24"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/></symbol>
+  <symbol id="i-chevron-down" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></symbol>
+  <symbol id="i-link" viewBox="0 0 24 24"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></symbol>
+  <symbol id="i-ticket" viewBox="0 0 24 24"><path d="M2 9a3 3 0 0 1 0 6v2a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-2a3 3 0 0 1 0-6V7a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2Z"/><path d="M13 5v2M13 17v2M13 11v2"/></symbol>
+  <symbol id="i-check" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></symbol>
+  <symbol id="i-check-circle" viewBox="0 0 24 24"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><path d="m9 11 3 3L22 4"/></symbol>
+  <symbol id="i-alert" viewBox="0 0 24 24"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/><path d="M12 9v4M12 17h.01"/></symbol>
+  <symbol id="i-alert-circle" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 8v5M12 16h.01"/></symbol>
+  <symbol id="i-info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></symbol>
+  <symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></symbol>
+  <symbol id="i-calendar" viewBox="0 0 24 24"><rect width="18" height="18" x="3" y="4" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></symbol>
+  <symbol id="i-arrow-right" viewBox="0 0 24 24"><path d="M5 12h14M12 5l7 7-7 7"/></symbol>
+  <symbol id="i-refresh" viewBox="0 0 24 24"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/></symbol>
+  <symbol id="i-copy" viewBox="0 0 24 24"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></symbol>
+  <symbol id="i-qr" viewBox="0 0 24 24"><rect width="5" height="5" x="3" y="3" rx="1"/><rect width="5" height="5" x="16" y="3" rx="1"/><rect width="5" height="5" x="3" y="16" rx="1"/><path d="M21 16h-3a2 2 0 0 0-2 2v3M21 21v.01M12 7v3a2 2 0 0 1-2 2H7M3 12h.01M12 3h.01M12 16v.01M16 12h1M21 12v.01M12 21v-1"/></symbol>
+  <symbol id="i-download" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m7 10 5 5 5-5M12 15V3"/></symbol>
+  <symbol id="i-external" viewBox="0 0 24 24"><path d="M15 3h6v6M10 14 21 3M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/></symbol>
+  <symbol id="i-lock" viewBox="0 0 24 24"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></symbol>
+  <symbol id="i-message" viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></symbol>
+  <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+  <symbol id="i-sparkles" viewBox="0 0 24 24"><path d="m12 3-1.9 5.8a2 2 0 0 1-1.3 1.3L3 12l5.8 1.9a2 2 0 0 1 1.3 1.3L12 21l1.9-5.8a2 2 0 0 1 1.3-1.3L21 12l-5.8-1.9a2 2 0 0 1-1.3-1.3Z"/></symbol>
+  <symbol id="i-file" viewBox="0 0 24 24"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4M16 13H8M16 17H8M10 9H8"/></symbol>
+  <symbol id="i-mail" viewBox="0 0 24 24"><rect width="20" height="16" x="2" y="4" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/></symbol>
+  <symbol id="i-thumb-up" viewBox="0 0 24 24"><path d="M7 10v12"/><path d="M15 5.88 14 10h5.83a2 2 0 0 1 1.92 2.56l-2.33 8A2 2 0 0 1 17.5 22H4a2 2 0 0 1-2-2v-8a2 2 0 0 1 2-2h2.76a2 2 0 0 0 1.79-1.11L12 2a3.13 3.13 0 0 1 3 3.88Z"/></symbol>
+  <symbol id="i-thumb-down" viewBox="0 0 24 24"><path d="M17 14V2"/><path d="M9 18.12 10 14H4.17a2 2 0 0 1-1.92-2.56l2.33-8A2 2 0 0 1 6.5 2H20a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2h-2.76a2 2 0 0 0-1.79 1.11L12 22a3.13 3.13 0 0 1-3-3.88Z"/></symbol>
+  <symbol id="i-trend-up" viewBox="0 0 24 24"><path d="M22 7 13.5 15.5 8.5 10.5 2 17"/><path d="M16 7h6v6"/></symbol>
+  <symbol id="i-trend-down" viewBox="0 0 24 24"><path d="M22 17 13.5 8.5 8.5 13.5 2 7"/><path d="M16 17h6v-6"/></symbol>
+  <symbol id="lia-icone" viewBox="0 0 1024 1024">
+    <rect width="1024" height="1024" rx="230" style="fill:var(--marca-violeta)"/>
+    <g transform="translate(192.61 277.1)">
+      <path d="M31.5 151.2V380.7H151.2" fill="none" stroke-width="48.6" style="stroke:var(--marca-branco)"/>
+      <circle cx="191.05" cy="380.7" r="25.27" style="fill:var(--marca-ciano)"/>
+      <path d="M233 702V0H62V702Z" transform="translate(253.58 405) scale(0.36 -0.36)" style="fill:var(--marca-branco)"/>
+      <path d="M293.72 21.6H362.84Q382.28 21.6 382.28 41.04V88.56Q382.28 108 362.84 108H319.64L295.88 138.24V108H293.72Q274.28 108 274.28 88.56V41.04Q274.28 21.6 293.72 21.6Z" style="fill:var(--marca-ciano)"/>
+      <path d="M499 124H237L195 0H16L270 702H468L722 0H541ZM455 256 368 513 282 256Z" transform="translate(366.26 405) scale(0.36 -0.36)" style="fill:var(--marca-branco)"/>
+      <rect x="7.2" y="441" width="624.38" height="14.4" rx="7.2" style="fill:var(--marca-ciano)"/>
+    </g>
+  </symbol>
+  <symbol id="i-home" viewBox="0 0 24 24"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><path d="M9 22V12h6v10"/></symbol>
+  <symbol id="i-send" viewBox="0 0 24 24"><path d="m22 2-7 20-4-9-9-4Z"/><path d="M22 2 11 13"/></symbol>
+  <symbol id="i-megaphone" viewBox="0 0 24 24"><path d="m3 11 18-5v12L3 14v-3z"/><path d="M11.6 16.8a3 3 0 1 1-5.8-1.6"/></symbol>
+  <symbol id="i-compass" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="m16.24 7.76-2.12 6.36-6.36 2.12 2.12-6.36 6.36-2.12z"/></symbol>
+  <symbol id="i-undo" viewBox="0 0 24 24"><path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/></symbol>
+  <symbol id="i-pencil" viewBox="0 0 24 24"><path d="M21.17 6.81a1 1 0 0 0-3.98-3.98L3.84 16.17a2 2 0 0 0-.5.83l-1.32 4.35a.5.5 0 0 0 .62.62l4.35-1.32a2 2 0 0 0 .83-.5zM15 5l4 4"/></symbol>
+  <symbol id="i-chevron-left" viewBox="0 0 24 24"><path d="m15 18-6-6 6-6"/></symbol>
+  <symbol id="i-wallet" viewBox="0 0 24 24"><path d="M19 7V4a1 1 0 0 0-1-1H5a2 2 0 0 0 0 4h15a1 1 0 0 1 1 1v4h-3a2 2 0 0 0 0 4h3a1 1 0 0 0 1-1v-2a1 1 0 0 0-1-1"/><path d="M3 5v14a2 2 0 0 0 2 2h15a1 1 0 0 0 1-1v-4"/></symbol>
+  <symbol id="i-pause" viewBox="0 0 24 24"><rect x="14" y="4" width="4" height="16" rx="1"/><rect x="6" y="4" width="4" height="16" rx="1"/></symbol>
+  <symbol id="i-play" viewBox="0 0 24 24"><path d="m6 3 14 9-14 9z"/></symbol>
+  <symbol id="i-instagram" viewBox="0 0 24 24"><rect x="2" y="2" width="20" height="20" rx="5"/><circle cx="12" cy="12" r="4"/><path d="M17.5 6.5h.01"/></symbol>
+  <symbol id="i-facebook" viewBox="0 0 24 24"><path d="M18 2h-3a5 5 0 0 0-5 5v3H7v4h3v8h4v-8h3l1-4h-4V7a1 1 0 0 1 1-1h3z"/></symbol>
+  <symbol id="i-eye" viewBox="0 0 24 24"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></symbol>
+  <symbol id="i-eye-off" viewBox="0 0 24 24"><path d="M9.88 9.88a3 3 0 1 0 4.24 4.24"/><path d="M10.73 5.08A10.43 10.43 0 0 1 12 5c7 0 10 7 10 7a13.16 13.16 0 0 1-1.67 2.68"/><path d="M6.61 6.61A13.53 13.53 0 0 0 2 12s3 7 10 7a9.74 9.74 0 0 0 5.39-1.61"/><path d="m2 2 20 20"/></symbol>
+  <symbol id="i-heart" viewBox="0 0 24 24"><path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"/></symbol>
+  <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></symbol>
+  <symbol id="i-reply" viewBox="0 0 24 24"><path d="M9 17 4 12l5-5"/><path d="M20 18v-2a4 4 0 0 0-4-4H4"/></symbol>
+  <symbol id="i-image" viewBox="0 0 24 24"><rect width="18" height="18" x="3" y="3" rx="2" ry="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.09-3.09a2 2 0 0 0-2.82 0L6 21"/></symbol>
+  <symbol id="i-comentario" viewBox="0 0 24 24"><path d="M7.9 20A9 9 0 1 0 4 16.1L2 22Z"/><path d="M8 12h.01M12 12h.01M16 12h.01"/></symbol>
+  <symbol id="i-zap" viewBox="0 0 24 24"><path d="M13 2 3 14h9l-1 8 10-12h-9l1-8z"/></symbol>
+  <symbol id="i-trash" viewBox="0 0 24 24"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></symbol>
+  <symbol id="i-sliders" viewBox="0 0 24 24"><path d="M21 4h-7M10 4H3M21 12h-9M8 12H3M21 20h-5M12 20H3M14 2v4M8 10v4M16 18v4"/></symbol>
+  <symbol id="liame-simbolo" viewBox="0 0 512 512">
+    <g transform="translate(122.16 61.31)">
+      <path d="M31.1 0V293.76H184.32" fill="none" stroke-width="62.2" style="stroke:var(--logo-ink)"/>
+      <circle cx="235.33" cy="293.76" r="32.35" style="fill:var(--marca-ciano)"/>
+      <rect x="0" y="366.34" width="267.68" height="20.74" rx="10.37" style="fill:var(--marca-ciano)"/>
+    </g>
+  </symbol>
+  <symbol id="i-map-pin" viewBox="0 0 24 24"><path d="M20 10c0 4.993-5.539 10.193-7.399 11.799a1 1 0 0 1-1.202 0C9.539 20.193 4 14.993 4 10a8 8 0 0 1 16 0"/><circle cx="12" cy="10" r="3"/></symbol>
+  <symbol id="i-map" viewBox="0 0 24 24"><path d="M14.106 5.553a2 2 0 0 0 1.788 0l3.659-1.83A1 1 0 0 1 21 4.619v12.764a1 1 0 0 1-.553.894l-4.553 2.277a2 2 0 0 1-1.788 0l-4.212-2.106a2 2 0 0 0-1.788 0l-3.659 1.83A1 1 0 0 1 3 19.381V6.618a1 1 0 0 1 .553-.894l4.553-2.277a2 2 0 0 1 1.788 0z"/><path d="M15 5.764v15M9 3.236v15"/></symbol>
+  <symbol id="i-store" viewBox="0 0 24 24"><path d="m2 7 4.41-4.41A2 2 0 0 1 7.83 2h8.34a2 2 0 0 1 1.42.59L22 7"/><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/><path d="M15 22v-4a2 2 0 0 0-2-2h-2a2 2 0 0 0-2 2v4M2 7h20"/><path d="M22 7v3a2 2 0 0 1-2 2 2.7 2.7 0 0 1-1.59-.63.7.7 0 0 0-.82 0A2.7 2.7 0 0 1 16 12a2.7 2.7 0 0 1-1.59-.63.7.7 0 0 0-.82 0A2.7 2.7 0 0 1 12 12a2.7 2.7 0 0 1-1.59-.63.7.7 0 0 0-.82 0A2.7 2.7 0 0 1 8 12a2.7 2.7 0 0 1-1.59-.63.7.7 0 0 0-.82 0A2.7 2.7 0 0 1 4 12a2 2 0 0 1-2-2V7"/></symbol>
+  <symbol id="i-users" viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></symbol>
+  <symbol id="i-palette" viewBox="0 0 24 24"><circle cx="13.5" cy="6.5" r=".5"/><circle cx="17.5" cy="10.5" r=".5"/><circle cx="8.5" cy="7.5" r=".5"/><circle cx="6.5" cy="12.5" r=".5"/><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10c.926 0 1.648-.746 1.648-1.688 0-.437-.18-.835-.437-1.125-.29-.289-.438-.652-.438-1.125a1.64 1.64 0 0 1 1.668-1.668h1.996c3.051 0 5.555-2.503 5.555-5.554C21.965 6.012 17.461 2 12 2z"/></symbol>
+  <symbol id="i-camera" viewBox="0 0 24 24"><path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z"/><circle cx="12" cy="13" r="3"/></symbol>
+  <symbol id="i-cloud-rain" viewBox="0 0 24 24"><path d="M4 14.899A7 7 0 1 1 15.71 8h1.79a4.5 4.5 0 0 1 2.5 8.242"/><path d="M16 14v6M8 14v6M12 16v6"/></symbol>
+  <symbol id="i-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/></symbol>
+  <symbol id="i-cloud" viewBox="0 0 24 24"><path d="M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9Z"/></symbol>
+  <symbol id="i-cloud-sun" viewBox="0 0 24 24"><path d="M12 2v2M4.93 4.93l1.41 1.41M20 12h2M19.07 4.93l-1.41 1.41M15.947 12.65a4 4 0 0 0-5.925-4.128"/><path d="M13 22H7a5 5 0 1 1 4.9-6H13a3 3 0 0 1 0 6Z"/></symbol>
+  <symbol id="i-minus" viewBox="0 0 24 24"><path d="M5 12h14"/></symbol>
+  <symbol id="i-utensils" viewBox="0 0 24 24"><path d="M3 2v7c0 1.1.9 2 2 2h4a2 2 0 0 0 2-2V2M7 2v20M21 15V2a5 5 0 0 0-5 5v6c0 1.1.9 2 2 2h3Zm0 0v7"/></symbol>
+  <symbol id="i-crosshair" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M22 12h-4M6 12H2M12 6V2M12 22v-4"/></symbol>
+  <symbol id="i-tag" viewBox="0 0 24 24"><path d="M12.586 2.586A2 2 0 0 0 11.172 2H4a2 2 0 0 0-2 2v7.172a2 2 0 0 0 .586 1.414l8.704 8.704a2.426 2.426 0 0 0 3.42 0l6.58-6.58a2.426 2.426 0 0 0 0-3.42z"/><circle cx="7.5" cy="7.5" r=".5"/></symbol>
+</svg>
+<a class="skip-link" href="#conteudo">Pular para o conteúdo</a>
+<p class="sr-only" id="anuncio" role="status" aria-live="polite"></p>
+
+<div class="revisao" role="region" aria-label="Controles do protótipo">
+  <p class="revisao-marca"><b>Protótipo para aprovação · Região · P40</b><span>A loja no mapa (R1) e Sua região (R2), em Minha marca · números reais da base §19; lojas, ruas, perfis e previsão de exemplo · CEP 00000-000 = não existe; 99999-999 = serviço fora do ar; número "s/n" = o mapa não acha</span></p>
+  <label>Região <select id="rev-p40"></select></label>
+  <button class="btn btn--sm btn--ghost" type="button" id="rev-tema" aria-pressed="false">Tema escuro</button>
+</div>
+
+<div class="app">
+  <aside class="sidebar" id="menu-lateral" aria-label="Menu">
+    <div class="sb-logo"><svg class="logo-completo" viewBox="0 0 758.18 309" role="img" aria-label="Liame">
+        <g transform="translate(24 24)">
+          <path d="M17.5 84V211.5H84" fill="none" stroke-width="27" style="stroke:var(--logo-ink)"/>
+          <circle cx="106.14" cy="211.5" r="14.04" style="fill:var(--marca-ciano)"/>
+          <path d="M233 702V0H62V702Z" transform="translate(140.88 225) scale(0.2 -0.2)" style="fill:var(--marca-violeta)"/>
+          <path d="M163.18 12H201.58Q212.38 12 212.38 22.8V49.2Q212.38 60 201.58 60H177.58L164.38 76.8V60H163.18Q152.38 60 152.38 49.2V22.8Q152.38 12 163.18 12Z" style="fill:var(--marca-ciano)"/>
+          <path d="M499 124H237L195 0H16L270 702H468L722 0H541ZM455 256 368 513 282 256Z" transform="translate(203.48 225) scale(0.2 -0.2)" style="fill:var(--marca-violeta)"/>
+          <clipPath id="liame-mc"><rect x="207.98" y="-57" width="480" height="282"/></clipPath>
+          <g clip-path="url(#liame-mc)" fill="none" stroke-width="31.86" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M512.05 99.93V256.86" style="stroke:var(--marca-petroleo)"/>
+            <path d="M447.98 182.7L512.05 99.93" style="stroke:var(--marca-ciano)"/>
+            <path d="M383.91 99.93L447.98 182.7" style="stroke:var(--marca-lavanda-clara)"/>
+            <path d="M383.91 256.86V99.93" style="stroke:var(--marca-lavanda)"/>
+          </g>
+          <polygon points="531.8,46.4 536.3,57.1 547.9,58 539,65.6 541.7,77 531.8,70.9 521.8,77 524.5,65.6 515.7,58 527.3,57.1" stroke-width="3.05" stroke-linejoin="round" style="fill:var(--marca-ambar);stroke:var(--marca-ambar)"/>
+          <g transform="translate(447.98 202.44) scale(1.128)"><path d="M0 15C-20 2-20-13-9-13C-4-13-1-9 0-7C1-9 4-13 9-13C20-13 20 2 0 15Z" style="fill:var(--marca-coral)"/></g>
+          <g transform="translate(386.73 80.19) scale(1.128)"><path fill-rule="evenodd" d="M0 24C-12 10-17 2-17-7A17 17 0 1 1 17-7C17 2 12 10 0 24ZM0-13.5A6.5 6.5 0 1 0 0-.5A6.5 6.5 0 1 0 0-13.5Z" style="fill:var(--logo-pin)"/></g>
+          <path d="M233 565V423H462V291H233V137H492V0H62V702H492V565Z" transform="translate(539.68 225) scale(0.2 -0.2)" style="fill:var(--logo-ink)"/>
+          <rect x="654.18" y="143.5" width="52" height="22" style="fill:var(--marca-ciano)"/>
+          <rect x="4" y="245" width="702.18" height="8" rx="4" style="fill:var(--marca-ciano)"/>
+        </g>
+      </svg><svg class="logo-simbolo" role="img" aria-label="Liame"><use href="#liame-simbolo"/></svg><button class="btn btn--icon btn--ghost sb-fechar" type="button" id="bt-fechar-menu" aria-label="Fechar menu"><svg class="ic" aria-hidden="true"><use href="#i-x"/></svg></button></div>
+    <button class="ctx" type="button" disabled><span class="ctx-av" aria-hidden="true" id="ctx-av">MB</span><span class="ctx-txt"><b id="ctx-marca">Mister Burgers</b><span id="ctx-papel">Dono</span></span></button>
+    <nav aria-label="Principal">
+      <div class="nav-grupo">
+        <p class="nav-grupo-rot rotulo-marca" id="g-ag">Agência</p>
+        <ul class="nav-lista" aria-labelledby="g-ag">
+          <li class="so-lite"><a class="nav-item" href="#" title="Resumo" data-fora="Fora deste protótipo: o Resumo já está no app."><svg class="ic" aria-hidden="true"><use href="#i-home"/></svg><span class="rot">Resumo</span></a></li>
+          <li class="so-pro"><a class="nav-item" href="#" title="Atenção" data-fora="Fora deste protótipo: Atenção já está no app."><svg class="ic" aria-hidden="true"><use href="#i-atencao"/></svg><span class="rot">Atenção</span></a></li>
+          <li><a class="nav-item" href="#" title="Aprovações" data-fora="Fora deste protótipo: Aprovações já está no app."><svg class="ic" aria-hidden="true"><use href="#i-check-circle"/></svg><span class="rot">Aprovações</span></a></li>
+          <li><a class="nav-item" href="#" title="Resultados" data-fora="Fora deste protótipo: Resultados já está no app."><svg class="ic" aria-hidden="true"><use href="#i-chart"/></svg><span class="rot">Resultados</span></a></li>
+          <li><a class="nav-item" href="#" title="Verba do mês" data-fora="Fora deste protótipo: a Verba do mês já está no app."><svg class="ic" aria-hidden="true"><use href="#i-wallet"/></svg><span class="rot">Verba do mês</span></a></li>
+          <li><a class="nav-item" href="#" title="Mensagens" data-fora="Fora deste protótipo: Mensagens já está no app."><svg class="ic" aria-hidden="true"><use href="#i-send"/></svg><span class="rot">Mensagens</span></a></li>
+          <li><a class="nav-item" href="#" title="Avaliações" data-fora="Fora deste protótipo: Avaliações já está no app."><svg class="ic" aria-hidden="true"><use href="#i-message"/></svg><span class="rot">Avaliações</span></a></li>
+          <li><a class="nav-item" href="#" title="Comentários" data-fora="Fora deste protótipo: Comentários já está no app."><svg class="ic" aria-hidden="true"><use href="#i-reply"/></svg><span class="rot">Comentários</span></a></li>
+          <li><a class="nav-item" href="#" title="Agenda" data-fora="Fora deste protótipo: a Agenda já está no app."><svg class="ic" aria-hidden="true"><use href="#i-calendar"/></svg><span class="rot">Agenda</span></a></li>
+          <li><a class="nav-item" href="#" title="Criativos" data-fora="Fora deste protótipo: Criativos já está no app."><svg class="ic" aria-hidden="true"><use href="#i-image"/></svg><span class="rot">Criativos</span></a></li>
+          <li><a class="nav-item" href="#" title="Sua equipe" data-fora="Fora deste protótipo: Sua equipe já está no app."><svg class="ic" aria-hidden="true"><use href="#i-users"/></svg><span class="rot">Sua equipe</span></a></li>
+          <li><a class="nav-item" href="#" title="Minha marca" data-tela="marca" aria-current="page"><span class="nav-no" aria-hidden="true"></span><svg class="ic" aria-hidden="true"><use href="#i-palette"/></svg><span class="rot">Minha marca</span></a></li>
+          <li><a class="nav-item" href="#" title="Fotos" data-fora="Fora deste protótipo: Fotos já está no app."><svg class="ic" aria-hidden="true"><use href="#i-camera"/></svg><span class="rot">Fotos</span></a></li>
+          <li><a class="nav-item" href="#" title="Contas conectadas" data-fora="Fora deste protótipo: Contas conectadas já está no app (é lá que se liga o Perfil da Empresa no Google)."><svg class="ic" aria-hidden="true"><use href="#i-plug"/></svg><span class="rot">Contas conectadas</span></a></li>
+          <li><a class="nav-item" href="#" title="Pessoas e acessos" data-fora="Fora deste protótipo: Pessoas e acessos já está no app."><svg class="ic" aria-hidden="true"><use href="#i-user-plus"/></svg><span class="rot">Pessoas e acessos</span></a></li>
+        </ul>
+      </div>
+      <button class="nav-item nav-mais so-lite" type="button" id="bt-ferramentas" aria-expanded="false" aria-controls="g-ferramentas" title="Mais ferramentas"><svg class="ic" aria-hidden="true"><use href="#i-chevron-down"/></svg><span class="rot">Mais ferramentas</span><span class="nav-mais-n" aria-hidden="true">1</span><span class="sr-only">, 1 ferramenta</span></button>
+      <div id="g-ferramentas" hidden>
+        <div class="nav-grupo">
+          <p class="nav-grupo-rot rotulo-marca" id="g-oper">Operação</p>
+          <ul class="nav-lista" aria-labelledby="g-oper">
+            <li><a class="nav-item" href="#" title="Links e cupons" data-fora="Fora deste protótipo: Links e cupons já está no app."><svg class="ic" aria-hidden="true"><use href="#i-link"/></svg><span class="rot">Links e cupons</span></a></li>
+          </ul>
+        </div>
+      </div>
+    </nav>
+    <div class="sb-rodape">
+      <div class="modo" role="group" aria-label="Modo de exibição"><button type="button" data-modo-bt="lite" aria-pressed="true">Lite</button><button type="button" data-modo-bt="pro" aria-pressed="false">Pro</button></div>
+      <div class="usuario"><span class="av-user" aria-hidden="true" id="us-av">R</span><span class="usuario-txt"><b id="us-nome">Rodrigo</b><span id="us-papel">Dono · Mister Burgers</span></span></div>
+    </div>
+  </aside>
+
+  <div class="principal">
+    <header class="topbar"><button class="btn btn--icon btn--ghost tb-menu" type="button" id="bt-menu" aria-label="Abrir menu" aria-expanded="false" aria-controls="menu-lateral"><svg class="ic" aria-hidden="true"><use href="#i-menu"/></svg></button><div class="trilha"><span class="trilha-pai" id="trilha-marca">Mister Burgers</span><span class="trilha-sep" aria-hidden="true">/</span><span class="trilha-pai">Minha marca</span><span class="trilha-sep" aria-hidden="true">/</span><strong>Região</strong></div><span class="spacer"></span><div class="modo modo-top" role="group" aria-label="Modo de exibição"><button type="button" data-modo-bt="lite" aria-pressed="true" title="Lite: o essencial; o resto em Ver detalhes">Lite</button><button type="button" data-modo-bt="pro" aria-pressed="false" title="Pro: códigos, precisão e as fontes com o período">Pro</button></div></header>
+    <main id="conteudo" class="conteudo" tabindex="-1">
+      <div class="pagina">
+<section id="tela-regiao" aria-labelledby="h-regiao">
+  <button class="btn btn--sm btn--ghost p40-volta" type="button" data-fora-p40="Volta para Minha marca (o P6, que já está no app). A parte Região de lá ganha a linha das lojas no mapa: veja a nota no pé desta tela."><svg class="ic ic-sm" aria-hidden="true"><use href="#i-chevron-left"/></svg>Minha marca</button>
+  <div class="view-cab">
+    <div><h1 id="h-regiao" tabindex="-1">Região</h1><p id="p40-intro">Onde cada loja da Mister Burgers fica, até onde entrega e como é a região em volta. Os números vêm de fontes públicas e são calculados pelo sistema, sem IA.</p></div>
+  </div>
+  <div id="regiao"></div>
+</section>
+      </div>
+    </main>
+  </div>
+</div>
+
+<!-- Região · P40 · pôr a loja no mapa: gaveta à direita (o padrão de edição do produto) -->
+<dialog class="dialogo dialogo--lado" id="dlg-loja" aria-labelledby="dlg-loja-t">
+  <form class="dialogo-form" id="p40-loja-form" novalidate></form>
+</dialog>
+
+<!-- Região · P40 · as fontes de Sua região: gaveta à direita -->
+<dialog class="dialogo dialogo--lado" id="dlg-fontes" aria-labelledby="dlg-fontes-t">
+  <div class="dialogo-form" id="p40-fontes-corpo"></div>
+</dialog>
+
+<div class="veu" id="veu" hidden></div>
+<div class="toast-region" role="status" aria-live="polite"></div>
+<script>
+'use strict';
+/* ---------- utilidades ---------- */
+const $ = (s, r = document) => r.querySelector(s);
+const $$ = (s, r = document) => [...r.querySelectorAll(s)];
+const raiz = document.documentElement;
+const esperar = (ms) => new Promise((r) => setTimeout(r, ms));
+const reduzido = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
+const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const moeda = (v, casas = 2) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', minimumFractionDigits: casas, maximumFractionDigits: casas });
+const numero = (v, casas = 0) => v.toLocaleString('pt-BR', { minimumFractionDigits: casas, maximumFractionDigits: casas });
+const vezes = (v) => numero(v, 1) + '×';
+const pct = (v) => numero(Math.round(v * 100)) + '%';
+const ic = (nome, cls = 'ic') => `<svg class="${cls}" aria-hidden="true"><use href="#${nome}"/></svg>`;
+const params = new URLSearchParams(location.search);
+
+function anunciar(t) { const a = $('#anuncio'); if (!a) return; a.textContent = ''; setTimeout(() => { a.textContent = t; }, 30); }
+function toast(texto, { tipo = 'ok' } = {}) {
+  const t = document.createElement('div');
+  t.className = 'toast' + (tipo === 'perigo' ? ' toast--perigo' : '');
+  const s = document.createElement('span'); s.textContent = texto; t.append(s);
+  $('.toast-region').append(t);
+  setTimeout(() => { t.classList.add('saindo'); setTimeout(() => t.remove(), 260); }, 4200);
+}
+async function copiar(texto) {
+  try { await navigator.clipboard.writeText(texto); return true; } catch { /* sem permissão: tenta o jeito antigo */ }
+  const ta = document.createElement('textarea');
+  ta.value = texto; ta.setAttribute('readonly', ''); ta.className = 'sr-only';
+  (document.querySelector('dialog[open]') || document.body).append(ta);
+  ta.select();
+  let ok = false;
+  try { ok = document.execCommand('copy'); } catch { ok = false; }
+  ta.remove();
+  return ok;
+}
+
+/* ---------- tema (faixa do protótipo) ---------- */
+const btTema = $('#rev-tema');
+const temaAtual = () => raiz.dataset.theme || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+function sincTema() { btTema.setAttribute('aria-pressed', String(temaAtual() === 'dark')); }
+btTema.addEventListener('click', () => { raiz.dataset.theme = temaAtual() === 'dark' ? 'light' : 'dark'; sincTema(); });
+matchMedia('(prefers-color-scheme: dark)').addEventListener('change', sincTema);
+sincTema();
+
+/* ---------- gaveta do menu (celular), como na tela aprovada ---------- */
+const app = $('.app'), btMenu = $('#bt-menu'), veu = $('#veu');
+function menu(abrir) {
+  app.classList.toggle('gaveta', abrir);
+  veu.hidden = !abrir;
+  btMenu.setAttribute('aria-expanded', String(abrir));
+  $('.principal').inert = abrir;
+  $('.revisao').inert = abrir;
+  // Foco depois do commit, sem requestAnimationFrame, com uma nova tentativa (V27).
+  const alvo = abrir ? $('#bt-fechar-menu') : btMenu;
+  setTimeout(() => { alvo.focus(); if (document.activeElement !== alvo) setTimeout(() => alvo.focus(), 400); }, 0);
+}
+btMenu.addEventListener('click', () => menu(true));
+$('#bt-fechar-menu').addEventListener('click', () => menu(false));
+veu.addEventListener('click', () => menu(false));
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && app.classList.contains('gaveta') && !document.querySelector('dialog[open]')) menu(false); });
+matchMedia('(max-width: 768px)').addEventListener('change', (e) => {
+  if (!e.matches && app.classList.contains('gaveta')) { app.classList.remove('gaveta'); veu.hidden = true; btMenu.setAttribute('aria-expanded', 'false'); $('.principal').inert = false; $('.revisao').inert = false; }
+});
+$$('[data-fora]').forEach((a) => a.addEventListener('click', (e) => { e.preventDefault(); if (app.classList.contains('gaveta')) menu(false); toast(a.dataset.fora); }));
+
+/* ---------- modos Lite e Pro (protótipo geral aprovado) ---------- */
+const shell = { modo: 'lite', ferramentas: document.body.dataset.ferramentas === 'abertas' };
+function sincFerramentas() {
+  $('#g-ferramentas').hidden = !(shell.modo === 'pro' || shell.ferramentas);
+  $('#bt-ferramentas').setAttribute('aria-expanded', String(shell.ferramentas));
+}
+$('#bt-ferramentas').addEventListener('click', () => { shell.ferramentas = !shell.ferramentas; sincFerramentas(); });
+function comModo(destino) {
+  const [base, q = ''] = destino.split('?');
+  const p = new URLSearchParams(q); p.set('modo', shell.modo);
+  return `${base}?${p}`;
+}
+function sincLinks() { $$('a[data-destino]').forEach((a) => a.setAttribute('href', comModo(a.dataset.destino))); }
+function sincDetalhesBt(bt, aberto) {
+  bt.setAttribute('aria-expanded', String(aberto));
+  const r = bt.querySelector('.rot'); if (r) r.textContent = aberto ? 'Ocultar detalhes' : 'Ver detalhes';
+}
+function definirModo(modo, { silencioso = false } = {}) {
+  if (modo !== 'lite' && modo !== 'pro') return;
+  shell.modo = modo;
+  raiz.classList.toggle('modo-lite', modo === 'lite');
+  raiz.classList.toggle('modo-pro', modo === 'pro');
+  $$('[data-modo-bt]').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.modoBt === modo)));
+  $$('.aberto').forEach((e) => e.classList.remove('aberto'));
+  $$('[data-detalhes]').forEach((b) => sincDetalhesBt(b, false));
+  sincFerramentas();
+  sincLinks();
+  if (typeof window.aoMudarModo === 'function') window.aoMudarModo(modo);
+  if (!silencioso) {
+    anunciar(modo === 'pro' ? 'Modo Pro' : 'Modo Lite');
+    toast(modo === 'pro' ? 'Modo Pro: todos os números, tabelas e ferramentas.' : 'Modo Lite: o essencial; o resto fica em "Ver detalhes".');
+  }
+}
+document.addEventListener('click', (e) => {
+  const alvo = e.target instanceof Element ? e.target : null; if (!alvo) return;
+  const m = alvo.closest('[data-modo-bt]'); if (m) { definirModo(m.dataset.modoBt); return; }
+  const d = alvo.closest('[data-detalhes]');
+  if (d) {
+    const bloco = $(d.dataset.detalhes); if (!bloco) return;
+    const aberto = !bloco.classList.contains('aberto');
+    bloco.classList.toggle('aberto', aberto);
+    $$(`[data-detalhes="${d.dataset.detalhes}"]`).forEach((b) => sincDetalhesBt(b, aberto));
+  }
+});
+
+/* ---------- diálogos nativos: foco volta a quem abriu; clique no fundo e "Fechar" fecham ---------- */
+const origemDlg = new WeakMap();
+function abrirDialogo(dlg, origem = document.activeElement) {
+  if (dlg.open) return;
+  const o = origem instanceof HTMLElement && origem !== document.body ? origem : null;
+  origemDlg.set(dlg, o);
+  if (o && o.getAttribute('aria-haspopup') === 'dialog') o.setAttribute('aria-expanded', 'true');
+  dlg.returnValue = ''; // Esc fecha sem valor; sem isto, a escolha anterior voltaria
+  dlg.showModal();
+}
+$$('dialog').forEach((dlg) => {
+  dlg.addEventListener('close', () => {
+    const o = origemDlg.get(dlg);
+    if (o) { if (o.getAttribute('aria-haspopup') === 'dialog') o.setAttribute('aria-expanded', 'false'); if (o.isConnected) o.focus({ preventScroll: true }); }
+    origemDlg.delete(dlg);
+  });
+  dlg.addEventListener('click', (e) => {
+    if (e.target === dlg || (e.target instanceof Element && e.target.closest('[data-fechar]'))) dlg.close('cancelar');
+  });
+});
+
+/* ---------- confirmação na própria linha (como na tela aprovada) ---------- */
+function confirmarNaLinha(bt, { texto = '', rotulo, voltar = 'Cancelar', aoConfirmar }) {
+  const caixa = document.createElement('div');
+  caixa.className = 'confirma-linha';
+  caixa.innerHTML = `${texto ? `<span class="confirma-txt">${esc(texto)}</span>` : ''}<button class="btn btn--sm btn--perigo-cheio" type="button">${esc(rotulo)}</button><button class="btn btn--sm" type="button">${esc(voltar)}</button>`;
+  const [conf, canc] = caixa.querySelectorAll('button');
+  bt.replaceWith(caixa);
+  conf.focus();
+  conf.addEventListener('click', aoConfirmar);
+  canc.addEventListener('click', () => { caixa.replaceWith(bt); bt.focus(); });
+}
+
+window.uiuxCenarios = {};
+definirModo(params.get('modo') === 'pro' ? 'pro' : 'lite', { silencioso: true });
+/* ===================== Região · P40 · A loja no mapa (R1) e Sua região (R2) ===================== */
+/* Hoje é quarta, 11/11/2026, 14:05. Os números de Sua região são os da base §19 (reais); as lojas, os números das
+   ruas, as coordenadas, os Perfis do Google e a previsão do tempo são de exemplo. */
+
+/* ---------- as decisões propostas (esperam o dono) ---------- */
+window.P40_DECISOES = [
+  { id: 'D-RG-11', titulo: 'Onde Sua região mora', texto: 'Uma página nova, Minha marca › Região, aberta pela parte Região do dossiê: as lojas no mapa em cima e Sua região embaixo, uma loja por vez. A parte Região de Minha marca (o texto e a retirada no balcão) não muda e ganha a linha "N lojas no mapa" e o botão "Abrir a região". No Resumo e em Atenção, nada por enquanto; a LIA responde de qualquer tela (D-RG-18).', rec: 'assim; um cartão no Resumo só quando o plano de mídia (R5) usar estes números para propor algo.', porque: 'O retrato muda devagar (o Censo é fixo, o IPCA muda uma vez por mês): no Resumo, que o dono lê todo dia, seria o mesmo cartão toda vez. O lugar dele é junto do que os funcionários leem sobre a marca, como as páginas do Pesquisador.' },
+  { id: 'D-RG-12', titulo: 'Salvar a loja no mapa não pede o código do app', texto: 'Pôr a loja no mapa, mudar o raio ou as áreas salva na hora, como as outras partes de Minha marca: sem o código do app e sem pedido em Aprovações. Fica na auditoria com o nome de quem salvou, o antes e o depois.', rec: 'sem o código.', porque: 'É dado da empresa: não gasta, não publica e não fala com cliente. O código continua onde o raio vira gasto: a campanha com raio (R6) nasce pausada e pede aprovação (D-A7-11).' },
+  { id: 'D-RG-13', titulo: 'Quem muda e quem vê', texto: 'Mudam a loja no mapa o Dono e o Administrador (a mesma permissão de mudar Minha marca). Veem a página inteira, com o endereço e os números, o Gestor, o Aprovador e o Somente leitura (a de ver Minha marca); o Só relatórios não vê. Nenhuma permissão nova.', rec: 'assim.', porque: 'O endereço é da empresa, não de cliente, e os números são públicos; a régua de Minha marca já separa quem muda de quem vê.' },
+  { id: 'D-RG-14', titulo: 'A precisão do ponto: endereço ou centro do bairro', texto: 'O ponto vem do endereço (o OpenStreetMap acha a rua e o número) ou, quando não acha, do centro do bairro, e a tela diz qual dos dois em palavras. Sua região funciona com os dois, porque é por bairro. A campanha com raio (R6) só nasce com o ponto pelo endereço; com o ponto no centro do bairro, ela pede para ajustar o endereço antes.', rec: 'o endereço para anunciar por raio; o centro do bairro basta para Sua região.', porque: 'Num bairro grande como a Tijuca (9,94 km²), o centro pode ficar a mais de 1 km da loja: num raio de 3 km, boa parte do anúncio iria para quem a loja não atende.' },
+  { id: 'D-RG-15', titulo: 'O raio e os anéis', texto: 'Um raio por loja, de 1 a 15 km, em passos de 0,5 km, começando em 3 km. A prévia desenha o núcleo até 2 km e a expansão do núcleo até o raio. Na R5, o tamanho dos anéis passa a sair da densidade e do público estimado (plano, seção 4.2), e a tela mostra o que o plano propôs ao lado do que você escolheu.', rec: 'assim.', porque: 'A Meta aceita raio de 1 a 80 km em volta de um ponto (base §19.2), mas acima de 15 km o anúncio paga gente que a entrega de bairro não alcança. O núcleo de 2 km é só o ponto de partida da prévia.' },
+  { id: 'D-RG-16', titulo: 'As áreas de entrega e o Perfil do Google', texto: 'Os bairros que o Perfil da Empresa no Google lista (até 20) entram como as áreas de entrega da loja; tirar ou acrescentar no Liame não muda o Perfil no Google. Cada perfil vale para uma loja: quando a marca tem mais de um, a gaveta mostra a lista para escolher, e o perfil que já é de outra loja aparece com o nome dela.', rec: 'assim; aqui o Liame só lê o Perfil do Google.', porque: 'Escrever no Perfil do Google é outra permissão e outro risco; a área que o Google mostra ao cliente continua sendo cuidada no Google.' },
+  { id: 'D-RG-17', titulo: 'A marca sem loja: salvar cria a loja (acréscimo de 11/11/2026)', texto: 'Hoje a loja só nasce no Liame quando a marca conecta o Regem; a marca que recebe os pedidos pela Brendi ou pelo Anota AI não tem loja nenhuma. Nela, salvar o endereço cria a loja, com o nome do Perfil do Google ou, sem perfil, "Loja" e o bairro (o nome pode ser mudado na gaveta). Quando o Regem for conectado depois, ele se liga a essa loja pelo mesmo nome, como já acontece hoje. Com uma loja criada assim, aparece "Pôr outra loja no mapa".', rec: 'sim, criar a loja ao salvar.', porque: 'Quem não usa o Regem também anuncia por região, e o endereço precisa de uma loja onde morar. Se o nome no Regem for outro, nasce uma segunda loja: por isso a gaveta avisa ao mudar o nome.' },
+  { id: 'D-RG-18', titulo: 'A LIA e "como é a minha região?"', texto: 'A LIA responde por regra, sem IA, com os números de Sua região, a fonte e o período de cada um, e no máximo duas ações (Ver Sua região, Ver as fontes). A resposta diz o que ainda não dá para saber, e por quê. Quando um funcionário de IA usa a região (o Estrategista, o Analista), recebe só o bairro, o município e os números já calculados, nunca o endereço (D-RG-2).', rec: 'assim.', porque: 'Número com fonte não precisa de IA: a resposta por regra não erra o número nem custa chamada, no mesmo padrão do "Resumo do sistema" das outras telas.' },
+  { id: 'D-RG-19', titulo: 'Lite e Pro na página Região', texto: 'Minha marca é hoje uma tela só nos dois modos. A página Região ganha os dois: no Lite, os números principais com a fonte curta e o resto em "Ver detalhes"; no Pro, também os códigos do IBGE (município, tabela e variável), a coordenada e a precisão, a renda média ao lado da mediana, os números do município e as fontes com o endereço e a renovação. Nada some no Lite.', rec: 'assim; as partes do dossiê continuam iguais.', porque: 'O dono quer o retrato numa olhada; quem opera a mídia confere de onde veio cada número.' },
+  { id: 'D-RG-20', titulo: 'A renda de 2022 sem correção, por enquanto', texto: 'O plano pede a renda do Censo corrigida pelo IPCA até hoje (seção 3), mas a tabela do índice do IPCA ainda não foi conferida na fonte (base §19.3). Até lá, a tela mostra o valor de 2022 com "valor de 2022, sem correção" escrito ao lado; depois de conferida, passa a "corrigido pelo IPCA até <mês>".', rec: 'mostrar já, com o ano escrito, e corrigir depois de conferir a tabela.', porque: 'Esperar a correção atrasaria o bolso, o número que mais escolhe a oferta; o ano escrito impede que alguém leia R$ 5.500 como valor de hoje.' },
+];
+
+/* ---------- os dados de exemplo (o CEP e os números da região são reais) ---------- */
+const P40_PERFIS = {
+  tijuca: { id: 'tijuca', nome: 'Mister Burgers Tijuca', end: { rua: 'Rua Conde de Bonfim', numero: '450', compl: '', bairro: 'Tijuca', municipio: 'Rio de Janeiro', uf: 'RJ', cep: '20520-054', ibge: '3304557' }, areas: ['Tijuca', 'Maracanã', 'Vila Isabel', 'Praça da Bandeira', 'Andaraí', 'Grajaú', 'Rio Comprido'] },
+  penha: { id: 'penha', nome: 'Mister Burgers Penha', end: { rua: 'Rua Montevidéu', numero: '900', compl: '', bairro: 'Penha', municipio: 'Rio de Janeiro', uf: 'RJ', cep: '21020-290', ibge: '3304557' }, areas: ['Penha', 'Penha Circular', 'Olaria', 'Brás de Pina', 'Vila da Penha'] },
+};
+const P40_CEP = { '20520054': { rua: 'Rua Conde de Bonfim', bairro: 'Tijuca', municipio: 'Rio de Janeiro', uf: 'RJ', ibge: '3304557', faixa: 'de 188 a 528, lado par' } };
+const P40_PONTO = { Tijuca: { lat: -22.9244, lon: -43.2327 }, Penha: { lat: -22.8424, lon: -43.2788 } };
+const P40_CENTRO = { Tijuca: { lat: -22.9330, lon: -43.2429 }, Penha: { lat: -22.8390, lon: -43.2810 } };
+const P40_BAIRROS_RIO = ['Alto da Boa Vista', 'Andaraí', 'Botafogo', 'Brás de Pina', 'Centro', 'Copacabana', 'Estácio', 'Grajaú', 'Maracanã', 'Méier', 'Olaria', 'Penha', 'Penha Circular', 'Praça da Bandeira', 'Ramos', 'Rio Comprido', 'São Cristóvão', 'Tijuca', 'Vila da Penha', 'Vila Isabel'];
+const P40_TEMPO = [
+  { dia: 'qui', data: '12/11', ic: 'i-cloud-sun', cond: 'Parcialmente nublado', min: 21, max: 29 },
+  { dia: 'sex', data: '13/11', ic: 'i-cloud-rain', cond: 'Chuva', min: 20, max: 25 },
+  { dia: 'sáb', data: '14/11', ic: 'i-cloud-rain', cond: 'Pancadas de chuva', min: 20, max: 26 },
+  { dia: 'dom', data: '15/11', ic: 'i-sun', cond: 'Sol', min: 22, max: 31 },
+  { dia: 'seg', data: '16/11', ic: 'i-sun', cond: 'Sol', min: 23, max: 32 },
+  { dia: 'ter', data: '17/11', ic: 'i-cloud', cond: 'Nublado', min: 22, max: 29 },
+];
+const P40_DATAS = [
+  { quando: 'dom 15/11', o: 'Proclamação da República', tipo: 'feriado nacional' },
+  { quando: 'sex 20/11', o: 'Consciência Negra', tipo: 'feriado nacional' },
+  { quando: 'sex 27/11', o: 'Black Friday', tipo: 'data comercial' },
+  { quando: 'seg 07/12', o: 'Quinto dia útil: dia de pagamento de salário', tipo: 'conta do sistema' },
+  { quando: 'sex 25/12', o: 'Natal', tipo: 'feriado nacional e data comercial' },
+];
+
+const P40_ESTADOS = {
+  'vazio-perfil': '1 · Sem loja no mapa, com o Perfil do Google ligado',
+  'vazio-cep': '2 · Sem loja no mapa e sem o Perfil do Google (informar pelo CEP)',
+  'gaveta-cep': '3 · A gaveta: informar pelo CEP',
+  'cep-nao-achado': '4 · O CEP não foi encontrado',
+  'cep-fora': '5 · O serviço de CEP fora do ar',
+  perfis: '6 · A marca com dois Perfis do Google: escolher o desta loja',
+  completo: '7 · A loja no mapa e Sua região lida',
+  bairro: '8 · O ponto no centro do bairro (o mapa não achou o número)',
+  lendo: '9 · Lendo a região…',
+  falhou: '10 · Uma fonte falhou (o IBGE não respondeu)',
+  fontes: '11 · Ver as fontes (a gaveta)',
+  duas: '12 · A marca com duas lojas',
+  'sem-loja': '13 · A marca sem loja (sem o Regem)',
+  'sem-loja-gaveta': '14 · A marca sem loja: salvar cria a loja',
+  leitura: '15 · Quem só vê (sem a permissão de mudar)',
+  pro: '16 · Modo Pro: códigos, precisão e as fontes com o período',
+  lia: '17 · A LIA responde "como é a minha região?"',
+  desligada: '18 · A função desligada pela Liame',
+};
+
+const km = (v) => numero(v, Number.isInteger(v) ? 0 : 1);
+const coordTxt = (c) => `${numero(c.lat, 4)}; ${numero(c.lon, 4)}`;
+const OSM_LINK = '<a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a>';
+
+function lojaTijuca(extra = {}) {
+  return { id: 'tijuca', nome: 'Mister Burgers Tijuca', doRegem: true, origem: 'perfil', perfil: 'tijuca', end: { ...P40_PERFIS.tijuca.end }, coord: { ...P40_PONTO.Tijuca, precisao: 'endereco' }, raio: 3, areas: [...P40_PERFIS.tijuca.areas], salvo: { quem: 'Rodrigo', quando: '10/11/2026, 18:42' }, ...extra };
+}
+function lojaSemEndereco(id, nome) {
+  return { id, nome, doRegem: true, origem: null, perfil: null, end: null, coord: null, raio: 3, areas: [], salvo: null };
+}
+
+let p40 = null;
+function p40Base() {
+  return {
+    estado: 'completo',
+    marca: { nome: 'Mister Burgers', ini: 'MB', regem: true, pedidos: 'Regem' },
+    pessoa: { nome: 'Rodrigo', ini: 'R', papel: 'Dono' },
+    podeEditar: true, funcao: true,
+    perfis: ['tijuca'], lojas: [lojaTijuca()], sel: 'tijuca',
+    raiox: { tijuca: 'lido' }, quando: 'hoje às 06:10', g: null, seq: 0, timer: 0,
+  };
+}
+const p40Loja = (id) => p40.lojas.find((l) => l.id === id) || null;
+const p40Usado = (perfilId, foraDe) => p40.lojas.find((l) => l.perfil === perfilId && l.id !== foraDe) || null;
+
+/* ---------- pedaços comuns ---------- */
+function p40Faixa(tipo, icone, titulo, texto, acao = '') {
+  return `<div class="faixa faixa--${tipo}"><span class="faixa-ic">${ic(icone)}</span><div class="faixa-txt"><b>${titulo}</b><span>${texto}</span></div>${acao}</div>`;
+}
+function p40Vazio(icone, titulo, texto, acoes = '') {
+  return `<div class="vazio vazio--compacto"><div class="vazio-ic">${ic(icone)}</div><h3 tabindex="-1">${titulo}</h3><p>${texto}</p>${acoes ? `<div class="vazio-acoes">${acoes}</div>` : ''}</div>`;
+}
+const p40NotaIA = () => `<p class="p40-nota">${ic('i-lock')}<span><b>O endereço da loja nunca vai para a IA.</b> Ela recebe só o bairro, o município e os números.</span></p>`;
+function p40Detalhes(alvo) {
+  return `<button class="detalhes-bt so-lite" type="button" data-detalhes="${alvo}" aria-expanded="false" aria-controls="${alvo.slice(1)}"><span class="rot">Ver detalhes</span>${ic('i-chevron-down')}</button>`;
+}
+
+/* a prévia dos anéis, em escala (sem mapa de fundo) */
+function p40Aneis(raio, precisao, id) {
+  const R = raio + 0.5;
+  const nucleo = Math.min(2, raio);
+  const fs = R * 0.085;
+  const escala = R >= 7 ? 5 : 1;
+  const x0 = -R + R * 0.06, y0 = R - R * 0.07;
+  const titulo = raio > 2 ? `Prévia em escala: núcleo até 2 km e expansão de 2 a ${km(raio)} km em volta da loja` : `Prévia em escala: núcleo até ${km(raio)} km em volta da loja`;
+  return `<svg class="p40-aneis" viewBox="${-R} ${-R} ${2 * R} ${2 * R}" role="img" aria-labelledby="${id}-t"><title id="${id}-t">${titulo}${precisao === 'bairro' ? ', com o ponto no centro do bairro' : ''}.</title>`
+    + (raio > 2 ? `<circle class="anel-exp" r="${raio}"/>` : '')
+    + `<circle class="anel-nucleo" r="${nucleo}"/>`
+    + `<circle class="anel-centro${precisao === 'bairro' ? ' anel-centro--bairro' : ''}" r="${R * 0.04}"/>`
+    + `<line class="anel-escala" x1="${x0}" y1="${y0}" x2="${x0 + escala}" y2="${y0}"/>`
+    + `<text x="${x0}" y="${y0 - R * 0.035}" font-size="${fs}">${escala} km</text></svg>`;
+}
+function p40Legenda(raio) {
+  const exp = raio > 2 ? `<li><i class="lg-exp" aria-hidden="true"></i><span><b>Expansão · de 2 a ${km(raio)} km</b> · mais longe, até o raio de entrega</span></li>` : '';
+  return `<ul class="p40-legenda"><li><i class="lg-nucleo" aria-hidden="true"></i><span><b>Núcleo · até ${km(Math.min(2, raio))} km</b> · perto da loja, entrega mais rápida</span></li>${exp}</ul>`;
+}
+
+/* ---------- A · a loja no mapa ---------- */
+function p40LojaHtml(l) {
+  const id = `p40-loja-${l.id}`;
+  if (!l.end) {
+    const acoes = !p40.podeEditar ? '' : p40.perfis.length
+      ? `<button class="btn btn--primary" type="button" data-p40-por="perfil" data-p40-loja="${l.id}" aria-haspopup="dialog">${ic('i-store')}Usar o endereço do Perfil do Google</button><button class="btn" type="button" data-p40-por="cep" data-p40-loja="${l.id}" aria-haspopup="dialog">Informar pelo CEP</button>`
+      : `<button class="btn btn--primary" type="button" data-p40-por="cep" data-p40-loja="${l.id}" aria-haspopup="dialog">${ic('i-map-pin')}Informar pelo CEP</button><button class="btn" type="button" data-fora-p40="Abre Contas conectadas, onde se liga o Perfil da Empresa no Google (já está no app).">Ligar o Perfil do Google</button>`;
+    const texto = p40.perfis.length
+      ? `O Perfil da Empresa no Google da marca já tem o endereço e as áreas de entrega: é só conferir. Ou informe o CEP e o número.`
+      : `Informe o CEP e o número: o Liame completa a rua, o bairro, o município e a UF. Com o Perfil da Empresa no Google ligado, o endereço e as áreas de entrega vêm de lá.`;
+    return `<li class="p40-loja" style="grid-template-columns:minmax(0,1fr)">${p40Vazio('i-map-pin', `A ${esc(l.nome)} ainda não está no mapa`, p40.podeEditar ? texto : 'Só o Dono e os Administradores põem a loja no mapa.', acoes)}</li>`;
+  }
+  const e = l.end, c = l.coord;
+  const origem = l.origem === 'perfil'
+    ? `<span class="st st--info">${ic('i-store', 'ic ic-sm')}Do seu Perfil da Empresa no Google</span>`
+    : `<span class="st st--espera">${ic('i-pencil', 'ic ic-sm')}Informado por você</span>`;
+  const criada = l.criada ? '<span class="st st--concluido">Loja criada aqui</span>' : '';
+  const ajustar = p40.podeEditar
+    ? `<button class="link-bt" type="button" data-p40-ajustar="${l.id}" aria-haspopup="dialog">O ponto está errado? Ajuste o endereço</button>`
+    : '<span class="eixo-nota">Para corrigir, fale com o Dono ou um Administrador.</span>';
+  const ponto = c.precisao === 'endereco'
+    ? `<span class="p40-precisao">${ic('i-check', 'ic ic-sm')}Achado pelo endereço.</span> ${ajustar}`
+    : `<span class="p40-precisao">${ic('i-alert', 'ic ic-sm')}No centro da ${esc(e.bairro)}: o mapa não achou o número ${esc(e.numero)}.</span> ${ajustar}`;
+  const faixaBairro = c.precisao === 'bairro'
+    ? p40Faixa('atencao', 'i-crosshair', 'O ponto está no centro do bairro, não na loja', `Sua região vale, porque é por bairro. Para anunciar por raio, o ponto precisa ser o da loja: confira o número ou ponha o complemento.`, p40.podeEditar ? `<button class="btn btn--sm" type="button" data-p40-ajustar="${l.id}" aria-haspopup="dialog">Ajustar o endereço</button>` : '')
+    : '';
+  const tags = l.areas.map((a) => `<li>${esc(a)}</li>`).join('');
+  const deOnde = l.origem === 'perfil' ? 'Do Perfil do Google; tire ou acrescente em Editar (o Google não muda).' : 'Informadas por você.';
+  const editar = p40.podeEditar ? `<button class="btn btn--sm" type="button" data-p40-editar="${l.id}" aria-haspopup="dialog">${ic('i-pencil')}Editar</button>` : '';
+  const pro = `<div class="so-pro"><dl class="p40-dl">
+      <div><dt>Coordenada</dt><dd><span class="num">${coordTxt(c)}</span> · © ${OSM_LINK}</dd></div>
+      <div><dt>Precisão</dt><dd>${c.precisao === 'endereco' ? 'endereço (a rua e o número achados no OpenStreetMap)' : `bairro (o centro da ${esc(e.bairro)} no OpenStreetMap; o número não foi achado)`}</dd></div>
+      <div><dt>Município</dt><dd>${esc(e.municipio)} – ${esc(e.uf)} · código IBGE <span class="num">${esc(e.ibge)}</span> (ViaCEP)</dd></div>
+      <div><dt>Bairro do Censo</dt><dd>${esc(e.bairro)} (o nome dos Correios casou com o do IBGE no mesmo município)</dd></div>
+      <div><dt>Endereço</dt><dd>${l.origem === 'perfil' ? 'do Perfil da Empresa no Google, lido hoje às 06:00' : 'pelo CEP, no ViaCEP, completado por você'}</dd></div>
+      <div><dt>Salvo por</dt><dd>${l.salvo ? `${esc(l.salvo.quem)}, ${esc(l.salvo.quando)}` : '—'}</dd></div>
+    </dl></div>`;
+  return `<li class="p40-loja" id="${id}">
+    <div class="p40-loja-info">
+      <div class="p40-loja-cab"><h3>${esc(l.nome)}</h3>${origem}${criada}</div>
+      <p class="p40-end"><b>${esc(e.rua)}, ${esc(e.numero)}${e.compl ? ` · ${esc(e.compl)}` : ''}</b><span>${esc(e.bairro)} · ${esc(e.municipio)} – ${esc(e.uf)} · CEP <span class="num">${esc(e.cep)}</span></span></p>
+      ${faixaBairro}
+      <dl class="p40-dl">
+        <div><dt>O ponto no mapa</dt><dd>${ponto}</dd></div>
+        <div><dt>Entrega até</dt><dd><b>${km(l.raio)} km</b> da loja</dd></div>
+        <div><dt>Áreas de entrega</dt><dd><ul class="p40-tags" aria-label="Áreas de entrega">${tags}</ul><span class="eixo-nota">${deOnde}</span></dd></div>
+      </dl>
+      ${pro}
+      <div class="p40-loja-acoes">${editar}${p40Detalhes('#' + id)}</div>
+    </div>
+    <figure class="p40-mapa">${p40Aneis(l.raio, c.precisao, id + '-aneis')}<figcaption>${p40Legenda(l.raio)}<p class="p40-osm">Ponto da loja: © ${OSM_LINK} · desenho em escala, sem o mapa de fundo</p></figcaption></figure>
+  </li>`;
+}
+
+function p40CardLojas() {
+  const s = p40;
+  let corpo;
+  if (!s.lojas.length) {
+    const acoes = !s.podeEditar ? '' : s.perfis.length
+      ? `<button class="btn btn--primary" type="button" data-p40-por="perfil" aria-haspopup="dialog">${ic('i-store')}Usar o endereço do Perfil do Google</button><button class="btn" type="button" data-p40-por="cep" aria-haspopup="dialog">Informar pelo CEP</button>`
+      : `<button class="btn btn--primary" type="button" data-p40-por="cep" aria-haspopup="dialog">${ic('i-map-pin')}Informar pelo CEP</button><button class="btn" type="button" data-fora-p40="Abre Contas conectadas, onde se liga o Perfil da Empresa no Google (já está no app).">Ligar o Perfil do Google</button>`;
+    corpo = `<div class="p40-loja" style="grid-template-columns:minmax(0,1fr)">${p40Vazio('i-store', `A ${esc(s.marca.nome)} ainda não tem loja no Liame`, `No Liame, a loja nasce quando a marca conecta o Regem. Sem ele (os pedidos da ${esc(s.marca.nome)} chegam pela ${esc(s.marca.pedidos)}), a loja nasce aqui: ao salvar o endereço, o Liame cria a loja com o nome do Perfil do Google ou, sem perfil, “Loja” e o bairro. Se o Regem for conectado depois, ele se liga a esta loja pelo mesmo nome.`, acoes)}</div>`;
+  } else {
+    corpo = `<ul class="p40-lojas">${s.lojas.map(p40LojaHtml).join('')}</ul>`;
+  }
+  const outra = !s.marca.regem && s.lojas.length && s.podeEditar ? `<button class="btn btn--sm" type="button" data-p40-por="cep" aria-haspopup="dialog">${ic('i-plus')}Pôr outra loja no mapa</button>` : '';
+  const n = s.lojas.filter((l) => l.end).length;
+  const selo = s.lojas.length ? `<span class="st ${n === s.lojas.length ? 'st--concluido' : 'st--aguardando'}">${n} de ${s.lojas.length} ${s.lojas.length === 1 ? 'loja' : 'lojas'} no mapa</span>` : '';
+  return `<section class="card p40-card" aria-labelledby="p40-a-t">
+    <div class="p40-card-cab"><div><h2 id="p40-a-t" tabindex="-1">A loja no mapa ${selo}</h2><p class="card-sub">Onde cada loja fica e até onde entrega. É dado da empresa: fica no Liame e serve para o raio dos anúncios e para Sua região.</p></div>${outra ? `<div class="p40-cab-acoes">${outra}</div>` : ''}</div>
+    ${corpo}
+    ${p40NotaIA()}
+  </section>`;
+}
+
+/* ---------- B · Sua região ---------- */
+function p40Num(v, o, f, { pro = '', cls = '', extra = '' } = {}) {
+  return `<div class="p40-num ${cls}"><p class="p40-num-v">${v}</p><p class="p40-num-o">${o}</p>${extra}<p class="p40-num-f">${f}</p>${pro ? `<p class="p40-num-c so-pro">${pro}</p>` : ''}</div>`;
+}
+function p40FalhaIbge(o) {
+  return `<p class="p40-falhou">${ic('i-alert-circle')}<span><b>${o}: o IBGE não respondeu.</b> Tentamos de novo em 1 hora, às 15:00. Os outros números valem.</span></p>`;
+}
+function p40Grupos(loja, falhou) {
+  const b = loja.end.bairro;
+  const gente = `<section class="p40-grupo" aria-labelledby="g-gente"><div class="p40-grupo-cab"><h3 id="g-gente">Gente</h3><p>no bairro da loja</p></div><div class="p40-nums">
+      ${p40Num('142.909', `pessoas moram na ${esc(b)}, em 9,94 km²`, 'IBGE · Censo 2022', { pro: 'Censo 2022, agregados por bairro (arquivo de 20/05/2026) · v0001 e AREA_KM2 · bairro do Censo: Tijuca' })}
+      ${p40Num('14.378 <small>por km²</small>', 'quase 3 vezes a densidade do Rio de Janeiro (5.174,6 por km²)', 'Conta do sistema com o Censo 2022', { pro: 'v0001 ÷ AREA_KM2, com a área inteira do arquivo · Rio: tabela 4714, variável 614' })}
+      ${p40Num('7 bairros', 'Gente em toda a área de entrega: a soma dos bairros', 'Nota do protótipo: só a Tijuca tem o número conferido; no app, a soma aparece aqui, com a mesma fonte.', { cls: 'p40-num--falta p40-proto' })}
+    </div></section>`;
+  const regua = `<div class="p40-regua" role="img" aria-label="A ${esc(b)} fica acima de 87% dos 162 bairros do Rio; o bairro típico tem R$ 2.000."><span class="p40-regua-trilho"></span><span class="p40-regua-marca" style="left:50%"></span><span class="p40-regua-ponto" style="left:87%"></span></div><p class="p40-regua-rot" aria-hidden="true"><span>menor renda</span><span>maior renda</span></p><p class="p40-regua-chave" aria-hidden="true"><span><i class="ch-marca"></i>bairro típico do Rio: R$ 2.000</span><span><i class="ch-ponto"></i>${esc(b)}: R$ 5.500</span></p>`;
+  const bolso = `<section class="p40-grupo" aria-labelledby="g-bolso"><div class="p40-grupo-cab"><h3 id="g-bolso">Bolso</h3><p>renda de quem mora em volta</p></div><div class="p40-nums">
+      ${p40Num('R$ 5.500', `é a renda mediana do responsável pelo domicílio na ${esc(b)}. O bairro típico do Rio tem R$ 2.000: a ${esc(b)} fica acima de 87% dos 162 bairros.`, 'IBGE · Censo 2022 · valor de 2022, sem correção', { cls: 'p40-num--largo', extra: regua, pro: 'renda do responsável por bairro (arquivo de 08/05/2026) · V06006 (mediana) · média: R$ 8.056,52 (V06004)' })}
+      ${falhou ? '' : p40Num('R$ 1.212', 'é a renda por pessoa (mediana) no Rio de Janeiro; a média é R$ 2.515,32', 'IBGE · Censo 2022 · valor de 2022', { cls: 'so-pro', pro: 'tabela 10295 · variáveis 13534 (mediana) e 13431 (média) · município 3304557' })}
+    </div>
+    <p class="p40-nota">${ic('i-lock')}<span>A renda escolhe a oferta e a verba; <b>nunca vai para o texto do anúncio</b>.</span></p></section>`;
+  const conc = falhou
+    ? `<section class="p40-grupo" aria-labelledby="g-conc"><div class="p40-grupo-cab"><h3 id="g-conc">Concorrência</h3><p>no município</p></div>${p40FalhaIbge('Restaurantes no Rio de Janeiro')}</section>`
+    : `<section class="p40-grupo" aria-labelledby="g-conc"><div class="p40-grupo-cab"><h3 id="g-conc">Concorrência</h3><p>no município</p></div><div class="p40-nums">
+      ${p40Num('16.242', 'restaurantes e similares no Rio de Janeiro', 'IBGE · Cadastro Central de Empresas, 2024', { pro: 'tabela 9528 · variável 706 · CNAE 56.11-2 (categoria 117551) · município 3304557' })}
+      ${p40Num('24 <small>por 10 mil habitantes</small>', 'restaurantes para cada 10 mil pessoas do Rio', 'Conta do sistema: 16.242 ÷ 6.731.133 pessoas (IBGE, estimativa de 2026)', { pro: 'tabela 6579 · variável 9324 · Censo 2022: 6.211.223 pessoas (tabela 4714, variável 93)' })}
+    </div></section>`;
+  const barra = (rot, v, foco) => `<div class="p40-barra${foco ? ' p40-barra--foco' : ''}"><span>${rot}</span><span class="p40-barra-trilho" aria-hidden="true"><i style="--v:${(v / 8) * 100}%"></i></span><span class="num">+${numero(v, 2)}%</span></div>`;
+  const preco = falhou
+    ? `<section class="p40-grupo" aria-labelledby="g-preco"><div class="p40-grupo-cab"><h3 id="g-preco">Preço de comer fora</h3><p>inflação de 12 meses</p></div>${p40FalhaIbge('Inflação do lanche e da refeição')}</section>`
+    : `<section class="p40-grupo" aria-labelledby="g-preco"><div class="p40-grupo-cab"><h3 id="g-preco">Preço de comer fora</h3><p>inflação de 12 meses até set/2026</p></div>
+      <ul class="p40-barras">
+        <li class="p40-barra-item"><b>Lanche</b>${barra('Região do Rio', 7.75, true)}${barra('Brasil', 7.59, false)}</li>
+        <li class="p40-barra-item"><b>Refeição</b>${barra('Região do Rio', 2.66, true)}${barra('Brasil', 5.01, false)}</li>
+      </ul>
+      <p class="lite-frase">O lanche subiu um pouco mais na região do Rio do que no Brasil; a refeição subiu bem menos.</p>
+      <p class="p40-num-f">IBGE · IPCA, 12 meses até set/2026 · região metropolitana do Rio de Janeiro e Brasil</p>
+      <p class="p40-num-c so-pro">tabela 7060 · variável 2265 · subitens 1201003 (lanche) e 1201001 (refeição) · N7 (região metropolitana) e N1 (Brasil)</p>
+    </section>`;
+  const tempo = P40_TEMPO.map((t) => `<li class="p40-dia"><b>${t.dia} ${t.data}</b>${ic(t.ic)}<span>${t.cond}</span><span><span class="num">${t.min}°</span> a <span class="num">${t.max}°</span></span></li>`).join('');
+  const datas = P40_DATAS.map((d) => `<li class="p40-data"><span class="num">${d.quando}</span><span>${d.o}<small>${d.tipo}</small></span></li>`).join('');
+  const semana = `<section class="p40-grupo" aria-labelledby="g-semana"><div class="p40-grupo-cab"><h3 id="g-semana">A semana que vem</h3><p>tempo, feriados e datas</p></div>
+      <div class="p40-duas">
+        <div><h4>Previsão do tempo · Rio de Janeiro</h4><ul class="p40-tempo" aria-label="Previsão por dia">${tempo}</ul><p class="p40-num-f">CPTEC/INPE, pela BrasilAPI · previsão por dia, lida hoje às 06:10</p><p class="p40-num-c so-pro">/api/cptec/v1/clima/previsao/241/6 · cidade 241 (Rio de Janeiro) · renova todo dia</p></div>
+        <div><h4>Feriados e datas</h4><ul class="p40-datas">${datas}</ul><p class="p40-num-f">Feriados: BrasilAPI (só os nacionais) · datas comerciais: calendário do Liame</p><p class="p40-num-c so-pro">/api/feriados/v1/2026 · os feriados do estado e da cidade ainda não têm fonte pública gratuita (base §19.4)</p></div>
+      </div>
+      <p class="p40-nota">${ic('i-info')}<span>Chuva e frio costumam aumentar o pedido em casa (referência do setor); a prova vem do caixa da própria loja.</span></p>
+    </section>`;
+  const ref = `<section class="p40-grupo" aria-labelledby="g-ref"><div class="p40-grupo-cab"><h3 id="g-ref">Referência do setor</h3><p>da imprensa; não é o número da sua loja</p></div>
+      <ul class="p40-ref">
+        <li><span><span class="st st--espera">Referência do setor (imprensa)</span></span><span><b>R$ 46,70</b> de tíquete médio no Brasil em mar/2026, 2,9% acima de 12 meses antes.</span><small>Instituto Foodservice Brasil (IFB), divulgado à imprensa (Mercado &amp; Consumo, 11/05/2026).</small><small class="so-pro">Em jun/2026, R$ 44,70 (mesma fonte, outra divulgação) · renova na revisão de 90 dias da base.</small></li>
+        <li><span><span class="st st--espera">Referência do setor (imprensa)</span></span><span>Em 2025, o jantar teve 487,7 milhões de pedidos no iFood e o almoço, 278 milhões; de sexta a domingo, cerca de 37% acima dos outros dias; no hambúrguer, o pico da tarde fica perto das 17h.</span><small>iFood, retrospectivas e notícias divulgadas à imprensa; os números variam entre as notícias. Vale até haver o dado da sua loja.</small></li>
+      </ul></section>`;
+  const pedidos = p40.marca.regem
+    ? 'Aparece com os pedidos do Regem (R3): o Liame já recebe os pedidos; falta a conta por hora e o tíquete.'
+    : 'Aparece com os pedidos do Regem. Sem ele, a medida de pedido é o cupom exclusivo de cada campanha.';
+  const ainda = `<section class="p40-grupo" aria-labelledby="g-ainda"><div class="p40-grupo-cab"><h3 id="g-ainda">Ainda não</h3><p>o que depende de outra entrega</p></div>
+      <ul class="p40-ainda">
+        <li><span class="st st--espera">Ainda não</span><span><b>Pedidos por hora e tíquete médio da loja</b><small>${pedidos}</small></span></li>
+        <li><span class="st st--espera">Ainda não</span><span><b>Pessoas no raio, na Meta</b><small>Aparece com a conta de anúncios: a Meta estima quantas pessoas há no raio, por faixa de idade, antes de gastar (R6).</small></span></li>
+        <li><span class="st st--espera">Ainda não</span><span><b>Concorrentes no raio</b><small>Aparece com o servidor de mapas próprio (R8). Hoje, a conta é a do município.</small></span></li>
+        <li><span class="st st--espera">Ainda não</span><span><b>Bairros para atacar e para defender</b><small>Pede os pedidos por bairro do Regem, somados e sem identificar ninguém (R3, D-RG-8).</small></span></li>
+      </ul></section>`;
+  return `<div class="p40-grupos">${gente}${bolso}${conc}${preco}${semana}${ref}${ainda}</div>`;
+}
+
+function p40Lendo(loja) {
+  const outra = p40.lojas.some((l) => l.id !== loja.id && l.end && p40.raiox[l.id] === 'lido' && l.end.ibge === loja.end.ibge);
+  const passo = (cls, icone, txt, st) => `<li class="${cls}">${icone}<span>${txt}</span>${st}</li>`;
+  const ok = (t) => `<span class="st st--concluido">${t}</span>`;
+  const lendo = '<span class="st st--info">Lendo</span>';
+  const fila = '<span class="st st--espera">Na fila</span>';
+  const gira = '<span class="girando" aria-hidden="true"></span>';
+  return `<div class="p40-lendo" aria-busy="true">
+      <div class="p40-lendo-cab"><span class="girando" aria-hidden="true"></span><h3 tabindex="-1">Lendo a região da ${esc(loja.nome)}…</h3></div>
+      <p class="lite-frase">Leva até 1 minuto: o Liame consulta o IBGE, o CPTEC e a BrasilAPI pelos códigos do bairro e do município. A tela atualiza sozinha; você pode sair daqui.</p>
+      <ul class="p40-passos">
+        ${passo('ok', ic('i-check-circle'), `Os códigos pelo CEP: ${esc(loja.end.municipio)} (<span class="num">${esc(loja.end.ibge)}</span>), ${esc(loja.end.bairro)}`, ok('Pronto'))}
+        ${outra ? passo('ok', ic('i-check-circle'), `O município no IBGE: restaurantes, renda e preços (já lidos para o ${esc(loja.end.municipio)})`, ok('Pronto')) : passo('', gira, 'O município no IBGE: restaurantes, renda e preços', lendo)}
+        ${passo('', outra ? gira : ic('i-clock'), `O bairro no Censo 2022: ${esc(loja.end.bairro)}`, outra ? lendo : fila)}
+        ${passo('', ic('i-clock'), 'A semana que vem: previsão, feriados e datas', fila)}
+      </ul>
+      <div class="p40-esq-nums" aria-hidden="true">${'<span><span class="esqueleto esqueleto--alto"></span><span class="esqueleto"></span><span class="esqueleto esqueleto--medio"></span></span>'.repeat(4)}</div>
+    </div>`;
+}
+
+function p40CardRegiao() {
+  const s = p40;
+  const comEnd = s.lojas.filter((l) => l.end);
+  if (!comEnd.length) {
+    return `<section class="card p40-card" aria-labelledby="p40-b-t"><div class="p40-card-cab"><div><h2 id="p40-b-t" tabindex="-1">Sua região <span class="st st--espera">Sem IA</span></h2></div></div>
+      ${p40Vazio('i-map', 'Sua região aparece quando a loja estiver no mapa', 'Com o endereço, o Liame lê o IBGE, o CPTEC e a BrasilAPI pelos códigos do bairro e do município e mostra aqui a gente, o bolso, a concorrência, os preços e a semana que vem, cada número com a fonte e o período.')}</section>`;
+  }
+  if (!comEnd.some((l) => l.id === s.sel)) s.sel = comEnd[0].id;
+  const loja = p40Loja(s.sel);
+  let estado = s.raiox[loja.id] || 'lendo';
+  if (estado !== 'lendo' && loja.end.bairro !== 'Tijuca') estado = 'lendo';
+  const seletor = comEnd.length > 1
+    ? `<div class="p40-lojas-seg"><span class="eixo-nota" id="p40-seg-rot">Loja</span><div class="seg" role="group" aria-labelledby="p40-seg-rot">${comEnd.map((l) => `<button type="button" data-p40-sel="${l.id}" aria-pressed="${l.id === s.sel}">${esc(l.nome)} · ${esc(l.end.bairro)}</button>`).join('')}</div></div>`
+    : '';
+  const frescor = estado === 'lendo'
+    ? '<span class="p40-frescor"><span class="ponto ponto--off" aria-hidden="true"></span>Lendo agora</span>'
+    : estado === 'falhou'
+      ? '<span class="p40-frescor"><span class="ponto ponto--atraso" aria-hidden="true"></span>Lida hoje às 14:00 · uma fonte falhou</span>'
+      : `<span class="p40-frescor"><span class="ponto" aria-hidden="true"></span>Lida ${esc(s.quando)}</span>`;
+  const fontesBt = estado === 'lendo' ? '' : `<button class="btn btn--sm" type="button" data-p40-fontes aria-haspopup="dialog">${ic('i-file')}Ver as fontes</button>`;
+  let corpo;
+  if (estado === 'lendo') corpo = p40Lendo(loja);
+  else {
+    const falha = estado === 'falhou'
+      ? p40Faixa('atencao', 'i-alert', 'O IBGE não respondeu', 'Os restaurantes do município e a inflação de comer fora ficaram de fora. Tentamos de novo em 1 hora, às 15:00; os outros números valem.', '<button class="btn btn--sm" type="button" data-p40-tentar>Tentar agora</button>')
+      : '';
+    corpo = `${falha}${p40Grupos(loja, estado === 'falhou')}<div class="p40-loja-acoes">${p40Detalhes('#p40-raiox')}</div>`;
+  }
+  return `<section class="card p40-card" id="p40-raiox" aria-labelledby="p40-b-t">
+    <div class="p40-card-cab"><div><h2 id="p40-b-t" tabindex="-1">Sua região <span class="st st--espera">Sem IA</span></h2><p class="card-sub">Calculada pelo sistema com dados públicos${comEnd.length > 1 ? ', uma loja por vez' : ` em volta da ${esc(loja.nome)}`}. Cada número diz de onde veio e de quando é.</p></div><div class="p40-cab-acoes">${frescor}${fontesBt}</div></div>
+    ${seletor}
+    ${corpo}
+  </section>`;
+}
+
+/* ---------- a LIA, por regra ---------- */
+function p40CardLia() {
+  const loja = p40Loja(p40.sel);
+  if (!loja || !loja.end) return '';
+  const est = p40.raiox[loja.id];
+  if (est !== 'lido' && est !== 'falhou') return '';
+  const b = loja.end.bairro;
+  const meio = est === 'falhou'
+    ? '<p>O IBGE não respondeu hoje às 14:00: os restaurantes do município e a inflação de comer fora voltam quando ele responder (nova tentativa às 15:00).</p>'
+    : `<p><b>Concorrência:</b> o Rio de Janeiro tem 16.242 restaurantes e similares, 24 para cada 10 mil habitantes <small>(IBGE, Cadastro Central de Empresas, 2024)</small>.</p>
+       <p><b>Preço de comer fora</b>, em 12 meses até setembro: o lanche subiu 7,75% na região do Rio (Brasil: 7,59%) e a refeição, 2,66% (Brasil: 5,01%) <small>(IBGE, IPCA)</small>.</p>`;
+  const pedidos = p40.marca.regem ? 'pedidos por hora e tíquete médio (com os pedidos do Regem)' : 'pedidos por hora e tíquete médio (só com o Regem)';
+  return `<section class="card p40-card" aria-labelledby="p40-lia-t">
+    <div class="p40-card-cab"><div><h2 id="p40-lia-t" tabindex="-1">Pergunte à LIA</h2><p class="card-sub">Quando alguém pergunta à LIA “como é a minha região?”, em qualquer tela, a resposta sai por regra, com os números e as fontes de Sua região.</p></div></div>
+    <div class="p40-conversa">
+      <div class="p40-fala p40-fala--pessoa"><p class="p40-bolha">Como é a minha região?</p><span class="eixo-nota">${esc(p40.pessoa.nome)} · 14:05</span></div>
+      <article class="p40-resp" aria-labelledby="p40-resp-t">
+        <div class="p40-resp-cab"><span class="av-sistema" aria-hidden="true">${ic('i-file')}</span><div><h3 id="p40-resp-t">Resumo do sistema</h3><p><span class="st st--espera">Sem IA</span><span>montado por regra, com os números de Sua região · ${esc(loja.nome)}</span></p></div></div>
+        <div class="p40-resp-texto">
+          <p><b>Gente:</b> a ${esc(loja.nome)} fica na ${esc(b)}, Rio de Janeiro: 142.909 pessoas em 9,94 km², 14.378 por km², quase 3 vezes a densidade do Rio <small>(IBGE, Censo 2022)</small>.</p>
+          <p><b>Bolso:</b> a renda mediana do responsável pelo domicílio é R$ 5.500, acima de 87% dos 162 bairros do Rio; o bairro típico tem R$ 2.000 <small>(IBGE, Censo 2022, valor de 2022)</small>.</p>
+          ${meio}
+          <p><b>Semana que vem:</b> chuva na sexta, 13/11 <small>(CPTEC)</small>; feriado no domingo, 15/11, e na sexta, 20/11 <small>(BrasilAPI)</small>; Black Friday em 27/11.</p>
+          <p><b>Ainda não dá para saber:</b> ${pedidos}, pessoas no raio (com a conta de anúncios) e concorrentes no raio.</p>
+        </div>
+        <div class="p40-resp-acoes"><button class="btn btn--sm" type="button" data-p40-ir-regiao>${ic('i-map')}Ver Sua região</button><button class="btn btn--sm" type="button" data-p40-fontes aria-haspopup="dialog">${ic('i-file')}Ver as fontes</button></div>
+        <p class="p40-resp-nota">Resumo montado pelo sistema, por regra, com os mesmos números. Nenhuma IA escreveu este texto.</p>
+      </article>
+    </div>
+  </section>`;
+}
+
+/* ---------- notas do protótipo: Minha marca e as decisões ---------- */
+function p40CardMk() {
+  const n = p40.lojas.filter((l) => l.end).length;
+  const linha = n === 0 ? 'Nenhuma loja no mapa ainda'
+      : `${n} ${n === 1 ? 'loja' : 'lojas'} no mapa: ${p40.lojas.filter((l) => l.end).map((l) => `${esc(l.nome)}, até ${km(l.raio)} km`).join('; ')}`;
+  return `<section class="card p40-proto" aria-labelledby="p40-mk-t">
+    <details class="p40-detalhe"><summary id="p40-mk-t">Nota do protótipo: como a parte Região aparece em Minha marca</summary>
+      <p class="lite-frase">A parte Região do dossiê (o texto livre e a retirada no balcão) não muda e continua sendo o que os funcionários leem. Ela ganha a linha das lojas no mapa e o botão que abre esta página.</p>
+      <div class="p40-mk">
+        <div class="p40-mk-cab"><span class="p40-mk-ic" aria-hidden="true">${ic('i-map-pin')}</span><h3>Região</h3><span class="st st--concluido">${ic('i-check', 'ic ic-sm')}Confirmada</span></div>
+        <div class="p40-mk-resumo"><p>Tijuca, Maracanã e Vila Isabel; o pedido sai pelo cardápio digital e pelo iFood.</p><p>Tem retirada no balcão.</p><p class="p40-mk-novo">${ic('i-map')}<span>${linha}</span></p></div>
+        <div class="p40-loja-acoes"><button class="btn btn--sm" type="button" data-fora-p40="Abre a gaveta da parte Região (o P6, que não muda).">Editar</button><button class="btn btn--sm" type="button" data-fora-p40="É esta página.">Abrir a região</button></div>
+      </div>
+    </details>
+  </section>`;
+}
+function p40Decisoes() {
+  const lista = window.P40_DECISOES.map((d) => `<li class="p40-dec"><p class="p40-dec-cab"><code>${esc(d.id)}</code><b>${esc(d.titulo)}</b></p><p>${esc(d.texto)}</p>${d.porque ? `<p>Por quê: ${esc(d.porque)}</p>` : ''}<p class="rec">Recomendo: ${esc(d.rec)}</p></li>`).join('');
+  return `<section class="card p40-proto p40-decisoes" aria-labelledby="p40-dec-t"><h2 id="p40-dec-t">Decisões do protótipo (D-RG-11 a D-RG-20)</h2><p class="lite-frase">Aprovadas pelo dono em 11/11/2026, todas como recomendadas, junto com o plano e as D-RG-1 a D-RG-10.</p><ul class="p40-dec-lista">${lista}</ul></section>`;
+}
+
+/* ---------- a página ---------- */
+function p40Render({ focar = null } = {}) {
+  const s = p40;
+  $('#ctx-av').textContent = s.marca.ini; $('#ctx-marca').textContent = s.marca.nome; $('#ctx-papel').textContent = s.pessoa.papel;
+  $('#us-av').textContent = s.pessoa.ini; $('#us-nome').textContent = s.pessoa.nome; $('#us-papel').textContent = `${s.pessoa.papel} · ${s.marca.nome}`;
+  $('#trilha-marca').textContent = s.marca.nome;
+  $('#p40-intro').textContent = `Onde cada loja da ${s.marca.nome} fica, até onde entrega e como é a região em volta. Os números vêm de fontes públicas e são calculados pelo sistema, sem IA.`;
+  let corpo;
+  if (!s.funcao) {
+    corpo = `<div class="card">${p40Vazio('i-lock', 'A região ainda não está liberada para a sua empresa', 'Quando a distribuição do Liame liberar, esta página mostra cada loja no mapa, o raio de entrega e o retrato da região em volta, com a fonte de cada número. A parte Região de Minha marca (o texto e a retirada no balcão) continua valendo.')}</div>`;
+  } else {
+    const leitura = s.podeEditar ? '' : p40Faixa('acao', 'i-eye', 'Você vê a região, mas não muda', 'Só o Dono e os Administradores põem a loja no mapa e mudam o raio e as áreas de entrega.');
+    corpo = leitura + p40CardLojas() + p40CardRegiao() + p40CardLia();
+  }
+  $('#regiao').innerHTML = `<div class="p40">${corpo}${p40CardMk()}${p40Decisoes()}</div>`;
+  if (focar) { const a = $(focar); if (a) a.focus({ preventScroll: false }); }
+}
+
+/* ---------- a gaveta: pôr a loja no mapa ---------- */
+function p40AbrirGaveta({ lojaId = null, modo = 'cep', ajustar = false }, origem) {
+  const loja = lojaId ? p40Loja(lojaId) : null;
+  const criar = !loja;
+  const g = { lojaId, criar, modo: p40.perfis.length ? modo : 'cep', perfilId: null, cep: '', numero: '', compl: '', consulta: null, achado: null, raio: loja ? loja.raio : 3, areas: loja ? [...loja.areas] : [], nome: '', nomeMexido: false, erros: {}, ajustar };
+  if (loja && loja.end) {
+    if (loja.origem === 'perfil' && !ajustar) { g.modo = 'perfil'; g.perfilId = loja.perfil; }
+    else { g.modo = 'cep'; g.cep = loja.end.cep; g.numero = loja.end.numero; g.compl = loja.end.compl; g.consulta = 'ok'; g.achado = { ...P40_CEP['20520054'], rua: loja.end.rua, bairro: loja.end.bairro }; }
+  } else if (g.modo === 'perfil' && p40.perfis.length === 1 && !p40Usado(p40.perfis[0], lojaId)) {
+    g.perfilId = p40.perfis[0];
+    if (!g.areas.length) g.areas = [...P40_PERFIS[g.perfilId].areas];
+  }
+  if (criar && g.perfilId) g.nome = P40_PERFIS[g.perfilId].nome;
+  p40.g = g;
+  p40GavetaRender();
+  abrirDialogo($('#dlg-loja'), origem);
+  const alvo = ajustar ? '#p40-numero' : g.modo === 'cep' ? '#p40-cep' : (p40.perfis.length > 1 && !g.perfilId ? 'input[name="p40-perfil"]:not([disabled])' : '#dlg-loja-t');
+  setTimeout(() => { const a = $(alvo); if (a) a.focus(); }, 0);
+}
+
+function p40PontoTxt(g) {
+  if (g.modo === 'perfil') return g.perfilId ? 'O Liame acha o ponto pelo endereço do perfil (© OpenStreetMap) ao salvar.' : '';
+  if (g.consulta !== 'ok') return '';
+  const n = g.numero.trim();
+  if (!n) return 'Digite o número para o Liame achar o ponto da loja no mapa.';
+  if (/^s\/?n$/i.test(n)) return `Sem o número, o ponto fica no centro da ${g.achado.bairro}. Sua região vale; para anunciar por raio, o ponto precisa ser o da loja.`;
+  return 'O Liame acha o ponto pelo endereço (© OpenStreetMap) ao salvar.';
+}
+
+function p40GavetaRender(foco) {
+  const g = p40.g; if (!g) return;
+  const loja = g.lojaId ? p40Loja(g.lojaId) : null;
+  const titulo = g.criar ? 'Criar a loja e pôr no mapa' : loja && loja.end ? `${loja.nome} no mapa` : `Pôr a ${loja.nome} no mapa`;
+  const err = (k) => g.erros[k] ? `<p class="campo-erro" id="p40-e-${k}">${esc(g.erros[k])}</p>` : '';
+  const inv = (k) => g.erros[k] ? ` aria-invalid="true" aria-describedby="p40-e-${k}"` : '';
+
+  const origem = p40.perfis.length ? `<fieldset class="p40-g-bloco"><legend>De onde vem o endereço</legend><div class="opcoes">
+      <label class="opcao"><input type="radio" name="p40-origem" value="perfil"${g.modo === 'perfil' ? ' checked' : ''}><span class="opcao-txt"><b>Do seu Perfil da Empresa no Google</b><span>O Google dá o endereço e as áreas de entrega; o Liame acha o ponto no mapa pelo endereço.</span></span></label>
+      <label class="opcao"><input type="radio" name="p40-origem" value="cep"${g.modo === 'cep' ? ' checked' : ''}><span class="opcao-txt"><b>Informar pelo CEP</b><span>Você digita o CEP e o número; o Liame completa a rua, o bairro, o município e a UF.</span></span></label>
+    </div></fieldset>` : '';
+
+  let endereco = '';
+  if (g.modo === 'perfil') {
+    const perfis = p40.perfis.map((id) => {
+      const p = P40_PERFIS[id]; const usado = p40Usado(id, g.lojaId);
+      return `<label class="opcao"${usado ? ' aria-disabled="true"' : ''}><input type="radio" name="p40-perfil" value="${id}"${g.perfilId === id ? ' checked' : ''}${usado ? ' disabled' : ''}><span class="opcao-txt"><b>${esc(p.nome)}</b><span>${esc(p.end.rua)}, ${esc(p.end.numero)} · ${esc(p.end.bairro)} · CEP ${esc(p.end.cep)}</span><span>${p.areas.length} áreas de entrega${usado ? ` · já é o perfil da loja ${esc(usado.nome)}` : ''}</span></span></label>`;
+    }).join('');
+    const p = g.perfilId ? P40_PERFIS[g.perfilId] : null;
+    const achado = p ? `<div class="p40-achado"><dl class="p40-dl"><div><dt>Endereço</dt><dd>${esc(p.end.rua)}, ${esc(p.end.numero)}</dd></div><div><dt>Bairro</dt><dd>${esc(p.end.bairro)}</dd></div><div><dt>Município</dt><dd>${esc(p.end.municipio)} – ${esc(p.end.uf)} · CEP <span class="num">${esc(p.end.cep)}</span></dd></div><div><dt>O ponto</dt><dd>${p40PontoTxt(g)}</dd></div></dl><span class="eixo-nota">Lido do Perfil do Google hoje às 06:00. Para mudar o endereço que o cliente vê, mude no Google.</span></div>` : '';
+    endereco = `<fieldset class="p40-g-bloco"><legend>${p40.perfis.length > 1 ? 'Qual perfil é desta loja?' : 'O perfil desta loja'}</legend>${p40.perfis.length > 1 ? '<p class="campo-dica">A marca tem mais de um Perfil da Empresa no Google. Cada perfil vale para uma loja.</p>' : ''}<div class="p40-perfis opcoes">${perfis}</div>${err('perfil')}</fieldset>${achado}`;
+  } else {
+    const buscando = g.consulta === 'buscando';
+    const naoAchado = g.consulta === 'nao-achado' ? `<p class="campo-erro" id="p40-e-cep">Não achamos o CEP ${esc(g.cep)} nos Correios. Confira os números.</p><a class="campo-dica" href="https://buscacepinter.correios.com.br/app/endereco/index.php" target="_blank" rel="noopener">Não sabe o CEP? Busque pelo endereço no site dos Correios ${ic('i-external', 'ic ic-sm')}</a>` : '';
+    const fora = g.consulta === 'fora' ? `<div class="dialogo-erro" role="alert">${ic('i-alert-circle')}<span>O serviço de CEP não respondeu. Nada foi perdido: tente de novo em instantes. <button class="link-bt" type="button" data-p40-buscar>Tentar de novo</button></span></div>` : '';
+    const a = g.consulta === 'ok' ? g.achado : null;
+    const achado = a ? `<div class="p40-achado" aria-live="polite"><dl class="p40-dl"><div><dt>Rua</dt><dd>${esc(a.rua)}</dd></div><div><dt>Bairro</dt><dd>${esc(a.bairro)}</dd></div><div><dt>Município</dt><dd>${esc(a.municipio)} – ${esc(a.uf)}<span class="so-pro"> · código IBGE <span class="num">${esc(a.ibge)}</span></span></dd></div><div><dt>O ponto</dt><dd id="p40-ponto-txt">${esc(p40PontoTxt(g))}</dd></div></dl><span class="eixo-nota">Completado pelo CEP (ViaCEP)${a.faixa ? `: este CEP vale para os números ${esc(a.faixa)}` : ''}.</span></div>
+      <div class="p40-num-compl"><div class="campo"><label for="p40-numero">Número</label><input class="input" id="p40-numero" value="${esc(g.numero)}" autocomplete="off" maxlength="10"${inv('numero')}>${err('numero')}</div><div class="campo"><label for="p40-compl">Complemento <span class="campo-dica">opcional</span></label><input class="input" id="p40-compl" value="${esc(g.compl)}" autocomplete="off" maxlength="60"></div></div>` : '';
+    endereco = `<fieldset class="p40-g-bloco"><legend>O endereço da loja</legend>
+      <div class="p40-cep"><div class="campo"><label for="p40-cep">CEP</label><input class="input num" id="p40-cep" inputmode="numeric" autocomplete="off" maxlength="9" placeholder="00000-000" value="${esc(g.cep)}"${g.consulta === 'nao-achado' ? ' aria-invalid="true" aria-describedby="p40-e-cep"' : inv('cep')}></div><button class="btn" type="button" data-p40-buscar${buscando ? ' disabled' : ''}>${buscando ? '<span class="girando" aria-hidden="true"></span>Buscando…' : `${ic('i-search')}Buscar`}</button></div>
+      ${g.consulta === 'nao-achado' ? naoAchado : err('cep')}${fora}
+      ${a ? '' : '<p class="campo-dica">O Liame completa a rua, o bairro, o município e a UF pelo CEP. Depois, você põe o número.</p>'}
+      ${achado}</fieldset>`;
+  }
+
+  const bairroDaLoja = g.modo === 'perfil' ? (g.perfilId ? P40_PERFIS[g.perfilId].end.bairro : '') : (g.achado ? g.achado.bairro : '');
+  const nome = g.criar ? `<div class="campo"><label for="p40-nome">Nome da loja</label><input class="input" id="p40-nome" value="${esc(g.nome)}" maxlength="80" placeholder="${bairroDaLoja ? `Loja ${esc(bairroDaLoja)}` : 'Aparece depois do endereço'}"${inv('nome')}>${err('nome')}<p class="campo-dica">${g.perfilId ? 'Veio do Perfil do Google.' : 'Sem perfil, o Liame usa “Loja” e o bairro.'} Se o Regem for conectado depois, ele se liga a esta loja pelo mesmo nome: mudando o nome aqui, use o mesmo nome no Regem.</p></div>` : '';
+
+  const raio = `<fieldset class="p40-g-bloco"><legend>Raio de entrega</legend>
+      <div class="p40-raio"><button class="btn btn--icon btn--sm" type="button" data-p40-passo="-1" aria-label="Diminuir o raio em 0,5 km">${ic('i-minus')}</button><input type="range" id="p40-raio" min="1" max="15" step="0.5" value="${g.raio}" aria-label="Raio de entrega" aria-valuetext="${km(g.raio)} km" aria-describedby="p40-raio-dica"><button class="btn btn--icon btn--sm" type="button" data-p40-passo="1" aria-label="Aumentar o raio em 0,5 km">${ic('i-plus')}</button></div>
+      <p><span class="p40-raio-valor" id="p40-raio-v">${km(g.raio)} km</span> <span class="campo-dica" id="p40-raio-dica">De 1 a 15 km, em passos de 0,5 km. Começa em 3 km.</span></p>
+      <div class="p40-g-mapa"><div id="p40-g-aneis">${p40Aneis(g.raio, 'endereco', 'p40-g')}</div><div id="p40-g-leg">${p40Legenda(g.raio)}</div></div>
+      <p class="p40-osm">© ${OSM_LINK} · desenho em escala</p>
+    </fieldset>`;
+
+  const deOnde = g.modo === 'perfil' && g.perfilId ? 'Vieram do Perfil do Google (o Google aceita até 20). Tirar ou acrescentar aqui não muda o Perfil no Google.' : 'Os bairros onde a loja entrega. Comece pelo bairro da loja.';
+  const areas = `<fieldset class="p40-g-bloco"><legend>Áreas de entrega</legend><p class="campo-dica">${deOnde}</p>
+      ${g.areas.length ? `<ul class="p40-areas">${g.areas.map((a, i) => `<li>${esc(a)}<button class="btn btn--icon btn--ghost" type="button" data-p40-tirar="${i}" aria-label="Tirar ${esc(a)}">${ic('i-x', 'ic ic-sm')}</button></li>`).join('')}</ul>` : '<p class="campo-dica">Nenhuma área ainda.</p>'}
+      <div class="p40-add"><input class="input" id="p40-area-nova" list="p40-bairros" placeholder="Outro bairro" aria-label="Acrescentar um bairro" autocomplete="off"${inv('areas')}><button class="btn" type="button" data-p40-acrescentar>${ic('i-plus')}Acrescentar</button></div>${err('areas')}
+      <datalist id="p40-bairros">${P40_BAIRROS_RIO.filter((b) => !g.areas.includes(b)).map((b) => `<option value="${esc(b)}"></option>`).join('')}</datalist>
+    </fieldset>`;
+
+  const criarNota = g.criar ? `<p class="p40-ia">${ic('i-store')}<span>A ${esc(p40.marca.nome)} ainda não tem loja no Liame. Ao salvar, a loja nasce com o nome abaixo e o endereço desta gaveta.</span></p>` : '';
+  const ajustarNota = g.ajustar && loja && loja.origem === 'perfil' ? `<p class="p40-nota">${ic('i-info')}<span>O endereço veio do Perfil do Google. Corrigir aqui muda só o Liame; o Perfil no Google continua como está.</span></p>` : '';
+  $('#p40-loja-form').innerHTML = `<div class="dialogo-cab"><div class="dlg-titulo"><p class="rotulo-marca">Minha marca · Região</p><h2 id="dlg-loja-t" tabindex="-1">${esc(titulo)}</h2></div><button class="btn btn--icon btn--ghost" type="button" data-fechar aria-label="Fechar">${ic('i-x')}</button></div>
+    <div class="dialogo-corpo">${criarNota}${ajustarNota}${origem}${endereco}${nome}${raio}${areas}
+      ${p40NotaIA()}
+      <p class="p40-nota">${ic('i-info')}<span>Salvar não pede o código do app: é dado da empresa, não gasta nem publica nada. Fica na auditoria com o seu nome.</span></p>
+    </div>
+    <div class="dialogo-acoes"><button class="btn" type="button" data-fechar>Cancelar</button><button class="btn btn--primary" type="submit">${g.criar ? 'Criar a loja e salvar' : 'Salvar a loja no mapa'}</button></div>`;
+  if (foco) { const f = $(foco, $('#dlg-loja')); if (f) f.focus(); }
+}
+
+function p40AtualizarRaio() {
+  const g = p40.g;
+  $('#p40-raio-v').textContent = `${km(g.raio)} km`;
+  const r = $('#p40-raio'); r.value = String(g.raio); r.setAttribute('aria-valuetext', `${km(g.raio)} km`);
+  $('#p40-g-aneis').innerHTML = p40Aneis(g.raio, 'endereco', 'p40-g');
+  $('#p40-g-leg').innerHTML = p40Legenda(g.raio);
+}
+
+function p40Buscar() {
+  const g = p40.g;
+  const d = g.cep.replace(/\D/g, '');
+  if (d.length !== 8) { g.consulta = null; g.achado = null; g.erros = { cep: 'Digite os 8 números do CEP.' }; p40GavetaRender('#p40-cep'); return; }
+  g.erros = {}; g.consulta = 'buscando'; g.achado = null;
+  p40GavetaRender();
+  const pedido = ++p40.seq;
+  setTimeout(() => {
+    if (!p40.g || pedido !== p40.seq) return;
+    if (d === '00000000') { g.consulta = 'nao-achado'; anunciar('CEP não encontrado.'); }
+    else if (d === '99999999') { g.consulta = 'fora'; anunciar('O serviço de CEP não respondeu.'); }
+    else {
+      g.consulta = 'ok'; g.achado = { ...P40_CEP['20520054'] };
+      if (!g.areas.length) g.areas = [g.achado.bairro];
+      if (g.criar && !g.nomeMexido) g.nome = `Loja ${g.achado.bairro}`;
+      anunciar(`CEP encontrado: ${g.achado.rua}, ${g.achado.bairro}, ${g.achado.municipio}. Agora, o número.`);
+    }
+    p40GavetaRender(g.consulta === 'ok' ? '#p40-numero' : '#p40-cep');
+  }, 450);
+}
+
+function p40Salvar() {
+  const g = p40.g; const erros = {};
+  let end = null, perfil = null;
+  if (g.modo === 'perfil') {
+    if (!g.perfilId) erros.perfil = 'Escolha o perfil desta loja.';
+    else { end = { ...P40_PERFIS[g.perfilId].end }; perfil = g.perfilId; }
+  } else {
+    if (g.consulta !== 'ok') erros.cep = g.consulta === 'fora' ? 'O serviço de CEP não respondeu. Tente de novo antes de salvar.' : g.consulta === 'nao-achado' ? 'Confira o CEP: este não foi encontrado.' : 'Busque o CEP antes de salvar.';
+    else if (!g.numero.trim()) erros.numero = 'Digite o número da loja (ou s/n).';
+    if (!erros.cep && !erros.numero) end = { rua: g.achado.rua, numero: g.numero.trim(), compl: g.compl.trim(), bairro: g.achado.bairro, municipio: g.achado.municipio, uf: g.achado.uf, cep: g.cep, ibge: g.achado.ibge };
+  }
+  const nome = g.criar ? (g.nome.trim() || (perfil ? P40_PERFIS[perfil].nome : end ? `Loja ${end.bairro}` : '')) : null;
+  if (g.criar && !nome && !erros.cep && !erros.perfil) erros.nome = 'Dê um nome à loja.';
+  if (!g.areas.length) erros.areas = 'Deixe pelo menos uma área de entrega.';
+  if (Object.keys(erros).length) {
+    g.erros = erros;
+    const ordem = [['perfil', 'input[name="p40-perfil"]:not([disabled])'], ['cep', '#p40-cep'], ['numero', '#p40-numero'], ['nome', '#p40-nome'], ['areas', '#p40-area-nova']];
+    p40GavetaRender((ordem.find(([k]) => erros[k]) || [])[1]);
+    anunciar(Object.values(erros)[0]);
+    return;
+  }
+  const precisao = g.modo === 'cep' && /^s\/?n$/i.test(end.numero) ? 'bairro' : 'endereco';
+  let loja = g.lojaId ? p40Loja(g.lojaId) : null;
+  const antes = loja && loja.end ? JSON.stringify(loja.end) : '';
+  if (!loja) { loja = { id: `nova-${++p40.seq}`, nome, doRegem: false, criada: true }; p40.lojas.push(loja); }
+  const ponto = (precisao === 'bairro' ? P40_CENTRO : P40_PONTO)[end.bairro] || P40_PONTO.Tijuca;
+  Object.assign(loja, { origem: g.modo === 'perfil' ? 'perfil' : 'cep', perfil, end, coord: { ...ponto, precisao }, raio: g.raio, areas: [...g.areas], salvo: { quem: p40.pessoa.nome, quando: 'hoje, 14:06' } });
+  const mudouEndereco = JSON.stringify(end) !== antes;
+  p40.sel = loja.id;
+  $('#dlg-loja').close('ok');
+  p40.g = null;
+  if (mudouEndereco) {
+    p40.raiox[loja.id] = 'lendo';
+    p40Render({ focar: '#p40-b-t' });
+    toast(g.criar ? `Loja ${loja.nome} criada e posta no mapa. O Liame está lendo a região.` : 'Loja no mapa. O Liame está lendo a região; leva até 1 minuto.');
+    clearTimeout(p40.timer);
+    const id = loja.id, estado = p40.estado;
+    p40.timer = setTimeout(() => {
+      if (!p40 || p40.estado !== estado || p40.raiox[id] !== 'lendo') return;
+      p40.raiox[id] = 'lido'; p40.quando = 'hoje às 14:06';
+      p40Render();
+      anunciar('Sua região está pronta.');
+      toast('Sua região está pronta.');
+    }, 1800);
+  } else {
+    p40Render({ focar: '#p40-a-t' });
+    toast('Salvo. O raio e as áreas de entrega valem a partir de agora.');
+  }
+}
+
+/* ---------- a gaveta das fontes ---------- */
+function p40Fontes() {
+  const loja = p40Loja(p40.sel);
+  const falhou = p40.raiox[loja.id] === 'falhou';
+  const quandoEnd = loja.salvo ? loja.salvo.quando : '—';
+  const api = (lido) => (falhou ? 'não respondeu hoje às 14:00 · nova tentativa às 15:00' : lido);
+  const lista = [
+    { dado: 'Município, bairro e UF pelo CEP', fonte: 'ViaCEP', recorte: `CEP ${loja.end.cep}`, periodo: 'atual', lido: `${quandoEnd}, ao salvar a loja`, pro: 'viacep.com.br/ws/{cep}/json/ · sem chave', renova: 'a cada mudança do endereço' },
+    { dado: 'O ponto da loja no mapa', fonte: '© OpenStreetMap (Nominatim), licença ODbL', recorte: 'o endereço da loja (só aqui; nunca vai para a IA)', periodo: 'atual', lido: `${quandoEnd}, ao salvar a loja`, pro: 'nominatim.openstreetmap.org/search · uma consulta por loja, guardada', renova: 'a cada mudança do endereço' },
+    { dado: 'Pessoas, área e densidade do bairro', fonte: 'IBGE · Censo 2022, agregados por bairro', recorte: `bairro (${loja.end.bairro})`, periodo: '2022', lido: 'arquivo de 20/05/2026, guardado no Liame', pro: 'Agregados_por_bairros_basico_BR · v0001 (pessoas) e AREA_KM2', renova: 'fixo até o próximo Censo' },
+    { dado: 'Renda do responsável pelo domicílio', fonte: 'IBGE · Censo 2022, renda do responsável por bairro', recorte: `bairro (${loja.end.bairro}) e os 162 bairros do Rio`, periodo: '2022 (valor de 2022, sem correção)', lido: 'arquivo de 08/05/2026, guardado no Liame', pro: 'V06006 (mediana) e V06004 (média)', renova: 'fixo até o próximo Censo' },
+    { dado: 'Renda por pessoa e população do município', fonte: 'IBGE · Censo 2022', recorte: 'município (Rio de Janeiro)', periodo: '2022', lido: api('09/11/2026, 06:10'), pro: 'tabelas 10295 (13534 e 13431) e 4714 (93 e 614) · servicodados.ibge.gov.br', renova: 'fixo até o próximo Censo', ibge: true },
+    { dado: 'População estimada', fonte: 'IBGE · Estimativas de População', recorte: 'município (Rio de Janeiro)', periodo: '2026', lido: api('09/11/2026, 06:10'), pro: 'tabela 6579 · variável 9324', renova: 'uma vez por ano', ibge: true },
+    { dado: 'Restaurantes e similares', fonte: 'IBGE · Cadastro Central de Empresas', recorte: 'município (Rio de Janeiro)', periodo: '2024', lido: api('09/11/2026, 06:10'), pro: 'tabela 9528 · variável 706 · CNAE 56.11-2', renova: 'uma vez por ano', ibge: true },
+    { dado: 'Inflação do lanche e da refeição', fonte: 'IBGE · IPCA', recorte: 'região metropolitana do Rio e Brasil', periodo: '12 meses até set/2026', lido: api('09/11/2026, 06:10'), pro: 'tabela 7060 · variável 2265 · subitens 1201003 e 1201001', renova: 'todo mês', ibge: true },
+    { dado: 'Previsão do tempo por dia', fonte: 'CPTEC/INPE, pela BrasilAPI', recorte: 'cidade (Rio de Janeiro)', periodo: 'de 12 a 17/11/2026', lido: 'hoje, 06:10', pro: '/api/cptec/v1/clima/previsao/241/6', renova: 'todo dia' },
+    { dado: 'Feriados nacionais', fonte: 'BrasilAPI (projeto comunitário, sem garantia de serviço)', recorte: 'Brasil', periodo: '2026', lido: '09/11/2026, 06:10', pro: '/api/feriados/v1/2026 · os do estado e da cidade não têm fonte gratuita', renova: 'uma vez por ano' },
+    { dado: 'Datas comerciais', fonte: 'Calendário comercial do Liame', recorte: 'Brasil', periodo: '2026', lido: 'hoje, 06:10', pro: 'tabela do sistema commercial_date', renova: 'quando a Liame atualiza' },
+    { dado: 'Tíquete médio do setor (referência)', fonte: 'Instituto Foodservice Brasil (IFB), pela imprensa', recorte: 'Brasil', periodo: 'mar/2026 (e jun/2026)', lido: 'base de conhecimento, 09/11/2026', pro: 'Mercado & Consumo, 11/05/2026 · número de imprensa nunca decide sozinho', renova: 'na revisão de 90 dias da base' },
+    { dado: 'Horários do delivery (referência)', fonte: 'iFood, retrospectivas na imprensa', recorte: 'Brasil e algumas cidades', periodo: '2025', lido: 'base de conhecimento, 09/11/2026', pro: 'os números variam entre as notícias', renova: 'na revisão de 90 dias da base' },
+  ];
+  const itens = lista.map((f) => {
+    const ruim = falhou && f.ibge;
+    return `<li class="p40-fonte${ruim ? ' p40-fonte--falhou' : ''}"><div class="p40-fonte-cab"><b>${esc(f.dado)}</b>${ruim ? '<span class="st st--perigo"><span class="dot"></span>Não respondeu</span>' : '<span class="st st--concluido"><span class="dot"></span>Em dia</span>'}</div>
+      <dl class="p40-dl"><div><dt>Fonte</dt><dd>${f.fonte.startsWith('©') ? `© ${OSM_LINK} (Nominatim), licença ODbL` : esc(f.fonte)}</dd></div><div><dt>Recorte</dt><dd>${esc(f.recorte)}</dd></div><div><dt>Período</dt><dd>${esc(f.periodo)}</dd></div><div><dt>Lido em</dt><dd>${esc(f.lido)}</dd></div>
+      <div class="so-pro"><dt>Consulta</dt><dd class="num">${esc(f.pro)}</dd></div><div class="so-pro"><dt>Renova</dt><dd>${esc(f.renova)}</dd></div></dl></li>`;
+  }).join('');
+  $('#p40-fontes-corpo').innerHTML = `<div class="dialogo-cab"><div class="dlg-titulo"><p class="rotulo-marca">Sua região · ${esc(loja.nome)}</p><h2 id="dlg-fontes-t" tabindex="-1">As fontes da região</h2></div><button class="btn btn--icon btn--ghost" type="button" data-fechar aria-label="Fechar">${ic('i-x')}</button></div>
+    <div class="dialogo-corpo" id="p40-fontes-lista"><p class="lite-frase">Cada fonte tem um endereço fixo, consultado pelo código do bairro e do município. Os números ficam numa tabela do sistema; a empresa guarda só o recorte dela e o retrato com a data.</p>${falhou ? p40Faixa('atencao', 'i-alert', 'O IBGE não respondeu hoje às 14:00', 'Tentamos de novo em 1 hora; os outros números valem.') : ''}<ul class="p40-fontes">${itens}</ul>${p40Detalhes('#p40-fontes-lista')}</div>
+    <div class="dialogo-acoes"><button class="btn" type="button" data-fechar>Fechar</button></div>`;
+}
+function p40AbrirFontes(origem) {
+  p40Fontes();
+  abrirDialogo($('#dlg-fontes'), origem);
+  setTimeout(() => { const t = $('#dlg-fontes-t'); if (t) t.focus(); }, 0);
+}
+
+/* ---------- os estados ---------- */
+function p40Aplicar(estado, { focar = false } = {}) {
+  clearTimeout(p40 && p40.timer);
+  $$('dialog[open]').forEach((d) => d.close());
+  const s = p40Base();
+  s.estado = estado;
+  p40 = s;
+  const t = s.lojas[0];
+  switch (estado) {
+    case 'vazio-perfil': s.lojas = [lojaSemEndereco('tijuca', 'Mister Burgers Tijuca')]; s.raiox = {}; break;
+    case 'vazio-cep': case 'gaveta-cep': case 'cep-nao-achado': case 'cep-fora':
+      s.perfis = []; s.lojas = [lojaSemEndereco('tijuca', 'Mister Burgers Tijuca')]; s.raiox = {}; break;
+    case 'perfis': s.perfis = ['tijuca', 'penha']; s.lojas = [lojaSemEndereco('tijuca', 'Mister Burgers Tijuca')]; s.raiox = {}; break;
+    case 'bairro': t.coord = { ...P40_CENTRO.Tijuca, precisao: 'bairro' }; break;
+    case 'lendo': t.salvo = { quem: 'Rodrigo', quando: 'hoje, 13:58' }; s.raiox = { tijuca: 'lendo' }; break;
+    case 'falhou': t.salvo = { quem: 'Rodrigo', quando: 'hoje, 13:58' }; s.raiox = { tijuca: 'falhou' }; break;
+    case 'duas':
+      s.lojas.push({ id: 'penha', nome: 'Mister Burgers Penha', doRegem: true, origem: 'cep', perfil: null, end: { ...P40_PERFIS.penha.end }, coord: { ...P40_PONTO.Penha, precisao: 'endereco' }, raio: 4.5, areas: [...P40_PERFIS.penha.areas], salvo: { quem: 'Rodrigo', quando: 'hoje, 13:58' } });
+      s.raiox.penha = 'lendo';
+      break;
+    case 'sem-loja': case 'sem-loja-gaveta':
+      s.marca = { nome: 'Casa Brasa', ini: 'CB', regem: false, pedidos: 'Brendi' };
+      s.pessoa = { nome: 'Marta', ini: 'M', papel: 'Dona' };
+      s.perfis = []; s.lojas = []; s.raiox = {}; s.sel = null;
+      break;
+    case 'leitura': s.podeEditar = false; s.pessoa = { nome: 'Camila', ini: 'C', papel: 'Aprovadora' }; break;
+    case 'desligada': s.funcao = false; break;
+    default: break;
+  }
+  const sel = $('#rev-p40'); if (sel && sel.value !== estado) sel.value = estado;
+  if (estado === 'pro') definirModo('pro', { silencioso: true });
+  p40Render({ focar: focar ? '#h-regiao' : null });
+  const origemA = () => $('[data-p40-por]') || $('#h-regiao');
+  if (estado === 'gaveta-cep' || estado === 'cep-nao-achado' || estado === 'cep-fora') {
+    p40AbrirGaveta({ lojaId: 'tijuca', modo: 'cep' }, origemA());
+    const g = p40.g;
+    if (estado === 'gaveta-cep') { g.cep = '20520-054'; g.consulta = 'ok'; g.achado = { ...P40_CEP['20520054'] }; g.numero = '450'; g.areas = ['Tijuca', 'Maracanã', 'Vila Isabel']; }
+    if (estado === 'cep-nao-achado') { g.cep = '00000-000'; g.consulta = 'nao-achado'; }
+    if (estado === 'cep-fora') { g.cep = '20520-054'; g.consulta = 'fora'; }
+    p40GavetaRender();
+  } else if (estado === 'perfis') {
+    p40AbrirGaveta({ lojaId: 'tijuca', modo: 'perfil' }, origemA());
+  } else if (estado === 'sem-loja-gaveta') {
+    p40AbrirGaveta({ lojaId: null, modo: 'cep' }, origemA());
+    const g = p40.g;
+    g.cep = '20520-054'; g.consulta = 'ok'; g.achado = { ...P40_CEP['20520054'] }; g.numero = '300'; g.areas = ['Tijuca', 'Maracanã']; g.nome = 'Loja Tijuca';
+    p40GavetaRender();
+  } else if (estado === 'fontes') {
+    p40AbrirFontes($('[data-p40-fontes]'));
+  } else if (estado === 'lia') {
+    const t2 = $('#p40-lia-t'); if (t2) { t2.scrollIntoView({ block: 'start' }); t2.focus({ preventScroll: true }); }
+  }
+}
+
+/* ---------- eventos ---------- */
+function p40Iniciar() {
+  const sel = $('#rev-p40');
+  sel.replaceChildren(...Object.entries(P40_ESTADOS).map(([id, rot]) => new Option(rot, id)));
+  sel.addEventListener('change', () => p40Aplicar(sel.value, { focar: true }));
+
+  document.addEventListener('click', (ev) => {
+    const alvo = ev.target instanceof Element ? ev.target : null; if (!alvo || !p40) return;
+    const fora = alvo.closest('[data-fora-p40]');
+    if (fora) { toast(fora.dataset.foraP40); return; }
+    const por = alvo.closest('[data-p40-por]');
+    if (por) { p40AbrirGaveta({ lojaId: por.dataset.p40Loja || null, modo: por.dataset.p40Por }, por); return; }
+    const ed = alvo.closest('[data-p40-editar]');
+    if (ed) { p40AbrirGaveta({ lojaId: ed.dataset.p40Editar }, ed); return; }
+    const aj = alvo.closest('[data-p40-ajustar]');
+    if (aj) { p40AbrirGaveta({ lojaId: aj.dataset.p40Ajustar, modo: 'cep', ajustar: true }, aj); return; }
+    const sl = alvo.closest('[data-p40-sel]');
+    if (sl) { p40.sel = sl.dataset.p40Sel; p40Render({ focar: `[data-p40-sel="${p40.sel}"]` }); return; }
+    const fo = alvo.closest('[data-p40-fontes]');
+    if (fo) { p40AbrirFontes(fo); return; }
+    if (alvo.closest('[data-p40-ir-regiao]')) { const h = $('#p40-b-t'); h.scrollIntoView({ block: 'start', behavior: reduzido() ? 'auto' : 'smooth' }); h.focus({ preventScroll: true }); return; }
+    if (alvo.closest('[data-p40-tentar]')) {
+      p40.raiox[p40.sel] = 'lendo'; p40Render({ focar: '#p40-b-t' });
+      const id = p40.sel, estado = p40.estado;
+      clearTimeout(p40.timer);
+      p40.timer = setTimeout(() => { if (p40.estado !== estado) return; p40.raiox[id] = 'lido'; p40.quando = 'hoje às 14:06'; p40Render(); toast('O IBGE respondeu. Sua região está completa.'); }, 1500);
+    }
+  });
+
+  const form = $('#p40-loja-form');
+  form.addEventListener('submit', (ev) => { ev.preventDefault(); p40Salvar(); });
+  form.addEventListener('change', (ev) => {
+    const g = p40.g; if (!g) return;
+    const t = ev.target;
+    if (t.name === 'p40-origem') {
+      g.modo = t.value; g.erros = {};
+      if (g.modo === 'perfil' && !g.perfilId && p40.perfis.length === 1 && !p40Usado(p40.perfis[0], g.lojaId)) { g.perfilId = p40.perfis[0]; if (!g.areas.length) g.areas = [...P40_PERFIS[g.perfilId].areas]; }
+      p40GavetaRender(`input[name="p40-origem"][value="${g.modo}"]`);
+    } else if (t.name === 'p40-perfil') {
+      g.perfilId = t.value; g.erros = {}; g.areas = [...P40_PERFIS[t.value].areas];
+      if (g.criar && !g.nomeMexido) g.nome = P40_PERFIS[t.value].nome;
+      p40GavetaRender(`input[name="p40-perfil"][value="${t.value}"]`);
+      anunciar(`${P40_PERFIS[t.value].nome}: ${P40_PERFIS[t.value].areas.length} áreas de entrega.`);
+    }
+  });
+  form.addEventListener('input', (ev) => {
+    const g = p40.g; if (!g) return;
+    const t = ev.target;
+    if (t.id === 'p40-cep') {
+      const d = t.value.replace(/\D/g, '').slice(0, 8);
+      t.value = d.length > 5 ? `${d.slice(0, 5)}-${d.slice(5)}` : d;
+      g.cep = t.value;
+    } else if (t.id === 'p40-numero') {
+      g.numero = t.value; const p = $('#p40-ponto-txt'); if (p) p.textContent = p40PontoTxt(g);
+    } else if (t.id === 'p40-compl') g.compl = t.value;
+    else if (t.id === 'p40-nome') { g.nome = t.value; g.nomeMexido = true; }
+    else if (t.id === 'p40-raio') { g.raio = Number(t.value); p40AtualizarRaio(); }
+  });
+  form.addEventListener('keydown', (ev) => {
+    if (ev.key !== 'Enter') return;
+    if (ev.target.id === 'p40-cep') { ev.preventDefault(); p40Buscar(); }
+    if (ev.target.id === 'p40-area-nova') { ev.preventDefault(); $('[data-p40-acrescentar]').click(); }
+  });
+  form.addEventListener('click', (ev) => {
+    const g = p40.g; if (!g) return;
+    const alvo = ev.target instanceof Element ? ev.target : null; if (!alvo) return;
+    if (alvo.closest('[data-p40-buscar]')) { p40Buscar(); return; }
+    const passo = alvo.closest('[data-p40-passo]');
+    if (passo) { g.raio = Math.min(15, Math.max(1, g.raio + 0.5 * Number(passo.dataset.p40Passo))); p40AtualizarRaio(); anunciar(`Raio de ${km(g.raio)} km`); return; }
+    const tirar = alvo.closest('[data-p40-tirar]');
+    if (tirar) {
+      const i = Number(tirar.dataset.p40Tirar); const nome = g.areas[i];
+      g.areas.splice(i, 1);
+      p40GavetaRender(g.areas.length ? `[data-p40-tirar="${Math.min(i, g.areas.length - 1)}"]` : '#p40-area-nova');
+      anunciar(`${nome} saiu das áreas de entrega.`);
+      return;
+    }
+    if (alvo.closest('[data-p40-acrescentar]')) {
+      const campo = $('#p40-area-nova'); const v = campo.value.trim();
+      if (!v) { campo.focus(); return; }
+      if (g.areas.some((a) => a.toLowerCase() === v.toLowerCase())) { toast(`${v} já está nas áreas de entrega.`); campo.select(); return; }
+      if (g.areas.length >= 20) { toast('No máximo 20 áreas por loja.'); return; }
+      g.areas.push(v); g.erros = { ...g.erros, areas: undefined }; delete g.erros.areas;
+      p40GavetaRender('#p40-area-nova');
+      anunciar(`${v} entrou nas áreas de entrega.`);
+    }
+  });
+  $('#dlg-loja').addEventListener('close', () => { if (p40) p40.g = null; });
+
+  $$('[data-tela="marca"]').forEach((a) => a.addEventListener('click', (ev) => { ev.preventDefault(); if (app.classList.contains('gaveta')) menu(false); toast('Minha marca: o P6, que já está no app. Esta é a página Região, aberta pela parte Região.'); $('#h-regiao').focus(); }));
+
+  const inicial = params.get('estado');
+  p40Aplicar(P40_ESTADOS[inicial] ? inicial : 'completo');
+}
+
+/* ---------- cenários de conferência no navegador (1440 e 375, claro e escuro) ---------- */
+Object.keys(P40_ESTADOS).forEach((id) => {
+  window.uiuxCenarios['p40-' + id] = { larguras: [1440, 375], executar: async () => { p40Aplicar(id); await esperar(120); } };
+});
+window.uiuxCenarios['p40-fluxo-perfil'] = {
+  larguras: [1440, 375],
+  executar: async () => {
+    p40Aplicar('vazio-perfil');
+    $('[data-p40-por="perfil"]').click();
+    await esperar(60);
+    $('#p40-loja-form').requestSubmit();
+    await esperar(2200);
+  },
+};
+window.uiuxCenarios['p40-fluxo-cep'] = {
+  larguras: [1440, 375],
+  executar: async () => {
+    p40Aplicar('vazio-cep');
+    $('[data-p40-por="cep"]').click();
+    await esperar(60);
+    const c = $('#p40-cep'); c.value = '20520054'; c.dispatchEvent(new Event('input', { bubbles: true }));
+    $('[data-p40-buscar]').click();
+    await esperar(700);
+    const n = $('#p40-numero'); n.value = '450'; n.dispatchEvent(new Event('input', { bubbles: true }));
+    const r = $('#p40-raio'); r.value = '5.5'; r.dispatchEvent(new Event('input', { bubbles: true }));
+  },
+};
+window.uiuxCenarios['p40-fluxo-sem-numero'] = {
+  larguras: [375],
+  executar: async () => {
+    p40Aplicar('gaveta-cep');
+    const n = $('#p40-numero'); n.value = ''; n.dispatchEvent(new Event('input', { bubbles: true }));
+    $('#p40-loja-form').requestSubmit();
+    await esperar(80);
+  },
+};
+
+p40Iniciar();
+</script>
+</body>
+</html>
