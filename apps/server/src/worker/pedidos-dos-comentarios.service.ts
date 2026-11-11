@@ -115,6 +115,9 @@ type Lido = {
   ia: { pedido: PedidoDeComentarioDoSocial; base: BaseDoTextoDeResposta; conhecido: string } | null;
 };
 
+/** O que a conversão ao ligar fez com o pedido (A6, Z11, parte 2e-1b). */
+export type VezDaConversao = { status: 'respondida'; pedido: string; resposta: string } | { status: 'com_a_pessoa'; motivo: string } | { status: 'fora' };
+
 /** O que a conferência da retirada fez com o pedido (A6, Z11, parte 2d-5). */
 export type VezDaRetiradaDoComentario = { status: 'retirada'; motivo: RetiradaDoComentario; pedido: string } | { status: 'igual' } | { status: 'fora' };
 
@@ -295,6 +298,81 @@ export class PedidosDosComentariosService {
       return { status: 'retirada', motivo, pedido: alvo.actionId };
     }).catch((err: unknown) => {
       if (err instanceof ForaDaFila) return { status: 'fora' as const };
+      throw err;
+    });
+  }
+
+  /**
+   * Ao ligar o atendimento automático (A6, Z11, parte 2e-1b; D-A6-92: "ao ligar, responde também o que espera das
+   * últimas 24 horas, se souber"): o pedido do Social media com a resposta pronta (o elogio ou a marcação dos tipos
+   * marcados), ainda em Aprovações, sai de lá e vira a resposta automática, na mesma transação. Fica com a pessoa, e não
+   * volta a ser olhado, o pedido cujo texto uma pessoa mudou, o da mesma pessoa no mesmo post (uma resposta por pessoa)
+   * e o que o portão segura agora; a vez dele ganha o porquê (`ficou_com_a_pessoa`), e a rotina não o pega de novo (V84).
+   * Quem escolhe os candidatos (a janela de 24 horas, o teto da hora) é a rotina; aqui, tudo é conferido de novo.
+   */
+  async converterAoLigar(alvo: { tenantId: string; actionId: string }, agora = new Date()): Promise<VezDaConversao> {
+    return naTransacaoDaEmpresa<VezDaConversao>(this.banco(), { tenantId: alvo.tenantId, userId: null }, async () => {
+      const tx = currentTx();
+      const p = (
+        await tx.execute<{ status: string; actor_type: string; agent_key: string | null; tool: string; brand_id: string | null; provider: string; account_id: string; resource_id: string; params: { texto?: unknown }; requested_by: string }>(sql`
+          select status, actor_type, agent_key, tool, brand_id, provider, account_id, resource_id, params, requested_by
+            from liame.action_request where id = ${alvo.actionId} and tenant_id = ${alvo.tenantId} for update`)
+      ).rows[0];
+      if (!p || p.status !== 'aguardando_aprovacao' || p.actor_type !== 'agent' || p.agent_key !== SOCIAL.key || p.tool !== FERRAMENTA_DA_OPERACAO.responder || !p.brand_id) {
+        return { status: 'fora' };
+      }
+      const prefixo = recursoDoComentario('');
+      const commentId = p.resource_id.startsWith(prefixo) ? p.resource_id.slice(prefixo.length) : null;
+      const vez = (
+        await tx.execute<{ id: string }>(sql`
+          select id from liame.comment_suggestion where action_id = ${alvo.actionId} and tenant_id = ${alvo.tenantId} and status = 'pronta' and round = 1 for update`)
+      ).rows[0];
+      if (!commentId || !vez) return { status: 'fora' };
+      const daVez = { tenantId: alvo.tenantId, id: vez.id };
+      const ficaComAPessoa = async (motivo: string): Promise<VezDaConversao> => {
+        await tx.execute(sql`
+          update liame.comment_suggestion set reason = 'ficou_com_a_pessoa', updated_at = ${agora.toISOString()}::timestamptz
+           where id = ${vez.id} and tenant_id = ${alvo.tenantId} and status = 'pronta'`);
+        return { status: 'com_a_pessoa', motivo };
+      };
+      const c = (
+        await tx.execute<{ kind: string | null; post_id: string; author_name: string | null }>(sql`
+          select kind, post_id, author_name from liame.social_comment
+           where connected_account_id = ${p.account_id}::uuid and comment_id = ${commentId} and tenant_id = ${alvo.tenantId}`)
+      ).rows[0];
+      if (!c || (c.kind !== 'elogio' && c.kind !== 'marcacao')) return ficaComAPessoa('tipo_fora_do_automatico');
+      // O texto que uma pessoa mudou é dela: fica em Aprovações.
+      const pronta = respostaPronta(c.kind, commentId);
+      if (p.params.texto !== pronta) return ficaComAPessoa('texto_mudado');
+      const segura = await oQueSeguraOAutomatico(tx, this.flags, { tenantId: alvo.tenantId, brandId: p.brand_id, connectedAccountId: p.account_id, commentId });
+      if (segura) return ficaComAPessoa(segura);
+      if (await jaRespondeuAPessoaNoPost(tx, { tenantId: alvo.tenantId, connectedAccountId: p.account_id, commentId, postId: c.post_id, autor: c.author_name })) {
+        return ficaComAPessoa('pessoa_no_post');
+      }
+      const funcionario = { tenantId: alvo.tenantId, agentKey: SOCIAL.key, agentLabel: SOCIAL.name };
+      if (!(await this.acoes.retirarPeloFuncionario(funcionario, alvo.actionId, 'atendimento_automatico'))) return { status: 'fora' };
+      const nova = await this.acoes.responderSozinhoPeloFuncionario(
+        { ...funcionario, emNomeDe: p.requested_by },
+        { tool: FERRAMENTA_DA_RESPOSTA_AUTOMATICA, brand_id: p.brand_id, provider: p.provider, account_id: p.account_id, resource_id: p.resource_id, params: { texto: comAviso(pronta) } },
+      );
+      // A vez passa a apontar a resposta automática (um pedido por vez).
+      await tx.execute(sql`
+        update liame.comment_suggestion set action_id = ${nova}, reason = null, updated_at = ${agora.toISOString()}::timestamptz
+         where id = ${vez.id} and tenant_id = ${alvo.tenantId}`);
+      await this.auditar(tx, daVez, 'comentario.responder_sozinho', { operation: 'responder', kind: c.kind, action_id: nova, replaced: alvo.actionId, on_enable: true });
+      return { status: 'respondida', pedido: alvo.actionId, resposta: nova };
+    }).catch(async (err: unknown) => {
+      // O portão fechou entre a escolha e a conversão (desligaram, a política pede aprovação): o pedido fica, e a vez
+      // ganha o porquê, numa transação nova (a de cima desfez tudo).
+      if (err instanceof AppProblem && err.code === 'automatico-segurado') {
+        await this.naEmpresa({ tenantId: alvo.tenantId, id: '' }, async (tx) => {
+          await tx.execute(sql`
+            update liame.comment_suggestion set reason = 'ficou_com_a_pessoa', updated_at = ${agora.toISOString()}::timestamptz
+             where action_id = ${alvo.actionId} and tenant_id = ${alvo.tenantId} and status = 'pronta'`);
+          return { status: 'fora' };
+        });
+        return { status: 'com_a_pessoa' as const, motivo: 'automatico_segurado' };
+      }
       throw err;
     });
   }

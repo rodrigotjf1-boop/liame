@@ -581,6 +581,7 @@ export { AcceptTermsRequest, MyTermsResponse, TermsAcceptanceVia, TermsChange, T
 export {
   COMMENT_AUTO_REPLY_HOURLY_LIMIT,
   COMMENT_AUTO_REPLY_KINDS,
+  COMMENT_AUTO_REPLY_NOTICE,
   COMMENTS_LIST_LIMIT,
   COMMENTS_REFRESH_WINDOW_S,
   CommentAutoReplyQuery,

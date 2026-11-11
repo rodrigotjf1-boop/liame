@@ -23,3 +23,20 @@
 .com-responder .av-editar { display: grid; gap: var(--sp-2); }
 .com-responder .av-editar textarea { width: 100%; min-height: 110px; padding: var(--sp-3); border: 1px solid var(--border-strong); border-radius: var(--radius); background: var(--surface); color: var(--text); font: inherit; font-size: var(--text-sm); resize: vertical; }
 .com-responder .av-editar-acoes { display: flex; flex-wrap: wrap; gap: var(--sp-2); }
+/* O atendimento automático (parte 2e-2; P38 versão 2): a linha no topo da lista e a gaveta. */
+.com-auto { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--sp-3); padding: var(--sp-3) var(--sp-4); border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--surface); }
+.com-auto--ligado { border-color: color-mix(in srgb, var(--success) 40%, var(--border)); }
+.com-auto-txt { display: grid; gap: var(--sp-1); min-width: 0; flex: 1 1 260px; }
+.com-auto-cab { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-2); }
+.com-auto-cab .ic { color: var(--marca-violeta); }
+.com-auto-sub { font-size: var(--text-sm); color: var(--text-muted); overflow-wrap: anywhere; }
+.com-gaveta .com-auto-bloco { display: grid; gap: var(--sp-2); min-width: 0; margin: 0; padding: 0; border: 0; }
+.com-gaveta .nota { display: flex; gap: var(--sp-3); margin: 0; font-size: var(--text-sm); color: var(--text-muted); }
+.com-gaveta .nota .ic { flex: none; margin-top: 2px; }
+.com-gaveta .nota b { color: var(--text); }
+.com-gaveta .com-auto-bloco legend, .com-gaveta .com-auto-bloco h3 { margin: 0 0 var(--sp-1); padding: 0; font-size: var(--text-sm); font-weight: 600; color: var(--text); }
+.com-gaveta .com-auto-chave { font-size: var(--text-base); }
+.com-gaveta .com-auto-tipo { align-items: flex-start; padding: var(--sp-3); border: 1px solid var(--border); border-radius: var(--radius); }
+.com-gaveta .com-auto-tipo input { margin-top: 2px; flex: none; }
+.com-gaveta .com-auto-tipo > span { display: grid; gap: 2px; min-width: 0; overflow-wrap: anywhere; }
+.com-gaveta .com-auto-tipo > span > span { color: var(--text-muted); font-size: var(--text-xs); }

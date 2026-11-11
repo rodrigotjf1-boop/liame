@@ -1,3 +1,4 @@
+import { COMMENT_AUTO_REPLY_NOTICE } from '@liame/contracts';
 import { z } from 'zod';
 import { canonicalJson, sha256 } from '../audit/audit.js';
 import { conferirTexto } from '../policy/texto.js';
@@ -29,7 +30,7 @@ export const ACAO_DE_OCULTAR = 'comentario.ocultar';
 export const ACAO_DE_MOSTRAR = 'comentario.mostrar';
 
 /** O aviso no fim de cada resposta automática (A6, Z11, parte 2e-1; Termos 6.3: quem fala com um funcionário de IA é avisado). */
-export const AVISO_DE_RESPOSTA_AUTOMATICA = ' · resposta automática';
+export const AVISO_DE_RESPOSTA_AUTOMATICA = COMMENT_AUTO_REPLY_NOTICE;
 
 /**
  * O texto da resposta automática, como parâmetro da ferramenta (A6, Z11, parte 2e-1; D-A6-92): só o texto, que termina

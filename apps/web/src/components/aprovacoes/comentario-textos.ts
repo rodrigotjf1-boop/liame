@@ -15,11 +15,18 @@ import { type PedidoApresentado, recusaDe } from './textos';
 type Acao = ActionResponse;
 export type AcaoDeComentario = Acao & { comment: NonNullable<Acao['comment']> };
 
-const FERRAMENTAS_DO_COMENTARIO = ['comentario_responder', 'comentario_ocultar', 'comentario_apagar_resposta', 'comentario_mostrar'];
+/** A resposta automática (A6, Z11, parte 2e; D-A6-92): saiu sozinha, pelo atendimento automático da marca. */
+const FERRAMENTA_DA_RESPOSTA_AUTOMATICA = 'comentario_responder_auto';
+const FERRAMENTAS_DO_COMENTARIO = ['comentario_responder', FERRAMENTA_DA_RESPOSTA_AUTOMATICA, 'comentario_ocultar', 'comentario_apagar_resposta', 'comentario_mostrar'];
 
 /** O pedido é sobre um comentário (responder, ocultar, apagar a resposta, mostrar)? */
 export function ehPedidoDeComentario(a: Acao): a is AcaoDeComentario {
   return Boolean(a.comment) && FERRAMENTAS_DO_COMENTARIO.includes(a.tool);
+}
+
+/** A resposta que o atendimento automático publicou sozinho, sem pedido de aprovação (parte 2e). */
+export function ehRespostaAutomatica(a: Acao): boolean {
+  return a.tool === FERRAMENTA_DA_RESPOSTA_AUTOMATICA;
 }
 
 /** O que o pedido faz com o comentário. */
@@ -68,6 +75,7 @@ export function tituloDoComentario(a: AcaoDeComentario): string {
     case 'mostrar':
       return autor ? `Mostrar de novo o comentário de ${autor}` : `Mostrar de novo um comentário ${onde}`;
     default:
+      if (ehRespostaAutomatica(a)) return autor ? `Resposta automática ao comentário de ${autor}` : `Resposta automática a um comentário ${onde}`;
       return autor ? `Responder ao comentário de ${autor}` : `Responder a um comentário ${onde}`;
   }
 }
@@ -105,6 +113,8 @@ const RETIRADA: Record<string, string> = {
   ja_oculto: 'Já estava oculto',
   comentario_mudou: 'O comentário mudou',
   comentario_sumiu: 'O comentário foi apagado',
+  // Ao ligar o atendimento automático (parte 2e-1b), o pedido virou a resposta automática.
+  atendimento_automatico: 'Respondido sozinho',
 };
 
 /** A segunda linha do item decidido na lista. */
@@ -114,7 +124,7 @@ export function etiquetaDoComentario(a: AcaoDeComentario): string {
   const rotulo: Record<SituacaoDoComentario, string> = {
     pendente: 'Espera aprovação',
     saindo: SAINDO[op],
-    feito: FEITO[op],
+    feito: ehRespostaAutomatica(a) ? 'Respondido sozinho' : FEITO[op],
     recusado: 'Recusado',
     retirado: RETIRADA[a.comment.withdrawn ?? ''] ?? 'Retirado',
     cancelado: 'Cancelado',
@@ -214,6 +224,15 @@ export function resultadoDoComentario(a: AcaoDeComentario): ResultadoDoComentari
   const op = operacaoDo(a);
   const onde = ondeDo(a.comment.channel);
   const recusa = recusaDe(a);
+  // A resposta automática (parte 2e): ninguém aprovou; ela sai pelo atendimento automático que a marca ligou.
+  if (ehRespostaAutomatica(a)) {
+    if (s === 'saindo') return { tom: 'espera', icone: 'clock', forte: 'Pelo atendimento automático da marca.', texto: ` A resposta está saindo ${onde}.` };
+    if (s === 'feito') return { tom: 'ok', icone: 'check', forte: `Respondido sozinho ${onde}, pelo atendimento automático, em nome da marca.`, texto: a.comment.channel === 'instagram' ? ' O Instagram avisa quem comentou.' : '' };
+    if (s === 'falhou' && a.status_reason?.startsWith('atendimento automático')) {
+      return { tom: 'falha', icone: 'alert', forte: 'O atendimento automático segurou esta resposta.', texto: ' Ele foi desligado, ou o tipo saiu da lista, antes de ela sair: nada foi publicado.' };
+    }
+    if (s === 'falhou') return { tom: 'falha', icone: 'alert', forte: 'A resposta automática não saiu.', texto: ` ${a.status_reason ?? 'A execução falhou.'}` };
+  }
   switch (s) {
     case 'recusado':
       return { tom: 'falha', icone: 'x', forte: null, texto: recusa?.motivo ? `Recusado por ${recusa.quem}: “${recusa.motivo}”. Nada foi feito.` : `Recusado por ${recusa?.quem ?? 'quem aprova'}. Nada foi feito.` };
@@ -225,6 +244,10 @@ export function resultadoDoComentario(a: AcaoDeComentario): ResultadoDoComentari
         comentario_mudou: 'Quem comentou editou o comentário depois da sugestão.',
         comentario_sumiu: `O comentário foi apagado ${onde}.`,
       };
+      // Ao ligar o atendimento automático (parte 2e-1b): este pedido virou a resposta automática, que saiu sozinha.
+      if (a.comment.withdrawn === 'atendimento_automatico') {
+        return { tom: 'ok', icone: 'check', forte: 'Respondido sozinho pelo atendimento automático.', texto: ' Ele foi ligado com este pedido esperando, e a mesma resposta saiu sem aprovação, com o aviso de resposta automática.' };
+      }
       return { tom: 'neutro', icone: 'info', forte: porque[a.comment.withdrawn ?? ''] ?? 'O comentário mudou depois da sugestão.', texto: ' O Social media tirou o pedido daqui, e nada foi feito pelo Liame.' };
     }
     case 'cancelado':

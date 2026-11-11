@@ -207,6 +207,45 @@ describe.skipIf(!hasDb)('o atendimento automático dos comentários (A6 · Z11, 
     expect(problema(direto)).toEqual([422, 'acao-so-pelo-automatico']);
   }, 120_000);
 
+  it('ao ligar (2e-1b): o elogio que esperava em Aprovações, das 24 horas antes, vira a resposta automática; o texto mudado e o antigo ficam com a pessoa', async () => {
+    const e = await empresa('Casa Brasa Automático Ao Ligar');
+    const post = meta.publicadoForaDoLiame(e.instagram!.externo, { caption: 'Combo', horas: 40, comments_count: 3 });
+    const recente = meta.comentouNoInstagram(post, { texto: 'Melhor smash da cidade, parabéns!', usuario: 'ana', horas: 2 });
+    const mudado = meta.comentouNoInstagram(post, { texto: 'Que delícia esse smash!', usuario: 'beto', horas: 3 });
+    const antigo = meta.comentouNoInstagram(post, { texto: 'Sério, que smash incrível!', usuario: 'caio', horas: 30 });
+    // Desligado: os três vão para Aprovações, como sempre.
+    await ler(e);
+    meta.normalizar();
+    await fila.executarLote(10, { tenantIds: [e.tenantId] });
+    const antes = await pedidosDe(e);
+    for (const id of [recente, mudado, antigo]) expect(doComentario(antes, id), id).toMatchObject({ tool: 'comentario_responder', status: 'aguardando_aprovacao' });
+    // Uma pessoa muda o texto de um deles: ele é dela.
+    const doMudado = doComentario(antes, mudado)!;
+    expect((await api.call('PATCH', `/v1/actions/${doMudado.id}`, { cookie: e.cookie, body: { params: { texto: 'Valeu demais! Volte sempre que bater a fome.' } } })).status).toBe(200);
+
+    // Liga o atendimento automático para o elogio: a rotina converte o que serve, uma vez.
+    expect((await mudar(e, { enabled: true, kinds: ['elogio'], code: await codigo(e) })).status).toBe(200);
+    const conversoes = await fila.executarConversoes(10, { tenantIds: [e.tenantId] });
+    expect(conversoes.map((c) => c.feito.status).sort()).toEqual(['com_a_pessoa', 'respondida']);
+    const depois = await pedidosDe(e);
+    const doRecente = depois.filter((p) => p.resource_id === `comentario:${recente}`);
+    expect(doRecente.map((p) => [p.tool, p.status]).sort()).toEqual([
+      ['comentario_responder', 'cancelada'],
+      ['comentario_responder_auto', 'aprovada'],
+    ]);
+    // O de texto mudado e o de mais de 24 horas antes de ligar seguem esperando a pessoa; e não voltam à fila.
+    expect(doComentario(depois, mudado)).toMatchObject({ tool: 'comentario_responder', status: 'aguardando_aprovacao' });
+    expect(doComentario(depois, antigo)).toMatchObject({ tool: 'comentario_responder', status: 'aguardando_aprovacao' });
+    expect(await fila.executarConversoes(10, { tenantIds: [e.tenantId] })).toEqual([]);
+    // Em Aprovações, o pedido convertido diz por quê.
+    const convertido = await api.call('GET', `/v1/actions/${doComentario(antes, recente)!.id}`, { cookie: e.cookie });
+    expect((convertido.body as { comment: { withdrawn: string | null } }).comment.withdrawn).toBe('atendimento_automatico');
+    // O executor publica a automática.
+    await executor.runCycle(20, { tenantIds: [e.tenantId] });
+    expect(meta.comentariosNoInstagram.get(post)!.find((c) => c.id === recente)!.respostas[0]!.text.endsWith(AVISO_DE_RESPOSTA_AUTOMATICA)).toBe(true);
+    expect(meta.defeitos).toEqual([]);
+  }, 120_000);
+
   it('as regras da tabela (V119): os tipos, ligado com um tipo, uma linha por marca e a empresa da marca', async () => {
     const e = await empresa('Casa Brasa Automático Regras');
     const inserir = (kinds: string, enabled = true) =>
