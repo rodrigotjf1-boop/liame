@@ -13,7 +13,7 @@ import { type SQL, sql } from 'drizzle-orm';
 import { ActionService, PREFIXO_RECUSA } from '../actions/action.service.js';
 import { naoTerminouDePreparar, pedeUmPostNovo } from '../actions/post-publicacao.js';
 import { contaConectada } from '../connections/conectada.js';
-import { CAPA_DO_REELS_BYTES, cabeNoReelsDoInstagram, FLAG_DOS_POSTS } from '../connectors/meta/publicacao.js';
+import { CAPA_DO_REELS_BYTES, cabeNoReelsDoInstagram, FLAG_DOS_POSTS, FLAG_DOS_STORIES, STORY_DA_PAGINA, STORY_DO_INSTAGRAM } from '../connectors/meta/publicacao.js';
 import { type AuthContext, auditDetail, currentTx } from '../context/request-context.js';
 import { AppProblem } from '../errors/problems.js';
 import { FlagService } from '../flags/flag.service.js';
@@ -95,6 +95,25 @@ function recusa(code: string, title: string, detail: string, path?: string): App
 }
 
 /**
+ * A mídia cabe no Story de cada canal escolhido (A6, Z13; D-A6-128)? No Instagram, a foto até 8 MB e o vídeo até 60
+ * segundos e 100 MB; na Página, a foto até 10 MB e o vídeo até 90 segundos. A frase de por que não, ou nula.
+ */
+function conferirOStory(midia: { kind: string; bytes: string | number; duration_ms: number | null }, canais: readonly string[]): string | null {
+  const bytes = Number(midia.bytes);
+  const duracao = midia.duration_ms ?? 0;
+  if (midia.kind === 'video') {
+    if (canais.includes('instagram') && (duracao > STORY_DO_INSTAGRAM.videoMs || bytes > STORY_DO_INSTAGRAM.videoBytes)) {
+      return 'O Story do Instagram aceita o vídeo de até 60 segundos e 100 MB. Escolha outro vídeo, ou publique o Story só na Página do Facebook (até 90 segundos).';
+    }
+    if (canais.includes('facebook') && duracao > STORY_DA_PAGINA.videoMs) return 'O Story da Página do Facebook aceita o vídeo de até 90 segundos. Escolha outro vídeo.';
+    return null;
+  }
+  if (canais.includes('instagram') && bytes > STORY_DO_INSTAGRAM.fotoBytes) return 'O Story do Instagram aceita a foto até 8 MB. Escolha outra foto.';
+  if (canais.includes('facebook') && bytes > STORY_DA_PAGINA.fotoBytes) return 'O Story da Página do Facebook aceita a foto até 10 MB. Escolha outra foto.';
+  return null;
+}
+
+/**
  * A hora do post (D-A6-8 e D-A6-34): depois de agora (com um minuto de folga), até 60 dias e entre 8h e 22h no fuso da
  * empresa. A recusa (422, com o campo), ou nula. O "Novo post" e "Mudar a hora" conferem igual.
  */
@@ -153,6 +172,11 @@ export class PostsService {
 
   private ligada(quem: Quem, brandId: string): Promise<boolean> {
     return this.flags.isEnabled(FLAG_DOS_POSTS, this.flags.context({ tenantId: quem.tenantId, userId: quem.userId, brandId }));
+  }
+
+  /** A função dos Stories (A6, Z13; D-A6-126), além da dos posts: sem ela, o post não sai como Story. */
+  private storiesLigados(quem: Quem, brandId: string): Promise<boolean> {
+    return this.flags.isEnabled(FLAG_DOS_STORIES, this.flags.context({ tenantId: quem.tenantId, userId: quem.userId, brandId }));
   }
 
   /** A função dos vídeos (A6, Z10; D-A6-67), além da dos posts: sem ela, o post não leva vídeo. */
@@ -275,19 +299,37 @@ export class PostsService {
     if (new Set(canais).size !== canais.length) throw recusa('canal-repetido', 'Canal repetido', 'Cada canal entra uma vez no post.', 'channels');
     // A ordem do post é a dos canais do Liame (o Instagram primeiro): é a do pedido e a da publicação. Os do pacote vão à parte.
     const ordenados = body.channels
-      .filter((c): c is { channel: CanalDoPost; text: string } => !ehCanalDoPacote(c.channel))
+      .filter((c): c is { channel: CanalDoPost; text?: string } => !ehCanalDoPacote(c.channel))
       .sort((a, b) => CANAIS_DO_POST.indexOf(a.channel) - CANAIS_DO_POST.indexOf(b.channel));
     const doPacote = body.channels
-      .filter((c): c is { channel: CanalDoPacote; text: string } => ehCanalDoPacote(c.channel))
+      .filter((c): c is { channel: CanalDoPacote; text?: string } => ehCanalDoPacote(c.channel))
       .sort((a, b) => CANAIS_DO_PACOTE.indexOf(a.channel) - CANAIS_DO_PACOTE.indexOf(b.channel));
+    // O Story (A6, Z13; D-A6-126 e D-A6-127): com a função `stories`, só nos canais do Liame, sem texto, sem recorte e
+    // sem capa. O post de sempre pede o texto de cada canal.
+    const story = body.format === 'story';
+    if (story) {
+      if (!(await this.storiesLigados(quem, body.brand_id))) throw new AppProblem(409, 'funcao-desligada', 'Função desligada', 'Os Stories não estão ligados para esta empresa.');
+      if (doPacote.length) throw recusa('story-sem-pacote', 'O Story é do Instagram e da Página', 'O Story sai no Instagram e na Página do Facebook: o TikTok e o YouTube ficam no post.', 'channels');
+      if (body.channels.some((c) => c.text)) {
+        throw recusa('story-sem-texto', 'O Story não leva texto', 'O Story sai sem texto, sem link e sem figurinha: a Meta não leva legenda no Story. O que a marca quer dizer vai na própria foto ou no vídeo.', 'channels');
+      }
+      if (body.crop_pos !== undefined) throw recusa('story-sem-recorte', 'O Story vai inteiro', 'No Story, a foto vai inteira: o recorte vale só para o post.', 'crop_pos');
+      if (body.cover_photo_id || body.cover_offset_ms !== undefined) {
+        throw recusa('story-sem-capa', 'O Story não tem capa', 'A capa vale para o Reels: o Story mostra o vídeo como ele é.', body.cover_photo_id ? 'cover_photo_id' : 'cover_offset_ms');
+      }
+    } else {
+      const semTexto = body.channels.find((c) => !c.text);
+      if (semTexto) throw recusa('texto-vazio', 'Escreva o texto', `Escreva o texto ${DO_CANAL[semTexto.channel]}.`, 'channels');
+    }
+
     // O link do post (D-A6-46): o cardápio da loja da marca, quando ela tem uma loja só com ele ligado. Na Página, o link
-    // vai no fim do texto (D-A6-47), e o limite dela conta o link.
-    const comLink = canais.some((c) => CANAIS_COM_LINK.includes(c));
+    // vai no fim do texto (D-A6-47), e o limite dela conta o link. O Story não leva link (D-A6-127).
+    const comLink = !story && canais.some((c) => CANAIS_COM_LINK.includes(c));
     const destino = comLink ? await destinoDoPost(tx, quem.tenantId, body.brand_id) : null;
     for (const c of [...ordenados, ...doPacote]) {
       const limite = ehCanalDoPacote(c.channel) ? LIMITE_DO_PACOTE[c.channel] : LIMITE_DO_TEXTO[c.channel];
       const doLink = c.channel === 'facebook' && destino?.ok ? tamanhoNoTexto(destino.url, c.channel) : 0;
-      if (c.text.length + doLink > limite) {
+      if ((c.text ?? '').length + doLink > limite) {
         const comOLink = doLink ? ', com o link do post no fim,' : '';
         throw recusa('texto-longo-demais', 'Texto longo demais', `O texto ${DO_CANAL[c.channel]}${comOLink} passa de ${limite.toLocaleString('pt-BR')} caracteres.`, 'channels');
       }
@@ -306,7 +348,12 @@ export class PostsService {
     const comInstagram = canais.includes('instagram');
     let recorte: number | null = null;
     let capa: Capa = SEM_CAPA;
-    if (!ehVideo) {
+    if (story) {
+      // Os limites da Meta para o Story (D-A6-128): no Instagram, a foto até 8 MB e o vídeo até 60 s e 100 MB; na Página,
+      // a foto até 10 MB (o vídeo de Fotos já vai até 90 s, o limite dela).
+      const fora = conferirOStory(midia, canais);
+      if (fora) throw recusa('story-fora-do-limite', 'Fora do que o Story aceita', fora, 'photo_id');
+    } else if (!ehVideo) {
       if (body.cover_photo_id || body.cover_offset_ms !== undefined) {
         throw recusa('capa-so-no-video', 'Capa só no vídeo', 'A capa escolhida vale só para o post com vídeo.', body.cover_photo_id ? 'cover_photo_id' : 'cover_offset_ms');
       }
@@ -325,7 +372,7 @@ export class PostsService {
     // post é conferido pelo trilho, no pedido.
     if (doPacote.length) {
       const { policies } = await carregarPoliticas(tx, quem.tenantId, body.brand_id);
-      const violacoes = doPacote.flatMap((c) => palavrasProibidasNoTexto(policies, c.text));
+      const violacoes = doPacote.flatMap((c) => palavrasProibidasNoTexto(policies, c.text ?? ''));
       if (violacoes.length) {
         throw new AppProblem(
           422,
@@ -362,7 +409,12 @@ export class PostsService {
     let linkDoPost: string | null = null;
     if (ordenados.length) {
       id = uuidv7();
-      if (ehVideo) {
+      if (story) {
+        // O Story (A6, Z13): a mídia inteira, sem recorte e sem capa; o vídeo sem o resumo do arquivo, como no post.
+        await tx.execute(sql`
+          insert into liame.social_post (id, tenant_id, brand_id, media, format, photo_id, photo_sha256, publish_at, created_by)
+          values (${id}, ${quem.tenantId}, ${body.brand_id}, ${ehVideo ? 'video' : 'foto'}, 'story', ${midia.id}, ${ehVideo ? null : midia.sha256}, ${hora.toISOString()}, ${quem.userId})`);
+      } else if (ehVideo) {
         // O vídeo não tem o resumo do arquivo (ele não muda depois de pronto); a capa fica presa aqui (D-A6-70).
         await tx.execute(sql`
           insert into liame.social_post (id, tenant_id, brand_id, media, photo_id, photo_sha256, crop_pos, cover_photo_id, cover_sha256, cover_version, cover_offset_ms, publish_at, created_by)
@@ -377,7 +429,12 @@ export class PostsService {
       if (canais.includes('facebook') && destino?.ok) {
         linkDoPost = await criarLinkDoPost(tx, { tenantId: quem.tenantId, brandId: body.brand_id, postId: id, canal: 'facebook', destino, nome: nomeDoLink('Página do Facebook'), userId: quem.userId });
       }
-      const linhas = ordenados.map((c) => ({ id: uuidv7(), channel: c.channel, conta: contaDo.get(c.channel)!, body: c.channel === 'facebook' && linkDoPost ? `${c.text}${SEPARADOR}${linkDoPost}` : c.text }));
+      const linhas = ordenados.map((c) => ({
+        id: uuidv7(),
+        channel: c.channel,
+        conta: contaDo.get(c.channel)!,
+        body: story ? '' : c.channel === 'facebook' && linkDoPost ? `${c.text ?? ''}${SEPARADOR}${linkDoPost}` : (c.text ?? ''),
+      }));
       await tx.execute(sql`
         insert into liame.social_post_channel (id, tenant_id, post_id, channel, connected_account_id, body)
         select x.id, ${quem.tenantId}, ${id}, x.channel, x.conta, x.body
@@ -398,7 +455,7 @@ export class PostsService {
 
     // Um pacote para cada rede (D-A6-40): a foto inteira (sem recorte), na mesma hora, pronto na Agenda; sem pedido. O
     // vídeo (A6, Z10, parte 4c): o mesmo vídeo, como a loja gravou, sem o resumo do arquivo e sem capa (D-A6-79).
-    const pacotes = doPacote.map((c) => ({ id: uuidv7(), canal: uuidv7(), channel: c.channel, body: c.text }));
+    const pacotes = doPacote.map((c) => ({ id: uuidv7(), canal: uuidv7(), channel: c.channel, body: c.text ?? '' }));
     if (pacotes.length) {
       await tx.execute(sql`
         insert into liame.social_post (id, tenant_id, brand_id, kind, media, photo_id, photo_sha256, crop_pos, publish_at, created_by)
@@ -425,6 +482,8 @@ export class PostsService {
         pacotes: pacotes.map((p) => ({ id: p.id, canal: p.channel })),
         publish_at: hora.toISOString(),
         crop_pos: recorte,
+        // O Story (A6, Z13): sem texto, sem link, 24 horas no ar.
+        ...(story ? { format: 'story' } : {}),
         // O link do post (D-A6-46): criado, ou por que não.
         link_do_post: destino === null ? null : destino.ok ? 'criado' : destino.motivo,
         // O post com vídeo (A6, Z10): o vídeo e a capa presa no pedido (a foto da capa, ou a versão da capa do vídeo); só

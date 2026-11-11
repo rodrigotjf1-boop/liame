@@ -26,8 +26,24 @@ export type PackageChannel = z.infer<typeof PackageChannel>;
  */
 export const POST_TEXT_LIMITS = { instagram: 2200, facebook: 10000, tiktok: 2200, youtube: 5000 } as const;
 
+/**
+ * O formato (A6, Z13; P41; D-A6-126): `post` (o de sempre) ou `story` (o Story do Instagram e da Página, sem texto, 24
+ * horas no ar). A lista pode crescer.
+ */
+export const POST_FORMATS = ['post', 'story'] as const;
+export const PostFormat = z.enum(POST_FORMATS);
+export type PostFormat = z.infer<typeof PostFormat>;
+
 export const CreatePostRequest = z.strictObject({
   brand_id: z.uuid(),
+  /**
+   * `post` (o padrão) ou `story` (A6, Z13; P41; D-A6-126 a D-A6-128), com a função `stories` ligada: a foto ou o vídeo
+   * inteiros, no Instagram e na Página, sem texto em nenhum canal (422 `story-sem-texto`), sem o pacote (422
+   * `story-sem-pacote`), sem recorte nem capa; dentro dos limites da Meta para o Story (no Instagram, a foto até 8 MB e o
+   * vídeo até 60 s e 100 MB; na Página, a foto até 10 MB; 422 `story-fora-do-limite`). Sem a função, 409
+   * `funcao-desligada`.
+   */
+  format: PostFormat.optional(),
   /**
    * Uma foto pronta das Fotos da marca (D-A6-6: só a foto de verdade, como ela é) ou, com a função `videos` ligada, um vídeo
    * pronto das Fotos e vídeos (A6, Z10; D-A6-69): ele sai como Reels no Instagram e, na Página, como Reels (em pé) ou
@@ -61,7 +77,8 @@ export const CreatePostRequest = z.strictObject({
    * sem pedido (D-A6-25).
    */
   channels: z
-    .array(z.strictObject({ channel: z.enum([...POST_CHANNELS, ...PACKAGE_CHANNELS]), text: z.string().trim().min(1).max(10000) }))
+    // O texto: obrigatório no post (422 `texto-vazio`); no Story, nenhum (A6, Z13).
+    .array(z.strictObject({ channel: z.enum([...POST_CHANNELS, ...PACKAGE_CHANNELS]), text: z.string().trim().max(10000).optional() }))
     .min(1)
     .max(POST_CHANNELS.length + PACKAGE_CHANNELS.length),
 });
@@ -176,6 +193,8 @@ export const PostResponse = z.strictObject({
    * `video` no post com vídeo (A6, Z10); ausente no post de foto (como antes da Z10). A lista pode crescer.
    */
   media: z.string().regex(/^[a-z_]{2,30}$/).optional(),
+  /** `story` no Story (A6, Z13): sem texto, 24 horas no ar; ausente no post (como antes da Z13). A lista pode crescer. */
+  format: z.string().regex(/^[a-z_]{2,30}$/).optional(),
   /** No post com vídeo, a foto das Fotos escolhida como capa (D-A6-70); nula com a capa do próprio vídeo; ausente na foto. */
   cover_photo_id: z.uuid().nullable().optional(),
   /** No post com vídeo, o tempo do quadro escolhido como capa (A6, Z10, parte 4a); nulo com a capa guardada ou uma foto; ausente na foto. */

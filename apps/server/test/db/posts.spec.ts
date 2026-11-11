@@ -278,7 +278,8 @@ describe.skipIf(!hasDb)('o post da marca no trilho (A6 · Z5b, parte 1)', () => 
     expect(await erro(`update liame.social_post_channel set status = 'publicado', published_at = now() where post_id = $1`, [pacote.id])).toBeNull();
     expect(await erro(`update liame.social_post_channel set status = 'aguardando' where post_id = $1`, [pacote.id])).toBe('23514:social_post_channel_pacote_check');
     expect(await erro(`update liame.social_post_channel set connected_account_id = $2 where post_id = $1`, [pacote.id, e.instagram!.id])).toBe('23514:social_post_channel_pacote_check');
-    expect(await erro(`update liame.social_post_channel set body = '' where post_id = $1`, [post.id])).toBe('23514:social_post_channel_body_check');
+    // O texto do canal: até 10.000 (desde a 0136, vazio vale no banco: o Story não leva texto, e o post pede pelo serviço).
+    expect(await erro(`update liame.social_post_channel set body = repeat('a', 10001) where post_id = $1`, [post.id])).toBe('23514:social_post_channel_texto');
     expect(await erro(`update liame.social_post_channel set channel = 'facebook' where post_id = $1 and channel = 'instagram'`, [post.id])).toBe('23505:social_post_channel_post_id_channel_key');
     // O que vale passa.
     expect(await erro(`update liame.social_post set crop_pos = 100, version = 2 where id = $1`, [post.id])).toBeNull();

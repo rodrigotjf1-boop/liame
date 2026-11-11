@@ -100,10 +100,12 @@ export type Conteiner = {
   imagem: Buffer | null;
   endereco: string;
   status: string;
-  tipo: 'foto' | 'REELS';
+  tipo: 'foto' | 'REELS' | 'STORY';
   capa?: string | null;
   quadro?: string | null;
   noFeed?: string | null;
+  /** No Story (A6, Z13): o vídeo (`video_url`) ou a foto (`image_url`). */
+  storyVideo?: boolean;
 };
 /**
  * O vídeo na Página (A6, Z10): o Reels (o começo, o envio pelo `rupload` e o fim) ou o vídeo comum. `fase`: enviando (o
@@ -112,7 +114,7 @@ export type Conteiner = {
 export type VideoNaPagina = {
   id: string;
   pagina: string;
-  tipo: 'reels' | 'video';
+  tipo: 'reels' | 'video' | 'story';
   description: string;
   created_time: string;
   arquivo: Buffer | null;
@@ -131,6 +133,8 @@ export type ComentarioNoInstagram = {
   hidden: boolean;
   respostas: ComentarioNoInstagram[];
 };
+/** Um Story publicado (A6, Z13): no Instagram, pelo contêiner; na Página, com a mídia (a foto sem post ou o vídeo). */
+export type StoryNaMeta = { id: string; onde: string; post_id: string; media_id: string; media_type: 'photo' | 'video'; creation_time: string; url: string; imagem: Buffer | null };
 /** Um post de uma Página (A6, Z11). */
 export type PostNaPagina = { id: string; pagina: string; message: string; created_time: string; permalink_url: string; full_picture: string | null; is_published: boolean };
 /** Um comentário num post da Página (A6, Z11). `deId` e `nome`: quem comentou (o id da Página, se foi ela). */
@@ -203,6 +207,12 @@ export class InstagramDeMentira {
   perderARespostaDoVideo = false;
   /** O que a Página responde ao fim do Reels (um código de recusa do vídeo, como o 1363040 da proporção). */
   recusaDoReels: { codigo: number; mensagem: string } | null = null;
+  /** Os Stories publicados (A6, Z13): os do Instagram e os das Páginas, o mais novo primeiro. */
+  readonly stories: StoryNaMeta[] = [];
+  /** As fotos enviadas à Página sem post (`published=false`), à espera do Story. */
+  readonly fotosSemPost: FotoNaPagina[] = [];
+  /** O próximo Story da Página sai, mas a resposta não chega (a Meta responde 503 depois de publicar). */
+  perderARespostaDoStory = false;
   /** Os comentários de cada mídia do Instagram, do mais novo para o mais velho (A6, Z11). */
   readonly comentariosNoInstagram = new Map<string, ComentarioNoInstagram[]>();
   /** A autorização sem a permissão de ler os comentários do Instagram (`instagram_manage_comments`): a recusa (#10). */
@@ -266,6 +276,7 @@ export class InstagramDeMentira {
     this.videoDaPaginaAoTerminar = 'publicado';
     this.perderARespostaDoVideo = false;
     this.recusaDoReels = null;
+    this.perderARespostaDoStory = false;
     this.semPermissaoDeComentarios = false;
     this.paginaDevolveQuemComentou = false;
     this.perderARespostaDoComentario = false;
@@ -705,7 +716,7 @@ export class InstagramDeMentira {
     const videoId = caminho.split('/').filter(Boolean).at(-1) ?? '';
     if (metodo !== 'POST') return erro(400, 100, 'Unsupported request');
     if (cabecalhos.authorization !== `OAuth ${TOKEN_DA_PAGINA}`) return erro(401, 190, 'Invalid OAuth access token');
-    const v = this.videosNaPagina.find((x) => x.id === videoId && x.tipo === 'reels');
+    const v = this.videosNaPagina.find((x) => x.id === videoId && (x.tipo === 'reels' || x.tipo === 'story'));
     if (!v || v.fase !== 'enviando') return erro(400, 100, 'Invalid video_id');
     const arquivo = this.buscarImagem(cabecalhos.file_url);
     if (!arquivo) return erro(400, 6000, 'There was a problem uploading your video file');
@@ -720,6 +731,9 @@ export class InstagramDeMentira {
    */
   private videoNaPagina(metodo: string, id: string, aresta: string | undefined, params: Record<string, string>, corpo: Record<string, unknown> | null): Resposta | null {
     const tarefas = this.paginas.get(id);
+    // O Story da Página (A6, Z13; o Page Stories API, lido em 11/11/2026).
+    const doStory = tarefas ? this.storyNaPagina(metodo, id, aresta, params, corpo, tarefas) : null;
+    if (doStory) return doStory;
     if (tarefas && aresta === 'video_reels' && metodo === 'POST') {
       if (!tarefas.includes('CREATE_CONTENT')) return erro(403, 200, 'Requires the CREATE_CONTENT task on the Page');
       if (corpo?.upload_phase === 'start') {
@@ -762,6 +776,49 @@ export class InstagramDeMentira {
       return { status: 200, corpo: { success: true } };
     }
     return null;
+  }
+
+  /**
+   * O Story da Página (o Page Stories API): a foto sem post vira Story por `photo_stories` (`photo_id`); o vídeo, por
+   * `video_stories` em duas fases (o começo devolve o id e o endereço do envio; o fim, depois do envio pelo `rupload`,
+   * publica); a lista `GET /{page-id}/stories`. Pede o token da Página de quem tem a tarefa de publicar. Nulo para o resto.
+   */
+  private storyNaPagina(metodo: string, id: string, aresta: string | undefined, params: Record<string, string>, corpo: Record<string, unknown> | null, tarefas: string[]): Resposta | null {
+    if (aresta === 'stories' && metodo === 'GET') {
+      const lista = this.stories.filter((s) => s.onde === id).slice(0, Number(params.limit ?? 25));
+      return { status: 200, corpo: { data: lista.map((s) => ({ post_id: s.post_id, status: 'PUBLISHED', creation_time: s.creation_time, media_type: s.media_type, media_id: s.media_id, url: s.url })) } };
+    }
+    if (metodo !== 'POST' || (aresta !== 'photo_stories' && aresta !== 'video_stories')) return null;
+    if (!tarefas.includes('CREATE_CONTENT')) return erro(403, 200, 'Requires the CREATE_CONTENT task on the Page');
+    const publicar = (mediaId: string, tipo: 'photo' | 'video', imagem: Buffer | null): Resposta => {
+      const postId = `${id}_${idDaMeta()}`;
+      this.stories.unshift({ id: postId, onde: id, post_id: postId, media_id: mediaId, media_type: tipo, creation_time: dataDoInstagram(new Date()), url: `https://www.facebook.com/stories/${id}/${postId.split('_')[1]}/`, imagem });
+      if (this.perderARespostaDoStory) {
+        this.perderARespostaDoStory = false;
+        return erro(503, 2, 'Service temporarily unavailable');
+      }
+      return { status: 200, corpo: { success: true, post_id: postId } };
+    };
+    if (aresta === 'photo_stories') {
+      const foto = this.fotosSemPost.find((f) => f.id === String(corpo?.photo_id ?? '') && f.pagina === id);
+      if (!foto) return erro(400, 100, '(#100) Invalid photo_id');
+      // A mídia de um Story já publicado não se reaproveita (a página da Meta).
+      if (this.stories.some((s) => s.media_id === foto.id)) return erro(400, 100, '(#100) Media used in a previously published post cannot be reused');
+      return publicar(foto.id, 'photo', foto.imagem);
+    }
+    if (corpo?.upload_phase === 'start') {
+      const v: VideoNaPagina = { id: idDaMeta(), pagina: id, tipo: 'story', description: '', created_time: dataDoInstagram(new Date()), arquivo: null, fase: 'enviando' };
+      this.videosNaPagina.unshift(v);
+      return { status: 200, corpo: { video_id: v.id, upload_url: `${this.rupload}/video-upload/v26.0/${v.id}` } };
+    }
+    if (corpo?.upload_phase === 'finish') {
+      const v = this.videosNaPagina.find((x) => x.id === String(corpo.video_id ?? '') && x.pagina === id && x.tipo === 'story');
+      if (!v || !v.arquivo) return erro(400, 100, 'The video was not uploaded');
+      if (this.recusaDoReels) return erro(400, this.recusaDoReels.codigo, this.recusaDoReels.mensagem);
+      v.fase = this.videoDaPaginaAoTerminar;
+      return publicar(v.id, 'video', v.arquivo);
+    }
+    return erro(400, 100, '(#100) The parameter upload_phase is required');
   }
 
   private responder(req: IncomingMessage, texto: string): { status: number; corpo: unknown } {
@@ -850,6 +907,12 @@ export class InstagramDeMentira {
       if (!tarefas.includes('CREATE_CONTENT')) return erro(403, 200, 'Requires the CREATE_CONTENT task on the Page');
       const imagem = this.buscarImagem(typeof corpo?.url === 'string' ? corpo.url : '');
       if (!imagem) return erro(400, 324, 'Missing or invalid image file');
+      // A foto sem post (`published=false`; o Story da Página, A6, Z13): fica à parte, sem post e fora das fotos da Página.
+      if (corpo?.published === false || corpo?.published === 'false') {
+        const semPost: FotoNaPagina = { id: idDaMeta(), pagina: id!, name: '', created_time: dataDoInstagram(new Date()), link: '', page_story_id: '', imagem };
+        this.fotosSemPost.unshift(semPost);
+        return { status: 200, corpo: { id: semPost.id } };
+      }
       const foto: FotoNaPagina = { id: idDaMeta(), pagina: id!, name: String(corpo?.caption ?? ''), created_time: dataDoInstagram(new Date()), link: '', page_story_id: `${id}_${idDaMeta()}`, imagem };
       foto.link = `https://www.facebook.com/photo/?fbid=${foto.id}`;
       this.fotosNaPagina.unshift(foto);
@@ -867,7 +930,10 @@ export class InstagramDeMentira {
     if (metodo === 'POST' && aresta === 'media') {
       // O Reels (A6, Z10): `media_type=REELS` com `video_url`, a capa (`cover_url` ou `thumb_offset`) e `share_to_feed`.
       const reels = corpo?.media_type === 'REELS';
-      const campo = reels ? corpo?.video_url : corpo?.image_url;
+      // O Story (A6, Z13): `media_type=STORIES` com `image_url` ou `video_url`, sem legenda (a referência não a aceita).
+      const story = corpo?.media_type === 'STORIES';
+      if (story && corpo?.caption !== undefined) return erro(400, 100, '(#100) The parameter caption is not supported for stories');
+      const campo = reels || (story && corpo?.video_url !== undefined) ? corpo?.video_url : corpo?.image_url;
       const endereco = typeof campo === 'string' ? campo : '';
       const imagem = this.buscarImagem(endereco);
       // A Meta busca a imagem (ou o vídeo) na hora: sem ela, o contêiner não nasce.
@@ -881,8 +947,9 @@ export class InstagramDeMentira {
         imagem,
         endereco,
         status: this.situacaoAoCriar,
-        tipo: reels ? 'REELS' : 'foto',
+        tipo: reels ? 'REELS' : story ? 'STORY' : 'foto',
         ...(reels ? { capa: textoOuNulo(corpo?.cover_url), quadro: textoOuNulo(corpo?.thumb_offset), noFeed: textoOuNulo(corpo?.share_to_feed) } : {}),
+        ...(story ? { storyVideo: corpo?.video_url !== undefined } : {}),
       };
       this.conteineres.set(c.id, c);
       return { status: 200, corpo: { id: c.id } };
@@ -892,6 +959,17 @@ export class InstagramDeMentira {
       if (!c || c.ig !== id) return erro(400, 100, 'Invalid parameter');
       // O pior caso (V125): o contêiner já publicado publica de novo.
       if (c.status !== 'FINISHED' && c.status !== 'PUBLISHED') return erro(400, 9007, 'Media ID is not available', 2207027);
+      // O Story (A6, Z13) fica à parte dos posts: ele não aparece em `/media`.
+      if (c.tipo === 'STORY') {
+        const sid = idDaMeta();
+        this.stories.unshift({ id: sid, onde: id!, post_id: sid, media_id: c.id, media_type: c.storyVideo ? 'video' : 'photo', creation_time: dataDoInstagram(new Date()), url: `https://www.instagram.com/stories/${this.usuarioDaConta}/${sid}/`, imagem: c.imagem });
+        c.status = 'PUBLISHED';
+        if (this.perderARespostaDaPublicacao) {
+          this.perderARespostaDaPublicacao = false;
+          return erro(503, 2, 'Service temporarily unavailable');
+        }
+        return { status: 200, corpo: { id: sid } };
+      }
       const p: PostNoInstagram = { id: idDaMeta(), caption: c.caption, timestamp: dataDoInstagram(new Date()), permalink: `https://www.instagram.com/p/${randomBytes(5).toString('hex')}/`, conteiner: c.id, imagem: c.imagem };
       this.posts.unshift(p);
       c.status = 'PUBLISHED';
@@ -913,6 +991,8 @@ export class InstagramDeMentira {
       if (c && params.fields === 'status_code') return { status: 200, corpo: { status_code: c.status, id: c.id } };
       const p = this.posts.find((x) => x.id === id);
       if (p) return { status: 200, corpo: { permalink: p.permalink, id: p.id } };
+      const s = this.stories.find((x) => x.id === id);
+      if (s) return { status: 200, corpo: { permalink: s.url, id: s.id } };
     }
     return erro(400, 100, `Unsupported ${metodo.toLowerCase()} request`, 33);
   }
