@@ -11,6 +11,13 @@ import { z } from 'zod';
 
 export const HOST_DO_IBGE = 'servicodados.ibge.gov.br';
 
+/** O texto tem exatamente `n` dígitos (sem expressão regular: a varredura de segurança do CI recusa regex sobre entrada). */
+export function digitos(texto: string, n: number): boolean {
+  if (texto.length !== n) return false;
+  for (const c of texto) if (c < '0' || c > '9') return false;
+  return true;
+}
+
 export type NivelDaLeitura = 'municipio' | 'uf' | 'capital' | 'rm' | 'ipca_local' | 'brasil';
 
 export interface LeituraDoMunicipio {
@@ -142,7 +149,7 @@ export function lugarDaLeitura(l: LeituraDoMunicipio, municipio: string, rm: str
 /** O endereço da consulta de uma tabela para um lugar. */
 export function enderecoDoAgregado(l: LeituraDoMunicipio, lugar: string | LugarDaLeitura): string {
   const localidade = typeof lugar === 'string' ? `N6[${lugar}]` : lugar.localidade;
-  if (typeof lugar === 'string' && !/^[0-9]{7}$/.test(lugar)) throw new Error('código de município fora do formato');
+  if (typeof lugar === 'string' && !digitos(lugar, 7)) throw new Error('código de município fora do formato');
   const u = new URL(`https://${HOST_DO_IBGE}/api/v3/agregados/${l.tabela}/periodos/${l.periodo}/variaveis/${Object.keys(l.variaveis).join('|')}`);
   u.searchParams.set('localidades', localidade);
   if (l.classificacao) u.searchParams.set('classificacao', l.classificacao);
@@ -175,8 +182,8 @@ export interface NumeroDoIbge {
 
 /** O período como o Liame guarda: o ano, o mês ("202609" → "2026-09") ou o trimestre pelo mês em que termina. */
 export function periodoDoIbge(bruto: string, trimestral: boolean): string | null {
-  if (/^[0-9]{4}$/.test(bruto)) return bruto;
-  if (!/^[0-9]{6}$/.test(bruto)) return null;
+  if (digitos(bruto, 4)) return bruto;
+  if (!digitos(bruto, 6)) return null;
   const ano = bruto.slice(0, 4);
   const n = Number(bruto.slice(4));
   if (trimestral) return n >= 1 && n <= 4 ? `${ano}-${String(n * 3).padStart(2, '0')}` : null;
@@ -259,7 +266,7 @@ export const HOST_DO_BCB = 'olinda.bcb.gov.br';
 export const FONTE_DO_PIX = 'bcb_pix';
 
 export function enderecoDoPix(municipio: string, desde: string): string {
-  if (!/^[0-9]{7}$/.test(municipio) || !/^[0-9]{6}$/.test(desde)) throw new Error('parâmetro do Pix fora do formato');
+  if (!digitos(municipio, 7) || !digitos(desde, 6)) throw new Error('parâmetro do Pix fora do formato');
   return `https://${HOST_DO_BCB}/olinda/servico/Pix_DadosAbertos/versao/v1/odata/TransacoesPixPorMunicipio(DataBase=@DataBase)?@DataBase='${desde}'&$filter=Municipio_Ibge%20eq%20${municipio}&$format=json`;
 }
 
@@ -276,7 +283,7 @@ export function numerosDoPix(corpo: unknown, municipio: string, mesCorrente: str
   const numeros: NumeroDoIbge[] = [];
   for (const m of r.data.value) {
     const anoMes = String(m.AnoMes);
-    if (String(m.Municipio_Ibge) !== municipio || anoMes >= mesCorrente || !/^[0-9]{6}$/.test(anoMes)) continue;
+    if (String(m.Municipio_Ibge) !== municipio || anoMes >= mesCorrente || !digitos(anoMes, 6)) continue;
     const periodo = `${anoMes.slice(0, 4)}-${anoMes.slice(4)}`;
     numeros.push({ indicador: 'pix_pf_pagadores', periodo, valor: m.QT_PES_PagadorPF }, { indicador: 'pix_pf_valor', periodo, valor: Math.round(m.VL_PagadorPF * 100) / 100 });
   }
