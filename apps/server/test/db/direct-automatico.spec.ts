@@ -1,6 +1,6 @@
 import { resolve } from 'node:path';
 import { DIRECT_AUTO_REPLY_NOTICE } from '@liame/contracts';
-import { type Database, runMigrations } from '@liame/database';
+import { type Database, runMigrations, withTenant } from '@liame/database';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { ActionService } from '../../src/actions/action.service.js';
 import { BudgetService } from '../../src/actions/budget.service.js';
@@ -10,7 +10,7 @@ import { currentStep, totpCode } from '../../src/auth/totp.js';
 import { ClienteConector } from '../../src/connectors/cliente-http.js';
 import { versaoRegistrada } from '../../src/connectors/tipos.js';
 import { DATABASE } from '../../src/database/database.module.js';
-import { comAvisoDoDirect } from '../../src/direct/automatico.js';
+import { comAvisoDoDirect, oQueSeguraODirectAutomatico } from '../../src/direct/automatico.js';
 import { RESPOSTAS_DA_MENCAO } from '../../src/direct/tipo-no-direct.js';
 import { FlagService } from '../../src/flags/flag.service.js';
 import { KillSwitchService } from '../../src/kill-switch/kill-switch.service.js';
@@ -32,7 +32,8 @@ import { hasDb, OWNER_URL } from './env.js';
 //     pessoa ficam com a equipe; a mesma mensagem não é decidida duas vezes, e a seguinte da pessoa é;
 //   - a terceira automática seguida na mesma conversa vai para a equipe;
 //   - desligar depois do pedido segura o que estava na fila (o executor confere o portão de novo); sem a função, nada sai;
-//   - a prévia mostra o que sairia, sem mandar nada.
+//   - a prévia mostra o que sairia, sem mandar nada;
+//   - o Messenger da Página (A6, Z14, parte 1) fica fora: a rotina não olha a conversa dele e o portão segura.
 
 describe.skipIf(!hasDb)('o atendimento automático do Direct (A6 · Z12, parte 5a)', () => {
   let api: TestApi;
@@ -140,6 +141,20 @@ describe.skipIf(!hasDb)('o atendimento automático do Direct (A6 · Z12, parte 5
     const pergunta = await conversa(e, 'ana.paula_rj', [{ texto: 'Vocês entregam na Penha?', minutos: 7 }]);
     const reclamacao = await conversa(e, 'rui.s', [{ texto: 'Chegou frio e faltou a batata.', minutos: 6 }]);
     const pessoa = await conversa(e, 'lucas_fern', [{ texto: 'Amei! Mas quero falar com um atendente.', minutos: 5 }]);
+    // Um elogio no Messenger da Página (Z14, parte 1): o automático fica no Direct do Instagram até a parte 2.
+    const doMessenger = meta.escreveuNoMessenger(e.pagina!.externo, { nome: 'Joana Lima', texto: 'Que delícia esse smash!', minutos: 4 });
+    const daJoana = meta.conversasDoDirect.find((c) => c.id === doMessenger)!.mensagens[0]!;
+    await ownerQuery(
+      `insert into liame.direct_conversation (connected_account_id, tenant_id, brand_id, conversation_id, participant_id, display_name, channel,
+                                              last_message_at, last_inbound_at, last_direction, unread, meta_updated_at)
+       values ($1, $2, $3, $4, 'psid-joana', 'Joana Lima', 'messenger', $5, $5, 'entrada', true, $5)`,
+      [e.pagina!.id, e.tenantId, e.brandId, doMessenger, daJoana.created_time],
+    );
+    await ownerQuery(
+      `insert into liame.direct_message (connected_account_id, tenant_id, brand_id, conversation_id, message_id, direction, kind, body, sent_at)
+       values ($1, $2, $3, $4, $5, 'entrada', 'texto', $6, $7)`,
+      [e.pagina!.id, e.tenantId, e.brandId, doMessenger, daJoana.id, daJoana.texto, daJoana.created_time],
+    );
 
     // A prévia, antes de ligar: o que sairia, sem mandar nada.
     const previa = (await api.call('GET', `/v1/direct/auto-reply/preview?brand_id=${e.brandId}`, { cookie: e.cookie })).body as { items: { conversation_id: string; kind: string; reply: string }[] };
@@ -166,6 +181,11 @@ describe.skipIf(!hasDb)('o atendimento automático do Direct (A6 · Z12, parte 5
     });
     // A mesma mensagem não é decidida de novo.
     expect(await rodar(e)).toEqual([]);
+    // O Messenger ficou fora da fila (nem entrou nas vezes acima), e o portão segura se ele chegar lá.
+    const portao = await withTenant(database.db, e.tenantId, (tx) =>
+      oQueSeguraODirectAutomatico(tx, api.app.get(FlagService), { tenantId: e.tenantId, brandId: e.brandId, connectedAccountId: e.pagina!.id, conversationId: doMessenger }, new Date()),
+    );
+    expect(portao).toEqual({ segura: 'canal_sem_automatico' });
     const feitos = await pedidos(e);
     expect(feitos.map((p) => [p.resource_id, p.status, p.mode, p.actor_type]).sort()).toEqual(
       [

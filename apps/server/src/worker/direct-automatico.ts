@@ -55,6 +55,7 @@ export class DirectAutomaticoLoop {
                where m.connected_account_id = c.connected_account_id and m.conversation_id = c.conversation_id and m.direction = 'entrada'
                order by m.sent_at desc, m.message_id desc limit 1) p on true
            where c.last_direction = 'entrada'
+             and c.channel = 'instagram'
              and c.last_inbound_at > ${ref} - make_interval(hours => ${JANELA_DO_DIRECT_HORAS})
              and (c.concluded_at is null or c.concluded_at < c.last_inbound_at)
              and c.auto_checked_message is distinct from p.message_id

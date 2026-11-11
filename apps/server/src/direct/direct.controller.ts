@@ -79,6 +79,25 @@ export class DirectController {
     return this.direct.mudarAjuste(auth, body);
   }
 
+  @Put('messenger')
+  @Permissao('acoes.aprovar')
+  @Auditar('direct.messenger_ajuste', { recurso: 'brand' })
+  @ApiOperation({
+    summary: 'Ligar ou desligar o Messenger',
+    description:
+      'Liga ou desliga o Messenger da Página da marca na caixa do Direct, separado do Direct do Instagram. Ligar pede o Dono ou um Administrador, a função `messenger` liberada, a Página conectada, `no_other_app` (nenhum outro programa responde aquele Messenger) e a confirmação de quem é (o código do app ou a chave de acesso); a leitura começa em até um minuto. Se a Central de atendimento do Regem atende o Messenger desta Página, o Liame não mostra as conversas. Desligar vale na hora, sem código, para quem aprova. Fica na auditoria, com o antes e o depois.',
+  })
+  @ApiOkResponse({ standardSchema: DirectSettingsResponse })
+  @ApiBadRequestResponse({ standardSchema: ProblemDetails })
+  @ApiForbiddenResponse({ standardSchema: ProblemDetails })
+  @ApiNotFoundResponse({ standardSchema: ProblemDetails })
+  @ApiConflictResponse({ standardSchema: ProblemDetails })
+  @ApiUnprocessableEntityResponse({ standardSchema: ProblemDetails })
+  @ApiTooManyRequestsResponse({ standardSchema: ProblemDetails })
+  mudarMessenger(@Auth() auth: AuthContext, @Body({ schema: DirectSettingsRequest }) body: DirectSettingsRequest): Promise<DirectSettingsResponse> {
+    return this.direct.mudarMessenger(auth, body);
+  }
+
   @Get('auto-reply')
   @Permissao('campanhas.ver')
   @ApiOperation({

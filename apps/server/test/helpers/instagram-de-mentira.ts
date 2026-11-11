@@ -155,7 +155,15 @@ const dataDoInstagram = (d: Date): string => `${d.toISOString().slice(0, 19)}+00
 /** Uma mensagem do Direct (A6, Z12): da marca ou da pessoa, o texto, o tipo do anexo e o story. */
 export type MensagemNoDirect = { id: string; created_time: string; daMarca: boolean; texto: string; anexo?: string; story?: 'reply_to' | 'mention' };
 /** Uma conversa do Direct, como a Página a guarda: a pessoa e as mensagens, da mais velha para a mais nova. */
-export type ConversaNoDirect = { id: string; pagina: string; updated_time: string; pessoa: { id: string; username: string }; mensagens: MensagemNoDirect[] };
+/** `canal`: o Direct do Instagram ou o Messenger da Página (A6, Z14); no Messenger a pessoa vem com o nome, sem @. */
+export type ConversaNoDirect = {
+  id: string;
+  pagina: string;
+  canal: 'instagram' | 'messenger';
+  updated_time: string;
+  pessoa: { id: string; username?: string; name?: string };
+  mensagens: MensagemNoDirect[];
+};
 
 export class InstagramDeMentira {
   readonly conteineres = new Map<string, Conteiner>();
@@ -372,12 +380,28 @@ export class InstagramDeMentira {
    */
   escreveuNoDirect(pagina: string, o: { usuario: string; texto?: string; deId?: string; minutos?: number; anexo?: string; story?: 'reply_to' | 'mention' }): string {
     const quando = new Date(Date.now() - (o.minutos ?? 0) * 60_000).toISOString();
-    let c = this.conversasDoDirect.find((x) => x.pagina === pagina && x.pessoa.username === o.usuario);
+    let c = this.conversasDoDirect.find((x) => x.pagina === pagina && x.canal === 'instagram' && x.pessoa.username === o.usuario);
     if (!c) {
-      c = { id: `aWdf${randomBytes(9).toString('hex')}`, pagina, updated_time: quando, pessoa: { id: o.deId ?? idDaMeta(), username: o.usuario }, mensagens: [] };
+      c = { id: `aWdf${randomBytes(9).toString('hex')}`, pagina, canal: 'instagram', updated_time: quando, pessoa: { id: o.deId ?? idDaMeta(), username: o.usuario }, mensagens: [] };
       this.conversasDoDirect.push(c);
     }
     c.mensagens.push({ id: `mid.${randomBytes(9).toString('hex')}`, created_time: quando, daMarca: false, texto: o.texto ?? '', ...(o.anexo ? { anexo: o.anexo } : {}), ...(o.story ? { story: o.story } : {}) });
+    c.updated_time = quando;
+    return c.id;
+  }
+
+  /**
+   * Uma mensagem da pessoa no Messenger da Página (A6, Z14): na conversa dela (nova, se não houver), há `minutos`
+   * minutos. A pessoa vem com o nome do Facebook e o PSID, sem @. Devolve o id da conversa.
+   */
+  escreveuNoMessenger(pagina: string, o: { nome: string; texto?: string; deId?: string; minutos?: number; anexo?: string }): string {
+    const quando = new Date(Date.now() - (o.minutos ?? 0) * 60_000).toISOString();
+    let c = this.conversasDoDirect.find((x) => x.pagina === pagina && x.canal === 'messenger' && x.pessoa.name === o.nome);
+    if (!c) {
+      c = { id: `t_${randomBytes(9).toString('hex')}`, pagina, canal: 'messenger', updated_time: quando, pessoa: { id: o.deId ?? idDaMeta(), name: o.nome }, mensagens: [] };
+      this.conversasDoDirect.push(c);
+    }
+    c.mensagens.push({ id: `m_${randomBytes(9).toString('hex')}`, created_time: quando, daMarca: false, texto: o.texto ?? '', ...(o.anexo ? { anexo: o.anexo } : {}) });
     c.updated_time = quando;
     return c.id;
   }
@@ -398,7 +422,9 @@ export class InstagramDeMentira {
    * que não é do Direct.
    */
   private doDirect(metodo: string, id: string, aresta: string | undefined, params: Record<string, string>, corpo: Record<string, unknown> | null): Resposta | null {
-    const daMarca = (pagina: string) => ({ id: `ig-${pagina}`, username: this.usuarioDaConta });
+    // A marca na conversa: a conta do Instagram no Direct; a própria Página no Messenger (com o nome dela).
+    const daMarca = (pagina: string, canal: 'instagram' | 'messenger' = 'instagram') =>
+      canal === 'messenger' ? { id: pagina, name: 'Página da marca' } : { id: `ig-${pagina}`, username: this.usuarioDaConta };
     // Mandar (Z12, parte 2): `POST /{page-id}/messages` com recipient.id e message.text, a tarefa de mensagens na Página,
     // só dentro da janela de 24 horas (fora dela, 10/2534022) e só o app dono da conversa (com o dono, 100/2534037).
     if (metodo === 'POST' && aresta === 'messages' && this.paginas.has(id)) {
@@ -428,14 +454,16 @@ export class InstagramDeMentira {
       return { status: 200, corpo: { data: this.donoDasConversas ? [{ thread_owner: { app_id: this.donoDasConversas === 'liame' ? APP_DA_META : this.donoDasConversas } }] : [] } };
     }
     if (aresta === 'conversations' && this.paginas.has(id)) {
-      if (params.platform !== 'instagram') return erro(400, 100, '(#100) The parameter platform is required for Instagram conversations');
-      if (!(this.paginas.get(id) ?? []).includes('MODERATE')) return erro(403, 200, 'Requires the MODERATE task on the Page');
+      // A plataforma pedida (`instagram` ou `messenger`; a documentação lida em 11/11/2026) e a tarefa MESSAGING na Página
+      // para as duas (D-A6-124).
+      if (params.platform !== 'instagram' && params.platform !== 'messenger') return erro(400, 100, '(#100) The parameter platform must be instagram or messenger');
+      if (!(this.paginas.get(id) ?? []).includes('MESSAGING')) return erro(403, 200, 'Requires the MESSAGING task on the Page');
       if (this.semPermissaoDeMensagens) return erro(403, 10, '(#10) Application does not have permission for this action');
-      const lista = this.conversasDoDirect.filter((c) => c.pagina === id).sort((a, b) => b.updated_time.localeCompare(a.updated_time));
+      const lista = this.conversasDoDirect.filter((c) => c.pagina === id && c.canal === params.platform).sort((a, b) => b.updated_time.localeCompare(a.updated_time));
       return {
         status: 200,
         corpo: {
-          data: lista.slice(0, Number(params.limit ?? 25)).map((c) => ({ id: c.id, updated_time: c.updated_time, participants: { data: [daMarca(c.pagina), c.pessoa] } })),
+          data: lista.slice(0, Number(params.limit ?? 25)).map((c) => ({ id: c.id, updated_time: c.updated_time, participants: { data: [daMarca(c.pagina, c.canal), c.pessoa] } })),
           paging: {},
         },
       };
@@ -447,8 +475,8 @@ export class InstagramDeMentira {
     const mensagens = [...c.mensagens].reverse().slice(0, 20).map((m) => ({
       id: m.id,
       created_time: m.created_time,
-      from: m.daMarca ? daMarca(c.pagina) : c.pessoa,
-      to: { data: [m.daMarca ? c.pessoa : daMarca(c.pagina)] },
+      from: m.daMarca ? daMarca(c.pagina, c.canal) : c.pessoa,
+      to: { data: [m.daMarca ? c.pessoa : daMarca(c.pagina, c.canal)] },
       ...(m.texto ? { message: m.texto } : {}),
       ...(m.anexo ? { attachments: { data: [{ type: m.anexo }] } } : {}),
       ...(m.story ? { story: { [m.story]: { link: 'https://lookaside.fbsbx.com/ig_messaging_cdn/?asset_id=1', id: '1' } } } : {}),

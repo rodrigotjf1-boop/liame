@@ -136,11 +136,13 @@ export async function oQueSeguraODirectAutomatico(
   if (!marca.enabled) return { segura: 'automatico_desligado' };
 
   const c = (
-    await tx.execute<{ last_direction: string; last_inbound_at: Date | string | null; concluded_at: Date | string | null }>(sql`
-      select last_direction, last_inbound_at, concluded_at from liame.direct_conversation
+    await tx.execute<{ last_direction: string; last_inbound_at: Date | string | null; concluded_at: Date | string | null; channel: string }>(sql`
+      select last_direction, last_inbound_at, concluded_at, channel from liame.direct_conversation
        where connected_account_id = ${alvo.connectedAccountId}::uuid and conversation_id = ${alvo.conversationId} and tenant_id = ${alvo.tenantId}`)
   ).rows[0];
   if (!c) return { segura: 'conversa_sumiu' };
+  // O automático no Messenger vem com a resposta pela Página (A6, Z14, parte 2): por enquanto, só o Direct do Instagram.
+  if (c.channel !== 'instagram') return { segura: 'canal_sem_automatico' };
   const ultima = c.last_inbound_at ? new Date(c.last_inbound_at) : null;
   if (c.last_direction !== 'entrada' || !ultima || (c.concluded_at && new Date(c.concluded_at) >= ultima)) return { segura: 'respondida' };
   if (ultima.getTime() + JANELA_DO_DIRECT_HORAS * 3_600_000 <= agora.getTime()) return { segura: 'fora_da_janela' };

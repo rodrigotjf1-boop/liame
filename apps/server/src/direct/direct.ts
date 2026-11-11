@@ -6,6 +6,10 @@
 
 /** A função da empresa (desligada; só leitura). */
 export const FLAG_DO_DIRECT = 'direct';
+/** A função do Messenger da Página, na mesma caixa (A6, Z14, parte 1; D-A6-120 e D-A6-121): desligada; só leitura. */
+export const FLAG_DO_MESSENGER = 'messenger';
+/** O canal da conversa: o Direct do Instagram ou o Messenger da Página. */
+export type CanalDoDirect = 'instagram' | 'messenger';
 /** O conjunto do `sync_state`. */
 export const DATASET_DO_DIRECT = 'direct';
 /** A cada minuto (D-A6-108: por consulta, enquanto o app do Liame estiver em desenvolvimento na Meta). */
@@ -26,14 +30,17 @@ export const ESCOPO_DOS_CANAIS_DO_REGEM = 'atendimento.canais.ler';
 /** Os campos de cada conversa da lista e das mensagens de uma conversa (a expansão da Graph API). */
 export const CAMPOS_DAS_CONVERSAS = 'id,updated_time,participants';
 export const CAMPOS_DAS_MENSAGENS = 'messages{id,created_time,from,to,message,attachments,story,is_unsupported}';
+/** No Messenger não há story nem `is_unsupported` nas mensagens (A6, Z14): só os campos de lá. */
+export const CAMPOS_DAS_MENSAGENS_DO_MESSENGER = 'messages{id,created_time,from,to,message,attachments}';
 
 export type DirecaoDoDirect = 'entrada' | 'saida';
 export type TipoDaMensagem = 'texto' | 'imagem' | 'video' | 'audio' | 'arquivo' | 'compartilhamento' | 'story_resposta' | 'story_mencao' | 'reel' | 'sem_suporte';
 
-export type ConversaLida = { conversation_id: string; meta_updated_at: string; participant_id: string; username: string | null };
+/** `display_name`: o nome que a Meta manda de quem escreve (no Messenger, o nome do Facebook; não há @). */
+export type ConversaLida = { conversation_id: string; meta_updated_at: string; participant_id: string; username: string | null; display_name: string | null };
 export type MensagemLida = { message_id: string; direction: DirecaoDoDirect; kind: TipoDaMensagem; body: string; sent_at: string };
 
-/** Como a conta do Instagram da marca aparece na Meta: o id da conta profissional e o @. */
+/** Como a conta da marca aparece na Meta: o id da conta profissional e o @ (Instagram), ou o id da Página (Messenger). */
 export type ContaDoDirect = { id: string; usuario: string | null };
 
 const MAX_TEXTO = 4000;
@@ -62,11 +69,18 @@ export function conversasDoDirect(resposta: unknown, conta: ContaDoDirect): Conv
     const id = texto(c.id);
     const quando = data(c.updated_time);
     if (!id || id.length > 200 || !quando) continue;
-    const pessoa = lista(c.participants).map((p) => p as { id?: unknown; username?: unknown }).find((p) => texto(p.id) && !daMarca(p, conta));
+    const pessoa = lista(c.participants).map((p) => p as { id?: unknown; username?: unknown; name?: unknown }).find((p) => texto(p.id) && !daMarca(p, conta));
     const participante = pessoa ? texto(pessoa.id) : null;
     if (!participante || participante.length > 100) continue;
     const usuario = texto(pessoa?.username);
-    saida.push({ conversation_id: id, meta_updated_at: quando, participant_id: participante, username: usuario && usuario.length <= 100 ? usuario : null });
+    const nome = texto(pessoa?.name);
+    saida.push({
+      conversation_id: id,
+      meta_updated_at: quando,
+      participant_id: participante,
+      username: usuario && usuario.length <= 100 ? usuario : null,
+      display_name: nome ? nome.slice(0, 200) : null,
+    });
   }
   return saida;
 }
@@ -151,8 +165,10 @@ export type CanaisDoRegem = { instagram: { ig_user_id: string; usuario: string |
 
 /**
  * A Central do Regem atende o Direct desta conta? Pelo id da conta profissional; se o id não bater (o login do Instagram e
- * o do Facebook podem dar ids diferentes, a conferir no teste), pelo @.
+ * o do Facebook podem dar ids diferentes, a conferir no teste), pelo @. No Messenger (A6, Z14; D-A6-121), pelo id da
+ * Página.
  */
-export function regemAtende(canais: CanaisDoRegem, conta: ContaDoDirect): boolean {
+export function regemAtende(canais: CanaisDoRegem, conta: ContaDoDirect, canal: CanalDoDirect = 'instagram'): boolean {
+  if (canal === 'messenger') return canais.messenger.some((m) => m.pagina_id === conta.id);
   return canais.instagram.some((c) => c.ig_user_id === conta.id || (conta.usuario !== null && c.usuario !== null && c.usuario.replace(/^@/, '').toLowerCase() === conta.usuario.replace(/^@/, '').toLowerCase()));
 }

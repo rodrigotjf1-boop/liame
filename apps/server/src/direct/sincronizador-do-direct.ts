@@ -5,13 +5,15 @@ import { sql } from 'drizzle-orm';
 import type { AppConfig } from '../config.js';
 import { contaConectada } from '../connections/conectada.js';
 import { type ClienteConector, ErroConector } from '../connectors/cliente-http.js';
-import { PROVEDOR_INSTAGRAM, tokenDaPagina } from '../connectors/meta/publicacao.js';
+import { PROVEDOR_INSTAGRAM, PROVEDOR_PAGINA, tokenDaPagina } from '../connectors/meta/publicacao.js';
 import type { CredencialGuardada } from '../connections/oauth.js';
 import { AcessoDaExecucao, credencialDaLoja } from '../connectors/regem/acesso-da-loja.js';
 import { lerCanaisAtendidos } from '../connectors/regem/conector-regem.js';
 import {
   CAMPOS_DAS_CONVERSAS,
   CAMPOS_DAS_MENSAGENS,
+  CAMPOS_DAS_MENSAGENS_DO_MESSENGER,
+  type CanalDoDirect,
   CONFERENCIA_DO_REGEM_MIN,
   CONVERSAS_POR_LEITURA,
   type ContaDoDirect,
@@ -34,12 +36,15 @@ import {
 // novas de cada conversa têm o texto, na Meta). O banco em transações curtas, antes e depois; as chamadas, sem
 // transação aberta. O token nunca vai para log nem banco; a prova do segredo do app vai no endereço (V161). A reserva
 // da vez é da rotina do worker (V53).
+// O Messenger da Página (A6, Z14, parte 1; D-A6-120 e D-A6-121): a conta `facebook_page` da marca segue o mesmo caminho,
+// com o ajuste e a função do canal (`messenger_setting`, `messenger`), a consulta com `platform=messenger`, o Regem pela
+// Página e o nome de quem escreve (no Messenger não há @).
 
 const META = 'meta_ads';
 const MINUTO_MS = 60_000;
 const HORA_MS = 60 * MINUTO_MS;
 
-type Capacidade = 'pages' | 'instagram_conversas';
+type Capacidade = 'pages' | 'instagram_conversas' | 'messenger_conversas';
 
 /** A conferência com o Regem guardada no cursor (D-A6-107). */
 export type SituacaoDoRegem = 'livre' | 'atende' | 'sem_regem' | 'nao_conferido';
@@ -51,8 +56,8 @@ export type DependenciasDoDirect = {
   graphUrl: string;
   appSecret: string | null;
   versao: (capacidade: Capacidade) => Promise<string>;
-  /** A função `direct` da empresa, conferida na vez. */
-  ligada: (tenantId: string, brandId: string) => Promise<boolean>;
+  /** A função do canal na empresa (`direct` ou `messenger`), conferida na vez. */
+  ligada: (tenantId: string, brandId: string, canal: CanalDoDirect) => Promise<boolean>;
   /** O endereço do Regem e o aplicativo do Liame no DMS ID (a ligação da loja). */
   config: Pick<AppConfig, 'dmsId' | 'produtos'>;
 };
@@ -73,6 +78,7 @@ export type CursorDoDirect = { proxima?: string; falha?: string; falhas_seguidas
 type LinhaDaConta = {
   id: string;
   brand_id: string;
+  provider: string;
   external_id: string;
   usuario: string | null;
   pagina_id: string | null;
@@ -103,14 +109,19 @@ export class SincronizadorDoDirect {
     const inicio = await withTenant(db, tenantId, async (tx) => {
       const conta = (
         await tx.execute<LinhaDaConta>(sql`
-          select a.id, a.brand_id, a.external_id, a.provider_attributes->>'usuario' as usuario, a.provider_attributes->>'pagina_id' as pagina_id,
+          select a.id, a.brand_id, a.provider, a.external_id, a.provider_attributes->>'usuario' as usuario,
+                 case when a.provider = ${PROVEDOR_PAGINA} then a.external_id else a.provider_attributes->>'pagina_id' end as pagina_id,
                  a.credential_secret_id as segredo, coalesce(${contaConectada('a')}, false) as conectada,
-                 coalesce((select d.enabled from liame.direct_setting d where d.brand_id = a.brand_id), false) as ligado, s.cursor
+                 coalesce(case when a.provider = ${PROVEDOR_PAGINA}
+                               then (select m.enabled from liame.messenger_setting m where m.brand_id = a.brand_id)
+                               else (select d.enabled from liame.direct_setting d where d.brand_id = a.brand_id) end, false) as ligado,
+                 s.cursor
             from liame.connected_account a
             left join liame.sync_state s on s.connected_account_id = a.id and s.dataset = ${DATASET_DO_DIRECT}
-           where a.id = ${contaId} and a.provider = ${PROVEDOR_INSTAGRAM}`)
+           where a.id = ${contaId} and a.provider in (${PROVEDOR_INSTAGRAM}, ${PROVEDOR_PAGINA})`)
       ).rows[0];
       if (!conta) return { situacao: 'ignorada' as const };
+      const canal: CanalDoDirect = conta.provider === PROVEDOR_PAGINA ? 'messenger' : 'instagram';
       const { lendo: _reserva, ...cursor }: CursorDoDirect = conta.cursor ?? {};
       if (!conta.conectada || !conta.segredo || !conta.pagina_id) {
         await this.adiar(tx, contaId, tenantId, { ...cursor, proxima: depois(24 * HORA_MS) }, agora);
@@ -118,7 +129,7 @@ export class SincronizadorDoDirect {
       }
       // A função desligada ou o Direct desligado na marca: a conta espera um dia, sem ler (V106). Ligar na tela traz a
       // vez para agora (`direct.service.ts`).
-      if (!conta.ligado || !(await this.deps.ligada(tenantId, conta.brand_id))) {
+      if (!conta.ligado || !(await this.deps.ligada(tenantId, conta.brand_id, canal))) {
         await this.adiar(tx, contaId, tenantId, { ...cursor, proxima: depois(24 * HORA_MS) }, agora);
         return { situacao: 'desligada' as const };
       }
@@ -137,7 +148,7 @@ export class SincronizadorDoDirect {
         await tx.execute<Guardada>(sql`
           select conversation_id, meta_updated_at, last_inbound_at from liame.direct_conversation where connected_account_id = ${contaId}`)
       ).rows;
-      return { situacao: 'ler' as const, conta, cursor, token, regem: regem ?? null, credencialDoRegem, guardadas };
+      return { situacao: 'ler' as const, conta, canal, cursor, token, regem: regem ?? null, credencialDoRegem, guardadas };
     }).catch(async (err: unknown) => {
       if (!(err instanceof ErroConector)) throw err;
       await withTenant(db, tenantId, (tx) => this.marcarFalha(tx, contaId, tenantId, {}, err, agora));
@@ -145,13 +156,14 @@ export class SincronizadorDoDirect {
     });
     if (inicio.situacao === 'ignorada' || inicio.situacao === 'desligada') return { conta: contaId, status: inicio.situacao };
     if (inicio.situacao === 'falhou') return { conta: contaId, status: inicio.erro.tipo === 'permissao' ? 'sem_permissao' : 'falhou', erro: inicio.erro.message };
-    const { conta, cursor, token, regem, credencialDoRegem, guardadas } = inicio;
-    const daConta: ContaDoDirect = { id: conta.external_id, usuario: conta.usuario };
+    const { conta, canal, cursor, token, regem, credencialDoRegem, guardadas } = inicio;
+    // No Messenger, a marca é a Página (o id dela); no Instagram, a conta profissional e o @.
+    const daConta: ContaDoDirect = canal === 'messenger' ? { id: conta.pagina_id!, usuario: null } : { id: conta.external_id, usuario: conta.usuario };
 
     // 2. A conferência com o Regem (D-A6-107), no máximo a cada 15 minutos: só a conta livre segue para a leitura.
     const fresca = cursor.regem_em && agora.getTime() - new Date(cursor.regem_em).getTime() < CONFERENCIA_DO_REGEM_MIN * MINUTO_MS;
     const situacaoDoRegem: SituacaoDoRegem =
-      fresca && (cursor.regem === 'livre' || cursor.regem === 'sem_regem') ? cursor.regem : await this.conferirRegem(regem, credencialDoRegem, daConta);
+      fresca && (cursor.regem === 'livre' || cursor.regem === 'sem_regem') ? cursor.regem : await this.conferirRegem(regem, credencialDoRegem, daConta, canal);
     const conferidoEm = fresca && situacaoDoRegem === cursor.regem ? cursor.regem_em! : agora.toISOString();
     if (situacaoDoRegem === 'atende' || situacaoDoRegem === 'nao_conferido') {
       await withTenant(db, tenantId, async (tx) => {
@@ -166,7 +178,7 @@ export class SincronizadorDoDirect {
     let lidas: ConversaLida[];
     let relidas: Relida[];
     try {
-      ({ lidas, relidas } = await this.ler(conta, token, daConta, guardadas));
+      ({ lidas, relidas } = await this.ler(conta, token, daConta, guardadas, canal));
     } catch (err) {
       if (!(err instanceof ErroConector)) throw err;
       this.logger.warn(`conta ${contaId}: o Direct não veio (${err.tipo}): ${err.message}`);
@@ -177,7 +189,7 @@ export class SincronizadorDoDirect {
     // 4. A gravação: as conversas relidas, as mensagens delas e o estado.
     const ultimaDaPessoa = new Map(guardadas.map((g) => [g.conversation_id, g.last_inbound_at ? iso(g.last_inbound_at) : null]));
     await withTenant(db, tenantId, async (tx) => {
-      for (const r of relidas) await this.gravarConversa(tx, conta, tenantId, r, ultimaDaPessoa.get(r.conversa.conversation_id) ?? null, agora);
+      for (const r of relidas) await this.gravarConversa(tx, conta, canal, tenantId, r, ultimaDaPessoa.get(r.conversa.conversation_id) ?? null, agora);
       await this.marcar(
         tx,
         contaId,
@@ -194,13 +206,13 @@ export class SincronizadorDoDirect {
    * (`atendimento.canais.ler`); sem o escopo, ou sem resposta, `nao_conferido` (a leitura espera: na dúvida, o Liame não
    * lê nem responde).
    */
-  private async conferirRegem(regem: LinhaDoRegem | null, credencial: ReturnType<typeof credencialDaLoja>, conta: ContaDoDirect): Promise<SituacaoDoRegem> {
+  private async conferirRegem(regem: LinhaDoRegem | null, credencial: ReturnType<typeof credencialDaLoja>, conta: ContaDoDirect, canal: CanalDoDirect): Promise<SituacaoDoRegem> {
     if (!regem) return 'sem_regem';
     if (!credencial || !credencial.escopos.includes(ESCOPO_DOS_CANAIS_DO_REGEM)) return 'nao_conferido';
     const acesso = new AcessoDaExecucao(credencial, this.deps.config, regem.external_id, [ESCOPO_DOS_CANAIS_DO_REGEM]);
     try {
       const canais = await acesso.chamar((a) => lerCanaisAtendidos({ cliente: this.deps.cliente(), apiUrl: this.deps.config.produtos.regemApiUrl }, a));
-      return regemAtende({ instagram: canais.instagram.map((c) => ({ ig_user_id: c.ig_user_id, usuario: c.usuario ?? null })), messenger: canais.messenger }, conta) ? 'atende' : 'livre';
+      return regemAtende({ instagram: canais.instagram.map((c) => ({ ig_user_id: c.ig_user_id, usuario: c.usuario ?? null })), messenger: canais.messenger }, conta, canal) ? 'atende' : 'livre';
     } catch (err) {
       if (!(err instanceof ErroConector)) throw err;
       this.logger.warn(`loja do Regem ${regem.id}: não deu para conferir quem atende o Direct (${err.tipo}${err.codigoProvider ? `:${err.codigoProvider}` : ''})`);
@@ -209,15 +221,17 @@ export class SincronizadorDoDirect {
   }
 
   /** As conversas mais recentes e, das que mudaram (ou que o Liame não tem), as mensagens, até 10 por leitura. */
-  private async ler(conta: LinhaDaConta, token: string, daConta: ContaDoDirect, guardadas: Guardada[]): Promise<{ lidas: ConversaLida[]; relidas: Relida[] }> {
+  private async ler(conta: LinhaDaConta, token: string, daConta: ContaDoDirect, guardadas: Guardada[], canal: CanalDoDirect): Promise<{ lidas: ConversaLida[]; relidas: Relida[] }> {
     const pagina = conta.pagina_id!;
+    const capacidade: Capacidade = canal === 'messenger' ? 'messenger_conversas' : 'instagram_conversas';
     const contas = await this.chamar(conta.external_id, token, 'pages', 'me/accounts', { fields: 'id,access_token,tasks', limit: '100' });
     const daPagina = tokenDaPagina(contas, pagina);
-    // Sem a Página na autorização, ou sem a tarefa de moderar (a leitura das conversas pede MODERATE).
-    if (!daPagina) throw new ErroConector('permissao', META, 'a autorização não alcança a Página do Instagram');
-    if (!daPagina.podeModerar) throw new ErroConector('permissao', META, 'quem autorizou não tem a tarefa de moderar a Página');
-    const corpo = await this.chamar(conta.external_id, daPagina.token, 'instagram_conversas', `${pagina}/conversations`, {
-      platform: 'instagram',
+    // Sem a Página na autorização, ou sem a tarefa de mensagens da Página (a referência das conversas pede MESSAGING;
+    // quem pode moderar também passa: D-A6-124).
+    if (!daPagina) throw new ErroConector('permissao', META, canal === 'messenger' ? 'a autorização não alcança a Página' : 'a autorização não alcança a Página do Instagram');
+    if (!daPagina.podeMandarMensagem && !daPagina.podeModerar) throw new ErroConector('permissao', META, 'quem autorizou não tem a tarefa de mensagens na Página');
+    const corpo = await this.chamar(conta.external_id, daPagina.token, capacidade, `${pagina}/conversations`, {
+      platform: canal,
       fields: CAMPOS_DAS_CONVERSAS,
       limit: String(CONVERSAS_POR_LEITURA),
     });
@@ -227,7 +241,9 @@ export class SincronizadorDoDirect {
     const relidas: Relida[] = [];
     for (const conversa of mudaram) {
       try {
-        const doFio = await this.chamar(conta.external_id, daPagina.token, 'instagram_conversas', conversa.conversation_id, { fields: CAMPOS_DAS_MENSAGENS });
+        const doFio = await this.chamar(conta.external_id, daPagina.token, capacidade, conversa.conversation_id, {
+          fields: canal === 'messenger' ? CAMPOS_DAS_MENSAGENS_DO_MESSENGER : CAMPOS_DAS_MENSAGENS,
+        });
         const mensagens = mensagensDaConversa(doFio, daConta);
         if (mensagens.length) relidas.push({ conversa, mensagens });
       } catch (err) {
@@ -247,20 +263,22 @@ export class SincronizadorDoDirect {
    * Grava uma conversa relida e as mensagens dela. A última mensagem e a última da pessoa saem das mensagens lidas (as
    * mais novas da conversa), sem voltar no tempo; a mensagem nova da pessoa marca a conversa como não aberta.
    */
-  private async gravarConversa(tx: Tx, conta: LinhaDaConta, tenantId: string, r: Relida, ultimaGuardada: string | null, agora: Date): Promise<void> {
+  private async gravarConversa(tx: Tx, conta: LinhaDaConta, canal: CanalDoDirect, tenantId: string, r: Relida, ultimaGuardada: string | null, agora: Date): Promise<void> {
     const ultima = r.mensagens[r.mensagens.length - 1]!;
     const daPessoa = r.mensagens.filter((m) => m.direction === 'entrada').map((m) => m.sent_at);
     const ultimaDaPessoa = daPessoa.length ? daPessoa[daPessoa.length - 1]! : null;
     const novaDaPessoa = ultimaDaPessoa !== null && (ultimaGuardada === null || ultimaDaPessoa > ultimaGuardada);
     const quando = agora.toISOString();
     await tx.execute(sql`
-      insert into liame.direct_conversation (connected_account_id, tenant_id, brand_id, conversation_id, participant_id, username, last_message_at,
-                                             last_inbound_at, last_direction, unread, meta_updated_at, read_at)
+      insert into liame.direct_conversation (connected_account_id, tenant_id, brand_id, conversation_id, participant_id, username, display_name, channel,
+                                             last_message_at, last_inbound_at, last_direction, unread, meta_updated_at, read_at)
       values (${conta.id}, ${tenantId}, ${conta.brand_id}, ${r.conversa.conversation_id}, ${r.conversa.participant_id}, ${r.conversa.username},
+              ${r.conversa.display_name}, ${canal},
               ${ultima.sent_at}::timestamptz, ${ultimaDaPessoa}::timestamptz, ${ultima.direction}, ${novaDaPessoa && ultima.direction === 'entrada'},
               ${r.conversa.meta_updated_at}::timestamptz, ${quando}::timestamptz)
       on conflict (connected_account_id, conversation_id) do update set
         username = coalesce(excluded.username, liame.direct_conversation.username),
+        display_name = coalesce(excluded.display_name, liame.direct_conversation.display_name),
         last_message_at = greatest(excluded.last_message_at, liame.direct_conversation.last_message_at),
         last_inbound_at = greatest(excluded.last_inbound_at, liame.direct_conversation.last_inbound_at),
         last_direction = case when excluded.last_message_at >= liame.direct_conversation.last_message_at then excluded.last_direction else liame.direct_conversation.last_direction end,

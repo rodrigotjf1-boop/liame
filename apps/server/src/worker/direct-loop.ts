@@ -5,10 +5,10 @@ import { APP_CONFIG, type AppConfig } from '../config.js';
 import { contaConectada } from '../connections/conectada.js';
 import { ClienteConector } from '../connectors/cliente-http.js';
 import { enderecosDasPlataformas } from '../connectors/enderecos.js';
-import { PROVEDOR_INSTAGRAM } from '../connectors/meta/publicacao.js';
+import { PROVEDOR_INSTAGRAM, PROVEDOR_PAGINA } from '../connectors/meta/publicacao.js';
 import { versaoRegistrada } from '../connectors/tipos.js';
 import { DATABASE } from '../database/database.module.js';
-import { DATASET_DO_DIRECT, FLAG_DO_DIRECT, INTERVALO_DO_DIRECT_MIN } from '../direct/direct.js';
+import { DATASET_DO_DIRECT, FLAG_DO_DIRECT, FLAG_DO_MESSENGER, INTERVALO_DO_DIRECT_MIN } from '../direct/direct.js';
 import { type ResultadoDoDirect, SincronizadorDoDirect } from '../direct/sincronizador-do-direct.js';
 import { FlagService } from '../flags/flag.service.js';
 import { VaultService } from '../vault/vault.service.js';
@@ -42,7 +42,8 @@ export class DirectLoop {
     const db = database.db;
     // O relógio de quem chama vale para a fila inteira: a reserva e o que a leitura grava (V34).
     const referencia = sql`${agora.toISOString()}::timestamptz`;
-    const elegivel = sql`a.provider = ${PROVEDOR_INSTAGRAM} and ${contaConectada('a')} and a.credential_secret_id is not null`;
+    // O Instagram (o Direct) e a Página (o Messenger, A6, Z14): cada conta com a sua linha no conjunto.
+    const elegivel = sql`a.provider in (${PROVEDOR_INSTAGRAM}, ${PROVEDOR_PAGINA}) and ${contaConectada('a')} and a.credential_secret_id is not null`;
     const reservadas = await withSystem(db, async (tx) => {
       // A conta desligada leva junto o que foi lido dela (as mensagens saem com a conversa, em cascata).
       await tx.execute(sql`
@@ -84,7 +85,7 @@ export class DirectLoop {
       graphUrl: this.config.plataformas.metaGraphUrl,
       appSecret: this.config.plataformas.metaAppSecret,
       versao: (capacidade) => versaoRegistrada(db, 'meta_ads', capacidade),
-      ligada: (tenantId, brandId) => this.flags.isEnabled(FLAG_DO_DIRECT, this.flags.context({ tenantId, brandId })),
+      ligada: (tenantId, brandId, canal) => this.flags.isEnabled(canal === 'messenger' ? FLAG_DO_MESSENGER : FLAG_DO_DIRECT, this.flags.context({ tenantId, brandId })),
       config: this.config,
     });
     const resultados: ResultadoDoDirect[] = [];
