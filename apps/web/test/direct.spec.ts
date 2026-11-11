@@ -1,5 +1,8 @@
-import type { DirectConversation, DirectSettingsResponse } from '@liame/contracts';
+import { DIRECT_AUTO_REPLY_NOTICE, type DirectAutoReplyResponse, type DirectConversation, type DirectSettingsResponse } from '@liame/contracts';
+import { createElement } from 'react';
+import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
+import { LinhaDoAutomaticoDoDirect } from '@/components/direct/automatico';
 import {
   anexoDaMensagem,
   avisoDaLeitura,
@@ -20,6 +23,13 @@ import {
   textoDoAtendimento,
   tipoDaConversa,
   vazioDoDirect,
+  botaoDoAutomaticoDoDirect,
+  erroDoAutomaticoDoDirect,
+  estadoDoAutomaticoDoDirect,
+  pedeConfirmacaoDoDirect,
+  resumoDoAutomaticoDoDirect,
+  saiuSozinha,
+  TIPOS_DO_AUTOMATICO_DO_DIRECT,
 } from '@/components/direct/textos';
 import { NAVEGACAO } from '@/components/shell/navegacao';
 import { horaDe } from '@/lib/formato';
@@ -178,5 +188,50 @@ describe('a tela Direct (A6 · Z12, parte 3)', () => {
     expect(tipoDaConversa('algo_novo')).toBeNull();
     expect(tipoDaConversa(null)).toBeNull();
     expect(previaDaConversa(conversa({ kind: null }))).toBe('Oi! Vocês entregam na Penha?');
+  });
+
+  it('parte 5b: a linha do automático, o botão, o estado, quando pede confirmação e a recusa', () => {
+    const auto = (o: Partial<DirectAutoReplyResponse> = {}): DirectAutoReplyResponse => ({
+      brand_id: '00000000-0000-4000-8000-000000000001',
+      available: true,
+      enabled: false,
+      kinds: [],
+      can_enable: true,
+      can_disable: true,
+      updated_at: null,
+      updated_by: null,
+      last_hour: 0,
+      hourly_limit: 30,
+      ...o,
+    });
+    expect(resumoDoAutomaticoDoDirect(auto())).toContain('Desligado: nenhuma resposta sai sem uma pessoa da equipe.');
+    expect(resumoDoAutomaticoDoDirect(auto({ enabled: true, kinds: ['pronta'], last_hour: 4 }))).toBe('4 respostas sozinho nesta hora (no máximo 30). Perguntas, reclamações e quem pede alguém esperam você.');
+    expect(resumoDoAutomaticoDoDirect(auto({ enabled: true, kinds: ['pronta'], last_hour: 1 }))).toMatch(/^1 resposta sozinho/);
+    expect(resumoDoAutomaticoDoDirect(auto({ enabled: true, kinds: ['pronta'], last_hour: 30 }))).toBe('Chegou a 30 respostas sozinho nesta hora, o teto: o resto fica com você.');
+    expect(botaoDoAutomaticoDoDirect(auto())).toBe('Ver e ligar');
+    expect(botaoDoAutomaticoDoDirect(auto({ can_enable: false }))).toBe('Ver como funciona');
+    expect(botaoDoAutomaticoDoDirect(auto({ enabled: true, kinds: ['pronta'] }))).toBe('Ajustar');
+    expect(estadoDoAutomaticoDoDirect(auto({ enabled: true, kinds: ['pronta'], updated_by: { id: '00000000-0000-4000-8000-000000000009', name: 'Rodrigo' } }))).toMatch(/^Ligado por Rodrigo\. Desligar vale na hora/);
+    expect(pedeConfirmacaoDoDirect({ enabled: false, kinds: [] }, { enabled: true, kinds: ['pronta'] })).toBe(true);
+    expect(pedeConfirmacaoDoDirect({ enabled: true, kinds: ['pronta'] }, { enabled: false, kinds: ['pronta'] })).toBe(false);
+    expect(pedeConfirmacaoDoDirect({ enabled: true, kinds: ['pronta'] }, { enabled: true, kinds: ['pronta'] })).toBe(false);
+    expect(erroDoAutomaticoDoDirect({ status: 409, code: 'direct-desligado', title: 'x' })).toBe('O Direct está desligado nesta marca: ligue o Direct antes do atendimento automático.');
+    expect(TIPOS_DO_AUTOMATICO_DO_DIRECT.map((t) => t.id)).toEqual(['pronta']);
+    const html = renderToStaticMarkup(createElement(LinhaDoAutomaticoDoDirect, { r: auto({ enabled: true, kinds: ['pronta'], last_hour: 2 }), aoAbrir: () => {} }));
+    expect(html).toContain('Atendimento automático');
+    expect(html).toContain('Ligado');
+    expect(html).toContain('2 respostas sozinho nesta hora');
+    expect(html).toContain('Ajustar<span class="sr-only"> o atendimento automático do Direct</span>');
+  });
+
+  it('parte 5b: a resposta que saiu sozinha, pelo aviso no fim: "Respondida sozinho" na lista, sem o aviso na prévia', () => {
+    const sozinha = `Obrigado pelo carinho! Esperamos você de novo.${DIRECT_AUTO_REPLY_NOTICE}`;
+    expect(saiuSozinha(sozinha)).toBe(true);
+    expect(saiuSozinha(`${sozinha}\n`)).toBe(true);
+    expect(saiuSozinha('Obrigado!')).toBe(false);
+    const respondida = conversa({ status: 'respondida', kind: null, last_message: { direction: 'saida', kind: 'texto', text: sozinha } });
+    expect(seloDaSituacao(respondida, agora)).toEqual({ texto: 'Respondida sozinho', classe: 'st--concluido' });
+    expect(previaDaConversa(respondida)).toBe('Você: Obrigado pelo carinho! Esperamos você de novo.');
+    expect(seloDaSituacao(conversa({ status: 'respondida', last_message: { direction: 'saida', kind: 'texto', text: 'Oi!' } }), agora)).toEqual({ texto: 'Respondida', classe: 'st--espera' });
   });
 });
