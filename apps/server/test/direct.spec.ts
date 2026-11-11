@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
+import { RESPOSTAS_PRONTAS } from '../src/ai/social/comentario.js';
 import { conversasDoDirect, mensagensDaConversa, regemAtende, situacaoDaConversa, tipoDaMensagem } from '../src/direct/direct.js';
+import { PASSOS_DA_RECLAMACAO, RESPOSTAS_DA_MENCAO, sugestaoNoDirect, tipoNoDirect } from '../src/direct/tipo-no-direct.js';
 
 // O Direct do Instagram (A6, Z12, parte 1; P39, D-A6-107, D-A6-111 e D-A6-112), sem banco e sem rede: o que a leitura
 // entende das respostas da Meta (a pessoa da conversa, de quem é cada mensagem, o tipo), a situação de cada conversa
@@ -92,5 +94,43 @@ describe('o Regem atende o Direct desta conta? (D-A6-107)', () => {
     expect(regemAtende({ instagram: [{ ig_user_id: 'outro-id', usuario: '@CasaBrasa' }], messenger: [] }, CONTA)).toBe(true);
     expect(regemAtende({ instagram: [{ ig_user_id: 'outro-id', usuario: 'outra.loja' }], messenger: [{ pagina_id: '1' }] }, CONTA)).toBe(false);
     expect(regemAtende({ instagram: [], messenger: [] }, CONTA)).toBe(false);
+  });
+});
+
+// A6 · Z12, parte 4a (D-A6-118): o tipo da conversa pela regra dos comentários e a sugestão sem IA.
+describe('o tipo da conversa e a sugestão sem IA (parte 4a)', () => {
+  const t = (body: string, kind = 'texto') => ({ kind, body });
+  it('o tipo junta o que a pessoa mandou desde a última resposta da marca; a marcação de amigo não vale no Direct; a menção no story sem texto é "menção"', () => {
+    expect(tipoNoDirect([t('Oi!'), t('Vocês entregam na Penha?')], CONTA.usuario)).toBe('pergunta');
+    // A reclamação vence a pergunta, como nos comentários.
+    expect(tipoNoDirect([t('Chegou frio e faltou a batata.'), t('Vão devolver o dinheiro?')], CONTA.usuario)).toBe('reclamacao');
+    expect(tipoNoDirect([t('Que delícia esse smash!', 'story_resposta')], CONTA.usuario)).toBe('elogio');
+    expect(tipoNoDirect([t('Ganhe seguidores reais hoje! Clique no link')], CONTA.usuario)).toBe('golpe');
+    expect(tipoNoDirect([t('', 'story_mencao')], CONTA.usuario)).toBe('mencao');
+    // O texto decide antes da menção: a menção com uma pergunta é pergunta.
+    expect(tipoNoDirect([t('', 'story_mencao'), t('Vocês abrem domingo?')], CONTA.usuario)).toBe('pergunta');
+    expect(tipoNoDirect([t('@amigo olha isso')], CONTA.usuario)).toBeNull();
+    expect(tipoNoDirect([t('', 'imagem')], CONTA.usuario)).toBeNull();
+    expect(tipoNoDirect([], CONTA.usuario)).toBeNull();
+  });
+
+  it('a sugestão: o agradecimento pronto do elogio e da menção (o mesmo para a mesma mensagem), os passos da reclamação, o golpe; a pergunta espera o Social media', () => {
+    const elogio = sugestaoNoDirect('elogio', 'mid.1')!;
+    expect(elogio.kind).toBe('pronta');
+    expect(RESPOSTAS_PRONTAS.elogio).toContain(elogio.text);
+    expect(sugestaoNoDirect('elogio', 'mid.1')).toEqual(elogio);
+    const mencao = sugestaoNoDirect('mencao', 'mid.2')!;
+    expect(mencao.kind).toBe('pronta');
+    expect(RESPOSTAS_DA_MENCAO).toContain(mencao.text);
+    // As respostas prontas variam entre as mensagens.
+    expect(new Set(['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'].map((s) => sugestaoNoDirect('mencao', s)!.text)).size).toBeGreaterThan(1);
+    expect(sugestaoNoDirect('reclamacao', 'mid.3')).toEqual({ kind: 'passos', text: null, steps: [...PASSOS_DA_RECLAMACAO] });
+    expect(sugestaoNoDirect('golpe', 'mid.4')).toEqual({ kind: 'golpe', text: null, steps: [] });
+    for (const tipo of ['pergunta', 'ofensivo', null] as const) expect(sugestaoNoDirect(tipo, 'mid.5'), String(tipo)).toBeNull();
+    // Nenhuma resposta pronta passa do espaço da Meta nem promete nada.
+    for (const r of RESPOSTAS_DA_MENCAO) {
+      expect(new TextEncoder().encode(r).length).toBeLessThan(1000);
+      expect(r).not.toMatch(/R\$|\d|desconto|brinde|reembolso|cupom/i);
+    }
   });
 });

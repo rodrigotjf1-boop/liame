@@ -80,7 +80,7 @@ export class DirectController {
   @ApiOperation({
     summary: 'As conversas do Direct',
     description:
-      'As conversas do Direct do Instagram da marca que a rotina `direct` guardou (A6, Z12; P39, D-A6-111), na situação pedida (`espera`, `fechando`, `respondida`, `fora` ou `todas`), com a contagem de cada uma; as que esperam resposta vêm primeiro, a que fecha a janela antes na frente. A busca olha o @ e o texto. Vazia com a função desligada, o Direct desligado na marca ou o Regem atendendo a conta.',
+      'As conversas do Direct do Instagram da marca que a rotina `direct` guardou (A6, Z12; P39, D-A6-111), na situação pedida (`espera`, `fechando`, `respondida`, `fora` ou `todas`), com a contagem de cada uma; as que esperam resposta vêm primeiro, a que fecha a janela antes na frente. Cada conversa leva o tipo pelo que a pessoa escreveu desde a última resposta da marca (a regra dos comentários; parte 4a). A busca olha o @ e o texto. Vazia com a função desligada, o Direct desligado na marca ou o Regem atendendo a conta.',
   })
   @ApiOkResponse({ standardSchema: DirectConversationsResponse })
   @ApiBadRequestResponse({ standardSchema: ProblemDetails })
@@ -191,7 +191,7 @@ export class DirectController {
   @ApiOperation({
     summary: 'Uma conversa do Direct',
     description:
-      'A conversa e as mensagens guardadas dela (as 100 mais novas, da mais velha para a mais nova): o texto e, do que só a Meta guarda (a foto, o vídeo, o áudio, o story), só o tipo (D-A6-112).',
+      'A conversa e as mensagens guardadas dela (as 100 mais novas, da mais velha para a mais nova): o texto e, do que só a Meta guarda (a foto, o vídeo, o áudio, o story), só o tipo (D-A6-112). Esperando resposta, a sugestão sem IA (parte 4a; D-A6-118): o agradecimento pronto do elogio e da menção no story, o "como proceder" da reclamação ou o aviso do golpe.',
   })
   @ApiOkResponse({ standardSchema: DirectConversationResponse })
   @ApiBadRequestResponse({ standardSchema: ProblemDetails })

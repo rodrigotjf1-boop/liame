@@ -83,6 +83,21 @@ export function seloDaSituacao(c: Pick<DirectConversation, 'status' | 'closing' 
   return null;
 }
 
+/** O tipo da conversa (parte 4a: a regra dos comentários, pelo que a pessoa escreveu desde a última resposta da marca). */
+const TIPOS_NO_DIRECT: Record<string, { rotulo: string; classe: string }> = {
+  pergunta: { rotulo: 'Pergunta', classe: 'st--info' },
+  reclamacao: { rotulo: 'Reclamação', classe: 'st--aguardando' },
+  elogio: { rotulo: 'Elogio', classe: 'st--concluido' },
+  mencao: { rotulo: 'Menção no story', classe: 'st--concluido' },
+  golpe: { rotulo: 'Golpe', classe: 'st--perigo' },
+  ofensivo: { rotulo: 'Ofensa', classe: 'st--perigo' },
+};
+
+/** O selo do tipo, ou nulo (sem tipo, ou um tipo que esta versão da tela não conhece). */
+export function tipoDaConversa(kind: string | null): { rotulo: string; classe: string } | null {
+  return kind ? (TIPOS_NO_DIRECT[kind] ?? null) : null;
+}
+
 /** O que só a Meta guarda: a frase no lugar da mensagem. */
 const SO_NA_META: Record<string, string> = {
   imagem: 'Foto',

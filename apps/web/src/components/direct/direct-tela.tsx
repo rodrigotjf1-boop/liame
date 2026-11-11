@@ -26,6 +26,7 @@ import {
   quemEscreveu,
   seloDaSituacao,
   textoDoAtendimento,
+  tipoDaConversa,
   vazioDoDirect,
 } from './textos';
 
@@ -472,6 +473,7 @@ export function DirectTela() {
                     <ul className="dir-lista" aria-label="Conversas">
                       {dados.items.map((c) => {
                         const selo = seloDaSituacao(c, agora);
+                        const tipo = tipoDaConversa(c.kind);
                         return (
                           <li key={c.id}>
                             <button
@@ -496,9 +498,10 @@ export function DirectTela() {
                                   <span className="dir-hora">{horaOuDia(c.last_message_at, agora)}</span>
                                 </span>
                                 <span className="dir-previa">{previaDaConversa(c)}</span>
-                                {selo && (
+                                {(selo || tipo) && (
                                   <span className="dir-selos">
-                                    <span className={`st ${selo.classe}`}>{selo.texto}</span>
+                                    {tipo && <span className={`st ${tipo.classe}`}>{tipo.rotulo}</span>}
+                                    {selo && <span className={`st ${selo.classe}`}>{selo.texto}</span>}
                                   </span>
                                 )}
                                 {c.unread && <span className="sr-only">, não lida</span>}

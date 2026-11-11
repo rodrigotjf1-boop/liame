@@ -101024,7 +101024,7 @@
     },
     "/v1/direct/conversations": {
       "get": {
-        "description": "As conversas do Direct do Instagram da marca que a rotina `direct` guardou (A6, Z12; P39, D-A6-111), na situação pedida (`espera`, `fechando`, `respondida`, `fora` ou `todas`), com a contagem de cada uma; as que esperam resposta vêm primeiro, a que fecha a janela antes na frente. A busca olha o @ e o texto. Vazia com a função desligada, o Direct desligado na marca ou o Regem atendendo a conta.",
+        "description": "As conversas do Direct do Instagram da marca que a rotina `direct` guardou (A6, Z12; P39, D-A6-111), na situação pedida (`espera`, `fechando`, `respondida`, `fora` ou `todas`), com a contagem de cada uma; as que esperam resposta vêm primeiro, a que fecha a janela antes na frente. Cada conversa leva o tipo pelo que a pessoa escreveu desde a última resposta da marca (a regra dos comentários; parte 4a). A busca olha o @ e o texto. Vazia com a função desligada, o Direct desligado na marca ou o Regem atendendo a conta.",
         "operationId": "DirectController_conversas",
         "parameters": [
           {
@@ -101175,6 +101175,13 @@
                           "unread": {
                             "type": "boolean"
                           },
+                          "kind": {
+                            "type": [
+                              "string",
+                              "null"
+                            ],
+                            "pattern": "^[a-z_]{2,40}$"
+                          },
                           "last_message_at": {
                             "type": "string",
                             "format": "date-time",
@@ -101213,6 +101220,7 @@
                           "closing",
                           "window_until",
                           "unread",
+                          "kind",
                           "last_message_at",
                           "last_message"
                         ],
@@ -102432,6 +102440,13 @@
                         "unread": {
                           "type": "boolean"
                         },
+                        "kind": {
+                          "type": [
+                            "string",
+                            "null"
+                          ],
+                          "pattern": "^[a-z_]{2,40}$"
+                        },
                         "last_message_at": {
                           "type": "string",
                           "format": "date-time",
@@ -102470,6 +102485,7 @@
                         "closing",
                         "window_until",
                         "unread",
+                        "kind",
                         "last_message_at",
                         "last_message"
                       ],
@@ -102512,12 +102528,46 @@
                         ],
                         "additionalProperties": false
                       }
+                    },
+                    "suggestion": {
+                      "type": [
+                        "object",
+                        "null"
+                      ],
+                      "properties": {
+                        "kind": {
+                          "type": "string",
+                          "pattern": "^[a-z_]{2,40}$"
+                        },
+                        "text": {
+                          "type": [
+                            "string",
+                            "null"
+                          ],
+                          "maxLength": 1000
+                        },
+                        "steps": {
+                          "maxItems": 8,
+                          "type": "array",
+                          "items": {
+                            "type": "string",
+                            "maxLength": 300
+                          }
+                        }
+                      },
+                      "required": [
+                        "kind",
+                        "text",
+                        "steps"
+                      ],
+                      "additionalProperties": false
                     }
                   },
                   "required": [
                     "brand_id",
                     "conversation",
-                    "messages"
+                    "messages",
+                    "suggestion"
                   ],
                   "additionalProperties": false
                 }
@@ -102812,6 +102862,13 @@
                         "unread": {
                           "type": "boolean"
                         },
+                        "kind": {
+                          "type": [
+                            "string",
+                            "null"
+                          ],
+                          "pattern": "^[a-z_]{2,40}$"
+                        },
                         "last_message_at": {
                           "type": "string",
                           "format": "date-time",
@@ -102850,6 +102907,7 @@
                         "closing",
                         "window_until",
                         "unread",
+                        "kind",
                         "last_message_at",
                         "last_message"
                       ],
@@ -102892,12 +102950,46 @@
                         ],
                         "additionalProperties": false
                       }
+                    },
+                    "suggestion": {
+                      "type": [
+                        "object",
+                        "null"
+                      ],
+                      "properties": {
+                        "kind": {
+                          "type": "string",
+                          "pattern": "^[a-z_]{2,40}$"
+                        },
+                        "text": {
+                          "type": [
+                            "string",
+                            "null"
+                          ],
+                          "maxLength": 1000
+                        },
+                        "steps": {
+                          "maxItems": 8,
+                          "type": "array",
+                          "items": {
+                            "type": "string",
+                            "maxLength": 300
+                          }
+                        }
+                      },
+                      "required": [
+                        "kind",
+                        "text",
+                        "steps"
+                      ],
+                      "additionalProperties": false
                     }
                   },
                   "required": [
                     "brand_id",
                     "conversation",
-                    "messages"
+                    "messages",
+                    "suggestion"
                   ],
                   "additionalProperties": false
                 }
@@ -103110,7 +103202,7 @@
     },
     "/v1/direct/conversations/{id}": {
       "get": {
-        "description": "A conversa e as mensagens guardadas dela (as 100 mais novas, da mais velha para a mais nova): o texto e, do que só a Meta guarda (a foto, o vídeo, o áudio, o story), só o tipo (D-A6-112).",
+        "description": "A conversa e as mensagens guardadas dela (as 100 mais novas, da mais velha para a mais nova): o texto e, do que só a Meta guarda (a foto, o vídeo, o áudio, o story), só o tipo (D-A6-112). Esperando resposta, a sugestão sem IA (parte 4a; D-A6-118): o agradecimento pronto do elogio e da menção no story, o \"como proceder\" da reclamação ou o aviso do golpe.",
         "operationId": "DirectController_conversa",
         "parameters": [
           {
@@ -103181,6 +103273,13 @@
                         "unread": {
                           "type": "boolean"
                         },
+                        "kind": {
+                          "type": [
+                            "string",
+                            "null"
+                          ],
+                          "pattern": "^[a-z_]{2,40}$"
+                        },
                         "last_message_at": {
                           "type": "string",
                           "format": "date-time",
@@ -103219,6 +103318,7 @@
                         "closing",
                         "window_until",
                         "unread",
+                        "kind",
                         "last_message_at",
                         "last_message"
                       ],
@@ -103261,12 +103361,46 @@
                         ],
                         "additionalProperties": false
                       }
+                    },
+                    "suggestion": {
+                      "type": [
+                        "object",
+                        "null"
+                      ],
+                      "properties": {
+                        "kind": {
+                          "type": "string",
+                          "pattern": "^[a-z_]{2,40}$"
+                        },
+                        "text": {
+                          "type": [
+                            "string",
+                            "null"
+                          ],
+                          "maxLength": 1000
+                        },
+                        "steps": {
+                          "maxItems": 8,
+                          "type": "array",
+                          "items": {
+                            "type": "string",
+                            "maxLength": 300
+                          }
+                        }
+                      },
+                      "required": [
+                        "kind",
+                        "text",
+                        "steps"
+                      ],
+                      "additionalProperties": false
                     }
                   },
                   "required": [
                     "brand_id",
                     "conversation",
-                    "messages"
+                    "messages",
+                    "suggestion"
                   ],
                   "additionalProperties": false
                 }

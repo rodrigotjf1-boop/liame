@@ -17,6 +17,7 @@ import {
   seloDaSituacao,
   situacaoDoEnvio,
   textoDoAtendimento,
+  tipoDaConversa,
   vazioDoDirect,
 } from '@/components/direct/textos';
 import { NAVEGACAO } from '@/components/shell/navegacao';
@@ -51,6 +52,7 @@ const conversa = (o: Partial<DirectConversation> = {}): DirectConversation => ({
   closing: false,
   window_until: daqui(23 * 60 + 53),
   unread: true,
+  kind: 'pergunta',
   last_message_at: daqui(-7),
   last_message: { direction: 'entrada', kind: 'texto', text: 'Oi! Vocês entregam na Penha?' },
   ...o,
@@ -160,5 +162,17 @@ describe('a tela Direct (A6 · Z12, parte 3)', () => {
     expect(situacaoDoEnvio('executada', null)).toEqual({ fim: true, ok: true, texto: 'enviada' });
     expect(situacaoDoEnvio('falhou', 'Esta conversa está com outro app na Meta')).toEqual({ fim: true, ok: false, texto: 'Não saiu: Esta conversa está com outro app na Meta' });
     expect(situacaoDoEnvio('expirada', null)).toEqual({ fim: true, ok: false, texto: 'Não saiu. Tente de novo.' });
+  });
+
+  it('parte 4a: o selo do tipo da conversa (o que a tela não conhece não aparece)', () => {
+    expect(tipoDaConversa('pergunta')).toEqual({ rotulo: 'Pergunta', classe: 'st--info' });
+    expect(tipoDaConversa('reclamacao')).toEqual({ rotulo: 'Reclamação', classe: 'st--aguardando' });
+    expect(tipoDaConversa('elogio')).toEqual({ rotulo: 'Elogio', classe: 'st--concluido' });
+    expect(tipoDaConversa('mencao')).toEqual({ rotulo: 'Menção no story', classe: 'st--concluido' });
+    expect(tipoDaConversa('golpe')).toEqual({ rotulo: 'Golpe', classe: 'st--perigo' });
+    expect(tipoDaConversa('ofensivo')).toEqual({ rotulo: 'Ofensa', classe: 'st--perigo' });
+    expect(tipoDaConversa('algo_novo')).toBeNull();
+    expect(tipoDaConversa(null)).toBeNull();
+    expect(previaDaConversa(conversa({ kind: null }))).toBe('Oi! Vocês entregam na Penha?');
   });
 });
