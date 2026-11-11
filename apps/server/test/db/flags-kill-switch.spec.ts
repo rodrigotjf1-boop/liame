@@ -59,7 +59,8 @@ describe.skipIf(!hasDb)('feature flags (A1-12) e kill switch (A1-10)', () => {
     // `perfil_google_write` (A6, Z2): publicar a resposta da empresa a uma avaliação no Google.
     // `social_write` (A6, Z5a): publicar o post aprovado na Página e no Instagram da marca.
     // `comentarios_responder` (A6, Z11, parte 2): responder, ocultar e mostrar um comentário dos posts da marca.
-    expect(seeded.map((f) => f.key)).toEqual(['autopilot', 'comentarios_responder', 'conversoes_google', 'creative_generation', 'google_write', 'mcp_write', 'meta_write', 'perfil_google_write', 'regem_write', 'social_write', 'whatsapp_campaign']);
+    // `comentarios_automatico` (A6, Z11, parte 2e-1): o atendimento automático publica sem pedido de aprovação.
+    expect(seeded.map((f) => f.key)).toEqual(['autopilot', 'comentarios_automatico', 'comentarios_responder', 'conversoes_google', 'creative_generation', 'google_write', 'mcp_write', 'meta_write', 'perfil_google_write', 'regem_write', 'social_write', 'whatsapp_campaign']);
     expect(seeded.every((f) => f.default_value === false)).toBe(true);
     await expect(
       ownerQuery(`insert into liame.feature_flag (key, kind, default_value, description, owner, is_write) values ('ligada_errada', 'boolean', 'true', 'x', 'x', true)`),
