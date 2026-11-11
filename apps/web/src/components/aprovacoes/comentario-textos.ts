@@ -113,6 +113,8 @@ const RETIRADA: Record<string, string> = {
   ja_oculto: 'Já estava oculto',
   comentario_mudou: 'O comentário mudou',
   comentario_sumiu: 'O comentário foi apagado',
+  // Ao ligar o atendimento automático (parte 2e-1b), o pedido virou a resposta automática.
+  atendimento_automatico: 'Respondido sozinho',
 };
 
 /** A segunda linha do item decidido na lista. */
@@ -242,6 +244,10 @@ export function resultadoDoComentario(a: AcaoDeComentario): ResultadoDoComentari
         comentario_mudou: 'Quem comentou editou o comentário depois da sugestão.',
         comentario_sumiu: `O comentário foi apagado ${onde}.`,
       };
+      // Ao ligar o atendimento automático (parte 2e-1b): este pedido virou a resposta automática, que saiu sozinha.
+      if (a.comment.withdrawn === 'atendimento_automatico') {
+        return { tom: 'ok', icone: 'check', forte: 'Respondido sozinho pelo atendimento automático.', texto: ' Ele foi ligado com este pedido esperando, e a mesma resposta saiu sem aprovação, com o aviso de resposta automática.' };
+      }
       return { tom: 'neutro', icone: 'info', forte: porque[a.comment.withdrawn ?? ''] ?? 'O comentário mudou depois da sugestão.', texto: ' O Social media tirou o pedido daqui, e nada foi feito pelo Liame.' };
     }
     case 'cancelado':

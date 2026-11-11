@@ -3,11 +3,12 @@ import { Inject, Injectable, Logger } from '@nestjs/common';
 import { sql } from 'drizzle-orm';
 import { recursoDoComentario } from '../actions/comentario-na-rede.js';
 import { SOCIAL } from '../ai/social/prompt.js';
+import { FERRAMENTA_DA_RESPOSTA_AUTOMATICA, RESPOSTAS_AUTOMATICAS_POR_HORA } from '../comentarios/automatico.js';
 import { FERRAMENTA_DA_OPERACAO } from '../comentarios/pedidos.js';
 import { DATABASE } from '../database/database.module.js';
 import { naOrdemDaFila, vezNaFila } from './ordem-da-fila.js';
 import { type JobScope, tenantFilter } from './outbox-publisher.js';
-import { PedidosDosComentariosService, type VezDaRetiradaDoComentario, type VezDoPedido } from './pedidos-dos-comentarios.service.js';
+import { PedidosDosComentariosService, type VezDaConversao, type VezDaRetiradaDoComentario, type VezDoPedido } from './pedidos-dos-comentarios.service.js';
 
 /** A vez reservada volta para a fila depois disto se o worker cair no meio (o modelo e a leitura na Meta cabem com folga). */
 const RESERVA = '15 minutes';
@@ -126,6 +127,52 @@ export class PedidosDosComentariosLoop {
       } catch (err) {
         // Falha fora do previsto: o pedido fica, e a próxima volta confere de novo.
         this.logger.error(`retirada ${l.id}: ${err instanceof Error ? (err.stack ?? err.message) : String(err)}`);
+        feito = { status: 'fora' };
+      }
+      feitos.push({ pedido: l.id, tenantId: l.tenant_id, feito });
+    }
+    return feitos;
+  }
+
+  /**
+   * Ao ligar o atendimento automático (A6, Z11, parte 2e-1b; D-A6-92): os pedidos do Social media com a resposta pronta
+   * (o elogio e a marcação dos tipos marcados) que ainda esperam em Aprovações, feitos antes de ligar (ou de somar o
+   * tipo) e de comentários das 24 horas antes disso, viram a resposta automática. Na consulta, para a fila não ficar
+   * presa em quem não pode andar (V84): a vez que já ficou com a pessoa (`reason`) e a marca que chegou ao teto da hora
+   * ficam de fora. Sem trava: o serviço trava o pedido e confere tudo de novo, e quem chega depois o acha decidido.
+   */
+  async executarConversoes(limite = 10, scope: JobScope = {}, agora?: Date): Promise<Array<{ pedido: string; tenantId: string; feito: VezDaConversao }>> {
+    if (!this.database) return [];
+    const quando = agora ?? new Date();
+    const ref = sql`${quando.toISOString()}::timestamptz`;
+    const candidatos = await withSystem(this.database.db, async (tx) =>
+      (
+        await tx.execute<{ id: string; tenant_id: string }>(sql`
+          select a.id, a.tenant_id
+            from liame.action_request a
+            join liame.comment_suggestion s on s.action_id = a.id and s.status = 'pronta' and s.round = 1 and s.reason is null
+            join liame.social_comment c on c.connected_account_id = s.connected_account_id and c.comment_id = s.comment_id
+            join liame.comment_auto_reply r on r.brand_id = a.brand_id and r.enabled
+           where a.status = 'aguardando_aprovacao' and a.actor_type = 'agent' and a.agent_key = ${SOCIAL.key}
+             and a.tool = ${FERRAMENTA_DA_OPERACAO.responder}
+             and c.kind in ('elogio', 'marcacao') and c.kind = any(r.kinds) and not c.hidden
+             and a.created_at <= r.updated_at and c.published_at >= r.updated_at - interval '24 hours'
+             and (select count(*) from liame.action_request q
+                   where q.brand_id = a.brand_id and q.tool = ${FERRAMENTA_DA_RESPOSTA_AUTOMATICA}
+                     and q.status in ('aprovada', 'executando', 'executada') and q.created_at > ${ref} - interval '1 hour') < ${RESPOSTAS_AUTOMATICAS_POR_HORA}
+             ${tenantFilter(scope, sql`a.tenant_id`)}
+           order by a.created_at, a.id
+           limit ${limite}`)
+      ).rows,
+    );
+    const feitos: Array<{ pedido: string; tenantId: string; feito: VezDaConversao }> = [];
+    for (const l of candidatos) {
+      let feito: VezDaConversao;
+      try {
+        feito = await this.pedidos.converterAoLigar({ tenantId: l.tenant_id, actionId: l.id }, quando);
+      } catch (err) {
+        // Falha fora do previsto: o pedido fica em Aprovações, e a próxima volta tenta de novo.
+        this.logger.error(`ao ligar ${l.id}: ${err instanceof Error ? (err.stack ?? err.message) : String(err)}`);
         feito = { status: 'fora' };
       }
       feitos.push({ pedido: l.id, tenantId: l.tenant_id, feito });

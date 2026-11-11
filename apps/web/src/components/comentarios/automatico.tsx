@@ -210,7 +210,9 @@ export function GavetaDoAutomatico({ r, reserva, aoSalvar, aoFechar, confirmar }
                 </label>
               );
             })}
-            {nota('info', 'Tirar um tipo vale na hora; ligar e somar um tipo pedem a sua confirmação.')}
+            {r.enabled
+              ? nota('info', 'Tirar um tipo vale na hora; somar um tipo pede a sua confirmação.')
+              : nota('info', 'Ao ligar, ele responde também os elogios e as marcações das últimas 24 horas que ainda esperam você, com o texto que o Social media escreveu.')}
           </fieldset>
           <section className="com-auto-bloco" aria-labelledby={`${ids}-espera`}>
             <h3 id={`${ids}-espera`}>O que sempre espera você</h3>

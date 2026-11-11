@@ -288,6 +288,10 @@ describe('o pedido sobre um comentário em Aprovações: o detalhe (A6 · Z11, p
     expect(semMarcas(desenho(pedido({ status: 'executada', approvals: aprovacao() })))).toContain('Apagar a resposta');
     expect(semMarcas(desenho(auto(), { podeOperar: false }))).not.toContain('Apagar a resposta');
     expect(semMarcas(desenho(auto({ undone_by: { id: uuid(9) } as ActionResponse['undone_by'] })))).toContain('A resposta foi apagada pelo Liame');
+    // Ao ligar (parte 2e-1b), o pedido que esperava virou a resposta automática.
+    const convertido = doSocial({ status: 'cancelada', status_reason: 'retirada pelo funcionário: atendimento_automatico' }, { withdrawn: 'atendimento_automatico' });
+    expect(etiquetaDoComentario(convertido)).toBe('Respondido sozinho');
+    expect(resultadoDoComentario(convertido)).toMatchObject({ tom: 'ok', forte: 'Respondido sozinho pelo atendimento automático.' });
   });
 
   it('decidido: o resultado e o que foi pedido, sem a decisão', () => {

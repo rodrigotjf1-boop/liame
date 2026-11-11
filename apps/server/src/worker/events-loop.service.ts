@@ -183,6 +183,9 @@ export class EventsLoopService implements OnApplicationBootstrap, OnApplicationS
       // A retirada (A6, Z11, parte 2d-5): o pedido do Social media que espera a decisão sai de Aprovações quando o
       // comentário foi respondido direto na rede, ocultado, editado ou apagado. Só confere o que a leitura trouxe de novo.
       this.loop('retiradas-dos-comentarios', 10, 60_000, async (n) => (await this.pedidosDosComentarios.executarRetiradas(n)).length),
+      // Ao ligar o atendimento automático (A6, Z11, parte 2e-1b): o elogio e a marcação que esperavam em Aprovações, das
+      // 24 horas antes de ligar, viram a resposta automática. Só anda com a marca ligada; de minuto em minuto.
+      this.loop('automatico-ao-ligar', 10, 60_000, async (n) => (await this.pedidosDosComentarios.executarConversoes(n)).length),
       // As sugestões de resposta do Social media (A6, Z6): a avaliação nova entra na fila na leitura do Perfil que a
       // trouxe, e o "Pedir outras" entra quando a pessoa pede, com ela esperando na tela de Aprovações (P31): por isso a
       // fila é olhada de 15 em 15 segundos (a do "Pedir outras" primeiro). Quem espera a vez (a IA desligada, o limite)
