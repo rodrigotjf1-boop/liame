@@ -163,7 +163,7 @@ describe('as ferramentas, a política e o conector da conta', () => {
     for (const t of doComentario) expect(t.providers, t.name).toEqual(['instagram', 'facebook_page']);
     // Só elas, a resposta no Direct (A6, Z12, parte 2) e a campanha nova na Meta (A4, X5) têm flag própria.
     expect(Object.values(TOOLS).filter((t) => t.flag).map((t) => t.name).sort()).toEqual(
-      [...doComentario.map((t) => t.name), 'direct_responder', 'direct_responder_auto', 'campanha_criar'].sort(),
+      [...doComentario.map((t) => t.name), 'direct_responder', 'direct_responder_auto', 'campanha_criar', 'campanha_nova_ativar', 'campanha_nova_pausar'].sort(),
     );
     // A sugestão do Social media só o funcionário preenche.
     expect(TOOLS.comentario_responder!.agentParams).toEqual(['sugestoes']);
