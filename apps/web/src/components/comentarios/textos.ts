@@ -102,6 +102,13 @@ export function resumoDoAutomatico(r: CommentAutoReplyResponse): string {
   return `${n} sozinho nesta hora (no máximo ${r.hourly_limit}). ${esperam}`;
 }
 
+/** O aviso depois de ligar: com "Perguntas" marcado, só as que ele não sabe com certeza esperam (parte 2e-3). */
+export function avisoAoLigar(kinds: readonly string[]): string {
+  return kinds.includes('pergunta')
+    ? 'Atendimento automático ligado. Os tipos marcados saem sozinhos, a pergunta só quando ele sabe responder com certeza; reclamações esperam você.'
+    : 'Atendimento automático ligado. Os elogios e as marcações marcados saem sozinhos; reclamações e perguntas esperam você.';
+}
+
 /** O botão da linha do topo: ajustar (ligado), ver e ligar (quem liga) ou ver como funciona (os outros). */
 export function botaoDoAutomatico(r: CommentAutoReplyResponse): string {
   if (r.enabled) return 'Ajustar';

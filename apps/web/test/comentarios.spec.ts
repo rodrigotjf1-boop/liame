@@ -2,6 +2,7 @@ import { COMMENT_AUTO_REPLY_NOTICE, type CommentAutoReplyResponse, type Comments
 import { describe, expect, it } from 'vitest';
 import {
   autorDoComentario,
+  avisoAoLigar,
   avisosDasContas,
   botaoDoAutomatico,
   comentariosFalados,
@@ -97,7 +98,9 @@ describe('a tela Comentários (A6 · Z11, parte 3b)', () => {
     expect(TIPOS_DO_AUTOMATICO.map((t) => t.id)).toEqual(['elogio', 'marcacao', 'pergunta']);
     expect(resumoDoAutomatico(r())).toContain('Desligado: nenhuma resposta sai sem a aprovação de uma pessoa.');
     expect(resumoDoAutomatico(r({ enabled: true, kinds: ['elogio'], last_hour: 1 }))).toBe('1 resposta sozinho nesta hora (no máximo 30). Reclamações e perguntas esperam você.');
-    // Com "Perguntas" marcado, só as que ele não sabe com certeza esperam (parte 2e-3).
+    // Com "Perguntas" marcado, só as que ele não sabe com certeza esperam (parte 2e-3), no resumo e no aviso ao ligar.
+    expect(avisoAoLigar(['elogio'])).toContain('reclamações e perguntas esperam você');
+    expect(avisoAoLigar(['elogio', 'pergunta'])).toContain('a pergunta só quando ele sabe responder com certeza; reclamações esperam você');
     expect(resumoDoAutomatico(r({ enabled: true, kinds: ['elogio', 'pergunta'], last_hour: 2 }))).toBe('2 respostas sozinho nesta hora (no máximo 30). Reclamações e as perguntas sem certeza esperam você.');
     expect(resumoDoAutomatico(r({ enabled: true, kinds: ['elogio'], last_hour: 30 }))).toContain('o teto: o resto espera a hora seguinte');
     // O botão: ajustar (ligado), ver e ligar (quem liga), ver como funciona (quem só aprova).
