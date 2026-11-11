@@ -72,6 +72,10 @@ type Linha = {
 };
 
 const recusado = (mensagem: string): ApplyResult => ({ ok: false, reason: 'recusado', mensagem });
+
+/** O id que a Meta devolve: só algarismos, conferidos um a um (sem expressão regular sobre o que vem de fora, V48). */
+const idDaMeta = (v: unknown): string | null =>
+  typeof v === 'string' && v.length > 0 && v.length <= 32 && [...v].every((c) => c >= '0' && c <= '9') ? v : null;
 const FORA_DO_AMBIENTE = 'A criação de campanha na Meta não está disponível neste ambiente.';
 const SUMIU = 'Esta campanha nova não está mais aqui (a peça, a mídia ou a conta saiu da marca).';
 const SEM_ACESSO = 'A Meta recusou o acesso desta conta (a autorização foi revogada ou venceu). Conecte a Meta de novo em Contas conectadas.';
@@ -270,7 +274,7 @@ export class CampanhaNovaNaMetaConnector implements Connector {
       cabecalhos: { authorization: `Bearer ${g.token}`, 'x-client-idempotent-key': chave },
       custo: 3,
     });
-    const id = typeof r.corpo?.id === 'string' && /^\d+$/.test(r.corpo.id) ? r.corpo.id : null;
+    const id = idDaMeta(r.corpo?.id);
     if (!id) throw new CriacaoRecusada('A Meta não devolveu o objeto criado: confira a conta de anúncios antes de pedir de novo.');
     return id;
   }
@@ -300,7 +304,7 @@ export class CampanhaNovaNaMetaConnector implements Connector {
         cabecalhos: { authorization: `Bearer ${g.token}` },
         custo: 3,
       });
-      video = typeof r.corpo?.id === 'string' && /^\d+$/.test(r.corpo.id) ? r.corpo.id : null;
+      video = idDaMeta(r.corpo?.id);
       if (!video) throw new CriacaoRecusada('A Meta não devolveu o vídeo enviado: a campanha não foi criada.');
       await guardar('meta_video_id', video);
       await tx.execute(sql`update liame.ad_campaign_new set video_waiting_since = coalesce(video_waiting_since, now()) where id = ${linha.id}`);
