@@ -19785,6 +19785,10 @@
                           "type": "string",
                           "pattern": "^[a-z_]{2,30}$"
                         },
+                        "format": {
+                          "type": "string",
+                          "pattern": "^[a-z_]{2,30}$"
+                        },
                         "cover_photo_id": {
                           "type": [
                             "string",
@@ -21851,6 +21855,10 @@
                                 "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
                               },
                               "media": {
+                                "type": "string",
+                                "pattern": "^[a-z_]{2,30}$"
+                              },
+                              "format": {
                                 "type": "string",
                                 "pattern": "^[a-z_]{2,30}$"
                               },
@@ -24575,6 +24583,10 @@
                           "type": "string",
                           "pattern": "^[a-z_]{2,30}$"
                         },
+                        "format": {
+                          "type": "string",
+                          "pattern": "^[a-z_]{2,30}$"
+                        },
                         "cover_photo_id": {
                           "type": [
                             "string",
@@ -26459,6 +26471,10 @@
                           "type": "string",
                           "pattern": "^[a-z_]{2,30}$"
                         },
+                        "format": {
+                          "type": "string",
+                          "pattern": "^[a-z_]{2,30}$"
+                        },
                         "cover_photo_id": {
                           "type": [
                             "string",
@@ -28322,6 +28338,10 @@
                           "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
                         },
                         "media": {
+                          "type": "string",
+                          "pattern": "^[a-z_]{2,30}$"
+                        },
+                        "format": {
                           "type": "string",
                           "pattern": "^[a-z_]{2,30}$"
                         },
@@ -30296,6 +30316,10 @@
                           "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
                         },
                         "media": {
+                          "type": "string",
+                          "pattern": "^[a-z_]{2,30}$"
+                        },
+                        "format": {
                           "type": "string",
                           "pattern": "^[a-z_]{2,30}$"
                         },
@@ -32284,6 +32308,10 @@
                                 "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
                               },
                               "media": {
+                                "type": "string",
+                                "pattern": "^[a-z_]{2,30}$"
+                              },
+                              "format": {
                                 "type": "string",
                                 "pattern": "^[a-z_]{2,30}$"
                               },
@@ -34314,6 +34342,10 @@
                           "type": "string",
                           "pattern": "^[a-z_]{2,30}$"
                         },
+                        "format": {
+                          "type": "string",
+                          "pattern": "^[a-z_]{2,30}$"
+                        },
                         "cover_photo_id": {
                           "type": [
                             "string",
@@ -36305,6 +36337,10 @@
                           "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
                         },
                         "media": {
+                          "type": "string",
+                          "pattern": "^[a-z_]{2,30}$"
+                        },
+                        "format": {
                           "type": "string",
                           "pattern": "^[a-z_]{2,30}$"
                         },
@@ -38302,6 +38338,10 @@
                           "type": "string",
                           "pattern": "^[a-z_]{2,30}$"
                         },
+                        "format": {
+                          "type": "string",
+                          "pattern": "^[a-z_]{2,30}$"
+                        },
                         "cover_photo_id": {
                           "type": [
                             "string",
@@ -40165,6 +40205,10 @@
                           "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
                         },
                         "media": {
+                          "type": "string",
+                          "pattern": "^[a-z_]{2,30}$"
+                        },
+                        "format": {
                           "type": "string",
                           "pattern": "^[a-z_]{2,30}$"
                         },
@@ -110100,6 +110144,10 @@
                             "type": "string",
                             "pattern": "^[a-z_]{2,30}$"
                           },
+                          "format": {
+                            "type": "string",
+                            "pattern": "^[a-z_]{2,30}$"
+                          },
                           "cover_photo_id": {
                             "type": [
                               "string",
@@ -110794,6 +110842,13 @@
                     "format": "uuid",
                     "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
                   },
+                  "format": {
+                    "type": "string",
+                    "enum": [
+                      "post",
+                      "story"
+                    ]
+                  },
                   "photo_id": {
                     "type": "string",
                     "format": "uuid",
@@ -110837,13 +110892,11 @@
                         },
                         "text": {
                           "type": "string",
-                          "minLength": 1,
                           "maxLength": 10000
                         }
                       },
                       "required": [
-                        "channel",
-                        "text"
+                        "channel"
                       ],
                       "additionalProperties": false
                     }
@@ -110891,6 +110944,10 @@
                       "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
                     },
                     "media": {
+                      "type": "string",
+                      "pattern": "^[a-z_]{2,30}$"
+                    },
+                    "format": {
                       "type": "string",
                       "pattern": "^[a-z_]{2,30}$"
                     },
@@ -111598,6 +111655,10 @@
                       "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
                     },
                     "media": {
+                      "type": "string",
+                      "pattern": "^[a-z_]{2,30}$"
+                    },
+                    "format": {
                       "type": "string",
                       "pattern": "^[a-z_]{2,30}$"
                     },
@@ -112560,6 +112621,10 @@
                       "type": "string",
                       "pattern": "^[a-z_]{2,30}$"
                     },
+                    "format": {
+                      "type": "string",
+                      "pattern": "^[a-z_]{2,30}$"
+                    },
                     "cover_photo_id": {
                       "type": [
                         "string",
@@ -113203,6 +113268,10 @@
                       "type": "string",
                       "pattern": "^[a-z_]{2,30}$"
                     },
+                    "format": {
+                      "type": "string",
+                      "pattern": "^[a-z_]{2,30}$"
+                    },
                     "cover_photo_id": {
                       "type": [
                         "string",
@@ -113843,6 +113912,10 @@
                       "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
                     },
                     "media": {
+                      "type": "string",
+                      "pattern": "^[a-z_]{2,30}$"
+                    },
+                    "format": {
                       "type": "string",
                       "pattern": "^[a-z_]{2,30}$"
                     },
@@ -114595,6 +114668,10 @@
                       "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
                     },
                     "media": {
+                      "type": "string",
+                      "pattern": "^[a-z_]{2,30}$"
+                    },
+                    "format": {
                       "type": "string",
                       "pattern": "^[a-z_]{2,30}$"
                     },
@@ -115403,6 +115480,10 @@
                       "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
                     },
                     "media": {
+                      "type": "string",
+                      "pattern": "^[a-z_]{2,30}$"
+                    },
+                    "format": {
                       "type": "string",
                       "pattern": "^[a-z_]{2,30}$"
                     },

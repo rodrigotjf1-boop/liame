@@ -915,7 +915,7 @@ export class PostPublicacaoConnector implements Connector {
       const videoId = idDoVideoNaPagina(inicio);
       if (!videoId) throw new CanalNaoSaiu(NAO_ACEITOU('facebook'));
       await this.guardarOVideo(tx, canal.id, videoId);
-      await this.enviarAoRupload(g, enderecoDoEnvioNaPagina(inicio?.upload_url, g.deps.ruploadUrl ?? RUPLOAD_OFICIAL, videoId), arquivo);
+      await this.enviarAoRupload(g, enderecoDoEnvioNaPagina(inicio?.upload_url, g.deps.ruploadUrl ?? RUPLOAD_OFICIAL, videoId), arquivo, 'pagina_story');
       const fim = await this.chamar<unknown>(g, 'POST', `${pagina}/video_stories`, 'pagina_story', { corpo: { upload_phase: 'finish', video_id: videoId }, custo: 3 });
       const postDoStory = postDoStoryNaPagina(fim);
       // A Meta prepara e publica sozinha: uma conferência logo depois; ainda não saiu, o pedido espera um minuto.
@@ -1036,17 +1036,18 @@ export class PostPublicacaoConnector implements Connector {
 
   /**
    * O arquivo vai à Meta pelo `rupload`, com o token da Página (`Authorization: OAuth`) e o endereço assinado em
-   * `file_url`: ela busca o vídeo (a opção do arquivo hospedado). Sem corpo; a resposta é `{"success": true}`.
+   * `file_url`: ela busca o vídeo (a opção do arquivo hospedado). Sem corpo; a resposta é `{"success": true}`. A
+   * capacidade é a de quem começou o envio: o Reels (A6, Z10) ou o Story (A6, Z13).
    */
-  private async enviarAoRupload(g: Graph, endereco: string, arquivo: string): Promise<void> {
-    const versao = g.versoes.pagina_reels;
-    if (!versao) throw new Error('post nas redes: a versão de pagina_reels não foi lida');
+  private async enviarAoRupload(g: Graph, endereco: string, arquivo: string, capacidade: 'pagina_reels' | 'pagina_story' = 'pagina_reels'): Promise<void> {
+    const versao = g.versoes[capacidade];
+    if (!versao) throw new Error(`post nas redes: a versão de ${capacidade} não foi lida`);
     const r = await g.deps.cliente().requisitar<{ success?: unknown } | null>({
       provider: META,
       conta: g.conta,
       url: endereco,
       metodo: 'POST',
-      endpoint: 'pagina_reels',
+      endpoint: capacidade,
       apiVersion: versao,
       cabecalhos: { authorization: `OAuth ${g.token}`, file_url: arquivo },
       custo: 3,

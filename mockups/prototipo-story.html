@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Stories · Liame</title>
 <!--
-@prototipo Liame · A6 · P41 · Stories (PROPOSTO EM 11/11/2026; ESPERA O DONO)
+@prototipo Liame · A6 · P41 · Stories (APROVADO PELO DONO EM 11/11/2026, com as recomendações D-A6-126 a D-A6-130)
 base: o P37 parte B (prototipo-video-post.html, aprovado em 04/11/2026), que já leva o P19 (o post e a Agenda,
       aprovados em 21/10/2026): tudo de lá fica como está; o Story entra por cima, no seletor "Story".
 pedido: do dono, em 07/11/2026 (Z13): o Story com a foto ou o vídeo da loja no Instagram e na Página, no mesmo trilho
@@ -14,8 +14,8 @@ o que tem: (1) no novo post, o formato "Post ou Story"; o Story leva a foto ou o
            Página (o Threads e o Perfil no Google não têm Story), sem texto, sem link e sem figurinha, e fica 24 horas
            no ar; a prévia em pé, com as faixas quando a mídia não é 9:16; o vídeo de 61 a 90 s sai só na Página;
            (2) o Story em Aprovações (a prévia, o que foi conferido, aprovar com o código do app); (3) na Agenda, o
-           Story com "no ar até" e o que já saiu do ar, e "Tirar do ar"; (4) as decisões propostas D-A6-126 a
-           D-A6-130 e uma pergunta, no seletor "Story", em "Decisões".
+           Story com "no ar até" e o que já saiu do ar, e "Tirar do ar"; (4) as decisões D-A6-126 a D-A6-130,
+           aprovadas, e a pergunta (o Social media propor Stories fica para depois), em "Decisões".
 fontes (lidas em 11/11/2026): Meta, Instagram Platform: Content Publishing (media_type STORIES) e a referência
       POST /{ig-user-id}/media (sem legenda; foto JPEG até 8 MB; vídeo de 3 a 60 s, até 100 MB); Page Stories API
       (photo_stories e video_stories; vídeo de 3 a 90 s; foto até 10 MB).
@@ -1642,7 +1642,7 @@ select.input { padding-right: var(--sp-2); }
 <p class="sr-only" id="anuncio" role="status" aria-live="polite"></p>
 
 <div class="revisao" role="region" aria-label="Controles do protótipo">
-  <p class="revisao-marca"><b>Protótipo proposto em 11/11/2026 · A6 · P41</b><span>Stories, por cima do P37 aprovado · espera você · dados de exemplo · código do app: qualquer um de 6 números, menos 000000</span></p>
+  <p class="revisao-marca"><b>Protótipo aprovado em 11/11/2026 · A6 · P41</b><span>Stories, por cima do P37 aprovado · dados de exemplo · código do app: qualquer um de 6 números, menos 000000</span></p>
   <span hidden><label>Avaliações <select id="rev-p17"></select></label></span><label>Story <select id="rev-p41"></select></label><label>Vídeo <select id="rev-p37b"></select></label><label>Post e Agenda <select id="rev-p19"></select></label>
   <!-- O seletor do P9 segue no arquivo (os cenários `p9-*` usam), fora da faixa. -->
   <span hidden><label>Pedido e verba <select id="rev-p9"></select></label></span>
@@ -6829,7 +6829,7 @@ p37bEstado(P37B_TODOS[params.get('video')] ? params.get('video') : 'novo-video')
 </script>
 <script>
 /* =====================================================================================================================
-   A6 · P41 · Stories (Z13; D-A6-126 a D-A6-130, propostas em 11/11/2026, esperam o dono). Uma camada por cima do P37
+   A6 · P41 · Stories (Z13; D-A6-126 a D-A6-130, aprovadas pelo dono em 11/11/2026, com as recomendações). Uma camada por cima do P37
    (o post com vídeo, aprovado): o novo post ganha o formato "Post ou Story"; o Story leva a foto ou o vídeo de Fotos,
    sai no Instagram e na Página, sem texto, na hora marcada, e fica 24 horas no ar. Em Aprovações e na Agenda, o Story
    aparece com a prévia em pé, o que foi conferido e o "no ar até". A tela aprovada (P19 e P37) segue nos seletores.
@@ -6856,7 +6856,7 @@ const P41_ESTADOS = {
     'agenda-story-saiu': 'O Story que já saiu do ar',
   },
   'Decisões': {
-    decisoes: 'As decisões propostas (D-A6-126 a D-A6-130)',
+    decisoes: 'As decisões aprovadas (D-A6-126 a D-A6-130)',
   },
 };
 const P41_TODOS = Object.assign({}, ...Object.values(P41_ESTADOS));
@@ -7077,10 +7077,10 @@ const P41_DECISOES = [
   { id: 'D-A6-129', titulo: '24 horas no ar', texto: 'A Agenda mostra "no ar até" e depois "saiu do ar". O Liame não republica. Os Stories contam no limite de publicações do Instagram (100 por 24 horas, que o Liame confere antes). Tirar do ar antes das 24 horas pede o código do app.', rec: 'assim; tirar do ar pelo Instagram se confere antes do código.' },
   { id: 'D-A6-130', titulo: 'O que o Story trouxe', texto: 'Os números do Story (alcance, respostas, toques para avançar ou sair) só existem enquanto ele está no ar e pedem a permissão de métricas. Ficam para uma parte 2, lidos uma vez perto do fim das 24 horas.', rec: 'fica para depois.' },
 ];
-const P41_PERGUNTAS = ['O Social media propõe Stories na pauta da semana? Recomendo depois, junto do "Pedir ao Social media" do vídeo (em estudo).'];
+const P41_PERGUNTAS = ['O Social media propõe Stories na pauta da semana? Fica para depois, junto do "Pedir ao Social media" do vídeo (em estudo), como recomendado.'];
 function p41DecisoesHtml() {
-  const lista = P41_DECISOES.map((d) => `<li><div><b>${d.id} · ${esc(d.titulo)}</b><span>${esc(d.texto)}</span><span><b>Recomendado:</b> ${esc(d.rec)}</span></div><span class="st st--aguardando">Espera você</span></li>`).join('');
-  return `<section class="card p41-decisoes" id="p41-decisoes" aria-labelledby="p41-dec-t"><div class="card-cab"><div><h2 id="p41-dec-t" tabindex="-1">Decisões propostas</h2><p class="card-sub">Pela documentação da Meta lida em 11/11/2026 (o Story pela API do Instagram e o Page Stories da Página). Esperam você.</p></div></div><ul class="rev-decisoes">${lista}</ul><p class="lite-frase"><b>Pergunta para você:</b> ${esc(P41_PERGUNTAS[0])}</p></section>`;
+  const lista = P41_DECISOES.map((d) => `<li><div><b>${d.id} · ${esc(d.titulo)}</b><span>${esc(d.texto)}</span><span><b>Recomendado:</b> ${esc(d.rec)}</span></div><span class="st st--concluido">Aprovada</span></li>`).join('');
+  return `<section class="card p41-decisoes" id="p41-decisoes" aria-labelledby="p41-dec-t"><div class="card-cab"><div><h2 id="p41-dec-t" tabindex="-1">Decisões</h2><p class="card-sub">Pela documentação da Meta lida em 11/11/2026 (o Story pela API do Instagram e o Page Stories da Página). Aprovadas por você em 11/11/2026, com as recomendações.</p></div></div><ul class="rev-decisoes">${lista}</ul><p class="lite-frase"><b>A pergunta:</b> ${esc(P41_PERGUNTAS[0])}</p></section>`;
 }
 
 /* ---------- cliques da camada ---------- */
@@ -7222,7 +7222,7 @@ selP41.addEventListener('change', () => p41Estado(selP41.value, { focar: true })
       if (id.startsWith('agenda') || id === 'decisoes') exige(!$('#tela-agenda').hidden && $('[data-p19-post="po-s1"]')?.getAttribute('aria-label').startsWith('Story de') && texto('[data-p19-post="po-s1"]').includes('No ar até 13:00') && texto('[data-p19-post="po-s2"]').includes('Saiu do ar'), 'o Story na Agenda');
       if (id === 'agenda-story-aberto') exige(dlgPost.open && texto('#dlg-post-t').startsWith('Story de') && texto('#dlg-post-st').includes('No ar até amanhã') && !!$('#post-corpo .p41-story') && texto('#post-acoes').includes('Tirar do ar') && !texto('#post-corpo .po-fatos').includes('Link'), 'o Story aberto');
       if (id === 'agenda-story-saiu') exige(dlgPost.open && texto('#dlg-post-st').includes('Saiu do ar') && !texto('#post-acoes').includes('Tirar do ar'), 'o Story que saiu do ar');
-      if (id === 'decisoes') exige($$('#p41-decisoes li').length === 5 && texto('#p41-decisoes').includes('Pergunta para você'), 'as decisões');
+      if (id === 'decisoes') exige($$('#p41-decisoes li').length === 5 && texto('#p41-decisoes').includes('Fica para depois'), 'as decisões');
     } };
   }
   window.uiuxCenarios['p41-fluxo-novo-story'] = { larguras: pontas, executar: async () => {
