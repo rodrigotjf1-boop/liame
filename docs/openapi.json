@@ -134442,6 +134442,10 @@
       "description": "Peças do Criativo: o pedido de peças de anúncio para uma oferta de Minha marca e as peças, cada uma com a conferência do código, item por item; nada vai para a Meta por aqui (A4)"
     },
     {
+      "name": "campanhas-novas",
+      "description": "Campanha nova na Meta: a peça aprovada com a foto ou o vídeo da loja vira um pedido de criar a campanha, o conjunto e o anúncio, tudo pausado, com aprovação e o código do app (A4, X5)"
+    },
+    {
       "name": "conversoes",
       "description": "Conversões para o Google: a venda confirmada no caixa, vinda de um clique em anúncio, informada ao Google; a situação de cada conta, as conversões da conta e escolher ou parar o destino (A5)"
     },
