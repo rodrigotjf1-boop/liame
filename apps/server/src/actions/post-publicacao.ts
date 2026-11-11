@@ -563,8 +563,9 @@ export class PostPublicacaoConnector implements Connector {
       update liame.social_post_channel
          set status = 'publicado', external_id = ${externo}, permalink = ${permalink}, error = null, preparing_since = null,
              published_at = coalesce(published_at, now()), attempted_at = coalesce(attempted_at, now()), updated_at = now(),
-             -- A primeira leitura dos números, uma hora depois de sair (A6, Z7, parte c; D-A6-51).
-             metrics_next_at = coalesce(metrics_next_at, now() + make_interval(mins => ${PRIMEIRA_LEITURA_MIN}))
+             -- A primeira leitura dos números, uma hora depois de sair (A6, Z7, parte c; D-A6-51). O Story não tem leitura
+             -- (D-A6-130: os números dele ficam para depois, e ele sai do ar em 24 horas).
+             metrics_next_at = ${post.story ? sql`null` : sql`coalesce(metrics_next_at, now() + make_interval(mins => ${PRIMEIRA_LEITURA_MIN}))`}
        where id = ${canal}`);
     await this.limparRecorte(tx, ref, post, deps);
   }

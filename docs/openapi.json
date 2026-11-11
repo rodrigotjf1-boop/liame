@@ -110543,6 +110543,9 @@
                         ],
                         "additionalProperties": false
                       }
+                    },
+                    "stories_enabled": {
+                      "type": "boolean"
                     }
                   },
                   "required": [
@@ -115398,7 +115401,7 @@
     },
     "/v1/posts/{id}/unpublish": {
       "post": {
-        "description": "Só para o post do Liame que está no ar em algum canal (A6, Z5d, parte 6; P19; D-A6-57): ele sai de cada canal em que está no ar (o Instagram e a Página do Facebook), com o código do app de quem apaga (quem pode aprovar). O pedido `post_apagar` (a volta do pedido que publicou) é feito e aprovado na mesma transação, pelo trilho de sempre, e executa em seguida, a qualquer hora; o andamento aparece em `removal` (`apagando`, `apagado`, `em_parte` ou `nao_apagou`, com o porquê). Apagar não se desfaz, e quem já viu o post, viu. No Instagram, a Meta pede a permissão de apagar posts na autorização; sem ela, o post continua lá e o porquê aparece em `removal.reason`. O código errado, ou o trilho que recusa, deixa tudo como estava. Recusas: 409 `post-fora-do-ar` (não está no ar em nenhum canal), `post-saindo` (o post ainda está saindo num canal), `post-saindo-das-redes` (já há um pedido de apagar executando), `canal-nao-conectado`, `e-pacote` e `funcao-desligada`; as do código do app, como em aprovar um pedido.",
+        "description": "Só para o post do Liame que está no ar em algum canal (A6, Z5d, parte 6; P19; D-A6-57): ele sai de cada canal em que está no ar (o Instagram e a Página do Facebook), com o código do app de quem apaga (quem pode aprovar). O pedido `post_apagar` (a volta do pedido que publicou) é feito e aprovado na mesma transação, pelo trilho de sempre, e executa em seguida, a qualquer hora; o andamento aparece em `removal` (`apagando`, `apagado`, `em_parte` ou `nao_apagou`, com o porquê). Apagar não se desfaz, e quem já viu o post, viu. No Instagram, a Meta pede a permissão de apagar posts na autorização; sem ela, o post continua lá e o porquê aparece em `removal.reason`. O código errado, ou o trilho que recusa, deixa tudo como estava. O Story (A6, Z13, parte 2; D-A6-132) sai só do Instagram e só nas 24 horas em que está no ar: a Meta não tem como tirar o Story da Página pela API, e ele some sozinho. Recusas: 409 `post-fora-do-ar` (não está no ar em nenhum canal), `story-fora-do-ar` (o Story passou das 24 horas), `story-so-na-pagina` (o Story está no ar só na Página), `post-saindo` (o post ainda está saindo num canal), `post-saindo-das-redes` (já há um pedido de apagar executando), `canal-nao-conectado`, `e-pacote` e `funcao-desligada`; as do código do app, como em aprovar um pedido.",
         "operationId": "PostsController_apagarDasRedes",
         "parameters": [
           {

@@ -105,8 +105,9 @@ export function GavetaPost({
   const story = ehStory(post);
   const naoApagou = avisoDoApagar(post);
   const pedidoEm = noFuso(new Date(post.created_at), fuso);
-  // P33: o que o post que já saiu trouxe (os pedidos pelo link e os números de cada rede); nulo antes de sair.
-  const trouxe = oQueOPostTrouxe(post, agora, fuso);
+  // P33: o que o post que já saiu trouxe (os pedidos pelo link e os números de cada rede); nulo antes de sair. O Story
+  // não leva link nem tem leitura dos números (D-A6-127 e D-A6-130): fica sem a seção.
+  const trouxe = story ? null : oQueOPostTrouxe(post, agora, fuso);
   // O post com vídeo (P37, parte B): o vídeo da lista das Fotos e o vídeo que a Meta não terminou de preparar.
   const comVideo = ehPostComVideo(post);
   const video = comVideo && foto && ehVideoPronto(foto) ? foto : null;

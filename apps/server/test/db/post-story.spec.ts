@@ -272,6 +272,9 @@ describe.skipIf(!hasDb)('o Story (A6 · Z13, parte 1)', () => {
     const { post } = await storyAprovado(e, foto.id, ['instagram', 'facebook']);
     await executar(e);
     expect([(await canalDe(post, 'instagram')).status, (await canalDe(post, 'facebook')).status]).toEqual(['publicado', 'publicado']);
+    // O Story não agenda a leitura dos números (D-A6-130).
+    const leituras = await ownerQuery<{ metrics_next_at: Date | null }>(`select metrics_next_at from liame.social_post_channel where post_id = $1`, [post]);
+    expect(leituras.map((l) => l.metrics_next_at)).toEqual([null, null]);
 
     // Sai do Instagram (`DELETE /<IG_MEDIA_ID>`); a Página não tem como (o Page Stories API), e o Story fica lá.
     const r = await tirar(e, post);
