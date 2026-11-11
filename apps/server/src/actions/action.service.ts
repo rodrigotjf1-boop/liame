@@ -43,6 +43,7 @@ import type { AcaoSombra } from '../sombra/regras.js';
 import { advance, workflowOf } from '../workflow/workflow.js';
 import { SOCIAL } from '../ai/social/prompt.js';
 import { abrirSegundaRodada, maisSugestoes, oQueDesligaAsSugestoes, paramsDaResposta, type SituacaoDaSugestao } from '../avaliacoes/sugestoes.js';
+import { oQueSeguraOAutomatico } from '../comentarios/automatico.js';
 import { abrirSegundaRodadaDoComentario, FERRAMENTA_DA_OPERACAO, oQueDesligaOsPedidos } from '../comentarios/pedidos.js';
 import { EstadoDaAvaliacao, ParametrosDaResposta, resumoDoTexto } from './avaliacao-plano.js';
 import { BudgetService, estadoNaResposta } from './budget.service.js';
@@ -529,14 +530,34 @@ export class ActionService {
     return true;
   }
 
+  /**
+   * A resposta automática a um comentário (A6, Z11, parte 2e-1; D-A6-92 e D-A6-104): o atendimento automático que a
+   * marca ligou responde sozinho, sem pedido de aprovação. Quem chama é a rotina dos pedidos dos comentários, na
+   * transação da empresa. O portão (a função, os pedidos dos comentários ligados, a marca ligada e o tipo de agora do
+   * comentário entre os marcados) é conferido aqui, na mesma transação do pedido, e de novo pelo executor antes de
+   * publicar. Fechado o portão, ou a política da empresa pedindo aprovação para ela, 409 (`automatico-segurado`): quem
+   * chama manda o comentário para uma pessoa. O pedido nasce aprovado e sai na volta seguinte do executor.
+   */
+  async responderSozinhoPeloFuncionario(alvo: { tenantId: string; agentKey: string; agentLabel: string; emNomeDe: string }, input: CreateActionRequest): Promise<string> {
+    const tool = TOOLS[input.tool];
+    const commentId = comentarioDoPedido({ provider: input.provider, resource_id: input.resource_id });
+    if (!tool?.atendimentoAutomatico || !commentId || !input.brand_id) {
+      throw new AppProblem(400, 'ferramenta-nao-e-automatica', 'Não é a resposta automática', 'Por aqui o funcionário só pede a resposta automática a um comentário.');
+    }
+    const segura = await oQueSeguraOAutomatico(currentTx(), this.flags, { tenantId: alvo.tenantId, brandId: input.brand_id, connectedAccountId: input.account_id, commentId });
+    if (segura) throw new AppProblem(409, 'automatico-segurado', 'O atendimento automático não responde este', `O atendimento automático não responde este comentário agora (${segura}).`);
+    return this.pedirEmNomeDoFuncionario(alvo, input, { automatic: true }, true);
+  }
+
   /** O pedido do funcionário de IA pelo trilho, com a auditoria em nome dele. `extra` vai para a auditoria. */
   private async pedirEmNomeDoFuncionario(
     alvo: { tenantId: string; agentKey: string; agentLabel: string; emNomeDe: string },
     input: CreateActionRequest,
     extra: Record<string, unknown>,
+    automatico = false,
   ): Promise<string> {
     const tx = currentTx();
-    const id = await this.pedir({ tenantId: alvo.tenantId, userId: alvo.emNomeDe, ator: 'agent', agentKey: alvo.agentKey }, input, null);
+    const id = await this.pedir({ tenantId: alvo.tenantId, userId: alvo.emNomeDe, ator: 'agent', agentKey: alvo.agentKey }, input, null, null, automatico);
     const r = await tx.execute<{ tool: string; action: string; mode: string; status: string; plan_hash: string; reserved_micros: string }>(sql`
       select tool, action, mode, status, plan_hash, reserved_micros::text as reserved_micros from liame.action_request where id = ${id} and tenant_id = ${alvo.tenantId}`);
     const feito = r.rows[0]!;
@@ -635,10 +656,15 @@ export class ActionService {
     input: CreateActionRequest,
     volta: { de: string; versaoDepois: number } | null,
     tentativa: { de: string } | null = null,
+    automatico = false,
   ): Promise<string> {
     const tx = currentTx();
     const tenantId = quem.tenantId;
     const { tool, connector } = this.resolve(input.tool, input.provider);
+    // A resposta automática (A6, Z11, parte 2e-1) só se pede pelo atendimento automático, que conferiu o portão antes.
+    if (tool.atendimentoAutomatico && (!automatico || quem.ator !== 'agent')) {
+      throw new AppProblem(422, 'acao-so-pelo-automatico', 'Esta ação não se pede direto', 'A resposta automática só sai pelo atendimento automático da marca: para responder, peça a resposta ao comentário.');
+    }
     // A ferramenta que só existe como a volta de outra ação não se pede direto (A6, Z2: apagar a resposta a uma avaliação).
     if (tool.onlyAsUndo && !volta) {
       throw new AppProblem(422, 'acao-so-como-volta', 'Esta ação não se pede direto', 'Esta ação só existe como a volta de outra: desfaça o pedido que foi executado.');
@@ -676,12 +702,17 @@ export class ActionService {
     // A exceção é o pedido que só o dono decide (A6, D-A6-4 e D-A6-27: a resposta a uma avaliação de 1 ou 2 estrelas,
     // que a política põe em ESCALATE): ele pede, e só a aprovação do dono, com o código do app, faz o pedido andar.
     const soDoDono = decision.mode === 'ESCALATE' && tool.ownerOnly?.(read.state) === true;
-    if (quem.ator === 'agent' && decision.mode !== 'APPROVAL' && !soDoDono) {
+    // A outra exceção é a resposta automática (A6, Z11, parte 2e-1): ela só existe no modo automático da regra própria
+    // dela; se a política da empresa ou da marca pedir outra coisa, ela não sai, e o comentário vai para uma pessoa.
+    if (tool.atendimentoAutomatico && decision.mode !== 'AUTO') {
+      throw new AppProblem(409, 'automatico-segurado', 'O atendimento automático não responde este', `A política desta conta pede ${decision.mode} para a resposta automática: o comentário vai para uma pessoa.`);
+    }
+    if (quem.ator === 'agent' && decision.mode !== 'APPROVAL' && !soDoDono && !tool.atendimentoAutomatico) {
       throw new AppProblem(409, 'modo-nao-e-aprovacao', 'O modo não é Aprovação', `Nesta conta, esta ação está em ${decision.mode} para o funcionário de IA: ele não faz o pedido.`);
     }
 
     const id = uuidv7();
-    const { mode, status, reason } = await this.statusFor(decision.mode, quem, brandId, tool);
+    const { mode, status, reason } = await this.statusFor(decision.mode, quem, brandId, tool, automatico);
     const fingerprint = sha256(canonicalJson({ tenantId, tool: tool.name, provider: input.provider, account: input.account_id, resource: input.resource_id }));
     const planHash = planHashOf({ ...input, brand_id: brandId, tool: tool.name, params }, plan, read.version);
     try {
@@ -1421,12 +1452,19 @@ export class ActionService {
     mode: AutonomyMode,
     quem: Pick<Solicitante, 'tenantId' | 'userId' | 'ator'>,
     brandId: string | null,
-    tool?: Pick<ToolDefinition, 'alwaysApproval' | 'directByPerson'>,
+    tool?: Pick<ToolDefinition, 'alwaysApproval' | 'directByPerson' | 'atendimentoAutomatico'>,
+    automatico = false,
   ): Promise<{ mode: AutonomyMode; status: ActionStatus; reason: string | null }> {
     if (mode === 'SHADOW') return { mode, status: 'sombra', reason: 'modo sombra: registra, não executa' };
     if (mode === 'LIMITED_AUTO' || mode === 'AUTO') {
       if (tool?.alwaysApproval) return { mode: 'APPROVAL', status: 'aguardando_aprovacao', reason: `autonomia ${mode} pedida, mas esta ação sempre espera a aprovação de uma pessoa` };
       if (tool?.directByPerson && quem.ator === 'human') return { mode, status: 'aprovada', reason: 'pedida por uma pessoa: esta ação não espera aprovação' };
+      // A resposta automática (A6, Z11, parte 2e-1): o portão é o do atendimento automático, conferido por quem pediu na
+      // mesma transação (e de novo pelo executor), e não o `autopilot`.
+      if (tool?.atendimentoAutomatico) {
+        if (automatico && quem.ator === 'agent') return { mode, status: 'aprovada', reason: 'atendimento automático: a marca ligou, com o código do app' };
+        return { mode: 'APPROVAL', status: 'aguardando_aprovacao', reason: 'a resposta automática só sai pelo atendimento automático' };
+      }
       const autopilot = await this.flags.isEnabled('autopilot', this.flags.context({ tenantId: quem.tenantId, userId: quem.userId, brandId }));
       if (autopilot) return { mode, status: 'aprovada', reason: 'aprovada pela política (autonomia)' };
       return { mode: 'APPROVAL', status: 'aguardando_aprovacao', reason: `autonomia ${mode} pedida, mas o autopilot está desligado` };
@@ -2005,6 +2043,7 @@ function toResponse(row: ActionRow, approvals: ApprovalRow[], workflow: ActionRe
 /** O que a ferramenta do pedido de comentário faz, para o pedido antigo sem a `operacao` no estado desejado. */
 const OPERACAO_DA_FERRAMENTA: Record<string, string> = {
   comentario_responder: 'responder',
+  comentario_responder_auto: 'responder',
   comentario_apagar_resposta: 'apagar_resposta',
   comentario_ocultar: 'ocultar',
   comentario_mostrar: 'mostrar',

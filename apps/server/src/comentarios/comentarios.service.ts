@@ -1,6 +1,9 @@
 import {
   COMMENTS_LIST_LIMIT,
   COMMENTS_REFRESH_WINDOW_S,
+  type CommentAutoReplyQuery,
+  type CommentAutoReplyRequest,
+  type CommentAutoReplyResponse,
   type CommentPost,
   type CommentReply,
   type CommentsCounts,
@@ -15,15 +18,22 @@ import { Injectable } from '@nestjs/common';
 import { sql } from 'drizzle-orm';
 import { ACTIVE_ACTION_STATUSES } from '../actions/action.service.js';
 import { recursoDoComentario } from '../actions/comentario-na-rede.js';
+import { ConfirmacaoService } from '../auth/confirmacao.service.js';
 import { RateLimitService } from '../auth/rate-limit.service.js';
 import { contaConectada } from '../connections/conectada.js';
 import { PROVEDOR_INSTAGRAM, PROVEDOR_PAGINA } from '../connectors/meta/publicacao.js';
-import { type AuthContext, currentTx } from '../context/request-context.js';
+import { type AuthContext, auditDetail, currentTx } from '../context/request-context.js';
 import { AppProblem } from '../errors/problems.js';
 import { FlagService } from '../flags/flag.service.js';
 import { situacaoDaLeitura } from '../fotos/do-seu-instagram.service.js';
 import { marcaDaEmpresa, quemPede } from '../fotos/fotos.service.js';
+import { automaticoDaMarca, FLAG_DO_AUTOMATICO, RESPOSTAS_AUTOMATICAS_POR_HORA, respostasAutomaticasNaHora, TIPOS_DO_AUTOMATICO } from './automatico.js';
 import { DATASET_DOS_COMENTARIOS, FLAG_DOS_COMENTARIOS } from './comentarios.js';
+
+/** Ligar e somar um tipo ao atendimento automático: o Dono ou um Administrador (D-A6-92). */
+const PERMISSAO_DE_LIGAR = 'politicas.gerenciar';
+/** Desligar e tirar um tipo: quem aprova, na hora e sem código. */
+const PERMISSAO_DE_DESLIGAR = 'acoes.aprovar';
 
 // Comentários (A6 · Z11, parte 1; P38, D-A6-84 a D-A6-90): o que a tela lê, na transação da rota, e o "Ler agora". Só
 // lê o que a rotina `comentarios` do worker gravou; nenhuma chamada à Meta acontece aqui.
@@ -95,6 +105,7 @@ export class ComentariosService {
   constructor(
     private readonly flags: FlagService,
     private readonly limite: RateLimitService,
+    private readonly confirmacao: ConfirmacaoService,
   ) {}
 
   private ligada(tenantId: string, userId: string, brandId: string): Promise<boolean> {
@@ -222,6 +233,73 @@ export class ComentariosService {
       comment_count: p.comment_count,
     }));
     return { brand_id: brandId, state: 'pronta', accounts, counts, items, posts, refresh };
+  }
+
+  /**
+   * O atendimento automático da marca (A6, Z11, parte 2e-1; D-A6-92 e D-A6-104): como está, quem pode ligar e desligar,
+   * e as respostas automáticas da última hora.
+   */
+  async verAutomatico(auth: AuthContext, query: CommentAutoReplyQuery, agora = new Date()): Promise<CommentAutoReplyResponse> {
+    const quem = quemPede(auth);
+    const brandId = query.brand_id;
+    await marcaDaEmpresa(brandId);
+    const tx = currentTx();
+    const available = await this.flags.isEnabled(FLAG_DO_AUTOMATICO, this.flags.context({ tenantId: quem.tenantId, userId: quem.userId, brandId }));
+    const m = await automaticoDaMarca(tx, brandId);
+    const quemMudou = m.updatedBy ? (await tx.execute<{ id: string; name: string }>(sql`select id, name from liame.app_user where id = ${m.updatedBy}`)).rows[0] : undefined;
+    const hora = await respostasAutomaticasNaHora(tx, brandId, agora);
+    return {
+      brand_id: brandId,
+      available,
+      enabled: m.enabled,
+      kinds: m.kinds,
+      can_enable: auth.permissions.has(PERMISSAO_DE_LIGAR),
+      can_disable: auth.permissions.has(PERMISSAO_DE_DESLIGAR),
+      updated_at: m.updatedAt ? m.updatedAt.toISOString() : null,
+      updated_by: quemMudou ? { id: quemMudou.id, name: quemMudou.name } : null,
+      last_hour: hora.n,
+      hourly_limit: RESPOSTAS_AUTOMATICAS_POR_HORA,
+    };
+  }
+
+  /**
+   * Liga, desliga ou muda os tipos do atendimento automático da marca (D-A6-92). Ligar e somar um tipo: o Dono ou um
+   * Administrador (`politicas.gerenciar`), com a função liberada para a empresa e a confirmação (o código do app ou a
+   * chave de acesso). Desligar e tirar um tipo: quem aprova, na hora e sem código (a rota pede `acoes.aprovar`). Ligado
+   * pede pelo menos um tipo. A mudança vai para a auditoria, com o antes e o depois.
+   */
+  async mudarAutomatico(auth: AuthContext, body: CommentAutoReplyRequest): Promise<CommentAutoReplyResponse> {
+    const quem = quemPede(auth);
+    const brandId = body.brand_id;
+    await marcaDaEmpresa(brandId);
+    const tx = currentTx();
+    const antes = await automaticoDaMarca(tx, brandId);
+    const kinds = TIPOS_DO_AUTOMATICO.filter((t) => body.kinds.includes(t));
+    if (body.enabled && kinds.length === 0) throw new AppProblem(422, 'sem-tipo', 'Marque um tipo', 'Para ligar o atendimento automático, marque pelo menos um tipo de comentário.');
+    // Pede o código quem passa a deixar sair algo sozinho: ligar, ou somar um tipo com ele ligado.
+    const liga = body.enabled && !antes.enabled;
+    const soma = body.enabled && kinds.some((k) => !antes.kinds.includes(k));
+    const comCodigo = liga || soma;
+    if (comCodigo) {
+      if (!auth.permissions.has(PERMISSAO_DE_LIGAR)) {
+        throw new AppProblem(403, 'so-dono-ou-administrador', 'Só o Dono ou um Administrador', 'Só o Dono ou um Administrador liga o atendimento automático ou soma um tipo. Você pode desligar ou tirar um tipo.');
+      }
+      if (!(await this.flags.isEnabled(FLAG_DO_AUTOMATICO, this.flags.context({ tenantId: quem.tenantId, userId: quem.userId, brandId })))) {
+        throw new AppProblem(409, 'funcao-desligada', 'Ainda não está liberado', 'O atendimento automático ainda não está liberado para esta empresa.');
+      }
+      await this.confirmacao.confirmar(tx, quem.userId, body);
+    }
+    await tx.execute(sql`
+      insert into liame.comment_auto_reply (brand_id, tenant_id, enabled, kinds, updated_by, created_at, updated_at)
+      values (${brandId}, ${quem.tenantId}, ${body.enabled}, ${`{${kinds.join(',')}}`}::text[], ${quem.userId}, now(), now())
+      on conflict (brand_id) do update
+        set enabled = excluded.enabled, kinds = excluded.kinds, updated_by = excluded.updated_by, updated_at = excluded.updated_at`);
+    auditDetail({
+      resourceId: brandId,
+      before: { enabled: antes.enabled, kinds: antes.kinds },
+      after: { enabled: body.enabled, kinds, confirmed: comCodigo },
+    });
+    return this.verAutomatico(auth, { brand_id: brandId });
   }
 
   /**

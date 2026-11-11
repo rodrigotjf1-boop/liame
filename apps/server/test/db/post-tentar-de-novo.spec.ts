@@ -172,7 +172,7 @@ describe.skipIf(!hasDb)('"Tentar de novo" no canal que não saiu (A6 · Z5d, par
     const novo = await pedidoDe(r.body.action_id);
     expect(novo).toMatchObject({ tool: 'post_tentar_de_novo', status: 'aprovada', mode: 'AUTO', actor_type: 'human', provider: 'facebook_page', account_id: e.pagina!.id, requested_by: e.userId });
     const doPedido = await api.call('GET', `/v1/actions/${r.body.action_id}`, { cookie: e.cookie });
-    expect(doPedido.body.policy.versions[0]).toBe('plataforma@11');
+    expect(doPedido.body.policy.versions[0]).toBe('plataforma@12');
     const [ev] = await ownerQuery<{ before: Record<string, unknown>; after: Record<string, unknown> }>(
       `select before, after from liame.audit_event where tenant_id = $1 and action = 'posts.tentar_de_novo'`,
       [e.tenantId],

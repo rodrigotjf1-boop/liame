@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { ChaveNoLugarDoCodigo } from './passkeys.js';
 
 // Comentários (A6, Z11; protótipo P38, D-A6-84 a D-A6-94). O que a tela Comentários lê: os comentários dos posts dos
 // últimos 30 dias do Instagram e da Página ligados à marca, que a rotina `comentarios` do worker guardou. O Liame guarda
@@ -159,3 +160,47 @@ export const CommentsWaitingResponse = z.strictObject({
   asking: z.int().min(0),
 });
 export type CommentsWaitingResponse = z.infer<typeof CommentsWaitingResponse>;
+
+// ---- O atendimento automático (A6, Z11, parte 2e-1; P38 versão 2; D-A6-92 e D-A6-104)
+
+/** Os tipos que o atendimento automático pode responder sozinho, nesta versão (a pergunta entra numa parte própria). */
+export const COMMENT_AUTO_REPLY_KINDS = ['elogio', 'marcacao'] as const;
+/** No máximo tantas respostas sozinho por hora, por marca; o que passar espera a hora seguinte. */
+export const COMMENT_AUTO_REPLY_HOURLY_LIMIT = 30;
+
+export const CommentAutoReplyQuery = z.strictObject({ brand_id: z.uuid() });
+export type CommentAutoReplyQuery = z.infer<typeof CommentAutoReplyQuery>;
+
+export const CommentAutoReplyResponse = z.strictObject({
+  brand_id: z.uuid(),
+  /** A função `comentarios_automatico` ligada para a empresa. Sem ela, nada responde sozinho, e a tela só explica. */
+  available: z.boolean(),
+  /** Ligado na marca (nasce desligado). */
+  enabled: z.boolean(),
+  /** Os tipos marcados: `elogio` e `marcacao` hoje. A lista pode crescer (V23). */
+  kinds: z.array(z.string().regex(/^[a-z_]{2,40}$/)),
+  /** Quem vê pode ligar e somar um tipo: o Dono ou um Administrador, com o código do app. */
+  can_enable: z.boolean(),
+  /** Quem vê pode desligar e tirar um tipo, na hora e sem código: quem aprova. */
+  can_disable: z.boolean(),
+  /** A última mudança e quem fez (cada uma fica também na auditoria). Nulos enquanto ninguém mudou. */
+  updated_at: z.iso.datetime().nullable(),
+  updated_by: z.strictObject({ id: z.uuid(), name: z.string() }).nullable(),
+  /** As respostas automáticas da última hora (dadas ou saindo) e o teto por hora. */
+  last_hour: z.int().min(0),
+  hourly_limit: z.int().min(1),
+});
+export type CommentAutoReplyResponse = z.infer<typeof CommentAutoReplyResponse>;
+
+/**
+ * Ligar, desligar ou mudar os tipos. Ligar e somar um tipo pedem o Dono ou um Administrador e a confirmação (o código do
+ * app ou a chave de acesso); desligar e tirar um tipo, não. Ligado pede pelo menos um tipo.
+ */
+export const CommentAutoReplyRequest = z.strictObject({
+  brand_id: z.uuid(),
+  enabled: z.boolean(),
+  kinds: z.array(z.enum(COMMENT_AUTO_REPLY_KINDS)).max(COMMENT_AUTO_REPLY_KINDS.length),
+  code: z.string().regex(/^\d{6}$/, { error: 'Digite os 6 números do app' }).optional(),
+  passkey: ChaveNoLugarDoCodigo,
+});
+export type CommentAutoReplyRequest = z.infer<typeof CommentAutoReplyRequest>;

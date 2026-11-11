@@ -235,6 +235,9 @@ export const DATA_CLASSES: Record<string, TableClassification> = {
   // situação, o tipo que saiu (ou "nenhum"), o porquê em código e a marca do texto julgado (o SHA-256, não o texto); nada
   // de quem comentou. Sai com o comentário (em cascata), na guarda de 90 dias dele.
   comment_kind_check: { class: 'INTERNAL', retention: 'com o comentário (sai com ele, na guarda de 90 dias dele)' },
+  // O atendimento automático de cada marca (A6, Z11, parte 2e-1; migration 0129; D-A6-92): ligado, os tipos e quem
+  // mudou por último. Configuração da empresa, sem comentário nem quem comentou; sai com a marca.
+  comment_auto_reply: { class: 'INTERNAL', retention: 'enquanto a marca existir (sai com ela)' },
   // Os posts da marca (A6, Z5b, migration 0086): a foto (pela referência e o resumo), a hora e cada canal com o texto
   // que a empresa escreveu em nome dela e o que aconteceu na rede. Conteúdo da empresa, sem dado de pessoa. Fica com a
   // marca: é o histórico da Agenda e o que diz o que saiu, onde e quando.
