@@ -17,7 +17,9 @@ import { APP_URL, hasDb, OWNER_URL } from './env.js';
 // tabelas são do produto (sem empresa): o teste limpa no começo e no fim.
 
 const RIO = '3304557';
-const SP = '3550308';
+// A rotina lê o município de TODAS as lojas no mapa do banco (o de teste é dividido com as outras suítes): a loja da
+// falha usa um código novo a cada rodada, para a leitura dele nunca estar em dia de uma rodada anterior.
+const SP = `35${String(Date.now() % 100_000).padStart(5, '0')}`;
 
 function arquivoBasico(): Buffer {
   const linhas = ['"CD_BAIRRO";"NM_BAIRRO";"CD_MUN";"NM_MUN";"AREA_KM2";"v0001";"v0002"'];
@@ -100,6 +102,7 @@ describe.skipIf(!hasDb)('Sua região: a rotina das fontes públicas e o retrato 
 
   afterAll(async () => {
     await ligarFlagDaEmpresa(api, 'regiao', tenantId, false);
+    await ownerQuery(`delete from liame.unit where id = any($1::uuid[])`, [[tijuca, paulista]]);
     await limpar();
     await api?.close();
   });
@@ -112,7 +115,8 @@ describe.skipIf(!hasDb)('Sua região: a rotina das fontes públicas e o retrato 
     expect(antes.body).toMatchObject({ status: 'lendo', district_status: 'lendo', district: null });
 
     const pedidos: string[] = [];
-    const feitas = await rotina.executarLote(8, agora, ibgeDeMentira(new Set(), pedidos));
+    // Outras suítes põem lojas no mapa no mesmo banco: a volta pode ler outros municípios também (o lote cobre todos).
+    const feitas = (await rotina.executarLote(50, agora, ibgeDeMentira(new Set(), pedidos))).filter((f) => f.lugar === RIO || f.lugar === '0');
     expect(feitas.map((f) => `${f.fonte}:${f.lugar}:${f.situacao}`).sort()).toEqual(
       ['ibge_censo_bairro:0:lida', `ibge_10295:${RIO}:lida`, `ibge_4714:${RIO}:lida`, `ibge_6579:${RIO}:lida`, `ibge_9528:${RIO}:lida`].sort(),
     );
@@ -143,7 +147,7 @@ describe.skipIf(!hasDb)('Sua região: a rotina das fontes públicas e o retrato 
     expect(r.body.sources.every((f: { status: string }) => f.status === 'em_dia')).toBe(true);
 
     // A volta seguinte não lê de novo o que está em dia (nem o Censo, que entra uma vez).
-    expect(await rotina.executarLote(8, new Date(agora.getTime() + 60_000), ibgeDeMentira(new Set(), []))).toEqual([]);
+    expect((await rotina.executarLote(50, new Date(agora.getTime() + 60_000), ibgeDeMentira(new Set(), []))).filter((f) => f.lugar === RIO || f.lugar === '0')).toEqual([]);
   });
 
   it('a fonte que falha aparece como "falhou", com a próxima tentativa em 1 hora; o resto vale', async () => {
@@ -152,8 +156,8 @@ describe.skipIf(!hasDb)('Sua região: a rotina das fontes públicas e o retrato 
        values ($1, $2, $3, 'Loja Paulista', '01310100', 'Bela Vista', 'São Paulo', 'SP', $4, 'cep', 3)`,
       [paulista, tenantId, brandId, SP],
     );
-    const feitas = await rotina.executarLote(8, agora, ibgeDeMentira(new Set(['4714']), []));
-    expect(feitas.find((f) => f.fonte === 'ibge_4714')).toMatchObject({ lugar: SP, situacao: 'falhou', motivo: 'o IBGE respondeu 500' });
+    const feitas = await rotina.executarLote(50, agora, ibgeDeMentira(new Set(['4714']), []));
+    expect(feitas.find((f) => f.fonte === 'ibge_4714' && f.lugar === SP)).toMatchObject({ situacao: 'falhou', motivo: 'o IBGE respondeu 500' });
     const r = await retrato(paulista);
     expect(r.body).toMatchObject({ status: 'parcial', district_status: 'nao_achado', district: null, city: { population: null, restaurants: { value: 16242 } } });
     expect(r.body.sources.find((f: { source: string }) => f.source === 'ibge_4714')).toEqual({ source: 'ibge_4714', status: 'falhou', read_at: null, next_try_at: '2026-11-11T16:00:00.000Z' });
