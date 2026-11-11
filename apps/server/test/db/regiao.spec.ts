@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { resolve } from 'node:path';
 import { runMigrations } from '@liame/database';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
-import { ownerQuery, resetIpRateLimits, signupAndLogin, startApi, type TestApi } from '../helpers/api.js';
+import { enableMfa, ownerQuery, resetIpRateLimits, signupAndLogin, startApi, type TestApi } from '../helpers/api.js';
 import { ligarFlagDaEmpresa } from '../helpers/meta-de-mentira.js';
 import { hasDb, OWNER_URL } from './env.js';
 
@@ -35,6 +35,8 @@ describe.skipIf(!hasDb)('a loja no mapa (plano da região, R1)', () => {
     await resetIpRateLimits();
     const s = await signupAndLogin(api, undefined, 'Loja no mapa');
     cookie = s.cookie;
+    // O Dono só usa rotas de permissão com o app autenticador ativo.
+    await enableMfa(api, cookie);
     tenantId = s.me.active_organization_id as string;
     brandId = (await ownerQuery<{ id: string }>(`select id from liame.brand where tenant_id = $1 limit 1`, [tenantId]))[0]!.id;
     unitId = randomUUID();
