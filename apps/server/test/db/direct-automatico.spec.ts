@@ -23,7 +23,7 @@ import { ligarFlagDaEmpresa } from '../helpers/meta-de-mentira.js';
 import { type EmpresaComCanais, empresaComCanais } from '../helpers/posts-semeados.js';
 import { hasDb, OWNER_URL } from './env.js';
 
-// A6 · Z12, parte 5a: o atendimento automático do Direct (migration 0132; P39 versão 2, D-A6-115 e D-A6-119; a política
+// A6 · Z12, parte 5a: o atendimento automático do Direct (migration 0133; P39 versão 2, D-A6-115 e D-A6-119; a política
 // v14), contra Postgres e a Meta local. O que se prova:
 //   - ligar pede o Dono ou um Administrador, a função, o Direct ligado e o código do app; ligado pede um tipo; desligar
 //     é sem código, e a auditoria guarda o antes e o depois;

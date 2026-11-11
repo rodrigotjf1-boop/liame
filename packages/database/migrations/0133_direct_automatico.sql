@@ -1,4 +1,4 @@
--- 0132 · Direct do Instagram: o atendimento automático (A6, Z12, parte 5a; protótipo P39 versão 2, aprovado em
+-- 0133 · Direct do Instagram: o atendimento automático (A6, Z12, parte 5a; protótipo P39 versão 2, aprovado em
 -- 11/11/2026; D-A6-115 e D-A6-119; `plano-a6.md` Z12). Com ele ligado numa marca (pelo Dono ou por um Administrador,
 -- com o código do app), o Liame responde sozinho, sem uma pessoa ver antes, as conversas do Direct dos tipos marcados:
 -- nesta parte, o elogio, a resposta ao story e a menção no story, com a resposta pronta, sem IA (o tipo `pronta`); a
@@ -59,16 +59,16 @@ on conflict (key) do nothing;
 
 do $$ begin
   if not exists (select 1 from liame.feature_flag where key = 'direct_automatico' and default_value = 'false'::jsonb and is_write) then
-    raise exception '0132: a função direct_automatico não entrou desligada';
+    raise exception '0133: a função direct_automatico não entrou desligada';
   end if;
   if not exists (select 1 from pg_class c join pg_namespace n on n.oid = c.relnamespace
                   where n.nspname = 'liame' and c.relname = 'direct_auto_reply' and c.relrowsecurity and c.relforcerowsecurity) then
-    raise exception '0132: a tabela do automático não entrou com a RLS forçada';
+    raise exception '0133: a tabela do automático não entrou com a RLS forçada';
   end if;
   if not exists (select 1 from pg_constraint where conrelid = 'liame.direct_auto_reply'::regclass and conname = 'direct_auto_reply_ligado') then
-    raise exception '0132: a regra de ligado com um tipo não entrou';
+    raise exception '0133: a regra de ligado com um tipo não entrou';
   end if;
   if not exists (select 1 from information_schema.columns where table_schema = 'liame' and table_name = 'direct_conversation' and column_name = 'auto_checked_message') then
-    raise exception '0132: a coluna da mensagem decidida não entrou';
+    raise exception '0133: a coluna da mensagem decidida não entrou';
   end if;
 end $$;

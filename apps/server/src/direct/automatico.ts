@@ -6,7 +6,7 @@ import type { FlagService } from '../flags/flag.service.js';
 import { DATASET_DO_DIRECT, FLAG_DO_DIRECT, JANELA_DO_DIRECT_HORAS } from './direct.js';
 import { sugestaoNoDirect, type TipoNoDirect, tipoNoDirect } from './tipo-no-direct.js';
 
-// O atendimento automático do Direct (A6, Z12, parte 5a; P39 versão 2; D-A6-115 e D-A6-119; migration 0132). Com ele
+// O atendimento automático do Direct (A6, Z12, parte 5a; P39 versão 2; D-A6-115 e D-A6-119; migration 0133). Com ele
 // ligado numa marca (pelo Dono ou por um Administrador, com o código do app), o Liame responde sozinho, sem uma pessoa
 // ver antes, as conversas dos tipos marcados: nesta parte, a resposta pronta (o elogio, a resposta ao story e a menção no
 // story), sem IA. Toda resposta automática termina com o aviso e o caminho para uma pessoa (Termos 5.5 e 6.3). Sempre
@@ -14,7 +14,7 @@ import { sugestaoNoDirect, type TipoNoDirect, tipoNoDirect } from './tipo-no-dir
 // automática seguida na mesma conversa. Aqui ficam as regras e o portão, que o Action Service confere ao criar o pedido e
 // o executor confere de novo antes de mandar: desligar segura na hora até o que já estava na fila.
 
-/** A função do atendimento automático do Direct (migration 0132): nasce desligada. */
+/** A função do atendimento automático do Direct (migration 0133): nasce desligada. */
 export const FLAG_DO_DIRECT_AUTOMATICO = 'direct_automatico';
 export { ACAO_DE_RESPONDER_NO_DIRECT_SOZINHO, FERRAMENTA_DO_DIRECT_AUTOMATICO };
 
