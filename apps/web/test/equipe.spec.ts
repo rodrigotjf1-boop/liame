@@ -559,7 +559,7 @@ describe('menu: "Sua equipe" depois de Resultados e da Verba do mês, para quem 
 
   it('o item, a permissão e o título', () => {
     const i = agencia.itens.findIndex((x) => x.href === '/equipe');
-    expect(agencia.itens.slice(i - 7, i).map((x) => x.href)).toEqual(['/resultados', '/verba', '/mensagens', '/avaliacoes', '/comentarios', '/agenda', '/criativos']);
+    expect(agencia.itens.slice(i - 7, i).map((x) => x.href)).toEqual(['/verba', '/mensagens', '/avaliacoes', '/comentarios', '/direct', '/agenda', '/criativos']);
     expect(agencia.itens[i]).toEqual({ href: '/equipe', rotulo: 'Sua equipe', icone: 'users', permissao: 'campanhas.ver', modos: true });
     expect(itensVisiveis(agencia, (p) => p !== 'campanhas.ver', 'lite').map((x) => x.href)).not.toContain('/equipe');
     expect(tituloDa('/equipe')).toBe('Sua equipe');

@@ -1,0 +1,120 @@
+/* ===================== Direct do Instagram (A6 · Z12, parte 3; P39 aprovado em 11/11/2026) ===================== */
+/* Só os tokens da base. Estado sempre com palavra, nunca só a cor. Lista e conversa lado a lado quando a caixa tem
+   espaço (consulta de contêiner, V45); no estreito, uma de cada vez, com "Voltar". Nenhuma barra de rolagem lateral. */
+
+.dir { display: grid; gap: var(--sp-4); min-width: 0; }
+.dir > .faixa { margin-bottom: 0; }
+
+/* a linha da conta: o @, a leitura e o atendimento aberto */
+.dir-conta { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--sp-2) var(--sp-3); padding: var(--sp-3) var(--sp-4); border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--surface); }
+.dir-conta-txt { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-1) var(--sp-3); min-width: 0; font-size: var(--text-sm); color: var(--text-muted); }
+.dir-conta-txt b { color: var(--text); font-weight: 600; }
+.dir-conta-item { display: inline-flex; align-items: center; gap: 6px; min-width: 0; overflow-wrap: anywhere; }
+.dir-conta-item .ic { width: 15px; height: 15px; flex: none; color: var(--text-muted); }
+.dir-conta-acoes { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-2); }
+.dir-conta-confirma { flex: 1 1 100%; min-width: 0; }
+.dir-turno { display: inline-flex; align-items: center; gap: 6px; min-height: 28px; padding: 2px 10px; border-radius: var(--radius-full); background: var(--success-soft); color: var(--success); font-size: var(--text-xs); font-weight: 600; }
+.dir-turno--fechado { background: var(--bg-subtle); color: var(--text-muted); }
+
+/* situações que filtram e a busca */
+.dir-barra { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-2) var(--sp-3); }
+.dir-filtros { display: flex; flex-wrap: wrap; gap: var(--sp-2); min-width: 0; }
+.dir-filtros .chip { white-space: normal; text-align: left; }
+.dir-busca { position: relative; flex: 1 1 220px; min-width: 0; max-width: 360px; }
+.dir-busca .ic { position: absolute; left: 10px; top: 50%; width: 16px; height: 16px; transform: translateY(-50%); color: var(--text-subtle); pointer-events: none; }
+.dir-busca .input { padding-left: 34px; }
+
+/* a caixa: lista + conversa */
+.dir-caixa { container: dircaixa / inline-size; min-width: 0; border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--surface); overflow: hidden; }
+.dir-dupla { display: grid; grid-template-columns: minmax(260px, 340px) minmax(0, 1fr); min-height: 560px; }
+.dir-lado-lista { min-width: 0; border-right: 1px solid var(--border); display: flex; flex-direction: column; }
+.dir-lado-conversa { min-width: 0; display: flex; flex-direction: column; }
+.dir-voltar { display: none; }
+.dir-carregando { padding: var(--sp-4); }
+@container dircaixa (max-width: 720px) {
+  .dir-dupla { grid-template-columns: minmax(0, 1fr); min-height: 0; }
+  .dir-lado-lista { border-right: 0; }
+  .dir-caixa.com-conversa .dir-lado-lista { display: none; }
+  .dir-caixa:not(.com-conversa) .dir-lado-conversa { display: none; }
+  .dir-voltar { display: inline-flex; }
+}
+
+/* a lista das conversas */
+.dir-lista { display: grid; margin: 0; padding: 0; list-style: none; }
+.dir-linha { position: relative; display: grid; grid-template-columns: 36px minmax(0, 1fr); gap: var(--sp-3); width: 100%; padding: var(--sp-3) var(--sp-4); border: 0; border-bottom: 1px solid var(--border); background: transparent; color: inherit; text-align: left; cursor: pointer; font: inherit; }
+.dir-linha:hover { background: var(--surface-hover); }
+.dir-linha[aria-current="true"] { background: var(--surface-2); box-shadow: inset 3px 0 0 var(--fio); }
+.dir-linha:focus-visible { outline: none; box-shadow: inset var(--focus-ring); }
+.dir-av { width: 36px; height: 36px; display: grid; place-items: center; border-radius: 50%; background: var(--bg-subtle); color: var(--text-muted); font-size: var(--text-xs); font-weight: 600; }
+.dir-linha-corpo { display: grid; gap: 4px; min-width: 0; }
+.dir-linha-cab { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px var(--sp-2); min-width: 0; }
+.dir-nome { font-weight: 600; overflow-wrap: anywhere; }
+.dir-hora { margin-left: auto; font-family: var(--font-mono); font-size: var(--text-xs); color: var(--text-subtle); white-space: nowrap; }
+.dir-previa { font-size: var(--text-sm); color: var(--text-muted); overflow-wrap: anywhere; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.dir-linha.nao-lida .dir-previa { color: var(--text); font-weight: 500; }
+.dir-selos { display: flex; flex-wrap: wrap; gap: 4px 6px; }
+.dir-selos .st { white-space: normal; }
+.dir-nao-lida { position: absolute; left: 6px; top: 50%; width: 6px; height: 6px; margin-top: -3px; border-radius: 50%; background: var(--fio); }
+
+/* a conversa */
+.dir-conv-vazia { margin: auto; padding: var(--sp-4); }
+.dir-conv-cab { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-2) var(--sp-3); padding: var(--sp-3) var(--sp-4); border-bottom: 1px solid var(--border); }
+.dir-conv-quem { display: grid; gap: 2px; min-width: 0; flex: 1 1 200px; }
+.dir-conv-quem b { overflow-wrap: anywhere; }
+/* O nome recebe o foco por código (no estreito, ao abrir): como os títulos do app, sem o contorno. */
+.dir-conv-quem b[tabindex="-1"]:focus { outline: none; }
+.dir-conv-quem span { font-size: var(--text-xs); color: var(--text-muted); overflow-wrap: anywhere; }
+.dir-janela { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-2); padding: var(--sp-2) var(--sp-4); border-bottom: 1px solid var(--border); background: var(--surface-2); font-size: var(--text-sm); }
+.dir-janela .ic { width: 16px; height: 16px; flex: none; }
+.dir-janela span { flex: 1 1 0; min-width: 0; overflow-wrap: anywhere; }
+.dir-janela--atencao { background: var(--warning-soft); color: var(--text); }
+.dir-janela--atencao .ic { color: var(--warning); }
+.dir-janela--fechada { background: var(--danger-soft); color: var(--text); }
+.dir-janela--fechada .ic { color: var(--danger); }
+
+.dir-fio { display: flex; flex-direction: column; gap: var(--sp-3); padding: var(--sp-4); min-height: 160px; }
+.dir-msg { display: grid; gap: 4px; max-width: min(78%, 520px); }
+.dir-msg--deles { align-self: flex-start; }
+.dir-msg--nossa { align-self: flex-end; justify-items: end; }
+.dir-bolha { padding: var(--sp-2) var(--sp-3); border-radius: 16px; background: var(--bg-subtle); overflow-wrap: anywhere; white-space: pre-wrap; }
+.dir-msg--deles .dir-bolha { border-bottom-left-radius: 4px; }
+.dir-msg--nossa .dir-bolha { border-bottom-right-radius: 4px; background: var(--primary-soft); }
+.dir-msg-meta { display: flex; flex-wrap: wrap; gap: 2px 6px; font-size: 11px; color: var(--text-subtle); }
+.dir-msg-meta--erro { color: var(--danger); font-size: var(--text-xs); font-weight: 600; }
+.dir-anexo { display: flex; align-items: center; gap: var(--sp-2); padding: var(--sp-2) var(--sp-3); border: 1px dashed var(--border-strong); border-radius: 12px; font-size: var(--text-sm); color: var(--text-muted); overflow-wrap: anywhere; }
+.dir-anexo .ic { flex: none; }
+.dir-anexo a { color: var(--link); font-weight: 600; }
+
+/* a resposta */
+.dir-resp { display: grid; gap: var(--sp-2); margin-top: auto; padding: var(--sp-3) var(--sp-4) var(--sp-4); border-top: 1px solid var(--border); background: var(--surface); }
+.dir-resp label { font-size: var(--text-sm); font-weight: 600; overflow-wrap: anywhere; }
+.dir-resp textarea { min-height: 84px; resize: vertical; padding: var(--sp-2) var(--sp-3); line-height: 1.5; }
+.dir-resp-pe { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--sp-2); }
+.dir-resp-dica { font-size: var(--text-xs); color: var(--text-muted); min-width: 0; flex: 1 1 220px; }
+.dir-resp-pe .btn { white-space: normal; }
+.dir-travado { display: flex; gap: var(--sp-2); align-items: flex-start; margin-top: auto; padding: var(--sp-3) var(--sp-4) var(--sp-4); border-top: 1px solid var(--border); font-size: var(--text-sm); color: var(--text-muted); }
+.dir-travado .ic { flex: none; margin-top: 2px; }
+.dir-travado b { color: var(--text); }
+
+/* o Regem atende esta conta: as notas */
+.dir-notas { display: grid; gap: var(--sp-2); }
+
+/* o passo a passo de ligar */
+.dir-ligar { display: grid; gap: var(--sp-3); margin: 0 0 var(--sp-3); padding: 0; list-style: none; }
+.dir-passo { display: grid; grid-template-columns: 28px minmax(0, 1fr); gap: var(--sp-3); align-items: start; padding: var(--sp-3) var(--sp-4); border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); }
+.dir-passo-n { width: 28px; height: 28px; display: grid; place-items: center; border-radius: 50%; background: var(--bg-subtle); font-family: var(--font-mono); font-size: var(--text-xs); font-weight: 600; }
+.dir-passo--ok .dir-passo-n { background: var(--success-soft); color: var(--success); }
+.dir-passo-corpo { display: grid; gap: 4px; min-width: 0; font-size: var(--text-sm); }
+.dir-passo-corpo b { font-size: var(--text-base, 1rem); }
+.dir-passo-corpo > div { display: grid; gap: var(--sp-2); color: var(--text-muted); overflow-wrap: anywhere; }
+.dir-passo-corpo .check { color: var(--text); }
+.dir-ligar-acoes { display: flex; flex-wrap: wrap; gap: var(--sp-2); }
+
+/* o diálogo de confirmar */
+.dir-dialogo-texto { display: grid; gap: var(--sp-2); font-size: var(--text-sm); color: var(--text-muted); }
+.dir-codigo { width: 120px; text-align: center; letter-spacing: .16em; }
+
+@media (max-width: 480px) {
+  .dir-msg { max-width: 92%; }
+  .dir-resp-pe .btn { flex: 1 1 100%; justify-content: center; }
+}
