@@ -246,6 +246,30 @@ describe.skipIf(!hasDb)('o atendimento automático dos comentários (A6 · Z11, 
     expect(meta.defeitos).toEqual([]);
   }, 120_000);
 
+  it('a prévia antes de ligar (2e-4): os elogios e as marcações das últimas 24 horas sem resposta, os mais novos primeiro, com a resposta que sairia', async () => {
+    const e = await empresa('Casa Brasa Automático Prévia', { automatico: false });
+    const post = meta.publicadoForaDoLiame(e.instagram!.externo, { caption: 'Combo', horas: 40, comments_count: 4 });
+    const elogio = meta.comentouNoInstagram(post, { texto: 'Melhor smash da cidade, parabéns!', usuario: 'ana', horas: 3 });
+    const marcacao = meta.comentouNoInstagram(post, { texto: '@joana_s bora?', usuario: 'carla_m', horas: 1 });
+    meta.comentouNoInstagram(post, { texto: 'Demorou demais e veio frio', usuario: 'rui_s', horas: 2 });
+    meta.comentouNoInstagram(post, { texto: 'Que delícia esse smash!', usuario: 'caio', horas: 30 });
+    await ler(e);
+    const r = await api.call('GET', `/v1/comments/auto-reply/preview?brand_id=${e.brandId}`, { cookie: e.cookie });
+    expect(r.status, JSON.stringify(r.body)).toBe(200);
+    const itens = (r.body as { items: Array<{ id: string; kind: string; author: string | null; reply: string }> }).items;
+    // A reclamação e o elogio de mais de 24 horas ficam de fora; o mais novo primeiro.
+    expect(itens.map((i) => [i.id, i.kind, i.author])).toEqual([
+      [marcacao, 'marcacao', 'carla_m'],
+      [elogio, 'elogio', 'ana'],
+    ]);
+    for (const i of itens) {
+      expect(i.reply.endsWith(AVISO_DE_RESPOSTA_AUTOMATICA)).toBe(true);
+      expect(RESPOSTAS_PRONTAS[i.kind as 'elogio' | 'marcacao']).toContain(i.reply.slice(0, -AVISO_DE_RESPOSTA_AUTOMATICA.length));
+    }
+    // Nada foi publicado nem pedido.
+    expect(await pedidosDe(e)).toEqual([]);
+  }, 120_000);
+
   it('as regras da tabela (V119): os tipos, ligado com um tipo, uma linha por marca e a empresa da marca', async () => {
     const e = await empresa('Casa Brasa Automático Regras');
     const inserir = (kinds: string, enabled = true) =>

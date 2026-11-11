@@ -209,3 +209,30 @@ export const CommentAutoReplyRequest = z.strictObject({
   passkey: ChaveNoLugarDoCodigo,
 });
 export type CommentAutoReplyRequest = z.infer<typeof CommentAutoReplyRequest>;
+
+/** A prévia antes de ligar (A6, Z11, parte 2e-4; P38 versão 2): até este tanto de exemplos. */
+export const COMMENT_AUTO_REPLY_PREVIEW_LIMIT = 3;
+
+/**
+ * "Veja como ele teria respondido": os elogios e as marcações das últimas 24 horas que ainda esperam uma resposta da
+ * marca, cada um com a resposta pronta que sairia, já com o aviso de resposta automática. Nada disto foi publicado.
+ */
+export const CommentAutoReplyPreviewResponse = z.strictObject({
+  items: z
+    .array(
+      z.strictObject({
+        id: z.string().min(1).max(120),
+        /** `instagram` ou `facebook`. A lista pode crescer (V23). */
+        channel: z.string().regex(/^[a-z_]{2,40}$/),
+        /** O @ ou o nome de quem comentou, como a rede mandou; nulo quando não mandou. */
+        author: z.string().nullable(),
+        message: z.string(),
+        /** `elogio` ou `marcacao`. A lista pode crescer (V23). */
+        kind: z.string().regex(/^[a-z_]{2,40}$/),
+        /** A resposta que sairia, com o aviso no fim. */
+        reply: z.string(),
+      }),
+    )
+    .max(COMMENT_AUTO_REPLY_PREVIEW_LIMIT),
+});
+export type CommentAutoReplyPreviewResponse = z.infer<typeof CommentAutoReplyPreviewResponse>;
