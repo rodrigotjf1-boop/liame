@@ -44,6 +44,17 @@ describe('o post no trilho: as regras puras (A6 · Z5b)', () => {
     expect(p.texto).toBe(`${base.canais[0]!.texto}\n\n${base.canais[1]!.texto}`);
   });
 
+  it('o Story (A6, Z13; D-A6-127): o plano pede o texto vazio em cada canal; com texto, recusa; a janela fala do Story', () => {
+    const story: EstadoDoPost = { ...base, formato: 'story', canais: base.canais.map((c) => ({ ...c, texto: '' })) };
+    const p = planoDoPost(story);
+    expect(p.ok).toBe(true);
+    if (p.ok) expect(p.desejado.formato).toBe('story');
+    const comTexto = planoDoPost({ ...story, canais: [{ ...story.canais[0]!, texto: 'Olha o smash!' }] });
+    expect(comTexto.ok ? null : comTexto.motivo).toBe('O Story sai sem texto: a Meta não leva legenda no Story.');
+    const fora = planoDoPost({ ...story, hora_local: '23:00' });
+    expect(fora.ok ? null : fora.motivo).toBe('O Story sai entre 8h e 22h. Escolha outra hora.');
+  });
+
   it('o plano recusa: a foto apagada, o canal que já saiu, a conta desligada, o texto vazio ou longo, a hora fora da janela, o que não é post', () => {
     const motivo = (e: unknown) => {
       const p = planoDoPost(e);

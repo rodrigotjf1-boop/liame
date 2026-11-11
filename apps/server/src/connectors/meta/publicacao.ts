@@ -74,6 +74,8 @@ export function permissoesDoDebug(resposta: unknown): string[] | null {
  * (nas partes seguintes) o post aprovado sai neles.
  */
 export const FLAG_DOS_POSTS = 'social_write';
+/** A função dos Stories (A6, Z13; 0136), por empresa, desligada; a escrita é a dos posts (`social_write`). */
+export const FLAG_DOS_STORIES = 'stories';
 /** A Página do Facebook como conta ligada à marca (a autorização da Meta a alcança). */
 export const PROVEDOR_PAGINA = 'facebook_page';
 /** A conta profissional do Instagram como conta ligada à marca (ligada a uma Página). */
@@ -461,4 +463,39 @@ export function enderecoDoEnvioNaPagina(v: unknown, base: string, videoId: strin
     if (meio === '' || /^v\d{1,3}\.\d{1,2}\/$/.test(meio)) return v;
   }
   return `${esperado}${videoId}`;
+}
+
+// ---- O Story (A6, Z13; P41; D-A6-126 a D-A6-129) ---------------------------------------------------------------------
+
+/**
+ * O Story do Instagram (a referência de `POST /{ig-user-id}/media` com `media_type=STORIES`, lida em 11/11/2026): sem
+ * legenda; a foto JPEG até 8 MB; o vídeo de 3 a 60 segundos, até 100 MB.
+ */
+export const STORY_DO_INSTAGRAM = { fotoBytes: 8 * 1024 * 1024, videoMs: 60_000, videoBytes: 100 * 1024 * 1024 } as const;
+
+/** O Story da Página (o Page Stories API, lido em 11/11/2026): a foto até 10 MB; o vídeo de 3 a 90 segundos. */
+export const STORY_DA_PAGINA = { fotoBytes: 10 * 1024 * 1024, videoMs: 90_000 } as const;
+
+/**
+ * O Story da Página que já saiu com esta mídia, na resposta de `GET /{page-id}/stories` (`data`: `post_id`, `status`,
+ * `media_type`, `media_id`, `url`): é como a tentativa seguinte sabe que a anterior publicou sem a resposta ter chegado
+ * (a foto sem post ou o vídeo que o Liame enviou é a mídia do Story). O post e o endereço, ou nulo.
+ */
+export function storyJaNaPagina(resposta: unknown, mediaId: string): { post: string; link: string | null } | null {
+  const data = (resposta as { data?: unknown } | null)?.data;
+  if (!Array.isArray(data)) return null;
+  for (const s of data as Array<Record<string, unknown> | null>) {
+    if (idDaGraph(s?.media_id) !== mediaId) continue;
+    // O post do Story vem como o id do post da Página (`{página}_{post}`) ou só os dígitos.
+    const post = idDoPostDaPagina(s?.post_id) ?? idDaGraph(s?.post_id);
+    if (!post) continue;
+    return { post, link: enderecoNaPagina(s?.url) };
+  }
+  return null;
+}
+
+/** O post do Story que a Página devolve ao publicar (`photo_stories` e `video_stories`: `success` e `post_id`). */
+export function postDoStoryNaPagina(corpo: unknown): string | null {
+  const c = corpo as { success?: unknown; post_id?: unknown } | null;
+  return c?.success === false ? null : (idDoPostDaPagina(c?.post_id) ?? idDaGraph(c?.post_id));
 }

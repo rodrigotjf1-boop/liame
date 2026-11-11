@@ -96,6 +96,11 @@ export const EstadoDoPost = z.object({
    * quando ela mudou, ou a foto dela foi apagada, depois do pedido.
    */
   video: z.object({ id: z.string(), capa: z.string().nullable() }).nullable().optional(),
+  /**
+   * O Story (A6, Z13; P41; D-A6-126 e D-A6-127): sem texto em nenhum canal, 24 horas no ar. Só no Story: no post a chave
+   * não existe, e o estado dele é o mesmo de antes (o pedido aprovado não muda de plano).
+   */
+  formato: z.literal('story').optional(),
   /** A posição do recorte do Instagram (D-A6-21), de 0 a 100 ao longo do lado comprido; nula = a foto cabe inteira. */
   recorte: z.number().int().min(0).max(100).nullable(),
   /** A hora marcada, em UTC, e a mesma hora no fuso da empresa (`HH:MM`), que o plano confere com a janela. */
@@ -138,15 +143,26 @@ export function planoDoPost(before: unknown): PlanoDoPost {
   if (e.canais.some((c) => c.situacao !== 'aguardando')) return { ok: false, motivo: JA_SAIU };
   for (const c of e.canais) {
     if (!c.conta) return { ok: false, motivo: contaFora(c.canal) };
-    if (c.texto.trim().length === 0) return { ok: false, motivo: `O texto ${NO_CANAL[c.canal]} está vazio.` };
-    if (c.texto.length > LIMITE_DO_TEXTO[c.canal]) return { ok: false, motivo: `O texto ${NO_CANAL[c.canal]} passa de ${LIMITE_DO_TEXTO[c.canal].toLocaleString('pt-BR')} caracteres.` };
+    const doTexto = recusaDoTexto(e, c);
+    if (doTexto) return { ok: false, motivo: doTexto };
   }
-  if (!dentroDaJanela(e.hora_local)) return { ok: false, motivo: 'O post sai entre 8h e 22h. Escolha outra hora.' };
+  if (!dentroDaJanela(e.hora_local)) return { ok: false, motivo: `${e.formato === 'story' ? 'O Story' : 'O post'} sai entre 8h e 22h. Escolha outra hora.` };
   return {
     ok: true,
     desejado: { ...e, canais: e.canais.map((c) => ({ ...c, situacao: 'publicado' as const })) },
     texto: e.canais.map((c) => c.texto).join('\n\n'),
   };
+}
+
+/**
+ * O texto do canal: no post, não vazio e no limite da rede; no Story (A6, Z13; D-A6-127), vazio (a Meta não leva legenda
+ * no Story). A frase de por que não, ou nula. Função pura.
+ */
+function recusaDoTexto(e: EstadoDoPost, c: CanalNoEstado): string | null {
+  if (e.formato === 'story') return c.texto === '' ? null : 'O Story sai sem texto: a Meta não leva legenda no Story.';
+  if (c.texto.trim().length === 0) return `O texto ${NO_CANAL[c.canal]} está vazio.`;
+  if (c.texto.length > LIMITE_DO_TEXTO[c.canal]) return `O texto ${NO_CANAL[c.canal]} passa de ${LIMITE_DO_TEXTO[c.canal].toLocaleString('pt-BR')} caracteres.`;
+  return null;
 }
 
 const FOTO_APAGADA = 'A foto deste post foi apagada nas Fotos: o post não sai. Faça um post novo com outra foto.';
@@ -246,8 +262,8 @@ export function planoDeTentarDeNovo(before: unknown): PlanoDoPost {
   if (!umQueFalta && !videoSemPreparo) return { ok: false, motivo: SEM_O_QUE_TENTAR };
   for (const c of faltam) {
     if (!c.conta) return { ok: false, motivo: contaFora(c.canal) };
-    if (c.texto.trim().length === 0) return { ok: false, motivo: `O texto ${NO_CANAL[c.canal]} está vazio.` };
-    if (c.texto.length > LIMITE_DO_TEXTO[c.canal]) return { ok: false, motivo: `O texto ${NO_CANAL[c.canal]} passa de ${LIMITE_DO_TEXTO[c.canal].toLocaleString('pt-BR')} caracteres.` };
+    const doTexto = recusaDoTexto(e, c);
+    if (doTexto) return { ok: false, motivo: doTexto };
   }
   return { ok: true, desejado: { ...e, canais: e.canais.map((x) => ({ ...x, situacao: 'publicado' as const })) }, texto: faltam.map((c) => c.texto).join('\n\n') };
 }

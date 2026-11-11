@@ -229,6 +229,7 @@ export async function ligarFlagDaEmpresa(
     | 'direct_responder'
     | 'direct_automatico'
     | 'messenger'
+    | 'stories'
     | 'regiao'
     | 'ia',
   tenantId: string,

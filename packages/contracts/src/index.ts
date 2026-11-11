@@ -527,6 +527,8 @@ export {
   PACKAGE_CHANNELS,
   PackageChannel,
   POST_CHANNELS,
+  POST_FORMATS,
+  PostFormat,
   POST_TEXT_LIMITS,
   PostChannel,
   PostChannelAccounts,

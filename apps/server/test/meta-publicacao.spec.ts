@@ -9,13 +9,37 @@ import {
   permissaoNoDebug,
   permissoesConcedidas,
   permissoesDoDebug,
+  postDoStoryNaPagina,
   procuraDosCanaisGuardada,
   situacaoDoConteiner,
+  storyJaNaPagina,
 } from '../src/connectors/meta/publicacao.js';
 import { procuraDosCanais, sobreOCanal } from '../src/connections/connections.service.js';
 
 // A6 · Z5, sem rede e sem banco: as regras da publicação na Meta que o teste da D-A6-10 (`scripts/teste-foto-meta.ts`)
 // usa e que o post de verdade vai usar (`base-conhecimento.md` §2.2, reconferida em 21/10/2026).
+
+describe('o Story da Página: as respostas da Meta (A6, Z13; Page Stories API, lido em 11/11/2026)', () => {
+  it('o Story que já saiu, pela mídia, na lista de Stories; o post do Story ao publicar', () => {
+    const lista = {
+      data: [
+        { post_id: '104000000000001_555', status: 'PUBLISHED', media_type: 'video', media_id: '900', url: 'https://www.facebook.com/stories/104000000000001/555/' },
+        { post_id: '104000000000001_556', status: 'PUBLISHED', media_type: 'photo', media_id: '901', url: 'http://outro.com/x' },
+        { post_id: '../x', media_id: '902' },
+      ],
+    };
+    expect(storyJaNaPagina(lista, '900')).toEqual({ post: '104000000000001_555', link: 'https://www.facebook.com/stories/104000000000001/555/' });
+    // O endereço que não é do Facebook não vai para a Agenda; o post sem id válido não conta.
+    expect(storyJaNaPagina(lista, '901')).toEqual({ post: '104000000000001_556', link: null });
+    expect(storyJaNaPagina(lista, '902')).toBeNull();
+    expect(storyJaNaPagina(lista, '903')).toBeNull();
+    expect(storyJaNaPagina({}, '900')).toBeNull();
+    expect(postDoStoryNaPagina({ success: true, post_id: '104000000000001_557' })).toBe('104000000000001_557');
+    expect(postDoStoryNaPagina({ success: true, post_id: '557' })).toBe('557');
+    expect(postDoStoryNaPagina({ success: false, post_id: '557' })).toBeNull();
+    expect(postDoStoryNaPagina(null)).toBeNull();
+  });
+});
 
 describe('a publicação na Meta: as regras puras (A6 · Z5)', () => {
   it('a proporção do feed do Instagram: de 4:5 (em pé) a 1,91:1 (deitada), as duas pontas dentro', () => {
