@@ -17,9 +17,9 @@ export type ItemNav = {
   permissao?: string;
   /**
    * Mostra ao lado um número: os avisos (crítico + atenção), os pedidos esperando aprovação ou, no Resumo, os
-   * pontos que pedem a pessoa (os avisos e, havendo pedido esperando, mais um).
+   * pontos que pedem a pessoa (os avisos e, havendo pedido esperando, mais um); em Comentários, os que pedem resposta.
    */
-  contador?: 'atencao' | 'aprovacoes' | 'resumo' | 'criativos';
+  contador?: 'atencao' | 'aprovacoes' | 'resumo' | 'criativos' | 'comentarios';
   /** A tela tem as duas visões (Lite e Pro): o seletor de modo aparece no topo. */
   modos?: boolean;
   /**
@@ -52,7 +52,7 @@ export const NAVEGACAO: GrupoNav[] = [
       // A tela Avaliações é uma só nos dois modos (protótipo P17): sem o seletor de modo.
       { href: '/avaliacoes', rotulo: 'Avaliações', icone: 'message', permissao: 'campanhas.ver' },
       // Os comentários dos posts (P38, D-A6-84): logo depois de Avaliações, uma tela só nos dois modos.
-      { href: '/comentarios', rotulo: 'Comentários', icone: 'reply', permissao: 'campanhas.ver' },
+      { href: '/comentarios', rotulo: 'Comentários', icone: 'reply', permissao: 'campanhas.ver', contador: 'comentarios' },
       // A Agenda dos posts (P19, D-A6-24): logo abaixo de Avaliações, uma tela só nos dois modos.
       { href: '/agenda', rotulo: 'Agenda', icone: 'calendar', permissao: 'campanhas.ver' },
       { href: '/criativos', rotulo: 'Criativos', icone: 'image', permissao: 'campanhas.ver', contador: 'criativos', modos: true },

@@ -12,6 +12,7 @@ import { Estado } from '@/components/ui/estado';
 import { Icone } from '@/components/ui/icone';
 import { ContadorAprovacoesProvider } from '@/lib/contador-aprovacoes';
 import { ContadorAtencaoProvider } from '@/lib/contador-atencao';
+import { ContadorComentariosProvider } from '@/lib/contador-comentarios';
 import { ContadorCriativosProvider } from '@/lib/contador-criativos';
 import { ModoProvider } from '@/lib/modo';
 import { useSessao } from '@/lib/sessao';
@@ -30,11 +31,13 @@ export function Shell({ children }: { children: ReactNode }) {
       <ContadorAtencaoProvider>
         <ContadorAprovacoesProvider>
           <ContadorCriativosProvider>
-            <ModoProvider>
-              <ConversaProvider disponivel={Boolean(empresa) && pode('conversa.usar')}>
-                <Estrutura>{children}</Estrutura>
-              </ConversaProvider>
-            </ModoProvider>
+            <ContadorComentariosProvider>
+              <ModoProvider>
+                <ConversaProvider disponivel={Boolean(empresa) && pode('conversa.usar')}>
+                  <Estrutura>{children}</Estrutura>
+                </ConversaProvider>
+              </ModoProvider>
+            </ContadorComentariosProvider>
           </ContadorCriativosProvider>
         </ContadorAprovacoesProvider>
       </ContadorAtencaoProvider>

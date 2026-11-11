@@ -78,6 +78,11 @@ export function avisosDasContas(accounts: CommentsResponse['accounts']): AvisoDa
   return avisos;
 }
 
+/** O que o leitor de tela ouve depois de "Comentários" no menu (P38): ", 1 pede resposta" ou ", 3 pedem resposta". */
+export function comentariosFalados(n: number): string {
+  return n === 1 ? ', 1 pede resposta' : `, ${n} pedem resposta`;
+}
+
 /** A recusa do pedido de uma pessoa (responder, ocultar, mostrar), nas palavras da tela; o resto, nas do servidor. */
 export function erroDoPedido(p: { code: string; detail?: string; title: string }): string {
   if (p.code === 'acao-duplicada') return 'Já há um pedido em aberto para este comentário. Abra a lista de novo e siga para Aprovações.';

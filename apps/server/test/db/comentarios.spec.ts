@@ -86,6 +86,12 @@ describe.skipIf(!hasDb)('Comentários: a leitura e a rota (A6 · Z11, parte 1)',
     expect(r.status, JSON.stringify(r.body)).toBe(200);
     return r.body as Resposta;
   };
+  /** O contador do menu (parte 3c): a empresa inteira. */
+  const noMenu = async (e: EmpresaComCanais): Promise<unknown> => {
+    const r = await api.call('GET', '/v1/comments/waiting', { cookie: e.cookie });
+    expect(r.status, JSON.stringify(r.body)).toBe(200);
+    return r.body;
+  };
   const estado = (contaId: string) =>
     ownerQuery<{ last_success_at: Date | null; last_error: string | null; cursor: Record<string, unknown> }>(
       `select last_success_at, last_error, cursor from liame.sync_state where connected_account_id = $1 and dataset = 'comentarios'`,
@@ -130,6 +136,12 @@ describe.skipIf(!hasDb)('Comentários: a leitura e a rota (A6 · Z11, parte 1)',
     const r = await rota(e);
     expect(r.accounts).toEqual([{ channel: 'instagram', name: '@casabrasa', situation: 'lido', read_at: agora.toISOString() }]);
     expect(r.counts).toEqual({ pedem: 1, ocultar: 1, respondidos: 1, ocultos: 1, todos: 4 });
+    // O menu conta o mesmo "Pedem resposta" da tela (a pergunta já respondida não conta; o golpe e o oculto também não);
+    // a marca com a função desligada não conta, mesmo com o comentário guardado.
+    expect(await noMenu(e)).toEqual({ asking: 1 });
+    await ligarFlagDaEmpresa(api, 'comentarios', e.tenantId, false);
+    expect(await noMenu(e)).toEqual({ asking: 0 });
+    await ligarFlagDaEmpresa(api, 'comentarios', e.tenantId, true);
     // A ordem: o que pede resposta, o para ocultar, o resto, o respondido e o oculto.
     expect(r.items.map((c) => [c.id, c.kind, c.situation])).toEqual([
       [reclamacao, 'reclamacao', 'pede_resposta'],
@@ -204,6 +216,9 @@ describe.skipIf(!hasDb)('Comentários: a leitura e a rota (A6 · Z11, parte 1)',
     // Sem Instagram nem Página na marca.
     const sem = await empresa('Casa Brasa Comentários Sem Conta', { pagina: false, instagram: false });
     expect(await rota(sem)).toMatchObject({ state: 'sem_conta', accounts: [], items: [] });
+    // O menu: zero com a função desligada e sem conta.
+    expect(await noMenu(e)).toEqual({ asking: 0 });
+    expect(await noMenu(sem)).toEqual({ asking: 0 });
   }, 120_000);
 
   it('sem a permissão de ler os comentários: sem_permissao, um dia; a falha de um post deixa só ele para a próxima vez', async () => {

@@ -11,10 +11,12 @@ import { NIVEIS } from '@/lib/niveis';
 import { useSessao } from '@/lib/sessao';
 import { pendentesFalados } from '@/components/aprovacoes/textos';
 import { avisosFalados } from '@/components/atencao/textos';
+import { comentariosFalados } from '@/components/comentarios/textos';
 import { pecasFaladas } from '@/components/criativos/textos';
 import { contadorDoResumo, pontosFalados } from '@/components/resumo/textos';
 import { useContadorAprovacoes } from '@/lib/contador-aprovacoes';
 import { useContadorAtencao } from '@/lib/contador-atencao';
+import { useContadorComentarios } from '@/lib/contador-comentarios';
 import { useContadorCriativos } from '@/lib/contador-criativos';
 import { useModo } from '@/lib/modo';
 import { BotaoTema } from './botao-tema';
@@ -29,6 +31,7 @@ export function MenuLateral({ id, aoFechar, modos, inerte = false }: { id: strin
   const contador = useContadorAtencao();
   const aprovacoes = useContadorAprovacoes();
   const criativos = useContadorCriativos();
+  const comentarios = useContadorComentarios();
   const caminho = usePathname();
   const { modo } = useModo();
   const idFerramentas = useId();
@@ -81,17 +84,21 @@ export function MenuLateral({ id, aoFechar, modos, inerte = false }: { id: strin
                   ? (aprovacoes.total ?? 0)
                   : item.contador === 'criativos'
                     ? (criativos.total ?? 0)
-                    : item.contador === 'resumo'
-                      ? contadorDoResumo(contador.total, aprovacoes.total, criativos.total)
-                      : 0;
+                    : item.contador === 'comentarios'
+                      ? (comentarios.total ?? 0)
+                      : item.contador === 'resumo'
+                        ? contadorDoResumo(contador.total, aprovacoes.total, criativos.total)
+                        : 0;
             const falado = n
               ? item.contador === 'aprovacoes'
                 ? pendentesFalados(n)
                 : item.contador === 'criativos'
                   ? pecasFaladas(n)
-                  : item.contador === 'resumo'
-                    ? pontosFalados(n)
-                    : avisosFalados(n)
+                  : item.contador === 'comentarios'
+                    ? comentariosFalados(n)
+                    : item.contador === 'resumo'
+                      ? pontosFalados(n)
+                      : avisosFalados(n)
               : '';
             const link = (
               <li key={item.href}>
