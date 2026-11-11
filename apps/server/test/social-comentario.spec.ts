@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { conferirRegistro, PROMPTS, registroAtual } from '../src/ai/registro/definicoes.js';
-import { RESPOSTAS_PRONTAS, respostaPronta, sugestoesDoComentario } from '../src/ai/social/comentario.js';
+import { levaOCaminhoDaEquipe, RESPOSTAS_PRONTAS, RespostaDoComentario, respondeComCerteza, respostaPronta, sugestoesDoComentario } from '../src/ai/social/comentario.js';
 import {
   baseDoComentario,
   contextoDoComentario,
@@ -109,6 +109,31 @@ describe('a leitura da resposta do modelo e a conferência', () => {
   });
 });
 
+describe('a pergunta que ele sabe responder com certeza (parte 2e-3)', () => {
+  const base = baseDoComentario({ texto: 'Quanto tá o combo?', legenda: 'Sexta é dia de combo.' }, MARCA);
+  const conferida = (texto: string) => sugestoesDoComentario({ sugestoes: [{ enfoque: 'Responde', texto }] }, base, 'pergunta').sugestoes[0];
+
+  it('só a pergunta, com o "sim" do modelo, a primeira sugestão sem aviso nenhum da conferência e o caminho da equipe; o "respondida" é obrigatório na leitura', () => {
+    const WHATS = 'o WhatsApp da loja';
+    const certa = conferida('O Combo sexta sai por R$ 34,90. Chama no WhatsApp da loja.');
+    expect(certa!.conferencia.situacao).toBe('passou');
+    expect(respondeComCerteza('pergunta', { respondida: 'sim' }, certa, WHATS)).toBe(true);
+    expect(respondeComCerteza('pergunta', { respondida: 'nao' }, certa, WHATS)).toBe(false);
+    expect(respondeComCerteza('reclamacao', { respondida: 'sim' }, certa, WHATS)).toBe(false);
+    expect(respondeComCerteza('pergunta', { respondida: 'sim' }, undefined, WHATS)).toBe(false);
+    // O preço que Minha marca não tem: a conferência barra, e o "sim" não basta.
+    expect(respondeComCerteza('pergunta', { respondida: 'sim' }, conferida('O combo sai por R$ 29,90. Chama no WhatsApp da loja.'), WHATS)).toBe(false);
+    // Sem o caminho para falar com a equipe (D-A6-92; Termos 5.5), também não sai sozinha; sem canal, vale o perfil.
+    expect(respondeComCerteza('pergunta', { respondida: 'sim' }, conferida('O Combo sexta sai por R$ 34,90.'), WHATS)).toBe(false);
+    expect(respondeComCerteza('pergunta', { respondida: 'sim' }, certa, null)).toBe(false);
+    expect(levaOCaminhoDaEquipe('Qualquer dúvida, chama a gente pelos contatos do Perfil da loja.', null)).toBe(true);
+    expect(levaOCaminhoDaEquipe('Chama a gente no whatsapp  da loja.', WHATS)).toBe(true);
+    expect(RespostaDoComentario.safeParse({ sugestoes: [] }).success).toBe(false);
+    expect(RespostaDoComentario.safeParse({ sugestoes: [], respondida: 'talvez' }).success).toBe(false);
+    expect(RespostaDoComentario.safeParse({ sugestoes: [], respondida: 'nao' }).success).toBe(true);
+  });
+});
+
 describe('as respostas prontas do elogio e da marcação (sem IA)', () => {
   it('cada uma passa nas regras da Liame, sem número, link, nome nem compensação; o mesmo comentário recebe sempre a mesma; comentários diferentes variam', () => {
     for (const [tipo, lista] of Object.entries(RESPOSTAS_PRONTAS)) {
@@ -128,10 +153,13 @@ describe('as respostas prontas do elogio e da marcação (sem IA)', () => {
 });
 
 describe('o registro (A6, Z11)', () => {
-  it('o prompt na v2, o Social media na versão 4 com as quatro tarefas (a do tipo: `social-comentario-tipo.spec.ts`), e a trava em dia', () => {
+  it('o prompt na v3, o Social media na versão 4 com as quatro tarefas (a do tipo: `social-comentario-tipo.spec.ts`), e a trava em dia', () => {
     expect([TAREFA_SOCIAL_COMENTARIO, WORKFLOW_DO_SOCIAL_COMENTARIO]).toEqual(['social_comentario', 'social.comentario']);
     expect(PROMPTS).toContain(PROMPT_SOCIAL_COMENTARIO);
-    expect(PROMPT_SOCIAL_COMENTARIO).toMatchObject({ key: 'social.comentario', version: 2, task: TAREFA_SOCIAL_COMENTARIO });
+    expect(PROMPT_SOCIAL_COMENTARIO).toMatchObject({ key: 'social.comentario', version: 3, task: TAREFA_SOCIAL_COMENTARIO });
+    // A v3 (parte 2e-3): o "respondida", com "nao" na dúvida e sempre na reclamação.
+    expect(PROMPT_SOCIAL_COMENTARIO.content).toContain('- respondida: "sim" ou "nao".');
+    expect(PROMPT_SOCIAL_COMENTARIO.content).toContain('Na dúvida, "nao". Na reclamação, sempre "nao".');
     // A v2 (a primeira rodada paga do eval, 08/11/2026): as três da reclamação começam reconhecendo o problema com as
     // palavras que o eval confere, o "Explicar o que houve" não vira propaganda, e a compensação não aparece nem negada.
     const texto = PROMPT_SOCIAL_COMENTARIO.content;

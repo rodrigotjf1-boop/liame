@@ -1,6 +1,6 @@
 'use client';
 
-import type { CommentAutoReplyPreviewResponse, CommentAutoReplyResponse, PasskeyAssertion } from '@liame/contracts';
+import type { CommentAutoReplyPreviewResponse, CommentAutoReplyRequest, CommentAutoReplyResponse, PasskeyAssertion } from '@liame/contracts';
 import { type FormEvent, type RefObject, useEffect, useId, useRef, useState } from 'react';
 import { ROTULO_DO_TIPO } from '@/components/aprovacoes/comentario-textos';
 import { ConfirmarComChave } from '@/components/seguranca/confirmar-com-chave';
@@ -9,7 +9,7 @@ import { useDialogo } from '@/components/ui/use-dialogo';
 import { api, chamar, mensagemDe, novaChave } from '@/lib/api';
 import { disparar } from '@/lib/disparar';
 import { type FormasDeConfirmar, useFormasDeConfirmar } from '@/lib/sessao';
-import { autorDoComentario, botaoDoAutomatico, erroDoAutomatico, estadoDoAutomatico, pedeConfirmacao, resumoDoAutomatico, TIPOS_DO_AUTOMATICO } from './textos';
+import { autorDoComentario, avisoAoLigar, botaoDoAutomatico, erroDoAutomatico, estadoDoAutomatico, pedeConfirmacao, resumoDoAutomatico, TIPOS_DO_AUTOMATICO } from './textos';
 
 // O atendimento automático na tela Comentários (mockups/prototipo-comentarios.html, P38 versão 2; A6 · Z11, parte 2e-2;
 // D-A6-92 e D-A6-104): a linha no topo, com o que está valendo, e a gaveta para ligar, desligar e marcar os tipos. Ligar
@@ -122,7 +122,7 @@ export function GavetaDoAutomatico({ r, reserva, aoSalvar, aoFechar, confirmar }
     const res = await chamar(() =>
       api.PUT('/v1/comments/auto-reply', {
         headers: { 'Idempotency-Key': idempotencia.current },
-        body: { brand_id: r.brand_id, enabled: mudanca.enabled, kinds: mudanca.kinds as ('elogio' | 'marcacao')[], ...(mudanca.code ? { code: mudanca.code } : {}), ...(mudanca.passkey ? { passkey: mudanca.passkey } : {}) },
+        body: { brand_id: r.brand_id, enabled: mudanca.enabled, kinds: mudanca.kinds as CommentAutoReplyRequest['kinds'], ...(mudanca.code ? { code: mudanca.code } : {}), ...(mudanca.passkey ? { passkey: mudanca.passkey } : {}) },
       }),
     );
     setEnviando(false);
@@ -131,7 +131,7 @@ export function GavetaDoAutomatico({ r, reserva, aoSalvar, aoFechar, confirmar }
         ? 'Atendimento automático desligado. A partir de agora, nenhuma resposta sai sem a aprovação de uma pessoa.'
         : r.enabled
           ? 'Salvo. O atendimento automático responde sozinho só os tipos marcados.'
-          : 'Atendimento automático ligado. Os elogios e as marcações marcados saem sozinhos; reclamações e perguntas esperam você.';
+          : avisoAoLigar(res.data.kinds);
       aoSalvar(res.data, aviso);
       return fechar();
     }
@@ -232,7 +232,7 @@ export function GavetaDoAutomatico({ r, reserva, aoSalvar, aoFechar, confirmar }
           <section className="com-auto-bloco" aria-labelledby={`${ids}-espera`}>
             <h3 id={`${ids}-espera`}>O que sempre espera você</h3>
             {nota('message', 'Vão para você com o passo a passo e as sugestões de resposta.', 'Reclamações.')}
-            {nota('info', 'Por enquanto, vão para você com uma sugestão.', 'Perguntas.')}
+            {nota('info', 'Vai para você com uma sugestão.', 'Pergunta que ele não sabe responder com certeza.')}
             {nota('eye-off', 'O Liame nunca responde; ocultar espera a sua aprovação.', 'Golpe ou ofensa.')}
           </section>
           <section className="com-auto-bloco" aria-labelledby={`${ids}-como`}>

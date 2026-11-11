@@ -5,7 +5,8 @@ import { avaliarSugestoesDoComentario, carregarCasosDoComentario, GRUPOS_DO_COME
 import { TAREFAS } from '../src/ai/evals/tarefas.js';
 import { limparJson, limparTexto } from '../src/ai/sanitizar.js';
 import { contextoDoComentario, ENFOQUES_DA_RECLAMACAO, mensagemDoComentario, sugestoesPedidasDoComentario } from '../src/ai/social/comentario-contexto.js';
-import { caracteres, RespostaDoSocial } from '../src/ai/social/resposta.js';
+import { RespostaDoComentario } from '../src/ai/social/comentario.js';
+import { caracteres } from '../src/ai/social/resposta.js';
 
 // Casos de eval do Social media nas respostas aos comentários (A6, Z11, parte 2d-1; o portão da função, como na Z6): o
 // avaliador é provado sem modelo nenhum. Toda resposta boa gravada passa pela conferência de produção (estrita); toda
@@ -53,8 +54,10 @@ describe('casos de eval do Social media nos comentários (A6, Z11)', () => {
 
   it('a resposta boa é a que o prompt pede: uma sugestão na pergunta, os três caminhos na reclamação, no tamanho dito ao modelo', () => {
     for (const c of casos) {
-      const r = RespostaDoSocial.parse(c.gravadas.boa);
+      const r = RespostaDoComentario.parse(c.gravadas.boa);
       expect({ id: c.id, quantas: r.sugestoes.length }).toEqual({ id: c.id, quantas: sugestoesPedidasDoComentario(c.tipo) });
+      // O "respondida" (v3, parte 2e-3): "nao" em toda reclamação; na pergunta, o que o caso espera.
+      expect({ id: c.id, respondida: r.respondida }).toEqual({ id: c.id, respondida: c.tipo === 'reclamacao' ? 'nao' : c.espera.respondida });
       if (c.tipo === 'reclamacao') expect({ id: c.id, enfoques: r.sugestoes.map((s) => s.enfoque) }).toEqual({ id: c.id, enfoques: [...ENFOQUES_DA_RECLAMACAO] });
       for (const s of r.sugestoes) expect({ id: c.id, cabe: caracteres(s.texto) <= 300 && (c.tipo === 'reclamacao' || caracteres(s.enfoque) <= 30) }).toEqual({ id: c.id, cabe: true });
     }
@@ -64,10 +67,12 @@ describe('casos de eval do Social media nos comentários (A6, Z11)', () => {
     const pergunta = casos.find((c) => c.id === 'pergunta-preco-combo')!;
     expect(avaliarSugestoesDoComentario(pergunta, 'isto não é JSON').falhas).toEqual(['formato: a resposta não é JSON']);
     expect(avaliarSugestoesDoComentario(pergunta, { respostas: [] }).falhas[0]).toMatch(/^formato: /);
-    const duas = { sugestoes: [pergunta.gravadas.boa, pergunta.gravadas.boa].flatMap((b) => RespostaDoSocial.parse(b).sugestoes) };
+    const duas = { sugestoes: [pergunta.gravadas.boa, pergunta.gravadas.boa].flatMap((b) => RespostaDoComentario.parse(b).sugestoes), respondida: 'sim' };
     expect(avaliarSugestoesDoComentario(pergunta, duas).falhas).toEqual(['quantidade: vieram 2, o pedido é de 1', 'descartada_repetida: a sugestão não chegaria à conferência']);
+    // Sem o "respondida", é formato (v3).
+    expect(avaliarSugestoesDoComentario(pergunta, { sugestoes: RespostaDoComentario.parse(pergunta.gravadas.boa).sugestoes }).falhas[0]).toMatch(/^formato: respondida/);
     const reclamacao = casos.find((c) => c.id === 'reclamacao-frio-atraso')!;
-    const sem3 = { sugestoes: RespostaDoSocial.parse(reclamacao.gravadas.boa).sugestoes.slice(0, 2) };
+    const sem3 = { sugestoes: RespostaDoComentario.parse(reclamacao.gravadas.boa).sugestoes.slice(0, 2), respondida: 'nao' };
     expect(avaliarSugestoesDoComentario(reclamacao, sem3).falhas).toEqual(['quantidade: vieram 2, o pedido é de 3', `caminho_faltando: ${ENFOQUES_DA_RECLAMACAO[2]}`]);
   });
 

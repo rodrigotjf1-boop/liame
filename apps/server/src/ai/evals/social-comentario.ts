@@ -3,9 +3,9 @@ import { BrandDossierContent, SystemProof } from '@liame/contracts';
 import { z } from 'zod';
 import { concorrentesDoDossie, fatosDoDossie, proibidasDoDossie, textoDoDossie } from '../../marca/dossie.js';
 import { normalizar } from '../../policy/texto.js';
-import { sugestoesDoComentario } from '../social/comentario.js';
+import { levaOCaminhoDaEquipe, RespostaDoComentario, sugestoesDoComentario } from '../social/comentario.js';
 import { baseDoComentario, ENFOQUES_DA_RECLAMACAO, type PedidoDeComentarioDoSocial, sugestoesPedidasDoComentario } from '../social/comentario-contexto.js';
-import { type BaseDoTextoDeResposta, estiloDaSugestao, RespostaDoSocial } from '../social/resposta.js';
+import { type BaseDoTextoDeResposta, estiloDaSugestao } from '../social/resposta.js';
 import type { Avaliacao } from './avaliar.js';
 
 // Casos de eval do Social media nas respostas aos comentários (A6, Z11, parte 2d-1; o portão da função, como na Z6;
@@ -49,6 +49,11 @@ export const CasoDoComentario = z.strictObject({
     cada_uma: z.array(z.array(Rotulo).min(1)).optional(),
     /** Trechos que nenhuma sugestão (nem o enfoque) pode trazer, sem olhar acento nem maiúscula. */
     nao_cita: z.array(Rotulo).optional(),
+    /**
+     * O `respondida` que o Social media tem de dar (v3, parte 2e-3): "sim" na pergunta que o dossiê ou a legenda
+     * respondem; "nao" na que eles não respondem e na reclamação. É o que deixa sair sozinha a pergunta, com o automático.
+     */
+    respondida: z.enum(['sim', 'nao']),
   }),
   gravadas: z.strictObject({
     boa: z.unknown(),
@@ -110,11 +115,14 @@ export function avaliarSugestoesDoComentario(caso: CasoDoComentario, bruto: unkn
       return { ok: false, falhas: ['formato: a resposta não é JSON'] };
     }
   }
-  const lida = RespostaDoSocial.safeParse(valor);
+  const lida = RespostaDoComentario.safeParse(valor);
   if (!lida.success) return { ok: false, falhas: [`formato: ${lida.error.issues.map((i) => `${i.path.join('.') || '(raiz)'}: ${i.message}`).join('; ')}`] };
   const r = lida.data;
   const pedidas = sugestoesPedidasDoComentario(caso.tipo);
   const falhas: string[] = [];
+  // A certeza (v3, parte 2e-3): o "sim" errado deixaria sair sozinha uma resposta sem a informação; o "nao" errado só
+  // manda a pergunta para uma pessoa, mas também conta.
+  if (r.respondida !== caso.espera.respondida) falhas.push(`respondida: veio "${r.respondida}", o caso espera "${caso.espera.respondida}"`);
   if (r.sugestoes.length !== pedidas) falhas.push(`quantidade: vieram ${r.sugestoes.length}, o pedido é de ${pedidas}`);
   const anteriores = caso.anteriores.map((a) => a.texto);
   const { sugestoes, descartes } = sugestoesDoComentario(r, baseDoCasoDoComentario(caso), caso.tipo, textoDoDossie(caso.marca, caso.dossie, caso.provas), anteriores);
@@ -123,6 +131,8 @@ export function avaliarSugestoesDoComentario(caso: CasoDoComentario, bruto: unkn
   if (caso.tipo === 'reclamacao') {
     for (const caminho of ENFOQUES_DA_RECLAMACAO) if (!sugestoes.some((s) => normalizar(s.enfoque) === normalizar(caminho))) falhas.push(`caminho_faltando: ${caminho}`);
   }
+  // A pergunta termina com o caminho para falar com a equipe (D-A6-92; Termos 5.5): a mesma régua da resposta automática.
+  if (caso.tipo === 'pergunta') for (const s of sugestoes) if (!levaOCaminhoDaEquipe(s.texto, caso.contato)) falhas.push(`sem_caminho_da_equipe: "${s.enfoque}"`);
   for (const s of sugestoes) {
     for (const item of s.conferencia.itens) {
       for (const a of item.achados) falhas.push(a.tipo === 'acima_do_recomendado' ? `tamanho: ${a.campo}: ${a.trecho} caracteres` : `${a.tipo}: ${a.campo}: ${a.trecho}`);

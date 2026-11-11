@@ -5,6 +5,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { ActionService } from '../../src/actions/action.service.js';
 import { BudgetService } from '../../src/actions/budget.service.js';
 import { comentarioNaPaginaConnector, comentarioNoInstagramConnector, type DependenciasDoComentario } from '../../src/actions/comentario-na-rede.js';
+import { AVISO_DE_RESPOSTA_AUTOMATICA } from '../../src/actions/comentario-plano.js';
 import { AiGateway } from '../../src/ai/gateway.js';
 import { ModelosIa } from '../../src/ai/modelos.js';
 import { RESPOSTAS_PRONTAS } from '../../src/ai/social/comentario.js';
@@ -37,7 +38,8 @@ import { hasDb, OWNER_URL } from './env.js';
 //     a sugestão do Social media e a reclamação os três caminhos, todos em nome do dono e esperando a aprovação;
 //   - o @ de quem comentou não vai ao modelo; a sugestão que a conferência barra não vira pedido;
 //   - a IA que não atende (desligada, ou a tarefa sem rota) faz a pergunta esperar, sem contar tentativa;
-//   - os pedidos prontos saem na rede com o lote de um código (2c-2).
+//   - os pedidos prontos saem na rede com o lote de um código (2c-2);
+//   - com o atendimento automático ligado para perguntas (2e-3), a que ele responde com certeza sai sozinha.
 
 const NA_MARCA = { identity: { summary: 'Hamburgueria de bairro com smash feito na chapa', audience: 'Quem mora ou trabalha no Centro', differentiator: 'Pão feito na casa todo dia', since: '2019' }, voice: { traits: ['Direta'], rules: ['Frases curtas.'], do_example: 'Bateu a fome? O smash sai da chapa rapidinho.', dont_example: '' }, products: { items: ['Combo duplo R$ 39,90'] }, offers: { items: [] }, forbidden: { items: [] }, competitors: { items: [] }, region: { area: 'Centro e Lapa', pickup: true } };
 const DA_PERGUNTA = 'O Combo duplo sai por R$ 39,90. Qualquer dúvida, chama a gente pelos contatos do perfil da loja.';
@@ -54,7 +56,7 @@ describe.skipIf(!hasDb)('os pedidos do Social media para os comentários (A6 · 
   const meta = new InstagramDeMentira();
 
   /** O que o modelo simulado escreve, pelo pedido que recebeu (a mensagem e o contexto, como texto). */
-  let responder: (pedido: string) => unknown = () => ({ sugestoes: [] });
+  let responder: (pedido: string) => unknown = () => ({ sugestoes: [], respondida: 'nao' });
   const vistos: string[] = [];
   const simulado = new MockLanguageModelV4({
     doGenerate: async (opcoes) => {
@@ -65,8 +67,8 @@ describe.skipIf(!hasDb)('os pedidos do Social media para os comentários (A6 · 
   });
   const padrao = (pedido: string) =>
     pedido.includes('O tipo do comentário: reclamação')
-      ? { sugestoes: [...ENFOQUES_DA_RECLAMACAO].map((enfoque, i) => ({ enfoque, texto: `${['Desculpa pela demora.', 'O pedido atrasou na saída.', 'Obrigado pelo aviso.'][i]} Chama a gente pelos contatos do perfil da loja com o número do pedido.` })) }
-      : { sugestoes: [{ enfoque: 'Responde e chama a equipe', texto: DA_PERGUNTA }] };
+      ? { sugestoes: [...ENFOQUES_DA_RECLAMACAO].map((enfoque, i) => ({ enfoque, texto: `${['Desculpa pela demora.', 'O pedido atrasou na saída.', 'Obrigado pelo aviso.'][i]} Chama a gente pelos contatos do perfil da loja com o número do pedido.` })), respondida: 'nao' }
+      : { sugestoes: [{ enfoque: 'Responde e chama a equipe', texto: DA_PERGUNTA }], respondida: 'sim' };
 
   beforeAll(async () => {
     await runMigrations({ connectionString: OWNER_URL, dir: resolve(process.cwd(), '../../packages/database/migrations') });
@@ -226,8 +228,8 @@ describe.skipIf(!hasDb)('os pedidos do Social media para os comentários (A6 · 
     const OUTRA = 'Sai por R$ 39,90 o Combo duplo. Se quiser saber mais, chama a gente pelos contatos do perfil da loja.';
     responder = (pedido) =>
       pedido.includes('O tipo do comentário: reclamação')
-        ? { sugestoes: [...ENFOQUES_DA_RECLAMACAO].map((enfoque, i) => ({ enfoque, texto: `${['Poxa, sentimos muito.', 'Na sexta a saída atrasou.', 'Valeu por avisar.'][i]} Chama a gente pelos contatos do perfil da loja com o número do pedido.` })) }
-        : { sugestoes: [{ enfoque: 'Responde e chama a equipe', texto: OUTRA }] };
+        ? { sugestoes: [...ENFOQUES_DA_RECLAMACAO].map((enfoque, i) => ({ enfoque, texto: `${['Poxa, sentimos muito.', 'Na sexta a saída atrasou.', 'Valeu por avisar.'][i]} Chama a gente pelos contatos do perfil da loja com o número do pedido.` })), respondida: 'nao' }
+        : { sugestoes: [{ enfoque: 'Responde e chama a equipe', texto: OUTRA }], respondida: 'sim' };
     // As duas vezes do "Pedir outra" saem primeiro na fila; o modelo viu as sugestões que a pessoa já tinha visto.
     const feitas = await fila.executarLote(10, { tenantIds: [e.tenantId] });
     expect(feitas.map((f) => f.feito)).toEqual([
@@ -310,7 +312,7 @@ describe.skipIf(!hasDb)('os pedidos do Social media para os comentários (A6 · 
 
     // Com a IA de volta, o modelo escreve um preço que Minha marca não tem: a conferência barra, e nada vai a Aprovações.
     await ligarFlagDaEmpresa(api, 'ia', e.tenantId, true);
-    responder = () => ({ sugestoes: [{ enfoque: 'Responde', texto: 'O Combo duplo sai por R$ 29,90. Chama a gente pelos contatos do perfil da loja.' }] });
+    responder = () => ({ sugestoes: [{ enfoque: 'Responde', texto: 'O Combo duplo sai por R$ 29,90. Chama a gente pelos contatos do perfil da loja.' }], respondida: 'sim' });
     await ownerQuery(`update liame.comment_suggestion set next_attempt_at = now() - interval '1 second' where tenant_id = $1`, [e.tenantId]);
     const barradas = await fila.executarLote(10, { tenantIds: [e.tenantId] });
     expect(barradas.map((f) => f.feito.status)).toEqual(['barrada', 'barrada']);
@@ -321,6 +323,44 @@ describe.skipIf(!hasDb)('os pedidos do Social media para os comentários (A6 · 
     });
     const pedidos = await ownerQuery<{ n: string }>(`select count(*) as n from liame.action_request where tenant_id = $1 and tool like 'comentario_%'`, [e.tenantId]);
     expect(Number(pedidos[0]!.n)).toBe(0);
+  }, 120_000);
+
+  it('o automático ligado para perguntas (parte 2e-3): a que ele responde com o que a marca diz sai sozinha, com o aviso; a que ele não sabe vai para Aprovações', async () => {
+    await ia.rotaCompartilhada(modelos, 'social_comentario', simulado);
+    modelos.porChave.set('teste/compartilhado_social_comentario', simulado);
+    const e = await empresa('Casa Brasa Perguntas Sozinho');
+    await ligarFlagDaEmpresa(api, 'comentarios_automatico', e.tenantId, true);
+    await ownerQuery(
+      `insert into liame.comment_auto_reply (brand_id, tenant_id, enabled, kinds, updated_by, created_at, updated_at) values ($1, $2, true, '{pergunta}', $3, now(), now())`,
+      [e.brandId, e.tenantId, e.userId],
+    );
+    const DO_FERIADO = 'Chama a gente pelos contatos do perfil da loja para confirmar o horário do feriado.';
+    // O Social media diz "sim" na pergunta do preço (Minha marca tem) e "nao" na do feriado (Minha marca não diz). A
+    // escolha é pelo comentário inteiro, que só a mensagem desse caso traz (V184).
+    responder = (pedido) => (pedido.includes('Vocês abrem no feriado?') ? { sugestoes: [{ enfoque: 'Chama a equipe', texto: DO_FERIADO }], respondida: 'nao' } : padrao(pedido));
+    const post = meta.publicadoForaDoLiame(e.instagram!.externo, { caption: 'Combo duplo na chapa', horas: 2, comments_count: 2 });
+    const doPreco = meta.comentouNoInstagram(post, { texto: 'Quanto custa o combo duplo?', usuario: 'ana_paula' });
+    const doFeriado = meta.comentouNoInstagram(post, { texto: 'Vocês abrem no feriado?', usuario: 'rui_s' });
+    expect((await ler(e))[0]).toMatchObject({ status: 'ok', pedidos: 2 });
+    meta.normalizar();
+
+    expect((await fila.executarLote(10, { tenantIds: [e.tenantId] })).map((f) => f.feito.status)).toEqual(['pronta', 'pronta']);
+    const porComentario = new Map((await vezes(e)).map((v) => [v.comment_id, v]));
+    const sozinho = await pedidoDe(e, porComentario.get(doPreco)!.action_id!);
+    expect(sozinho).toMatchObject({ tool: 'comentario_responder_auto', status: 'aprovada', agent_key: 'social', requested_by: e.userId, params: { texto: `${DA_PERGUNTA}${AVISO_DE_RESPOSTA_AUTOMATICA}` } });
+    expect(porComentario.get(doPreco)).toMatchObject({ status: 'pronta', suggestions: 1 });
+    expect(await pedidoDe(e, porComentario.get(doFeriado)!.action_id!)).toMatchObject({
+      tool: 'comentario_responder',
+      status: 'aguardando_aprovacao',
+      params: { texto: DO_FERIADO, sugestoes: [{ enfoque: 'Chama a equipe', texto: DO_FERIADO, rodada: 1 }] },
+    });
+
+    // O executor publica só a automática; a do feriado espera a aprovação.
+    await executor.runCycle(20, { tenantIds: [e.tenantId] });
+    const naRede = meta.comentariosNoInstagram.get(post)!;
+    expect(naRede.find((c) => c.id === doPreco)!.respostas.map((r) => r.text)).toEqual([sozinho.params.texto]);
+    expect(naRede.find((c) => c.id === doFeriado)!.respostas).toEqual([]);
+    expect(meta.defeitos).toEqual([]);
   }, 120_000);
 
   it('as regras da tabela (V119): a operação, a situação, o porquê, o ocultar sem sugestões, a pronta de responder com quantas foram, a barrada e o fim', async () => {

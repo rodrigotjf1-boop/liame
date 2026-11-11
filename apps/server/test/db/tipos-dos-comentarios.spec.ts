@@ -62,7 +62,7 @@ describe.skipIf(!hasDb)('o tipo do comentário pela IA (A6 · Z11, parte 2d-4c)'
       const pedido = JSON.stringify(opcoes.prompt);
       const doTipo = pedido.includes('Diga de que tipo é o comentário abaixo.');
       if (doTipo) vistos.push(pedido);
-      const resposta = doTipo ? tipoDe(pedido) : { sugestoes: [{ enfoque: 'Responde e chama a equipe', texto: DA_PERGUNTA }] };
+      const resposta = doTipo ? tipoDe(pedido) : { sugestoes: [{ enfoque: 'Responde e chama a equipe', texto: DA_PERGUNTA }], respondida: 'sim' };
       return { content: [{ type: 'text' as const, text: JSON.stringify(resposta) }], finishReason: { unified: 'stop' as const, raw: undefined }, usage: ia.uso(900, 10), warnings: [] };
     },
   });

@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto';
+import { z } from 'zod';
 import { normalizar } from '../../policy/texto.js';
 import { temDadoPessoal } from '../sanitizar.js';
 import { ENFOQUES_DA_RECLAMACAO, sugestoesPedidasDoComentario, type TipoComSugestao } from './comentario-contexto.js';
@@ -20,6 +21,43 @@ import {
 // regras da Liame, das plataformas e da marca, e o número fora do comentário, da legenda do post e dos fatos da marca (o
 // preço fora de Minha marca barra). O elogio e a marcação de amigo têm resposta pronta, sem IA (D-A6-88), com variação,
 // para não repetir a mesma frase em todos. Funções puras.
+
+/**
+ * O formato da resposta do Social media aos comentários (v3, A6, Z11, parte 2e-3; D-A6-92): as sugestões, como nas
+ * avaliações, e `respondida`: na pergunta, "sim" quando a sugestão responde à pergunta só com o que o dossiê ou a legenda
+ * dizem, e "nao" quando faltou a informação e ela só chama a equipe; na reclamação, sempre "nao". É o que deixa o
+ * atendimento automático responder sozinho a pergunta que ele sabe responder com certeza.
+ */
+export const RespostaDoComentario = z.strictObject({
+  sugestoes: z.array(z.strictObject({ enfoque: z.string(), texto: z.string() })),
+  respondida: z.enum(['sim', 'nao']),
+});
+export type RespostaDoComentario = z.infer<typeof RespostaDoComentario>;
+
+/**
+ * A pergunta que o atendimento automático pode responder sozinha (D-A6-92: "a pergunta que ele sabe responder com
+ * certeza"): o Social media disse que respondeu ("sim"), e a primeira sugestão passou na conferência sem aviso nenhum
+ * (nada de número fora das fontes, nada que a conferência apontou) e leva o caminho para falar com a equipe.
+ * Qualquer dúvida vai para uma pessoa.
+ */
+export function respondeComCerteza(
+  tipo: TipoComSugestao,
+  r: Pick<RespostaDoComentario, 'respondida'>,
+  primeira: Pick<SugestaoConferida, 'conferencia' | 'texto'> | undefined,
+  contato: string | null,
+): boolean {
+  return tipo === 'pergunta' && r.respondida === 'sim' && primeira?.conferencia.situacao === 'passou' && levaOCaminhoDaEquipe(primeira.texto, contato);
+}
+
+/**
+ * A resposta a uma pergunta termina com o caminho para falar com a equipe (D-A6-92; Termos 5.5): o canal de contato
+ * do contexto, como o contexto manda escrever (sem o artigo do começo: "o WhatsApp da loja" vale "no WhatsApp da
+ * loja"); sem canal informado, os contatos do perfil da loja.
+ */
+export function levaOCaminhoDaEquipe(texto: string, contato: string | null): boolean {
+  const canal = contato ? normalizar(contato).trim().replace(/^(o|a|os|as) /, '') : 'perfil';
+  return canal.length >= 3 && normalizar(texto).includes(canal);
+}
 
 /** Por que uma sugestão do modelo nem chegou à conferência: os da resposta à avaliação e o enfoque fora dos três. */
 export type DescarteDaSugestaoAoComentario = DescarteDaSugestao | 'fora_do_enfoque';

@@ -163,8 +163,11 @@ export type CommentsWaitingResponse = z.infer<typeof CommentsWaitingResponse>;
 
 // ---- O atendimento automático (A6, Z11, parte 2e-1; P38 versão 2; D-A6-92 e D-A6-104)
 
-/** Os tipos que o atendimento automático pode responder sozinho, nesta versão (a pergunta entra numa parte própria). */
-export const COMMENT_AUTO_REPLY_KINDS = ['elogio', 'marcacao'] as const;
+/**
+ * Os tipos que o atendimento automático pode responder sozinho: o elogio e a marcação (a resposta pronta) e, desde a
+ * parte 2e-3, a pergunta que o Social media responde com o que a marca diz (o "sim" dele e a conferência sem aviso).
+ */
+export const COMMENT_AUTO_REPLY_KINDS = ['elogio', 'marcacao', 'pergunta'] as const;
 /** No máximo tantas respostas sozinho por hora, por marca; o que passar espera a hora seguinte. */
 export const COMMENT_AUTO_REPLY_HOURLY_LIMIT = 30;
 /**
@@ -182,7 +185,7 @@ export const CommentAutoReplyResponse = z.strictObject({
   available: z.boolean(),
   /** Ligado na marca (nasce desligado). */
   enabled: z.boolean(),
-  /** Os tipos marcados: `elogio` e `marcacao` hoje. A lista pode crescer (V23). */
+  /** Os tipos marcados: `elogio`, `marcacao` e `pergunta` hoje. A lista pode crescer (V23). */
   kinds: z.array(z.string().regex(/^[a-z_]{2,40}$/)),
   /** Quem vê pode ligar e somar um tipo: o Dono ou um Administrador, com o código do app. */
   can_enable: z.boolean(),
