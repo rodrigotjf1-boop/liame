@@ -134,6 +134,45 @@ export const DirectMessage = z.strictObject({
 });
 export type DirectMessage = z.infer<typeof DirectMessage>;
 
+/** O atendimento aberto vale este tanto de horas (D-A6-109): depois, a próxima resposta pede o código de novo. */
+export const DIRECT_ATTENDANCE_HOURS = 8;
+
+/** O atendimento da pessoa (A6, Z12, parte 2): aberto ou não, até quando, e se ela pode responder no Direct. */
+export const DirectAttendanceResponse = z.strictObject({
+  open: z.boolean(),
+  until: z.iso.datetime().nullable(),
+  /** A pessoa pode responder no Direct (o Dono, os Administradores e quem aprova). */
+  can_reply: z.boolean(),
+});
+export type DirectAttendanceResponse = z.infer<typeof DirectAttendanceResponse>;
+
+/** Abrir o atendimento: a confirmação de quem é (o código do app ou a chave de acesso). */
+export const DirectAttendanceRequest = z.strictObject({
+  code: z.string().regex(/^\d{6}$/, { error: 'Digite os 6 números do app' }).optional(),
+  passkey: ChaveNoLugarDoCodigo,
+});
+export type DirectAttendanceRequest = z.infer<typeof DirectAttendanceRequest>;
+
+/** Mandar a resposta numa conversa (A6, Z12, parte 2; D-A6-109): o texto, até 1.000 de espaço na Meta. */
+export const DirectReplyRequest = z.strictObject({
+  brand_id: z.uuid(),
+  text: z.string().trim().min(1).max(4000),
+});
+export type DirectReplyRequest = z.infer<typeof DirectReplyRequest>;
+
+export const DirectReplyResponse = z.strictObject({
+  /** O pedido no trilho de ações: nasce aprovado e sai na volta seguinte do executor. */
+  action_id: z.uuid(),
+  /** A situação do pedido (`aprovada`, `executando`, `executada`, `falhou`…). A lista pode crescer (V23). */
+  status: Codigo,
+  status_reason: z.string().nullable(),
+});
+export type DirectReplyResponse = z.infer<typeof DirectReplyResponse>;
+
+/** Concluir uma conversa sem responder, ou marcá-la como lida: só a marca. */
+export const DirectBrandRequest = z.strictObject({ brand_id: z.uuid() });
+export type DirectBrandRequest = z.infer<typeof DirectBrandRequest>;
+
 export const DirectConversationResponse = z.strictObject({
   brand_id: z.uuid(),
   conversation: DirectConversation,

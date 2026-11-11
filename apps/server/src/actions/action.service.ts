@@ -636,6 +636,15 @@ export class ActionService {
   }
 
   /**
+   * O pedido da ferramenta que só se pede pela rota do próprio recurso (A6, Z12, parte 2: a resposta no Direct, pela rota
+   * da conversa, que conferiu o atendimento aberto com o código do app). É o mesmo trilho (a trava, as flags, a política,
+   * o plano); devolve o id do pedido.
+   */
+  async pedirPelaRota(auth: AuthContext, input: CreateActionRequest): Promise<string> {
+    return this.pedir(pessoa(auth), input, null, null, false, true);
+  }
+
+  /**
    * A volta pedida pela rota do próprio recurso (A6, Z5d, parte 6; D-A6-57: apagar das redes o post que o Liame publicou,
    * pela rota do post, que travou o post, conferiu que ele está no ar e que nada dele ainda executa). É o mesmo trilho da
    * volta de sempre (a trava, a flag, a política, o plano), com a versão em que o recurso está agora. `de`: o pedido que
@@ -657,10 +666,15 @@ export class ActionService {
     volta: { de: string; versaoDepois: number } | null,
     tentativa: { de: string } | null = null,
     automatico = false,
+    pelaRota = false,
   ): Promise<string> {
     const tx = currentTx();
     const tenantId = quem.tenantId;
     const { tool, connector } = this.resolve(input.tool, input.provider);
+    // A ferramenta que só se pede pela rota do recurso (A6, Z12: a resposta no Direct, que pede o atendimento aberto).
+    if (tool.onlyByRoute && (!pelaRota || quem.ator !== 'human')) {
+      throw new AppProblem(422, 'acao-so-pela-rota', 'Esta ação não se pede direto', 'Esta ação só se pede pela tela do recurso: para responder no Direct, use a conversa, com o atendimento aberto.');
+    }
     // A resposta automática (A6, Z11, parte 2e-1) só se pede pelo atendimento automático, que conferiu o portão antes.
     if (tool.atendimentoAutomatico && (!automatico || quem.ator !== 'agent')) {
       throw new AppProblem(422, 'acao-so-pelo-automatico', 'Esta ação não se pede direto', 'A resposta automática só sai pelo atendimento automático da marca: para responder, peça a resposta ao comentário.');

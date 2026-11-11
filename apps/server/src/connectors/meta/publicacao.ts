@@ -278,14 +278,19 @@ export const TAREFA_DE_PUBLICAR = 'CREATE_CONTENT';
 export const TAREFA_DE_ANALISAR = 'ANALYZE';
 /** A tarefa que a pessoa precisa ter na Página para o token dela ler os comentários (`MODERATE`, desde a v11.0; A6, Z11). */
 export const TAREFA_DE_MODERAR = 'MODERATE';
+/** A tarefa que a pessoa precisa ter na Página para o token dela mandar mensagem no Direct (`MESSAGING`; A6, Z12). */
+export const TAREFA_DE_MENSAGENS = 'MESSAGING';
 
 /**
  * O token da Página, na resposta de `GET /me/accounts?fields=id,access_token,tasks` (Pages API, "Get a Page access
  * token": cada Página com o token dela e as tarefas de quem autorizou). Nulo quando a autorização não alcança a Página.
  * `podePublicar`: quem autorizou tem a tarefa de criar conteúdo nela; `podeAnalisar`, a de ler os números dela;
- * `podeModerar`, a de ler e responder os comentários dela.
+ * `podeModerar`, a de ler e responder os comentários dela; `podeMandarMensagem`, a de mandar mensagem no Direct.
  */
-export function tokenDaPagina(resposta: unknown, paginaId: string): { token: string; podePublicar: boolean; podeAnalisar: boolean; podeModerar: boolean } | null {
+export function tokenDaPagina(
+  resposta: unknown,
+  paginaId: string,
+): { token: string; podePublicar: boolean; podeAnalisar: boolean; podeModerar: boolean; podeMandarMensagem: boolean } | null {
   const data = (resposta as { data?: unknown } | null)?.data;
   if (!Array.isArray(data)) return null;
   for (const p of data as Array<Record<string, unknown> | null>) {
@@ -293,7 +298,13 @@ export function tokenDaPagina(resposta: unknown, paginaId: string): { token: str
     const token = texto(p?.access_token);
     if (!token) return null;
     const tarefas = Array.isArray(p?.tasks) ? (p.tasks as unknown[]) : [];
-    return { token, podePublicar: tarefas.includes(TAREFA_DE_PUBLICAR), podeAnalisar: tarefas.includes(TAREFA_DE_ANALISAR), podeModerar: tarefas.includes(TAREFA_DE_MODERAR) };
+    return {
+      token,
+      podePublicar: tarefas.includes(TAREFA_DE_PUBLICAR),
+      podeAnalisar: tarefas.includes(TAREFA_DE_ANALISAR),
+      podeModerar: tarefas.includes(TAREFA_DE_MODERAR),
+      podeMandarMensagem: tarefas.includes(TAREFA_DE_MENSAGENS),
+    };
   }
   return null;
 }

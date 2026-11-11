@@ -38,6 +38,7 @@ import {
   credencialDaLoja,
   PERMISSOES_DA_ESCRITA,
   PERMISSOES_DA_LEITURA,
+  PERMISSOES_DO_CLIQUE_NO_REGEM,
   recursoDoRegem,
 } from '../connectors/regem/acesso-da-loja.js';
 import { pedirAutorizacaoAoRegem, revogarNoRegem } from '../connectors/regem/conector-regem.js';
@@ -449,7 +450,7 @@ export class ConnectionsService {
             redirectUri: inicio.redirectUri,
             estado: inicio.estado,
             desafio: desafioPkce(inicio.verificador!),
-            permissoes: PERMISSOES_DA_ESCRITA,
+            permissoes: PERMISSOES_DO_CLIQUE_NO_REGEM,
             conta: inicio.contaQuePede!,
           }),
         'regem',
@@ -503,7 +504,7 @@ export class ConnectionsService {
         ...(inicio.perfil ? { perfil_no_google: true } : {}),
         ...(inicio.searchConsole ? { search_console: true } : {}),
         ...(inicio.provedor === 'regemcast' ? { permissoes: [...PERMISSOES_DO_CLIQUE] } : {}),
-        ...(inicio.porClique ? { por_clique: true, permissoes: [...PERMISSOES_DA_ESCRITA] } : {}),
+        ...(inicio.porClique ? { por_clique: true, permissoes: [...PERMISSOES_DO_CLIQUE_NO_REGEM] } : {}),
       },
       traceId: activeTraceId(),
       origin: 'api',

@@ -14,6 +14,7 @@ import {
   planoDeMostrar,
   planoDeOcultar,
 } from './comentario-plano.js';
+import { FLAG_DE_RESPONDER_NO_DIRECT, ParametrosDaRespostaNoDirect, planoDaRespostaNoDirect } from './direct-plano.js';
 import { EstadoDaMensagem, faseDaMensagem, impedimentoDaMensagem } from './mensagem-plano.js';
 import { EstadoDoPost, planoDeApagarOPost, planoDeTentarDeNovo, planoDoPost, quandoSai } from '../posts/post-plano.js';
 import { motivoDoCompartilhado, orcamentoCompartilhado } from './orcamento-compartilhado.js';
@@ -109,6 +110,12 @@ export interface ToolDefinition {
    * confere o prazo e o motivo e prepara o recurso. Não se pede direto (`POST /v1/actions`), nem por um funcionário de IA.
    */
   onlyAsRetry?: boolean;
+  /**
+   * Só se pede pela rota própria do recurso, que confere o que a ferramenta exige antes (A6, Z12, parte 2: a resposta no
+   * Direct, pela rota da conversa, que confere o atendimento aberto com o código do app). Não se pede direto
+   * (`POST /v1/actions`), nem por um funcionário de IA.
+   */
+  onlyByRoute?: boolean;
   /**
    * A trava (kill switch) de outra ferramenta que também para esta (A6, Z5d: a trava do `post_publicar` para a nova
    * tentativa do post). Conferida no pedido e na execução, junto com a desta.
@@ -635,6 +642,39 @@ export const TOOLS: Record<string, ToolDefinition> = {
       };
     },
     undo: () => ({ tool: 'comentario_apagar_resposta', params: {} }),
+  },
+  // A resposta numa conversa do Direct do Instagram (A6, Z12, parte 2; P39, D-A6-109 e D-A6-111): uma pessoa da equipe
+  // escreve (ou escolhe a sugestão) e manda, sem pedido em Aprovações; o código do app vem uma vez, ao abrir o atendimento
+  // (8 horas), e a rota da conversa confere o atendimento aberto antes de pedir. Só dentro da janela de 24 horas da Meta.
+  // A mensagem particular não volta pela API: sem volta pelo Liame.
+  direct_responder: {
+    name: 'direct_responder',
+    version: 1,
+    owner: 'social',
+    description:
+      'Manda a resposta da marca numa conversa do Direct do Instagram, com o texto que uma pessoa da equipe escreveu ou escolheu. A mensagem é particular, para quem escreveu, e só sai até 24 horas depois da última mensagem da pessoa.',
+    // Fala com uma pessoa em nome da marca, em particular: quem manda é uma pessoa da equipe, com o atendimento aberto.
+    risk: 'R2',
+    providers: ['instagram'],
+    compensation: 'sem_volta_pelo_liame',
+    directByPerson: true,
+    onlyByRoute: true,
+    flag: FLAG_DE_RESPONDER_NO_DIRECT,
+    params: ParametrosDaRespostaNoDirect,
+    plan(before, params) {
+      const plano = planoDaRespostaNoDirect(before, params);
+      if (!plano.ok) throw new PlanoRecusado(plano.motivo);
+      return {
+        action: plano.acao,
+        // Responder não gasta verba: nada a reservar no envelope do mês.
+        budgetImpact: 'none',
+        valueMicros: null,
+        currentValueMicros: null,
+        reserveMicros: 0,
+        desiredState: plano.desejado,
+        text: plano.texto,
+      };
+    },
   },
   comentario_apagar_resposta: {
     name: 'comentario_apagar_resposta',

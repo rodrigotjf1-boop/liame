@@ -515,6 +515,7 @@ describe('conectar o Regem e ligar as lojas', () => {
       ['cupons.ler', false, null],
       ['cupons.uso.ler', false, null],
       ['cupons.criar', true, 'com aprovação'],
+      ['atendimento.canais.ler', false, null],
     ]);
     expect(chipsDoRegem(['pedidos.ler', 'clientes.anonimizacao.ler', 'cupons.ler', 'cupons.uso.ler', 'cupons.criar'], 'oauth').map((c) => [c.texto, c.classe])).toEqual([
       ['Pedidos', 'st--concluido'],

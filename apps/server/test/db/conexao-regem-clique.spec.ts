@@ -275,7 +275,8 @@ describe.skipIf(!hasDb)('conectar o Regem por clique (Hub DMS, F3, parte C)', ()
     // O pedido: tudo o que a página mostra fica no Regem, com o token do DMS ID do aplicativo do Liame.
     expect(tokensDoDmsId.has(pedido.autorizacao)).toBe(true);
     expect(pedido.corpo).toMatchObject({ response_type: 'code', client_id: APLICATIVO, redirect_uri: VOLTA, code_challenge_method: 'S256', conta_email: e.email, conta_marca: e.marca });
-    expect(pedido.corpo.scope!.split(' ')).toEqual([...PERMISSOES_DA_ESCRITA]);
+    // As de escrita e a dos canais que a Central do Regem atende (A6, Z12, D-A6-107; Regem #907).
+    expect(pedido.corpo.scope!.split(' ')).toEqual([...PERMISSOES_DA_ESCRITA, 'atendimento.canais.ler']);
     expect(pedido.corpo.conta_nome).toBe('Mister Burgers Clique Regem');
     expect(pedido.corpo.conta_cnpj).toBeUndefined();
     expect(pedido.corpo.state!.length).toBeGreaterThanOrEqual(43);
@@ -289,7 +290,7 @@ describe.skipIf(!hasDb)('conectar o Regem por clique (Hub DMS, F3, parte C)', ()
       e.tenantId,
       inicio.body.id,
     ]);
-    expect(auditoria?.after).toMatchObject({ provider: 'regem', brand_id: e.brandId, por_clique: true, permissoes: [...PERMISSOES_DA_ESCRITA] });
+    expect(auditoria?.after).toMatchObject({ provider: 'regem', brand_id: e.brandId, por_clique: true, permissoes: [...PERMISSOES_DA_ESCRITA, 'atendimento.canais.ler'] });
 
     // A volta com o `iss` do Regem (a origem da API dele) e o worker.
     const volta = await voltar(e.cookie, { state: pedido.corpo.state!, code: codigo, iss: new URL(base).origin });
