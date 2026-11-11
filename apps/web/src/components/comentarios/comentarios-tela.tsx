@@ -14,6 +14,7 @@ import { Faixa } from '@/components/ui/faixa';
 import { Icone } from '@/components/ui/icone';
 import { useAgora } from '@/lib/agora';
 import { api, chamar, mensagemDe, type Problema } from '@/lib/api';
+import { useContadorComentarios } from '@/lib/contador-comentarios';
 import { disparar } from '@/lib/disparar';
 import { useSessao } from '@/lib/sessao';
 import { autorDoComentario, avisosDasContas, erroDoPedido, FILTROS, type Filtro, legendaDoPost, lerAgora, lidoHa, pedidoDoComentario, ROTULO_DA_SITUACAO, vazioDoFiltro } from './textos';
@@ -47,6 +48,9 @@ export function ComentariosTela() {
   // Só a resposta mais nova vale (trocar de marca ou de filtro no meio de uma leitura não mistura as listas).
   const seq = useRef(0);
   const agora = useAgora(60_000, null);
+  // O contador do menu (parte 3c) lê de novo quando a contagem "Pedem resposta" da tela muda entre duas leituras.
+  const { recarregar: recarregarMenu } = useContadorComentarios();
+  const pedemAntes = useRef<number | null>(null);
 
   const carregarMarcas = useCallback(async () => {
     setErroMarcas(null);
@@ -76,9 +80,12 @@ export function ComentariosTela() {
       chamar(() => api.GET('/v1/comments', { params: { query } })).then((r) => {
         if (id !== seq.current) return;
         setCarga(r.ok ? { tipo: 'ok', dados: r.data } : { tipo: 'erro', problema: r.problema });
+        if (!r.ok) return;
+        if (pedemAntes.current !== null && pedemAntes.current !== r.data.counts.pedem) recarregarMenu();
+        pedemAntes.current = r.data.counts.pedem;
       }),
     );
-  }, [marca, filtro, canal, buscando, tentativa]);
+  }, [marca, filtro, canal, buscando, tentativa, recarregarMenu]);
 
   async function pedirLeitura() {
     if (!marca) return;

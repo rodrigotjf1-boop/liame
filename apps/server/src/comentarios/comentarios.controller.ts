@@ -1,4 +1,4 @@
-import { CommentsQuery, CommentsRefreshRequest, CommentsRefreshResponse, CommentsResponse, ProblemDetails } from '@liame/contracts';
+import { CommentsQuery, CommentsRefreshRequest, CommentsRefreshResponse, CommentsResponse, CommentsWaitingResponse, ProblemDetails } from '@liame/contracts';
 import { Body, Controller, Get, HttpCode, Post, Query } from '@nestjs/common';
 import {
   ApiAcceptedResponse,
@@ -39,6 +39,19 @@ export class ComentariosController {
   @ApiNotFoundResponse({ standardSchema: ProblemDetails })
   ver(@Auth() auth: AuthContext, @Query({ schema: CommentsQuery }) query: CommentsQuery): Promise<CommentsResponse> {
     return this.comentarios.ver(auth, query);
+  }
+
+  @Get('waiting')
+  @Permissao('campanhas.ver')
+  @ApiOperation({
+    summary: 'Quantos comentários pedem resposta',
+    description:
+      'O contador do menu (A6, Z11, parte 3c; P38): quantos comentários pedem resposta, somadas as marcas da empresa com a função `comentarios` ligada. A mesma regra de "Pedem resposta" em `GET /v1/comments` (de primeiro nível, de outras pessoas, à vista, sem resposta da marca, pergunta ou reclamação). Sem a função ou sem conta, 0. Só leitura, sem os textos.',
+  })
+  @ApiOkResponse({ standardSchema: CommentsWaitingResponse })
+  @ApiForbiddenResponse({ standardSchema: ProblemDetails })
+  esperando(@Auth() auth: AuthContext): Promise<CommentsWaitingResponse> {
+    return this.comentarios.esperando(auth);
   }
 
   @Post('refresh')

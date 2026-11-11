@@ -1,6 +1,18 @@
 import type { CommentsResponse } from '@liame/contracts';
 import { describe, expect, it } from 'vitest';
-import { autorDoComentario, avisosDasContas, erroDoPedido, FILTROS, legendaDoPost, lerAgora, lidoHa, pedidoDoComentario, ROTULO_DA_SITUACAO, vazioDoFiltro } from '@/components/comentarios/textos';
+import {
+  autorDoComentario,
+  avisosDasContas,
+  comentariosFalados,
+  erroDoPedido,
+  FILTROS,
+  legendaDoPost,
+  lerAgora,
+  lidoHa,
+  pedidoDoComentario,
+  ROTULO_DA_SITUACAO,
+  vazioDoFiltro,
+} from '@/components/comentarios/textos';
 import { NAVEGACAO } from '@/components/shell/navegacao';
 
 // A tela Comentários (A6 · Z11, parte 3b; mockups/prototipo-comentarios.html, P38): o item do menu, as situações que
@@ -10,11 +22,14 @@ const agora = new Date('2026-11-10T15:00:00Z');
 const conta = (o: Partial<CommentsResponse['accounts'][number]> = {}): CommentsResponse['accounts'][number] => ({ channel: 'instagram', name: '@misterburgers', situation: 'lido', read_at: '2026-11-10T14:48:00Z', ...o });
 
 describe('a tela Comentários (A6 · Z11, parte 3b)', () => {
-  it('o item do menu fica logo depois de Avaliações, para quem acompanha as campanhas, uma tela só nos dois modos', () => {
+  it('o item do menu fica logo depois de Avaliações, para quem acompanha as campanhas, uma tela só nos dois modos, com o contador dos que pedem resposta', () => {
     const itens = NAVEGACAO.find((g) => g.id === 'agencia')!.itens;
     const i = itens.findIndex((x) => x.href === '/comentarios');
-    expect(itens[i]).toEqual({ href: '/comentarios', rotulo: 'Comentários', icone: 'reply', permissao: 'campanhas.ver' });
+    expect(itens[i]).toEqual({ href: '/comentarios', rotulo: 'Comentários', icone: 'reply', permissao: 'campanhas.ver', contador: 'comentarios' });
     expect(itens[i - 1]!.href).toBe('/avaliacoes');
+    // O leitor de tela ouve o número com o que ele conta (P38).
+    expect(comentariosFalados(1)).toBe(', 1 pede resposta');
+    expect(comentariosFalados(3)).toBe(', 3 pedem resposta');
   });
 
   it('as situações que filtram são as do servidor, na ordem da tela, e cada comentário tem o rótulo da situação', () => {

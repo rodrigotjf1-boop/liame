@@ -98462,6 +98462,109 @@
         ]
       }
     },
+    "/v1/comments/waiting": {
+      "get": {
+        "description": "O contador do menu (A6, Z11, parte 3c; P38): quantos comentários pedem resposta, somadas as marcas da empresa com a função `comentarios` ligada. A mesma regra de \"Pedem resposta\" em `GET /v1/comments` (de primeiro nível, de outras pessoas, à vista, sem resposta da marca, pergunta ou reclamação). Sem a função ou sem conta, 0. Só leitura, sem os textos.",
+        "operationId": "ComentariosController_esperando",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "asking": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 9007199254740991
+                    }
+                  },
+                  "required": [
+                    "asking"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string",
+                      "format": "uri"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "integer",
+                      "minimum": 400,
+                      "maximum": 599
+                    },
+                    "detail": {
+                      "type": "string"
+                    },
+                    "instance": {
+                      "type": "string"
+                    },
+                    "code": {
+                      "type": "string"
+                    },
+                    "trace_id": {
+                      "type": "string"
+                    },
+                    "errors": {
+                      "description": "Campos inválidos, quando o erro é de validação",
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "path": {
+                            "type": "string"
+                          },
+                          "message": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "path",
+                          "message"
+                        ],
+                        "additionalProperties": false
+                      }
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "title",
+                    "status",
+                    "code",
+                    "trace_id"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "liame_sessao": []
+          }
+        ],
+        "summary": "Quantos comentários pedem resposta",
+        "tags": [
+          "comentarios"
+        ]
+      }
+    },
     "/v1/comments/refresh": {
       "post": {
         "description": "Adianta a leitura dos comentários do Instagram e da Página da marca, com todos os posts dos últimos 30 dias: o worker lê em até um minuto. A leitura terminou quando o `read_at` de cada conta, em `GET /v1/comments`, passa de `requested_at`. Uma vez por janela de 5 minutos por marca (429 `leitura-recente`, com `retry-after`); a conta que já está sendo lida fica como está. Precisa da função `comentarios` ligada (409 `funcao-desligada`).",

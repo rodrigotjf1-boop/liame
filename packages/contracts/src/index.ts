@@ -589,5 +589,6 @@ export {
   CommentsRefreshRequest,
   CommentsRefreshResponse,
   CommentsResponse,
+  CommentsWaitingResponse,
   SocialComment,
 } from './comentarios.js';

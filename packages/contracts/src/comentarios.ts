@@ -149,3 +149,13 @@ export const CommentsRefreshResponse = z.strictObject({
   next_at: z.iso.datetime(),
 });
 export type CommentsRefreshResponse = z.infer<typeof CommentsRefreshResponse>;
+
+/** O contador do menu (A6, Z11, parte 3c; P38): quantos comentários pedem resposta na empresa. */
+export const CommentsWaitingResponse = z.strictObject({
+  /**
+   * Os comentários que pedem resposta, somadas as marcas da empresa com a função ligada: a mesma regra de "Pedem
+   * resposta" na tela (de primeiro nível, de outras pessoas, à vista, sem resposta da marca, pergunta ou reclamação).
+   */
+  asking: z.int().min(0),
+});
+export type CommentsWaitingResponse = z.infer<typeof CommentsWaitingResponse>;

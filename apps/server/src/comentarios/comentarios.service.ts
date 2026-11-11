@@ -8,6 +8,7 @@ import {
   type CommentsRefreshRequest,
   type CommentsRefreshResponse,
   type CommentsResponse,
+  type CommentsWaitingResponse,
   type SocialComment,
 } from '@liame/contracts';
 import { Injectable } from '@nestjs/common';
@@ -221,6 +222,33 @@ export class ComentariosService {
       comment_count: p.comment_count,
     }));
     return { brand_id: brandId, state: 'pronta', accounts, counts, items, posts, refresh };
+  }
+
+  /**
+   * O contador do menu (A6, Z11, parte 3c; P38): quantos comentários pedem resposta, somadas as marcas da empresa com a
+   * função ligada. A mesma regra de "Pedem resposta" na tela (`ver`), numa contagem só, sem os textos.
+   */
+  async esperando(auth: AuthContext): Promise<CommentsWaitingResponse> {
+    const quem = quemPede(auth);
+    const tx = currentTx();
+    const contas = (
+      await tx.execute<{ id: string; brand_id: string }>(sql`
+        select a.id, a.brand_id from liame.connected_account a
+          join liame.brand b on b.id = a.brand_id
+         where b.archived_at is null and a.provider in (${PROVEDOR_INSTAGRAM}, ${PROVEDOR_PAGINA}) and ${contaConectada('a')}`)
+    ).rows;
+    // A função é por marca (a empresa costuma ter poucas): a conta da marca desligada não conta.
+    const ligadas = new Set<string>();
+    for (const marca of new Set(contas.map((c) => c.brand_id))) if (await this.ligada(quem.tenantId, quem.userId, marca)) ligadas.add(marca);
+    const ids = contas.filter((c) => ligadas.has(c.brand_id)).map((c) => c.id);
+    if (!ids.length) return { asking: 0 };
+    const r = await tx.execute<{ n: string | number }>(sql`
+      select count(*) as n from liame.social_comment c
+       where c.connected_account_id in ${ids} and c.parent_comment_id is null and not c.by_brand and not c.hidden
+         and c.kind in ('pergunta', 'reclamacao')
+         and not exists (select 1 from liame.social_comment r
+                          where r.connected_account_id = c.connected_account_id and r.parent_comment_id = c.comment_id and r.by_brand)`);
+    return { asking: Number(r.rows[0]?.n ?? 0) };
   }
 
   /**
