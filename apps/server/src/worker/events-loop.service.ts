@@ -21,6 +21,7 @@ import { PostsNumerosLoop } from './posts-numeros-loop.js';
 import { DoSeuInstagramLoop } from './do-seu-instagram-loop.js';
 import { ComentariosLoop } from './comentarios-loop.js';
 import { DirectLoop } from './direct-loop.js';
+import { DirectAutomaticoLoop } from './direct-automatico.js';
 import { EstrategistaAgenda, MARCAS_POR_VOLTA } from './estrategista-agenda.js';
 import { EstrategistaLoop } from './estrategista-loop.js';
 import { PedidosQueEsperam } from './pedidos-que-esperam.js';
@@ -90,6 +91,7 @@ export class EventsLoopService implements OnApplicationBootstrap, OnApplicationS
     private readonly doSeuInstagram: DoSeuInstagramLoop,
     private readonly comentarios: ComentariosLoop,
     private readonly direct: DirectLoop,
+    private readonly directAutomatico: DirectAutomaticoLoop,
     private readonly pedidosDosComentarios: PedidosDosComentariosLoop,
     private readonly tiposDosComentarios: TiposDosComentariosLoop,
     private readonly sugestoes: SugestoesDeRespostaLoop,
@@ -179,6 +181,10 @@ export class EventsLoopService implements OnApplicationBootstrap, OnApplicationS
       // ligado, a cada minuto por conta (por consulta, enquanto o app do Liame estiver em desenvolvimento na Meta), só com
       // a função `direct` ligada e o Regem conferido (D-A6-107); a fila é olhada a cada 20 segundos.
       this.loop('direct', 10, 20_000, async (n) => (await this.direct.executarLote(n)).length),
+      // O atendimento automático do Direct (A6, Z12, parte 5a; D-A6-115): a mensagem da pessoa que a leitura trouxe, nas
+      // marcas com o automático ligado, vira a resposta pronta pelo trilho (o elogio, a resposta ao story, a menção), com o
+      // portão de novo no pedido e na execução; o que não é dele fica com uma pessoa. Olhada a cada 15 segundos.
+      this.loop('direct-automatico', 10, 15_000, async (n) => (await this.directAutomatico.executarLote(n)).length),
       // Os pedidos do Social media para os comentários (A6, Z11, parte 2d-2): a leitura dos comentários abre a vez de cada
       // um que pede uma ação da marca (com a função `comentarios_sugeridos` ligada); a fila é olhada a cada 30 segundos.
       // Quem espera a vez (uma chave desligada, sem a rota do modelo, o limite) volta em uma hora.

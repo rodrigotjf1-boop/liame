@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
+import { DIRECT_AUTO_REPLY_NOTICE } from '@liame/contracts';
 import { RESPOSTAS_PRONTAS } from '../src/ai/social/comentario.js';
+import { automaticasSeguidas, comAvisoDoDirect, ehAutomatica, pedeUmaPessoa, tipoDoAutomatico } from '../src/direct/automatico.js';
 import { conversasDoDirect, mensagensDaConversa, regemAtende, situacaoDaConversa, tipoDaMensagem } from '../src/direct/direct.js';
 import { PASSOS_DA_RECLAMACAO, RESPOSTAS_DA_MENCAO, sugestaoNoDirect, tipoNoDirect } from '../src/direct/tipo-no-direct.js';
 
@@ -132,5 +134,40 @@ describe('o tipo da conversa e a sugestão sem IA (parte 4a)', () => {
       expect(new TextEncoder().encode(r).length).toBeLessThan(1000);
       expect(r).not.toMatch(/R\$|\d|desconto|brinde|reembolso|cupom/i);
     }
+  });
+});
+
+// A6 · Z12, parte 5a (D-A6-115 e D-A6-119): as regras puras do atendimento automático do Direct.
+describe('o atendimento automático do Direct (parte 5a)', () => {
+  it('o aviso vai no fim, posto pelo código, e a tela o reconhece mesmo com os espaços mexidos', () => {
+    const texto = comAvisoDoDirect('Obrigado pelo carinho! Esperamos você de novo.  ');
+    expect(texto).toBe(`Obrigado pelo carinho! Esperamos você de novo.${DIRECT_AUTO_REPLY_NOTICE}`);
+    expect(texto.endsWith('Resposta automática · para falar com alguém da equipe, é só pedir aqui')).toBe(true);
+    expect(ehAutomatica(texto)).toBe(true);
+    expect(ehAutomatica(`${texto}\n`)).toBe(true);
+    expect(ehAutomatica('Obrigado pelo carinho!')).toBe(false);
+  });
+
+  it('só a resposta pronta (o elogio e a menção) é dele nesta parte; a pergunta, a reclamação e o golpe esperam uma pessoa', () => {
+    expect(tipoDoAutomatico('elogio')).toBe('pronta');
+    expect(tipoDoAutomatico('mencao')).toBe('pronta');
+    for (const t of ['pergunta', 'reclamacao', 'golpe', 'ofensivo', null] as const) expect(tipoDoAutomatico(t), String(t)).toBeNull();
+  });
+
+  it('quem pede uma pessoa vai para a equipe (sem acento e sem diferença de maiúscula)', () => {
+    for (const t of ['Quero falar com um ATENDENTE', 'posso falar com alguém?', 'É robô? Quero uma pessoa de verdade', 'chama o gerente', 'Amei! Mas quero falar com vocês']) {
+      expect(pedeUmaPessoa(t), t).toBe(true);
+    }
+    for (const t of ['Amei o smash!', 'Que delícia', 'Obrigada pelo atendimento de ontem']) expect(pedeUmaPessoa(t), t).toBe(false);
+  });
+
+  it('as automáticas seguidas contam do fim para trás, até a primeira resposta que uma pessoa mandou', () => {
+    const auto = (body: string) => ({ direction: 'saida', body: comAvisoDoDirect(body) });
+    const pessoa = (body: string) => ({ direction: 'entrada', body });
+    const equipe = (body: string) => ({ direction: 'saida', body });
+    // Da mais nova para a mais velha.
+    expect(automaticasSeguidas([pessoa('Valeu!'), auto('Obrigado!'), pessoa('Top'), auto('Que bom!'), pessoa('Amei')])).toBe(2);
+    expect(automaticasSeguidas([pessoa('Valeu!'), auto('Obrigado!'), pessoa('Top'), equipe('Oi, aqui é o Rodrigo'), auto('Que bom!')])).toBe(1);
+    expect(automaticasSeguidas([pessoa('Amei')])).toBe(0);
   });
 });

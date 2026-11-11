@@ -115,8 +115,8 @@ describe('a política da distribuição v10', () => {
   });
 
   it('tentar de novo é direto para uma pessoa; o funcionário de IA e o post novo seguem esperando a aprovação', () => {
-    expect(PLATFORM_POLICY.version).toBe(13);
-    expect(chooseMode([PLATFORM_POLICY], proposta('post.tentar_de_novo'))).toEqual({ mode: 'AUTO', source: 'platform', version: 13 });
+    expect(PLATFORM_POLICY.version).toBe(14);
+    expect(chooseMode([PLATFORM_POLICY], proposta('post.tentar_de_novo'))).toEqual({ mode: 'AUTO', source: 'platform', version: 14 });
     expect(chooseMode([PLATFORM_POLICY], proposta('post.tentar_de_novo', { actor: 'agent' })).mode).toBe('APPROVAL');
     expect(chooseMode([PLATFORM_POLICY], proposta('post.publicar', { tool: 'post_publicar' })).mode).toBe('APPROVAL');
   });

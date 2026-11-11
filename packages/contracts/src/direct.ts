@@ -141,6 +141,16 @@ export const DirectMessage = z.strictObject({
 });
 export type DirectMessage = z.infer<typeof DirectMessage>;
 
+/** O contador do menu (A6, Z12; P39): quantas conversas do Direct esperam resposta na empresa. */
+export const DirectWaitingResponse = z.strictObject({
+  /**
+   * As conversas que esperam resposta, somadas as marcas da empresa com o Direct ligado e lido pelo Liame: a mesma regra
+   * de "Esperam resposta" na tela (a última mensagem é da pessoa, dentro da janela de 24 horas, sem "concluir" depois).
+   */
+  waiting: z.int().min(0),
+});
+export type DirectWaitingResponse = z.infer<typeof DirectWaitingResponse>;
+
 /** O atendimento aberto vale este tanto de horas (D-A6-109): depois, a próxima resposta pede o código de novo. */
 export const DIRECT_ATTENDANCE_HOURS = 8;
 
@@ -201,3 +211,81 @@ export const DirectConversationResponse = z.strictObject({
   suggestion: DirectSuggestion.nullable(),
 });
 export type DirectConversationResponse = z.infer<typeof DirectConversationResponse>;
+
+// ---- O atendimento automático do Direct (A6, Z12, parte 5a; P39 versão 2; D-A6-115 e D-A6-119)
+
+/**
+ * Os tipos que o atendimento automático do Direct responde sozinho: `pronta` (o elogio, a resposta ao story e a menção
+ * no story, com a resposta pronta, sem IA). A pergunta que ele sabe responder com certeza entra com o Social media (parte
+ * 4b); a tabela já a aceita.
+ */
+export const DIRECT_AUTO_REPLY_KINDS = ['pronta'] as const;
+/** No máximo tantas respostas sozinho por hora, por marca (P39); o que passar fica para uma pessoa. */
+export const DIRECT_AUTO_REPLY_HOURLY_LIMIT = 30;
+/** No máximo tantas respostas automáticas seguidas na mesma conversa; a seguinte vai para uma pessoa (P39). */
+export const DIRECT_AUTO_REPLY_IN_A_ROW = 2;
+/**
+ * O aviso no fim de cada resposta automática do Direct, posto pelo código (Termos 5.5 e 6.3: o aviso de IA e o caminho
+ * para uma pessoa; a Meta pede o aviso de automação). A tela reconhece por ele a resposta que saiu sozinha.
+ */
+export const DIRECT_AUTO_REPLY_NOTICE = '\n\nResposta automática · para falar com alguém da equipe, é só pedir aqui';
+
+export const DirectAutoReplyResponse = z.strictObject({
+  brand_id: z.uuid(),
+  /** A função `direct_automatico` liberada para a empresa. Sem ela, nada responde sozinho, e a tela só explica. */
+  available: z.boolean(),
+  /** Ligado na marca (nasce desligado). */
+  enabled: z.boolean(),
+  /** Os tipos marcados: `pronta` hoje. A lista pode crescer (V23). */
+  kinds: z.array(Codigo),
+  /** Quem vê pode ligar e somar um tipo: o Dono ou um Administrador, com o código do app. */
+  can_enable: z.boolean(),
+  /** Quem vê pode desligar e tirar um tipo, na hora e sem código: quem aprova. */
+  can_disable: z.boolean(),
+  /** A última mudança e quem fez (cada uma fica também na auditoria). Nulos enquanto ninguém mudou. */
+  updated_at: z.iso.datetime().nullable(),
+  updated_by: z.strictObject({ id: z.uuid(), name: z.string() }).nullable(),
+  /** As respostas automáticas da última hora (dadas ou saindo) e o teto por hora. */
+  last_hour: z.int().min(0),
+  hourly_limit: z.int().min(1),
+});
+export type DirectAutoReplyResponse = z.infer<typeof DirectAutoReplyResponse>;
+
+/**
+ * Ligar, desligar ou mudar os tipos. Ligar e somar um tipo pedem o Dono ou um Administrador e a confirmação (o código do
+ * app ou a chave de acesso); desligar e tirar um tipo, não. Ligado pede pelo menos um tipo.
+ */
+export const DirectAutoReplyRequest = z.strictObject({
+  brand_id: z.uuid(),
+  enabled: z.boolean(),
+  kinds: z.array(z.enum(DIRECT_AUTO_REPLY_KINDS)).max(DIRECT_AUTO_REPLY_KINDS.length),
+  code: z.string().regex(/^\d{6}$/, { error: 'Digite os 6 números do app' }).optional(),
+  passkey: ChaveNoLugarDoCodigo,
+});
+export type DirectAutoReplyRequest = z.infer<typeof DirectAutoReplyRequest>;
+
+/** A prévia antes de ligar: até este tanto de exemplos. */
+export const DIRECT_AUTO_REPLY_PREVIEW_LIMIT = 3;
+
+/**
+ * "Veja como ele teria respondido": as conversas das últimas 24 horas que esperam resposta e que ele sabe responder,
+ * cada uma com a resposta que sairia, já com o aviso de resposta automática. Nada disto foi enviado.
+ */
+export const DirectAutoReplyPreviewResponse = z.strictObject({
+  items: z
+    .array(
+      z.strictObject({
+        conversation_id: z.string().min(1).max(200),
+        /** O @ de quem escreveu, sem o "@"; nulo quando a Meta não mandou. */
+        username: z.string().max(100).nullable(),
+        /** O que a pessoa mandou (o texto, ou o tipo do que só a Meta guarda, como na lista). */
+        message: z.string(),
+        /** `elogio` ou `mencao`. A lista pode crescer (V23). */
+        kind: Codigo,
+        /** A resposta que sairia, com o aviso no fim. */
+        reply: z.string(),
+      }),
+    )
+    .max(DIRECT_AUTO_REPLY_PREVIEW_LIMIT),
+});
+export type DirectAutoReplyPreviewResponse = z.infer<typeof DirectAutoReplyPreviewResponse>;

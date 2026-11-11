@@ -172,7 +172,7 @@ describe.skipIf(!hasDb)('o Direct do Instagram: a leitura e o ajuste (A6 · Z12,
     expect(meta.defeitos).toEqual([]);
   }, 120_000);
 
-  it('parte 4a (D-A6-118): o tipo de cada conversa pela regra e a sugestão sem IA; respondida ou concluída, sem tipo nem sugestão', async () => {
+  it('parte 4a (D-A6-118): o tipo de cada conversa pela regra e a sugestão sem IA; respondida ou concluída, sem tipo nem sugestão; o contador do menu', async () => {
     const e = await empresa('Casa Brasa Direct Tipos');
     const pagina = e.pagina!.externo;
     const carla = meta.escreveuNoDirect(pagina, { usuario: 'carla.m', texto: 'Que delícia esse smash!', minutos: 9 });
@@ -200,12 +200,22 @@ describe.skipIf(!hasDb)('o Direct do Instagram: a leitura e o ajuste (A6 · Z12,
     expect(await sugestao(ana)).toBeNull();
     expect(await sugestao(lucas)).toBeNull();
 
+    // O contador do menu: as que esperam resposta (a do Lucas foi respondida), com a mesma regra da lista.
+    const esperando = async () => ((await api.call('GET', '/v1/direct/waiting', { cookie: e.cookie })).body as { waiting: number }).waiting;
+    expect(await esperando()).toBe(5);
+    expect(await esperando()).toBe(((await lista(e)).body as Lista).counts.espera);
+
     // Concluir sem responder tira o tipo e a sugestão; a mensagem nova da pessoa traz de novo.
     const concluida = await api.call('POST', `/v1/direct/conversations/${promo}/conclude`, { cookie: e.cookie, body: { brand_id: e.brandId } });
     expect(concluida.body).toMatchObject({ conversation: { status: 'respondida', kind: null }, suggestion: null });
+    expect(await esperando()).toBe(4);
     meta.escreveuNoDirect(pagina, { usuario: 'promo_seguidores', texto: 'Última chance: ganhe seguidores reais! www.promo-seguidores.shop' });
     expect((await ler(e, emMinutos(2)))[0]).toMatchObject({ status: 'ok', relidas: 1 });
     expect(await sugestao(promo)).toEqual({ kind: 'golpe', text: null, steps: [] });
+    expect(await esperando()).toBe(5);
+    // Desligado na marca, não conta.
+    expect((await mudar(e, { enabled: false, no_other_app: true })).status).toBe(200);
+    expect(await esperando()).toBe(0);
     expect(meta.defeitos).toEqual([]);
   }, 120_000);
 

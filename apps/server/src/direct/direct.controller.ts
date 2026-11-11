@@ -1,6 +1,9 @@
 import {
   DirectAttendanceRequest,
   DirectAttendanceResponse,
+  DirectAutoReplyPreviewResponse,
+  DirectAutoReplyRequest,
+  DirectAutoReplyResponse,
   DirectBrandRequest,
   DirectConversationId,
   DirectReplyRequest,
@@ -11,6 +14,7 @@ import {
   DirectSettingsQuery,
   DirectSettingsRequest,
   DirectSettingsResponse,
+  DirectWaitingResponse,
   ProblemDetails,
 } from '@liame/contracts';
 import { Body, Controller, Delete, Get, HttpCode, Param, Post, Put, Query } from '@nestjs/common';
@@ -32,8 +36,8 @@ import { Auth, Permissao } from '../auth/access.js';
 import type { AuthContext } from '../context/request-context.js';
 import { DirectService } from './direct.service.js';
 
-// O Direct do Instagram (A6, Z12, parte 1; protótipo P39): o ajuste da marca e o que a tela Direct lê. As rotas de
-// leitura só leem o que a rotina `direct` do worker guardou; responder vem à parte (Z12, parte 3).
+// O Direct do Instagram (A6, Z12; protótipo P39): o ajuste da marca, o que a tela Direct lê e o contador do menu. As
+// rotas de leitura só leem o que a rotina `direct` do worker guardou; responder, com o atendimento aberto, é a parte 2.
 
 @ApiTags('direct')
 @ApiCookieAuth('liame_sessao')
@@ -75,6 +79,55 @@ export class DirectController {
     return this.direct.mudarAjuste(auth, body);
   }
 
+  @Get('auto-reply')
+  @Permissao('campanhas.ver')
+  @ApiOperation({
+    summary: 'O atendimento automático do Direct',
+    description:
+      'Como está o atendimento automático do Direct da marca (A6, Z12, parte 5a; P39 versão 2; D-A6-115): `available` (a função `direct_automatico` liberada para a empresa), ligado ou não, os tipos que ele responde sozinho (`pronta` hoje: o elogio, a resposta ao story e a menção, com a resposta pronta), quem pode ligar (`can_enable`: o Dono ou um Administrador) e desligar (`can_disable`: quem aprova), a última mudança e as respostas automáticas da última hora, com o teto. Nasce desligado. Só leitura.',
+  })
+  @ApiOkResponse({ standardSchema: DirectAutoReplyResponse })
+  @ApiBadRequestResponse({ standardSchema: ProblemDetails })
+  @ApiForbiddenResponse({ standardSchema: ProblemDetails })
+  @ApiNotFoundResponse({ standardSchema: ProblemDetails })
+  verAutomatico(@Auth() auth: AuthContext, @Query({ schema: DirectSettingsQuery }) query: DirectSettingsQuery): Promise<DirectAutoReplyResponse> {
+    return this.direct.verAutomatico(auth, query);
+  }
+
+  @Get('auto-reply/preview')
+  @Permissao('campanhas.ver')
+  @ApiOperation({
+    summary: 'Como o atendimento automático do Direct teria respondido',
+    description:
+      'A prévia antes de ligar (P39 versão 2): até 3 conversas da marca, das últimas 24 horas, que esperam resposta e que ele sabe responder, as mais novas primeiro, cada uma com a resposta pronta que sairia (com o aviso de resposta automática no fim). Nada disto é enviado. Com o Direct desligado ou o Regem atendendo a conta, vazia. Só leitura.',
+  })
+  @ApiOkResponse({ standardSchema: DirectAutoReplyPreviewResponse })
+  @ApiBadRequestResponse({ standardSchema: ProblemDetails })
+  @ApiForbiddenResponse({ standardSchema: ProblemDetails })
+  @ApiNotFoundResponse({ standardSchema: ProblemDetails })
+  previaDoAutomatico(@Auth() auth: AuthContext, @Query({ schema: DirectSettingsQuery }) query: DirectSettingsQuery): Promise<DirectAutoReplyPreviewResponse> {
+    return this.direct.previaDoAutomatico(auth, query);
+  }
+
+  @Put('auto-reply')
+  @Permissao('acoes.aprovar')
+  @Auditar('direct.atendimento_automatico', { recurso: 'brand' })
+  @ApiOperation({
+    summary: 'Ligar, desligar ou mudar o atendimento automático do Direct',
+    description:
+      'Liga, desliga ou muda os tipos do atendimento automático do Direct da marca (D-A6-115). Com ele ligado, o Liame responde sozinho, sem uma pessoa ver antes, as conversas dos tipos marcados, com o aviso de resposta automática e o caminho para uma pessoa no fim; a reclamação, o golpe, a pergunta (até a parte 4b), quem pede uma pessoa e a terceira automática seguida na mesma conversa sempre esperam a equipe; no máximo 30 por hora, e nunca fora da janela de 24 horas. **Ligar e somar um tipo:** o Dono ou um Administrador (403 `so-dono-ou-administrador`), com a função liberada (409 `funcao-desligada`), o Direct ligado na marca (409 `direct-desligado`) e a confirmação (`code` do app ou `passkey`). **Desligar e tirar um tipo:** quem aprova, na hora e sem código; desligar segura também o que já estava na fila. Ligado pede pelo menos um tipo (422 `sem-tipo`). A mudança fica na auditoria, com o antes e o depois.',
+  })
+  @ApiOkResponse({ standardSchema: DirectAutoReplyResponse })
+  @ApiBadRequestResponse({ standardSchema: ProblemDetails })
+  @ApiForbiddenResponse({ standardSchema: ProblemDetails })
+  @ApiNotFoundResponse({ standardSchema: ProblemDetails })
+  @ApiConflictResponse({ standardSchema: ProblemDetails })
+  @ApiUnprocessableEntityResponse({ standardSchema: ProblemDetails })
+  @ApiTooManyRequestsResponse({ standardSchema: ProblemDetails })
+  mudarAutomatico(@Auth() auth: AuthContext, @Body({ schema: DirectAutoReplyRequest }) body: DirectAutoReplyRequest): Promise<DirectAutoReplyResponse> {
+    return this.direct.mudarAutomatico(auth, body);
+  }
+
   @Get('conversations')
   @Permissao('campanhas.ver')
   @ApiOperation({
@@ -88,6 +141,19 @@ export class DirectController {
   @ApiNotFoundResponse({ standardSchema: ProblemDetails })
   conversas(@Auth() auth: AuthContext, @Query({ schema: DirectConversationsQuery }) query: DirectConversationsQuery): Promise<DirectConversationsResponse> {
     return this.direct.conversas(auth, query);
+  }
+
+  @Get('waiting')
+  @Permissao('campanhas.ver')
+  @ApiOperation({
+    summary: 'Quantas conversas do Direct esperam resposta',
+    description:
+      'O contador do menu (A6, Z12; P39): quantas conversas do Direct esperam resposta, somadas as marcas ativas da empresa em que o Liame mostra o Direct (a função `direct`, o Direct ligado na marca e o Regem sem atender a conta). A mesma regra de "Esperam resposta" em `GET /v1/direct/conversations` (a última mensagem é da pessoa, dentro da janela de 24 horas, sem "concluir" depois dela). Sem a função ou sem conta, 0. Só leitura, sem os textos.',
+  })
+  @ApiOkResponse({ standardSchema: DirectWaitingResponse })
+  @ApiForbiddenResponse({ standardSchema: ProblemDetails })
+  esperando(@Auth() auth: AuthContext): Promise<DirectWaitingResponse> {
+    return this.direct.esperando(auth);
   }
 
   @Get('attendance')

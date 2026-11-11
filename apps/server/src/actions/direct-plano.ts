@@ -15,6 +15,10 @@ const PREFIXO = 'direct:';
 export const FLAG_DE_RESPONDER_NO_DIRECT = 'direct_responder';
 /** A ação para a política (a regra v13: direta para a pessoa que pede, com o atendimento aberto). */
 export const ACAO_DE_RESPONDER_NO_DIRECT = 'direct.responder';
+/** A ferramenta da resposta automática no Direct (A6, Z12, parte 5a; D-A6-115). */
+export const FERRAMENTA_DO_DIRECT_AUTOMATICO = 'direct_responder_auto';
+/** A ação da resposta automática (a regra v14: direta quando quem pede é o funcionário de IA, pelo atendimento automático). */
+export const ACAO_DE_RESPONDER_NO_DIRECT_SOZINHO = 'direct.responder_automatico';
 /** O limite da Meta para o texto de uma mensagem: 1.000 bytes em UTF-8 (a letra com acento ocupa 2). */
 export const BYTES_DA_RESPOSTA_NO_DIRECT = 1000;
 

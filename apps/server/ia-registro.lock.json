@@ -72,6 +72,10 @@
       "version": 1,
       "hash": "b451dfa75ded2fefd6690a136baf84d551c4b84233d980cae1561cb081e38f90"
     },
+    "direct_responder_auto": {
+      "version": 1,
+      "hash": "7a5e0c4817a3f870a67cf044198317e6f7c73768e19b294d23e110cfa4de19b7"
+    },
     "equipe_trabalho": {
       "version": 5,
       "hash": "443447c149383150170c4c94089a073298cece63fc60e5065e71c25ab5a9fcc1"

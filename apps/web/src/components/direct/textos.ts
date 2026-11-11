@@ -8,6 +8,11 @@ import { diasAte, horaDe, quandoComHora } from '@/lib/formato';
 
 export type FiltroDoDirect = 'espera' | 'fechando' | 'respondida' | 'fora' | 'todas';
 
+/** O que o leitor de tela ouve depois de "Direct" no menu (P39). */
+export function conversasFaladas(n: number): string {
+  return n === 1 ? ', 1 espera resposta' : `, ${n} esperam resposta`;
+}
+
 /** As situações que filtram, na ordem do protótipo. */
 export const FILTROS_DO_DIRECT: [FiltroDoDirect, string][] = [
   ['espera', 'Esperam resposta'],

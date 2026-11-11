@@ -11,6 +11,7 @@ import { Icone } from '@/components/ui/icone';
 import { useAgora } from '@/lib/agora';
 import { api, chamar, mensagemDe, type Problema } from '@/lib/api';
 import { disparar } from '@/lib/disparar';
+import { useContadorDirect } from '@/lib/contador-direct';
 import { horaDe } from '@/lib/formato';
 import { useSessao } from '@/lib/sessao';
 import { type Confirmacao, DialogoDeConfirmar, type ResultadoDaConfirmacao } from './confirmar';
@@ -69,6 +70,8 @@ export function DirectTela() {
   const agora = useAgora(60_000, lista.tipo === 'ok' ? lista.dados : null);
   const seqLista = useRef(0);
   const caixa = useRef<HTMLDivElement>(null);
+  const { recarregar: recarregarMenu } = useContadorDirect();
+  const esperamAntes = useRef<number | null>(null);
 
   const carregarMarcas = useCallback(async () => {
     setErroMarcas(null);
@@ -129,9 +132,13 @@ export function DirectTela() {
       chamar(() => api.GET('/v1/direct/conversations', { params: { query } })).then((r) => {
         if (id !== seqLista.current) return;
         setLista(r.ok ? { tipo: 'ok', dados: r.data } : { tipo: 'erro', problema: r.problema });
+        // O contador do menu lê de novo quando "Esperam resposta" muda entre duas leituras da tela.
+        if (!r.ok) return;
+        if (esperamAntes.current !== null && esperamAntes.current !== r.data.counts.espera) recarregarMenu();
+        esperamAntes.current = r.data.counts.espera;
       }),
     );
-  }, [marca, estado, filtro, buscando, tentativa]);
+  }, [marca, estado, filtro, buscando, tentativa, recarregarMenu]);
 
   // A primeira conversa da lista fica aberta no largo (no estreito, a lista fica sozinha até a pessoa escolher). A
   // conversa aberta não troca sozinha: respondida, ela sai de "Esperam resposta", e continua aberta até a pessoa escolher outra.

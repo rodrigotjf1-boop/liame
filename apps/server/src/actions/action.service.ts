@@ -44,6 +44,8 @@ import { advance, workflowOf } from '../workflow/workflow.js';
 import { SOCIAL } from '../ai/social/prompt.js';
 import { abrirSegundaRodada, maisSugestoes, oQueDesligaAsSugestoes, paramsDaResposta, type SituacaoDaSugestao } from '../avaliacoes/sugestoes.js';
 import { oQueSeguraOAutomatico } from '../comentarios/automatico.js';
+import { oQueSeguraODirectAutomatico } from '../direct/automatico.js';
+import { conversaDoRecurso, FERRAMENTA_DO_DIRECT_AUTOMATICO } from './direct-plano.js';
 import { abrirSegundaRodadaDoComentario, FERRAMENTA_DA_OPERACAO, oQueDesligaOsPedidos } from '../comentarios/pedidos.js';
 import { EstadoDaAvaliacao, ParametrosDaResposta, resumoDoTexto } from './avaliacao-plano.js';
 import { BudgetService, estadoNaResposta } from './budget.service.js';
@@ -546,6 +548,25 @@ export class ActionService {
     }
     const segura = await oQueSeguraOAutomatico(currentTx(), this.flags, { tenantId: alvo.tenantId, brandId: input.brand_id, connectedAccountId: input.account_id, commentId });
     if (segura) throw new AppProblem(409, 'automatico-segurado', 'O atendimento automático não responde este', `O atendimento automático não responde este comentário agora (${segura}).`);
+    return this.pedirEmNomeDoFuncionario(alvo, input, { automatic: true }, true);
+  }
+
+  /**
+   * A resposta automática numa conversa do Direct (A6, Z12, parte 5a; D-A6-115 e D-A6-119): o mesmo caminho da dos
+   * comentários, com o portão do Direct (a função, o Direct ligado e lido, o automático ligado na marca e a conversa de
+   * agora: esperando, na janela, o tipo entre os marcados, sem pedir uma pessoa e sem duas automáticas seguidas). Quem
+   * chama é a rotina do atendimento automático do Direct, na transação da empresa; fechado o portão, ou a política
+   * pedindo outra coisa, 409 (`automatico-segurado`) e a conversa fica com uma pessoa.
+   */
+  async responderSozinhoNoDirect(alvo: { tenantId: string; agentKey: string; agentLabel: string; emNomeDe: string }, input: CreateActionRequest, agora = new Date()): Promise<string> {
+    const conversationId = conversaDoRecurso(input.resource_id);
+    if (input.tool !== FERRAMENTA_DO_DIRECT_AUTOMATICO || !conversationId || !input.brand_id) {
+      throw new AppProblem(400, 'ferramenta-nao-e-automatica', 'Não é a resposta automática', 'Por aqui o funcionário só pede a resposta automática numa conversa do Direct.');
+    }
+    const portao = await oQueSeguraODirectAutomatico(currentTx(), this.flags, { tenantId: alvo.tenantId, brandId: input.brand_id, connectedAccountId: input.account_id, conversationId }, agora);
+    if ('segura' in portao) {
+      throw new AppProblem(409, 'automatico-segurado', 'O atendimento automático não responde esta', `O atendimento automático não responde esta conversa agora (${portao.segura}).`);
+    }
     return this.pedirEmNomeDoFuncionario(alvo, input, { automatic: true }, true);
   }
 

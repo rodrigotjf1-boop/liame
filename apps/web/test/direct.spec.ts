@@ -4,6 +4,7 @@ import {
   anexoDaMensagem,
   avisoDaLeitura,
   bytesDoTexto,
+  conversasFaladas,
   erroDaResposta,
   estadoDoDirect,
   falta,
@@ -59,11 +60,14 @@ const conversa = (o: Partial<DirectConversation> = {}): DirectConversation => ({
 });
 
 describe('a tela Direct (A6 · Z12, parte 3)', () => {
-  it('o item do menu fica logo depois de Comentários, para quem acompanha as campanhas, uma tela só nos dois modos', () => {
+  it('o item do menu fica logo depois de Comentários, para quem acompanha as campanhas, uma tela só nos dois modos, com o contador das que esperam resposta', () => {
     const itens = NAVEGACAO.find((g) => g.id === 'agencia')!.itens;
     const i = itens.findIndex((x) => x.href === '/direct');
-    expect(itens[i]).toEqual({ href: '/direct', rotulo: 'Direct', icone: 'instagram', permissao: 'campanhas.ver' });
+    expect(itens[i]).toEqual({ href: '/direct', rotulo: 'Direct', icone: 'instagram', permissao: 'campanhas.ver', contador: 'direct' });
     expect(itens[i - 1]!.href).toBe('/comentarios');
+    // O leitor de tela ouve o número com o que ele conta (P39).
+    expect(conversasFaladas(1)).toBe(', 1 espera resposta');
+    expect(conversasFaladas(4)).toBe(', 4 esperam resposta');
   });
 
   it('o estado vem do ajuste da marca, na ordem do protótipo', () => {
