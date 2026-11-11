@@ -3,7 +3,7 @@ import type { ClienteConector } from '../cliente-http.js';
 import { ErroConector } from '../cliente-http.js';
 import { CABECALHO_LIGACAO } from '../dms/integracao-dms.js';
 import type { AcessoAoRegem } from './acesso-da-loja.js';
-import { AvisoRegem, CupomRegem, LigacaoRegem, LigacoesDoClique, LojaRegem, PedidoDeAutorizacaoRegem, pagina, TokensRegem } from './contrato-regem.js';
+import { AvisoRegem, CanaisRegem, CupomRegem, LigacaoRegem, LigacoesDoClique, LojaRegem, PedidoDeAutorizacaoRegem, pagina, TokensRegem } from './contrato-regem.js';
 
 // Chamadas ao Regem pelo contrato v1 (docs/integracoes/regem.md; ADR-019). A credencial vai só no cabeçalho e nunca em
 // log; o endereço é o da distribuição, liberado no cliente HTTP (V33). Cota e disjuntor por loja, como nas plataformas
@@ -41,6 +41,22 @@ export async function lerLoja(ctx: Contexto, a: AcessoAoRegem): Promise<LojaRege
     apiVersion: VERSAO_CONTRATO_REGEM,
   });
   return conferir(LojaRegem, r.corpo, 'loja');
+}
+
+/**
+ * Os canais que a Central de atendimento do Regem atende (as contas do Instagram e as páginas do Facebook), para o Liame
+ * não responder o Direct que o Regem já responde (A6, Z12, D-A6-107). Escopo `atendimento.canais.ler`.
+ */
+export async function lerCanaisAtendidos(ctx: Contexto, a: AcessoAoRegem): Promise<CanaisRegem> {
+  const r = await ctx.cliente.requisitar({
+    provider: 'regem',
+    conta: a.lojaChave,
+    url: `${ctx.apiUrl}/atendimento/canais`,
+    cabecalhos: cabecalhosDoAcesso(a),
+    endpoint: 'atendimento/canais',
+    apiVersion: VERSAO_CONTRATO_REGEM,
+  });
+  return conferir(CanaisRegem, r.corpo, 'atendimento/canais');
 }
 
 /** Uma página de uma rota com cursor (pedidos, cupons, usos, clientes anonimizados). */

@@ -20,6 +20,7 @@ import { FotosLoop } from './fotos-loop.js';
 import { PostsNumerosLoop } from './posts-numeros-loop.js';
 import { DoSeuInstagramLoop } from './do-seu-instagram-loop.js';
 import { ComentariosLoop } from './comentarios-loop.js';
+import { DirectLoop } from './direct-loop.js';
 import { EstrategistaAgenda, MARCAS_POR_VOLTA } from './estrategista-agenda.js';
 import { EstrategistaLoop } from './estrategista-loop.js';
 import { PedidosQueEsperam } from './pedidos-que-esperam.js';
@@ -88,6 +89,7 @@ export class EventsLoopService implements OnApplicationBootstrap, OnApplicationS
     private readonly numerosDosPosts: PostsNumerosLoop,
     private readonly doSeuInstagram: DoSeuInstagramLoop,
     private readonly comentarios: ComentariosLoop,
+    private readonly direct: DirectLoop,
     private readonly pedidosDosComentarios: PedidosDosComentariosLoop,
     private readonly tiposDosComentarios: TiposDosComentariosLoop,
     private readonly sugestoes: SugestoesDeRespostaLoop,
@@ -173,6 +175,10 @@ export class EventsLoopService implements OnApplicationBootstrap, OnApplicationS
       // ligados a uma marca, a cada 15 minutos por conta; a fila é olhada a cada minuto (o "Ler agora" sai na volta
       // seguinte), só com a função `comentarios` ligada.
       this.loop('comentarios', 5, 60_000, async (n) => (await this.comentarios.executarLote(n)).length),
+      // O Direct do Instagram (A6, Z12, parte 1; D-A6-108): as conversas de cada Instagram ligado a uma marca com o Direct
+      // ligado, a cada minuto por conta (por consulta, enquanto o app do Liame estiver em desenvolvimento na Meta), só com
+      // a função `direct` ligada e o Regem conferido (D-A6-107); a fila é olhada a cada 20 segundos.
+      this.loop('direct', 10, 20_000, async (n) => (await this.direct.executarLote(n)).length),
       // Os pedidos do Social media para os comentários (A6, Z11, parte 2d-2): a leitura dos comentários abre a vez de cada
       // um que pede uma ação da marca (com a função `comentarios_sugeridos` ligada); a fila é olhada a cada 30 segundos.
       // Quem espera a vez (uma chave desligada, sem a rota do modelo, o limite) volta em uma hora.

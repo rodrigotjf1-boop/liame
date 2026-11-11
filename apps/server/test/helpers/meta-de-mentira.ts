@@ -225,6 +225,7 @@ export async function ligarFlagDaEmpresa(
     | 'comentarios_responder'
     | 'comentarios_sugeridos'
     | 'comentarios_automatico'
+    | 'direct'
     | 'ia',
   tenantId: string,
   valor: boolean,
