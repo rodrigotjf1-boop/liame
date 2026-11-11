@@ -1,5 +1,7 @@
 import type { Tx } from '@liame/database';
 import { sql } from 'drizzle-orm';
+import { campanhaNovaDoRecurso } from '../campanhas/campanha-nova-plano.js';
+import { campanhaNovaNaMetaConnector } from './campanha-nova-na-meta.js';
 import { comentarioDoRecurso, comentarioNaPaginaConnector, comentarioNoInstagramConnector } from './comentario-na-rede.js';
 import { directNoInstagramConnector, directNoMessengerConnector } from './direct-na-rede.js';
 import { conversaDoRecurso } from './direct-plano.js';
@@ -155,10 +157,59 @@ export class ConectorPorRecurso implements Connector {
   }
 }
 
+/**
+ * A Meta de anúncios (A4): os objetos que já existem na Meta (`campanha:`, `conjunto:` e `anuncio:<id>`, verba e
+ * situação) e a campanha nova do Liame (`campanha_nova:<id>`, X5), que o conector cria na Meta. A trava, a flag de
+ * escrita (`meta_write`) e os limites são os do provedor; a leitura em duas partes (a do pedido de mudança) é só dos
+ * objetos que já existem.
+ */
+export class ConectorDaMeta implements Connector {
+  readonly provider: string;
+  readonly writeFlag: string | null;
+  readonly requiresSpendLimits: boolean;
+  readonly needsWriteAuthorization?: boolean;
+
+  constructor(
+    private readonly dosObjetos: Connector,
+    private readonly daCampanhaNova: Connector,
+  ) {
+    this.provider = dosObjetos.provider;
+    this.writeFlag = dosObjetos.writeFlag;
+    this.requiresSpendLimits = dosObjetos.requiresSpendLimits;
+    if (dosObjetos.needsWriteAuthorization !== undefined) this.needsWriteAuthorization = dosObjetos.needsWriteAuthorization;
+  }
+
+  de(resourceId: string): Connector {
+    return campanhaNovaDoRecurso(resourceId) ? this.daCampanhaNova : this.dosObjetos;
+  }
+
+  read(tx: Tx, ref: ResourceRef): Promise<ReadResult | null> {
+    return this.de(ref.resourceId).read(tx, ref);
+  }
+
+  async prepareRead(tx: Tx, ref: ResourceRef): Promise<PreparedRead | null> {
+    const c = this.de(ref.resourceId);
+    return c.prepareRead ? c.prepareRead(tx, ref) : null;
+  }
+
+  async readPrepared(prepared: PreparedRead): Promise<ReadResult | null> {
+    return this.dosObjetos.readPrepared ? this.dosObjetos.readPrepared(prepared) : null;
+  }
+
+  async sharedBudgetWith(prepared: PreparedRead, state: ResourceState): Promise<string[]> {
+    return this.dosObjetos.sharedBudgetWith ? this.dosObjetos.sharedBudgetWith(prepared, state) : [];
+  }
+
+  apply(tx: Tx, ref: ResourceRef, desired: ResourceState, expectedVersion: number, options?: ApplyOptions): Promise<ApplyResult> {
+    return this.de(ref.resourceId).apply(tx, ref, desired, expectedVersion, options);
+  }
+}
+
 export const CONNECTORS: Record<string, Connector> = {
   sandbox: new SandboxConnector(),
   regem: regemCupomConnector,
-  meta_ads: metaAnunciosConnector,
+  // A4, X5: a campanha nova (`campanha_nova:<id>`) pelo mesmo provedor; os objetos que já existem, como sempre.
+  meta_ads: new ConectorDaMeta(metaAnunciosConnector, campanhaNovaNaMetaConnector),
   google_ads: googleAnunciosConnector,
   // A5, Y5: o pedido de mensagem de WhatsApp. Só com a flag de escrita `whatsapp_campaign` ligada para a empresa.
   regemcast: regemcastMensagemConnector,

@@ -22,6 +22,7 @@ import {
   planoDaRespostaNoDirect,
 } from './direct-plano.js';
 import { EstadoDaMensagem, faseDaMensagem, impedimentoDaMensagem } from './mensagem-plano.js';
+import { planoDaCampanhaNova } from '../campanhas/campanha-nova-plano.js';
 import { EstadoDoPost, planoDeApagarOPost, planoDeTentarDeNovo, planoDoPost, quandoSai } from '../posts/post-plano.js';
 import { motivoDoCompartilhado, orcamentoCompartilhado } from './orcamento-compartilhado.js';
 
@@ -316,6 +317,38 @@ export const TOOLS: Record<string, ToolDefinition> = {
     },
     // A volta devolve a verba de antes (se ninguém mexeu depois).
     undo: (before) => ({ tool: 'orcamento_ajustar', params: { daily_budget_micros: budgetOf(before) } }),
+  },
+  // A campanha nova na Meta, criada pausada (A4, X5, parte 1; P10, aprovado em 05/10/2026; D-A4-31 e D-A4-40): a peça
+  // aprovada com a foto ou o vídeo da loja vira a campanha, o conjunto e o anúncio, tudo pausado. Não gasta (ativar é
+  // outro pedido, a parte 3), mas fala em público em nome da empresa quando for ativada: sempre com a aprovação de uma
+  // pessoa e o código do app. Só pela rota da campanha nova (`POST /v1/new-campaigns`), que confere a peça, a mídia, a
+  // Página, a loja e o teto por campanha, e só com a função `campanha_nova`, além da escrita na Meta.
+  campanha_criar: {
+    name: 'campanha_criar',
+    version: 1,
+    owner: 'midia',
+    description:
+      'Cria na Meta uma campanha nova com a peça aprovada em Criativos e a foto ou o vídeo da loja: a campanha, o conjunto (o raio em volta da loja e a verba diária) e o anúncio nascem pausados e não gastam. Ativar é outro pedido, com outra aprovação.',
+    risk: 'R1',
+    providers: ['meta_ads'],
+    compensation: 'fica_pausada_na_meta',
+    alwaysApproval: true,
+    onlyByRoute: true,
+    flag: 'campanha_nova',
+    params: NoParams,
+    plan(before) {
+      const plano = planoDaCampanhaNova(before);
+      if (!plano.ok) throw new PlanoRecusado(plano.motivo);
+      return {
+        action: 'campanha.criar',
+        // Nasce pausada: não gasta nada até ser ativada, então nada a reservar no envelope do mês.
+        budgetImpact: 'none',
+        valueMicros: null,
+        currentValueMicros: null,
+        reserveMicros: 0,
+        desiredState: plano.desejado as unknown as ResourceState,
+      };
+    },
   },
   regem_cupom_criar: {
     name: 'regem_cupom_criar',

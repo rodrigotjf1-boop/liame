@@ -22,6 +22,9 @@ export type ChamadaNaMeta = { metodo: string; id: string; params: Record<string,
 export type FalhaDaMeta = { status: number; corpo: unknown; cabecalhos?: Record<string, string>; aplicaAntes?: boolean };
 export type TipoDeObjeto = 'campanha' | 'conjunto' | 'anuncio';
 
+/** Um objeto criado na conta pela campanha nova (A4, X5). */
+export type CriadoNaMeta = { aresta: string; id: string; params: Record<string, string>; chave: string | null };
+
 export const TOKEN_DA_META = 'token-de-sistema-da-meta-para-o-teste';
 export const SEGREDO_DO_APP_DA_META = 'segredo-do-app-da-meta-de-teste';
 
@@ -41,9 +44,19 @@ export class MetaDeMentira {
   uso: string | null = null;
   /** Quanto a Meta demora para responder à próxima chamada (uma vez só). */
   atrasoDaProximaRespostaMs = 0;
+  /** O que foi criado na conta (A4, X5): a campanha, o conjunto, o criativo, o anúncio e o vídeo, na ordem. */
+  readonly criados: CriadoNaMeta[] = [];
+  /** As próximas criações que falham, por aresta; `aplicaAntes`: a Meta cria e a resposta se perde. */
+  falhasDaCriacao: Array<FalhaDaMeta & { aresta: string }> = [];
+  /** Quantas conferências do próximo vídeo ainda dizem "processing" antes de "ready". */
+  leiturasDoVideoEmPreparo = 0;
+  /** O próximo vídeo enviado dá erro no preparo. */
+  videoComErro = false;
   base = '';
   private servidor: Server | null = null;
   private seq = 0;
+  private readonly porChave = new Map<string, string>();
+  private readonly videos = new Map<string, { leituras: number; erro: boolean }>();
 
   async ligar(): Promise<void> {
     const servidor = createServer((req, res) => {
@@ -79,6 +92,9 @@ export class MetaDeMentira {
     this.falhasDaLeitura = [];
     this.uso = null;
     this.atrasoDaProximaRespostaMs = 0;
+    this.falhasDaCriacao = [];
+    this.leiturasDoVideoEmPreparo = 0;
+    this.videoComErro = false;
   }
 
   erro(code: number, message: string, extra: Record<string, unknown> = {}): unknown {
@@ -111,12 +127,21 @@ export class MetaDeMentira {
     const token = (req.headers.authorization ?? '').replace('Bearer ', '');
     if (url.searchParams.has('access_token') || (req.url ?? '').includes(TOKEN_DA_META)) this.defeitos.push('token na URL');
     if (!url.searchParams.get('appsecret_proof')) this.defeitos.push('sem appsecret_proof');
+    const daConta = /^\/graph\/v26\.0\/act_(\d+)\/(campaigns|adsets|adcreatives|ads|advideos)$/.exec(url.pathname);
+    if (daConta) return this.criarNaConta(req, url, token, daConta[1]!, daConta[2]!);
     const id = /^\/graph\/v26\.0\/(\d+)$/.exec(url.pathname)?.[1];
     if (!id) return { status: 404, corpo: this.erro(100, 'Unknown path') };
     const params = Object.fromEntries([...url.searchParams].filter(([k]) => k !== 'appsecret_proof'));
     const validar = (params.execution_options ?? '') === '["validate_only"]';
     this.chamadas.push({ metodo: req.method ?? 'GET', id, params, validar });
     if (token !== TOKEN_DA_META) return { status: 400, corpo: this.erro(190, 'Error validating access token: Session has expired') };
+    // A situação de um vídeo enviado à conta (A4, X5): `processing` nas primeiras conferências, depois `ready` (ou `error`).
+    const video = req.method === 'GET' ? this.videos.get(id) : undefined;
+    if (video) {
+      const situacao = video.erro ? 'error' : video.leituras > 0 ? 'processing' : 'ready';
+      if (video.leituras > 0) video.leituras -= 1;
+      return { status: 200, corpo: { id, status: { video_status: situacao } } };
+    }
     const o = this.objetos.get(id);
     if (!o) {
       return {
@@ -148,6 +173,111 @@ export class MetaDeMentira {
     }
     if (!validar) aplicar();
     return { status: 200, corpo: { success: true } };
+  }
+
+  /**
+   * A criação na conta (A4, X5), pela referência oficial reconferida em 11/11/2026 (base §2.1): `POST
+   * /act_{id}/campaigns`, `adsets`, `adcreatives` e `ads` aceitam `execution_options=["validate_only"]` (confere sem
+   * criar, `{"success": true}`) e a chave de idempotência (`X-Client-Idempotent-Key`: a mesma chave devolve o mesmo
+   * objeto, sem criar de novo); `advideos` recebe o `file_url` e o vídeo fica pronto depois de algumas conferências. As
+   * regras que a Meta aplica e o teste precisa pegar: a verba no conjunto pede `is_adset_budget_sharing_enabled`; o raio
+   * em quilômetros, de 1 a 80; o `advantage_audience` explícito; o destino WhatsApp com a Página promovida; o objetivo de
+   * otimização que o objetivo da campanha aceita; o criativo com a Página, sem `instagram_actor_id` e sem
+   * `standard_enhancements`, com o link do botão igual ao do criativo; o vídeo pronto antes do criativo; e o anúncio com o
+   * conjunto e o criativo que existem.
+   */
+  private criarNaConta(req: IncomingMessage, url: URL, token: string, conta: string, aresta: string): { status: number; corpo: unknown; cabecalhos?: Record<string, string> } {
+    const params = Object.fromEntries([...url.searchParams].filter(([k]) => k !== 'appsecret_proof'));
+    const validar = (params.execution_options ?? '') === '["validate_only"]';
+    this.chamadas.push({ metodo: req.method ?? 'GET', id: `act_${conta}/${aresta}`, params, validar });
+    if (token !== TOKEN_DA_META) return { status: 400, corpo: this.erro(190, 'Error validating access token: Session has expired') };
+    if (req.method !== 'POST' || conta !== this.conta) {
+      return { status: 400, corpo: this.erro(100, `Unsupported post request. Object with ID 'act_${conta}' does not exist`, { error_subcode: 33 }) };
+    }
+    const invalido = (mensagem: string, extra: Record<string, unknown> = {}) => ({ status: 400, corpo: this.erro(100, 'Invalid parameter', { error_user_msg: mensagem, ...extra }) });
+    const json = <T>(campo: string): T | null => {
+      try {
+        return params[campo] ? (JSON.parse(params[campo]!) as T) : null;
+      } catch {
+        return null;
+      }
+    };
+    const criado = (id: string | undefined, qual: string) => this.criados.find((c) => c.id === id && c.aresta === qual);
+
+    // As regras da Meta, que a validação também aplica.
+    if (aresta === 'campaigns') {
+      if (!params.special_ad_categories) return invalido('special_ad_categories is required');
+      if (!/^OUTCOME_/.test(params.objective ?? '')) return invalido('Objetivo inválido.');
+      if (!params.daily_budget && params.is_adset_budget_sharing_enabled === undefined) return invalido('Must specify True or False in is_adset_budget_sharing_enabled field', { error_subcode: 4834011 });
+    }
+    if (aresta === 'adsets') {
+      const campanha = criado(params.campaign_id, 'campaigns');
+      if (!campanha) return invalido('A campanha do conjunto não existe nesta conta.');
+      const alvo = json<{ geo_locations?: { custom_locations?: Array<{ radius?: number; distance_unit?: string }> }; targeting_automation?: { advantage_audience?: number } }>('targeting');
+      const pontos = alvo?.geo_locations?.custom_locations ?? [];
+      if (!pontos.length) return invalido('O público precisa de um lugar.');
+      if (pontos.some((p) => p.distance_unit !== 'kilometer' || (p.radius ?? 0) < 1 || (p.radius ?? 0) > 80)) return invalido('O raio vai de 1 a 80 quilômetros.', { error_subcode: 1815946 });
+      if (alvo?.targeting_automation?.advantage_audience !== 0 && alvo?.targeting_automation?.advantage_audience !== 1) return invalido('Informe advantage_audience (0 ou 1).');
+      if (Number(params.daily_budget ?? 0) < 600) return invalido('O orçamento diário precisa ser de pelo menos R$ 6,00.', { error_subcode: 1885272 });
+      const objetivo = campanha.params.objective;
+      const aceitos = objetivo === 'OUTCOME_TRAFFIC' ? ['LINK_CLICKS', 'LANDING_PAGE_VIEWS'] : ['CONVERSATIONS', 'LINK_CLICKS'];
+      if (!aceitos.includes(params.optimization_goal ?? '')) return invalido('O objetivo de otimização não combina com o da campanha.');
+      if (params.destination_type === 'WHATSAPP' && !json<{ page_id?: string }>('promoted_object')?.page_id) return invalido('O WhatsApp pede a Página promovida.');
+    }
+    if (aresta === 'adcreatives') {
+      const spec = json<Record<string, unknown>>('object_story_spec');
+      if (!spec?.page_id) return invalido('O criativo precisa da Página.');
+      if ('instagram_actor_id' in spec) return invalido('instagram_actor_id foi descontinuado: use instagram_user_id.');
+      if (params.degrees_of_freedom_spec?.includes('standard_enhancements')) return invalido('standard_enhancements foi descontinuado.');
+      const link = spec.link_data as { link?: string; call_to_action?: { value?: { link?: string } } } | undefined;
+      if (link && link.link !== link.call_to_action?.value?.link) return invalido('O link do botão tem de ser o mesmo do criativo.');
+      const video = spec.video_data as { video_id?: string } | undefined;
+      if (video) {
+        const v = this.videos.get(video.video_id ?? '');
+        if (!v || v.leituras > 0 || v.erro) return invalido('O vídeo ainda não está pronto.');
+      }
+    }
+    if (aresta === 'ads') {
+      if (!criado(params.adset_id, 'adsets')) return invalido('O conjunto do anúncio não existe nesta conta.');
+      if (!criado(json<{ creative_id?: string }>('creative')?.creative_id, 'adcreatives')) return invalido('O criativo do anúncio não existe nesta conta.');
+    }
+    if (aresta === 'advideos' && !params.file_url) return invalido('Informe o vídeo (file_url).');
+
+    const falha = this.falhasDaCriacao.findIndex((f) => f.aresta === aresta && (!validar || !f.aplicaAntes));
+    const chave = typeof req.headers['x-client-idempotent-key'] === 'string' ? req.headers['x-client-idempotent-key'] : null;
+    const criar = () => {
+      const ja = chave ? this.porChave.get(chave) : undefined;
+      if (ja) return ja;
+      this.seq += 1;
+      const id = `23850${String(Date.now()).slice(-8)}${String(this.seq).padStart(4, '0')}`;
+      this.criados.push({ aresta, id, params, chave });
+      if (chave) this.porChave.set(chave, id);
+      if (aresta === 'advideos') {
+        this.videos.set(id, { leituras: this.leiturasDoVideoEmPreparo, erro: this.videoComErro });
+        this.leiturasDoVideoEmPreparo = 0;
+        this.videoComErro = false;
+      }
+      // A campanha, o conjunto e o anúncio entram na conta, como os outros objetos (a parte de ativar os lê).
+      const tipo = { campaigns: 'campanha', adsets: 'conjunto', ads: 'anuncio' }[aresta];
+      if (tipo) {
+        this.objetos.set(id, {
+          id,
+          name: params.name ?? '',
+          status: params.status ?? 'PAUSED',
+          effective_status: params.status ?? 'PAUSED',
+          account_id: this.conta,
+          ...(aresta === 'adsets' ? { daily_budget: params.daily_budget } : {}),
+        });
+      }
+      return id;
+    };
+    if (falha >= 0) {
+      const f = this.falhasDaCriacao.splice(falha, 1)[0]!;
+      if (f.aplicaAntes && !validar) criar();
+      return f;
+    }
+    if (validar) return { status: 200, corpo: { success: true } };
+    return { status: 200, corpo: { id: criar() } };
   }
 }
 
@@ -230,6 +360,7 @@ export async function ligarFlagDaEmpresa(
     | 'direct_automatico'
     | 'messenger'
     | 'stories'
+    | 'campanha_nova'
     | 'regiao'
     | 'ia',
   tenantId: string,
