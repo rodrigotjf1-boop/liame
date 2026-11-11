@@ -200,6 +200,28 @@ export class LifecyclePurgeService {
           returning p.tenant_id`,
       true,
     );
+    // As mensagens do Direct (A6, Z12; D-A6-112): 90 dias contados de quando foram enviadas. O texto é de terceiro. A
+    // chave é composta (conta, mensagem). Depois, a conversa que ficou sem mensagem guardada.
+    await run(
+      'direct_mensagem',
+      sql`delete from liame.direct_message m using (
+            select e.connected_account_id, e.message_id from liame.direct_message e
+             where e.sent_at < now() - interval '90 days' and ${noHold('e')} ${t('e.tenant_id')} limit ${BATCH}) v
+           where m.connected_account_id = v.connected_account_id and m.message_id = v.message_id
+          returning m.tenant_id`,
+      true,
+    );
+    await run(
+      'direct_conversa',
+      sql`delete from liame.direct_conversation c using (
+            select e.connected_account_id, e.conversation_id from liame.direct_conversation e
+             where e.last_message_at < now() - interval '90 days' and ${noHold('e')} ${t('e.tenant_id')}
+               and not exists (select 1 from liame.direct_message m where m.connected_account_id = e.connected_account_id and m.conversation_id = e.conversation_id)
+             limit ${BATCH}) v
+           where c.connected_account_id = v.connected_account_id and c.conversation_id = v.conversation_id
+          returning c.tenant_id`,
+      true,
+    );
     // As buscas da semana do Search Console (A6, Z3): 12 meses contados do começo da semana. O texto é o que as
     // pessoas digitaram no Google. A chave é composta (site, semana, busca): a linha sai pela chave inteira.
     await run(

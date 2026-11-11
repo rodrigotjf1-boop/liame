@@ -600,3 +600,20 @@ export {
   CommentsWaitingResponse,
   SocialComment,
 } from './comentarios.js';
+export {
+  DIRECT_LIST_LIMIT,
+  DIRECT_MESSAGES_LIMIT,
+  DIRECT_STATUSES,
+  DIRECT_WINDOW_HOURS,
+  DirectAccount,
+  DirectConversation,
+  DirectConversationId,
+  DirectConversationResponse,
+  DirectConversationsQuery,
+  DirectConversationsResponse,
+  DirectCounts,
+  DirectMessage,
+  DirectSettingsQuery,
+  DirectSettingsRequest,
+  DirectSettingsResponse,
+} from './direct.js';

@@ -41,6 +41,17 @@ export const AvisoRegem = z.object({
 export type AvisoRegem = z.infer<typeof AvisoRegem>;
 
 /**
+ * `GET {base}/atendimento/canais` (escopo `atendimento.canais.ler`; A6, Z12, D-A6-107): as contas do Instagram e as
+ * páginas do Facebook que a Central de atendimento do Regem atende, da empresa da loja. Sem mensagem nem dado de
+ * cliente. O Liame desliga o Direct da conta que aparece aqui.
+ */
+export const CanaisRegem = z.object({
+  instagram: z.array(z.object({ ig_user_id: Id, usuario: Texto(100).nullable().optional() })).max(50),
+  messenger: z.array(z.object({ pagina_id: Id })).max(50),
+});
+export type CanaisRegem = z.infer<typeof CanaisRegem>;
+
+/**
  * `POST {base}/dms-id/ligacao` (Hub DMS, F3, parte A; Regem #690): a troca do `rgm_it_` da loja pelo segredo da ligação.
  * O segredo em claro só vem nesta resposta e vai direto para o cofre; o resto é para conferir que a ligação é da mesma
  * loja (`loja_id` nulo = token da empresa inteira, que o Liame não usa). Repetir a troca gira o segredo.

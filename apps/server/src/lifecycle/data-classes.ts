@@ -238,6 +238,14 @@ export const DATA_CLASSES: Record<string, TableClassification> = {
   // O atendimento automático de cada marca (A6, Z11, parte 2e-1; migration 0129; D-A6-92): ligado, os tipos e quem
   // mudou por último. Configuração da empresa, sem comentário nem quem comentou; sai com a marca.
   comment_auto_reply: { class: 'INTERNAL', retention: 'enquanto a marca existir (sai com ela)' },
+  // O Direct do Instagram (A6, Z12, parte 1; migration 0130; P39, D-A6-106 a D-A6-115). O ajuste da marca (ligado e a
+  // confirmação de que nenhum outro programa responde aquele Direct) é configuração da empresa e sai com a marca. A
+  // conversa guarda o id de quem escreveu (o IGSID, para onde a resposta vai) e o @; a mensagem, o texto, por 90 dias
+  // contados de quando foi enviada (D-A6-112). A conversa sem mensagem guardada sai junto, no mesmo expurgo. Antes, as
+  // duas saem com a conta desligada ou quando o Regem passa a atender o Direct dela (D-A6-107).
+  direct_setting: { class: 'INTERNAL', retention: 'enquanto a marca existir (sai com ela)' },
+  direct_conversation: { class: 'PERSONAL', retention: 'com a conta conectada; sai quando não sobra mensagem guardada (90 dias depois da última)', purge: { job: 'direct_conversa', days: 90 } },
+  direct_message: { class: 'PERSONAL', retention: '90 dias depois de enviada; antes, se a conta for desligada ou o Regem passar a atender o Direct dela', purge: { job: 'direct_mensagem', days: 90 } },
   // Os posts da marca (A6, Z5b, migration 0086): a foto (pela referência e o resumo), a hora e cada canal com o texto
   // que a empresa escreveu em nome dela e o que aconteceu na rede. Conteúdo da empresa, sem dado de pessoa. Fica com a
   // marca: é o histórico da Agenda e o que diz o que saiu, onde e quando.

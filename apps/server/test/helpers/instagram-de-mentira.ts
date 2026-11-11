@@ -148,6 +148,11 @@ const idDaMeta = (): string => `${Date.now()}${Number.parseInt(randomBytes(3).to
 /** A data no formato do Instagram: `2026-10-29T19:00:00+0000`. */
 const dataDoInstagram = (d: Date): string => `${d.toISOString().slice(0, 19)}+0000`;
 
+/** Uma mensagem do Direct (A6, Z12): da marca ou da pessoa, o texto, o tipo do anexo e o story. */
+export type MensagemNoDirect = { id: string; created_time: string; daMarca: boolean; texto: string; anexo?: string; story?: 'reply_to' | 'mention' };
+/** Uma conversa do Direct, como a Página a guarda: a pessoa e as mensagens, da mais velha para a mais nova. */
+export type ConversaNoDirect = { id: string; pagina: string; updated_time: string; pessoa: { id: string; username: string }; mensagens: MensagemNoDirect[] };
+
 export class InstagramDeMentira {
   readonly conteineres = new Map<string, Conteiner>();
   readonly posts: PostNoInstagram[] = [];
@@ -200,6 +205,10 @@ export class InstagramDeMentira {
   perderARespostaDoComentario = false;
   /** A autorização sem a permissão de moderar os comentários (responder, ocultar e apagar): a recusa (#10). */
   semPermissaoDeModerar = false;
+  /** As conversas do Direct de cada Página (A6, Z12), a mais nova primeiro na lista que a Meta devolve. */
+  readonly conversasDoDirect: ConversaNoDirect[] = [];
+  /** A autorização sem a permissão de mensagens (`instagram_manage_messages`): a recusa (#10). */
+  semPermissaoDeMensagens = false;
   /** O @ da conta do Instagram dos testes (o `empresaComCanais` liga a conta como `@casabrasa`). */
   usuarioDaConta = 'casabrasa';
   base = '';
@@ -245,6 +254,7 @@ export class InstagramDeMentira {
     this.paginaDevolveQuemComentou = false;
     this.perderARespostaDoComentario = false;
     this.semPermissaoDeModerar = false;
+    this.semPermissaoDeMensagens = false;
     this.chamadas.length = 0;
     this.defeitos.length = 0;
   }
@@ -344,6 +354,69 @@ export class InstagramDeMentira {
     }
     this.comentariosNaPagina.set(post, lista);
     return c.id;
+  }
+
+  /**
+   * Uma mensagem da pessoa no Direct da conta ligada à Página (A6, Z12): na conversa dela (nova, se não houver), há
+   * `minutos` minutos. Devolve o id da conversa.
+   */
+  escreveuNoDirect(pagina: string, o: { usuario: string; texto?: string; deId?: string; minutos?: number; anexo?: string; story?: 'reply_to' | 'mention' }): string {
+    const quando = new Date(Date.now() - (o.minutos ?? 0) * 60_000).toISOString();
+    let c = this.conversasDoDirect.find((x) => x.pagina === pagina && x.pessoa.username === o.usuario);
+    if (!c) {
+      c = { id: `aWdf${randomBytes(9).toString('hex')}`, pagina, updated_time: quando, pessoa: { id: o.deId ?? idDaMeta(), username: o.usuario }, mensagens: [] };
+      this.conversasDoDirect.push(c);
+    }
+    c.mensagens.push({ id: `mid.${randomBytes(9).toString('hex')}`, created_time: quando, daMarca: false, texto: o.texto ?? '', ...(o.anexo ? { anexo: o.anexo } : {}), ...(o.story ? { story: o.story } : {}) });
+    c.updated_time = quando;
+    return c.id;
+  }
+
+  /** A resposta da marca numa conversa do Direct (pelo app do Instagram ou pelo Liame), há `minutos` minutos. */
+  marcaNoDirect(conversa: string, texto: string, minutos = 0): void {
+    const c = this.conversasDoDirect.find((x) => x.id === conversa);
+    if (!c) throw new Error(`conversa ${conversa} não existe`);
+    const quando = new Date(Date.now() - minutos * 60_000).toISOString();
+    c.mensagens.push({ id: `mid.${randomBytes(9).toString('hex')}`, created_time: quando, daMarca: true, texto });
+    c.updated_time = quando;
+  }
+
+  /**
+   * O Direct (A6, Z12), pela documentação lida em 11/11/2026: as conversas da conta do Instagram ligada à Página
+   * (`GET /{page-id}/conversations?platform=instagram`, o token dela, de quem tem a tarefa MODERATE) e as mensagens de
+   * uma conversa (`GET /{conversation-id}?fields=messages{…}`, só as 20 mais novas, a mais nova primeiro). Nulo para o
+   * que não é do Direct.
+   */
+  private doDirect(metodo: string, id: string, aresta: string | undefined, params: Record<string, string>): Resposta | null {
+    if (metodo !== 'GET') return null;
+    const daMarca = (pagina: string) => ({ id: `ig-${pagina}`, username: this.usuarioDaConta });
+    if (aresta === 'conversations' && this.paginas.has(id)) {
+      if (params.platform !== 'instagram') return erro(400, 100, '(#100) The parameter platform is required for Instagram conversations');
+      if (!(this.paginas.get(id) ?? []).includes('MODERATE')) return erro(403, 200, 'Requires the MODERATE task on the Page');
+      if (this.semPermissaoDeMensagens) return erro(403, 10, '(#10) Application does not have permission for this action');
+      const lista = this.conversasDoDirect.filter((c) => c.pagina === id).sort((a, b) => b.updated_time.localeCompare(a.updated_time));
+      return {
+        status: 200,
+        corpo: {
+          data: lista.slice(0, Number(params.limit ?? 25)).map((c) => ({ id: c.id, updated_time: c.updated_time, participants: { data: [daMarca(c.pagina), c.pessoa] } })),
+          paging: {},
+        },
+      };
+    }
+    const c = aresta ? undefined : this.conversasDoDirect.find((x) => x.id === id);
+    if (!c) return null;
+    if (this.semPermissaoDeMensagens) return erro(403, 10, '(#10) Application does not have permission for this action');
+    if (!(params.fields ?? '').includes('messages')) return { status: 200, corpo: { id: c.id } };
+    const mensagens = [...c.mensagens].reverse().slice(0, 20).map((m) => ({
+      id: m.id,
+      created_time: m.created_time,
+      from: m.daMarca ? daMarca(c.pagina) : c.pessoa,
+      to: { data: [m.daMarca ? c.pessoa : daMarca(c.pagina)] },
+      ...(m.texto ? { message: m.texto } : {}),
+      ...(m.anexo ? { attachments: { data: [{ type: m.anexo }] } } : {}),
+      ...(m.story ? { story: { [m.story]: { link: 'https://lookaside.fbsbx.com/ig_messaging_cdn/?asset_id=1', id: '1' } } } : {}),
+    }));
+    return { status: 200, corpo: { id: c.id, messages: { data: mensagens, paging: {} } } };
   }
 
   /** Um comentário do Instagram como a Meta o devolve. */
@@ -647,7 +720,8 @@ export class InstagramDeMentira {
     const [, , id, aresta] = partes;
     // O token vai no cabeçalho, nunca na URL; a prova do segredo do app vai junto, calculada com o token. O que é da
     // Página (as fotos dela, o post e os vídeos) pede o token da Página; o resto, o da autorização.
-    const daPagina = this.paginas.has(id ?? '') || (id ?? '').includes('_') || this.videosNaPagina.some((v) => v.id === id);
+    const daPagina =
+      this.paginas.has(id ?? '') || (id ?? '').includes('_') || this.videosNaPagina.some((v) => v.id === id) || this.conversasDoDirect.some((c) => c.id === id);
     const esperado = daPagina ? TOKEN_DA_PAGINA : TOKEN_DO_INSTAGRAM;
     if (params.access_token) this.defeitos.push('token na URL');
     if (req.headers.authorization !== `Bearer ${esperado}`) return erro(401, 190, 'Invalid OAuth access token');
@@ -656,6 +730,10 @@ export class InstagramDeMentira {
     const final = aresta ?? (params.fields === 'status_code' ? 'status_code' : params.fields === 'status' ? 'status' : 'objeto');
     const falha = this.falhas.get(final)?.shift();
     if (falha) return falha;
+
+    // O Direct (A6, Z12, parte 1).
+    const doDirect = this.doDirect(metodo, id ?? '', aresta, params);
+    if (doDirect) return doDirect;
 
     // Os comentários (A6, Z11, parte 1).
     const dosComentarios = this.umComentario(metodo, id ?? '', aresta, params, corpo) ?? this.dosComentarios(metodo, id ?? '', aresta, params);
