@@ -116,6 +116,21 @@ Cada entrega nasce desligada, passa primeiro no piloto, tem protótipo aprovado 
 | **D-RG-9** | Aprovar a ordem da seção 5? | Sim |
 | **D-RG-10** | Pedir o nível Basic do Google Ads agora, para abrir o volume de busca por cidade? | Sim; o pedido é do dono e leva tempo de análise |
 
+**Decisões do protótipo P40** (`mockups/prototipo-regiao.html`: a loja no mapa e Sua região, 18 cenários; **aprovadas pelo dono em 11/11/2026, todas como recomendadas**):
+
+| Decisão | O que fica decidido |
+| --- | --- |
+| **D-RG-11** | Sua região mora numa página nova, **Minha marca › Região**, aberta pela parte Região do dossiê: as lojas no mapa em cima e Sua região embaixo, uma loja por vez. A parte Região de Minha marca (o texto e a retirada no balcão) não muda e ganha a linha "N lojas no mapa" e o botão "Abrir a região". No Resumo e em Atenção, nada por enquanto; um cartão no Resumo só quando o plano de mídia (R5) usar estes números para propor algo |
+| **D-RG-12** | Pôr a loja no mapa, mudar o raio ou as áreas **salva na hora, sem o código do app** e sem pedido em Aprovações: é dado da empresa, não gasta nem publica. Fica na auditoria com quem salvou, o antes e o depois. O código continua onde o raio vira gasto (a campanha com raio da R6 nasce pausada e pede aprovação, D-A7-11) |
+| **D-RG-13** | Mudam o Dono e o Administrador (a permissão de mudar Minha marca, `dossie.editar`); veem a página inteira o Gestor, o Aprovador e o Somente leitura (`dossie.ver`); o Só relatórios não vê. Nenhuma permissão nova |
+| **D-RG-14** | O ponto vem do endereço (o OpenStreetMap acha a rua e o número) ou, quando não acha, do **centro do bairro**, e a tela diz qual dos dois em palavras. Sua região funciona com os dois; a campanha com raio (R6) só nasce com o ponto pelo endereço |
+| **D-RG-15** | Um raio por loja, **de 1 a 15 km, em passos de 0,5 km, começando em 3 km**. A prévia desenha o núcleo até 2 km e a expansão até o raio (desenho em escala, sem mapa de fundo); na R5, os anéis passam a sair da densidade e do público estimado |
+| **D-RG-16** | As áreas atendidas do Perfil da Empresa no Google (até 20) entram como as áreas de entrega da loja; tirar ou acrescentar no Liame **não muda o Google** (aqui o Liame só lê o Perfil). **Cada perfil vale para uma loja**: com mais de um, a gaveta mostra a lista, e o perfil que já é de outra loja aparece com o nome dela |
+| **D-RG-17** | A marca sem loja (sem o Regem): **salvar o endereço cria a loja**, com o nome do Perfil do Google ou, sem perfil, "Loja" e o bairro (o nome muda na gaveta). Quando o Regem for conectado depois, ele se liga a essa loja pelo mesmo nome, como já acontece; a gaveta avisa ao mudar o nome. Com uma loja criada assim, aparece "Pôr outra loja no mapa" |
+| **D-RG-18** | A LIA responde "como é a minha região?" **por regra, sem IA**, com os números, a fonte e o período de cada um e no máximo duas ações (Ver Sua região, Ver as fontes), e diz o que ainda não dá para saber. Funcionário de IA que usa a região recebe só o bairro, o município e os números calculados, nunca o endereço (D-RG-2) |
+| **D-RG-19** | A página Região tem **Lite e Pro**: no Lite, os números principais com a fonte curta e o resto em "Ver detalhes"; no Pro, também os códigos do IBGE, a coordenada e a precisão, a renda média ao lado da mediana, os números do município e as fontes com o endereço e a renovação. Nada some no Lite |
+| **D-RG-20** | A renda do Censo aparece **já, com "valor de 2022, sem correção"** escrito ao lado; depois de conferida a tabela do IPCA na fonte (base §19.3), passa a "corrigido pelo IPCA até <mês>" |
+
 ## 7. Cuidados
 
 - **Pessoa nenhuma no dado:** tudo da região é agregado público; o bairro dos pedidos só agregado e com mínimo de pedidos; públicos de lista de clientes continuam esperando o consentimento com prova (C3c, D-A5-18).
@@ -130,8 +145,8 @@ Cada entrega nasce desligada, passa primeiro no piloto, tem protótipo aprovado 
 
 | Entrega | Situação | Onde |
 | --- | --- | --- |
-| **R1 · A loja no mapa** | **Servidor pronto, função `regiao` desligada** (11/11/2026). Migration 0132 (as colunas do endereço, da coordenada, do raio e das áreas em `unit`, com as regras que juntam colunas; a função `regiao`); as rotas `GET /v1/region/stores`, `POST /v1/region/address-lookup` (ViaCEP + OpenStreetMap, sem gravar), `POST /v1/region/google-profile-address` (o endereço e as áreas do Perfil do Google, lidos agora, sem gravar) e `PUT /v1/units/:id/location` (salvar, com a auditoria `loja.localizacao`). O endereço da loja nunca vai para o modelo (D-A3-4, D-RG-2). **Falta:** a tela (Minha marca › Região), que espera o protótipo P40; e a loja da marca sem Regem (hoje a loja só nasce com o Regem conectado), que espera a decisão do P40 | `apps/server/src/regiao/`, `packages/contracts/src/regiao.ts`, migration 0132 |
-| **R2 · Raio-x da região** | Começa depois da R1 (migration 0133 reservada) | — |
+| **R1 · A loja no mapa** | **Servidor no ar (#485, 11/11/2026), função `regiao` desligada; protótipo P40 aprovado (D-RG-11 a D-RG-20).** **Parte 2 (a seguir):** a tela Minha marca › Região com a gaveta, a loja criada na marca sem Regem (D-RG-17), o perfil do Google ligado a uma loja (D-RG-16, pela `connected_account.unit_id`) e o complemento do endereço (migration 0135). Parte 1: migration 0132 (as colunas do endereço, da coordenada, do raio e das áreas em `unit`, com as regras que juntam colunas; a função `regiao`); as rotas `GET /v1/region/stores`, `POST /v1/region/address-lookup` (ViaCEP + OpenStreetMap, sem gravar), `POST /v1/region/google-profile-address` (o endereço e as áreas do Perfil do Google, lidos agora, sem gravar) e `PUT /v1/units/:id/location` (salvar, com a auditoria `loja.localizacao`). O endereço da loja nunca vai para o modelo (D-A3-4, D-RG-2) | `apps/server/src/regiao/`, `packages/contracts/src/regiao.ts`, migration 0132; protótipo `mockups/prototipo-regiao.html` |
+| **R2 · Raio-x da região** | Começa depois da R1 (a migration pega o próximo número livre da `main`); o cartão Sua região, as fontes e a LIA seguem o P40 (cenários 7, 9 a 11 e 17) | — |
 | R3 a R9 | Na ordem da seção 5 | — |
 
 **Achados da R1 (conferidos na documentação oficial em 11/11/2026, base §19.1):** o Perfil da Empresa no Google dá o endereço (`storefrontAddress`) e até 20 áreas atendidas (`serviceArea.places.placeInfos`), mas a coordenada (`latlng`) só volta quando foi digitada ao criar o perfil; por isso a coordenada sai do endereço, pelo OpenStreetMap, do endereço para o bairro e a cidade, e só vale se cair no município do CEP.
