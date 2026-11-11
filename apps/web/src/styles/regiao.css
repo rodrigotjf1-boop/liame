@@ -93,6 +93,68 @@
 .rg-areas li .btn { min-height: 26px; width: 26px; border: 0; border-radius: 50%; }
 .rg-add { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: var(--sp-2); }
 
+/* Sua região (R2): os grupos de números, cada um com a fonte e o período */
+.rg-frescor { display: inline-flex; align-items: center; gap: 6px; font-size: var(--text-xs); color: var(--text-muted); white-space: normal; }
+.rg-lojas-seg { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-2) var(--sp-3); }
+.rg-lojas-seg .seg button { white-space: normal; text-align: left; }
+.rg-grupos { display: grid; gap: var(--sp-5); }
+.rg-grupo { display: grid; gap: var(--sp-3); min-width: 0; padding-top: var(--sp-4); border-top: 1px solid var(--border); }
+.rg-grupo:first-child { padding-top: 0; border-top: 0; }
+.rg-grupo-cab { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 2px var(--sp-3); }
+.rg-grupo-cab h3 { font-size: var(--text-md); }
+.rg-grupo-cab p { font-size: var(--text-xs); color: var(--text-subtle); }
+.rg-nums { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 190px), 1fr)); gap: var(--sp-3); }
+.rg-num { display: grid; align-content: start; gap: 4px; min-width: 0; padding: var(--sp-3) var(--sp-4); border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); }
+.rg-num-v { font-size: var(--text-xl); font-weight: 600; line-height: 1.15; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.rg-num-v small { font-size: var(--text-sm); font-weight: 500; color: var(--text-muted); }
+.rg-num-o { font-size: var(--text-sm); overflow-wrap: anywhere; }
+.rg-num-f { font-size: var(--text-xs); color: var(--text-subtle); overflow-wrap: anywhere; }
+.rg-num-c { font-family: var(--font-mono); font-size: 11px; color: var(--text-subtle); overflow-wrap: anywhere; }
+.rg-num--largo { grid-column: 1 / -1; }
+.rg-num--falta { border-style: dashed; background: var(--surface-2); }
+.rg-num--falta .rg-num-v { font-size: var(--text-md); color: var(--text-muted); }
+
+/* a régua dos bairros: onde o bairro da loja fica entre os do município */
+.rg-regua { position: relative; height: 34px; margin: var(--sp-2) 0 0; }
+.rg-regua-trilho { position: absolute; left: 0; right: 0; top: 14px; height: 6px; border-radius: var(--radius-full); background: var(--chart-cinza-1); }
+.rg-regua-marca { position: absolute; top: 6px; width: 2px; height: 22px; margin-left: -1px; background: var(--text); }
+.rg-regua-ponto { position: absolute; top: 9px; width: 16px; height: 16px; margin-left: -8px; border-radius: 50%; background: var(--chart-foco); box-shadow: 0 0 0 3px var(--surface); }
+.rg-regua-rot { display: flex; justify-content: space-between; gap: var(--sp-2); font-size: var(--text-xs); color: var(--text-muted); }
+.rg-regua-chave { display: flex; flex-wrap: wrap; gap: 4px var(--sp-4); font-size: var(--text-xs); color: var(--text-muted); }
+.rg-regua-chave span { display: inline-flex; align-items: center; gap: 6px; min-width: 0; overflow-wrap: anywhere; }
+.rg-regua-chave .rg-ch-marca { flex: none; width: 2px; height: 12px; background: var(--text); }
+.rg-regua-chave .rg-ch-ponto { flex: none; width: 10px; height: 10px; border-radius: 50%; background: var(--chart-foco); }
+
+/* o que ainda não dá e a fonte que falhou */
+.rg-ainda { display: grid; gap: var(--sp-2); margin: 0; padding: 0; list-style: none; }
+.rg-ainda li { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: var(--sp-1) var(--sp-3); align-items: start; padding: var(--sp-3) var(--sp-4); border: 1px dashed var(--border-strong); border-radius: var(--radius); font-size: var(--text-sm); }
+.rg-ainda li > span:last-child { min-width: 0; overflow-wrap: anywhere; }
+.rg-ainda b { font-weight: 600; }
+.rg-ainda small { display: block; color: var(--text-muted); font-size: var(--text-xs); }
+@container rgcard (max-width: 420px) { .rg-ainda li { grid-template-columns: minmax(0, 1fr); } }
+.rg-falhou { display: flex; gap: var(--sp-2); padding: var(--sp-3) var(--sp-4); border: 1px solid color-mix(in srgb, var(--danger) 35%, var(--border)); border-radius: var(--radius); background: var(--danger-soft); font-size: var(--text-sm); }
+.rg-falhou .ic { flex: none; color: var(--danger); margin-top: 2px; }
+.rg-falhou span { min-width: 0; overflow-wrap: anywhere; }
+
+/* lendo a região */
+.rg-lendo { display: grid; gap: var(--sp-4); }
+.rg-lendo-cab { display: flex; align-items: center; gap: var(--sp-3); }
+.rg-lendo-cab h3 { font-size: var(--text-md); outline: none; }
+.rg-passos { display: grid; gap: var(--sp-2); margin: 0; padding: 0; list-style: none; }
+.rg-passos li { display: grid; grid-template-columns: 22px minmax(0, 1fr) auto; gap: var(--sp-2) var(--sp-3); align-items: center; padding: var(--sp-2) var(--sp-3); border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); font-size: var(--text-sm); }
+.rg-passos li > span:nth-child(2) { min-width: 0; overflow-wrap: anywhere; }
+.rg-passos .ic { width: 18px; height: 18px; }
+.rg-passos .rg-ok > .ic { color: var(--success); }
+@container rgcard (max-width: 460px) { .rg-passos li { grid-template-columns: 22px minmax(0, 1fr); } .rg-passos li > .st { grid-column: 2; justify-self: start; } }
+
+/* a gaveta das fontes */
+.rg-fontes { display: grid; gap: var(--sp-2); margin: 0; padding: 0; list-style: none; }
+.rg-fonte { display: grid; gap: 4px; padding: var(--sp-3) var(--sp-4); border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); font-size: var(--text-sm); min-width: 0; }
+.rg-fonte-cab { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 4px var(--sp-2); }
+.rg-fonte-cab b { font-weight: 600; overflow-wrap: anywhere; }
+.rg-fonte .rg-dl > div { grid-template-columns: minmax(0, 6rem) minmax(0, 1fr); }
+.rg-fonte--falhou { border-color: color-mix(in srgb, var(--danger) 35%, var(--border)); }
+
 @media (max-width: 480px) {
   .rg-loja { padding: var(--sp-3); }
 }

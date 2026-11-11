@@ -173,3 +173,70 @@ export const CreateStoreRequest = SaveStoreLocationRequest.extend({
   name: z.string().trim().min(1).max(80),
 });
 export type CreateStoreRequest = z.infer<typeof CreateStoreRequest>;
+
+// ------------------------------------------------------------------------------------------------------------------
+// Sua região (plano da região, R2; P40): o retrato da região de uma loja, calculado pelo sistema com as fontes públicas
+// (os bairros do Censo 2022 e as tabelas do IBGE por município), sem IA. Todo número leva a fonte e o período (§19.3);
+// a renda do Censo é de 2022, sem correção (D-RG-20). Nada aqui é dado de pessoa.
+
+export const RegionOverviewQuery = z.strictObject({ brand_id: z.uuid(), unit_id: z.uuid() });
+export type RegionOverviewQuery = z.infer<typeof RegionOverviewQuery>;
+
+/** Um número público com a fonte (o catálogo do código) e o período ("2022", "2026"). */
+export const RegionNumber = z.strictObject({ value: z.number(), period: z.string(), source: Slug });
+export type RegionNumber = z.infer<typeof RegionNumber>;
+
+/** A leitura de uma fonte: `em_dia`, `lendo` (ainda não lida) ou `falhou` (com a próxima tentativa). */
+export const RegionSourceStatus = z.strictObject({
+  source: Slug,
+  status: Slug,
+  read_at: z.iso.datetime().nullable(),
+  next_try_at: z.iso.datetime().nullable(),
+});
+export type RegionSourceStatus = z.infer<typeof RegionSourceStatus>;
+
+export const RegionOverviewResponse = z.strictObject({
+  brand_id: z.uuid(),
+  unit_id: z.uuid(),
+  /** `disponivel` ou `desligado_pela_liame`. */
+  availability: z.strictObject({ status: Slug }),
+  /** `sem_endereco` (a loja não está no mapa), `lendo` (as fontes ainda não foram lidas), `pronto` ou `parcial` (alguma fonte falhou). */
+  status: Slug,
+  /** O bairro do Censo da loja: `achado`, `nao_achado` (o nome do CEP não casou com o do Censo), `sem_bairro` ou `lendo`. */
+  district_status: Slug,
+  district: z
+    .strictObject({
+      code: z.string(),
+      name: z.string(),
+      population: z.number().int().nullable(),
+      area_km2: z.number().nullable(),
+      /** Pessoas por km², a conta do sistema com o Censo. */
+      density: z.number().nullable(),
+      /** A renda do responsável pelo domicílio, em reais de 2022 (mediana e média). */
+      head_income_median: z.number().nullable(),
+      head_income_mean: z.number().nullable(),
+      /** Onde o bairro fica entre os bairros do município com renda: acima de quantos por cento, de quantos, e a mediana deles. */
+      income_rank: z.strictObject({ above_pct: z.number().int(), districts: z.number().int(), typical_median: z.number() }).nullable(),
+    })
+    .nullable(),
+  /** As áreas de entrega que casaram com bairros do Censo do município, e a gente somada nelas. */
+  delivery_area: z.strictObject({ matched: z.number().int(), total: z.number().int(), population: z.number().int().nullable() }),
+  city: z
+    .strictObject({
+      code: z.string(),
+      name: z.string(),
+      state: z.string(),
+      population: RegionNumber.nullable(),
+      density: RegionNumber.nullable(),
+      population_estimate: RegionNumber.nullable(),
+      income_pc_median: RegionNumber.nullable(),
+      income_pc_mean: RegionNumber.nullable(),
+      restaurants: RegionNumber.nullable(),
+      /** Restaurantes por 10 mil habitantes (a estimativa mais nova, ou o Censo). */
+      restaurants_per_10k: z.number().nullable(),
+    })
+    .nullable(),
+  sources: z.array(RegionSourceStatus),
+  generated_at: z.iso.datetime(),
+});
+export type RegionOverviewResponse = z.infer<typeof RegionOverviewResponse>;

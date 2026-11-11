@@ -14,6 +14,7 @@ import { disparar } from '@/lib/disparar';
 import { useSessao } from '@/lib/sessao';
 import { type AbrirGaveta, GavetaLoja } from './gaveta-loja';
 import { LojaNoMapa } from './loja-no-mapa';
+import { SuaRegiao } from './sua-regiao';
 import { seloDasLojas } from './textos';
 
 // Minha marca › Região (mockups/prototipo-regiao.html, P40 aprovado em 11/11/2026; plano da região, R1): onde cada loja
@@ -213,6 +214,7 @@ export function RegiaoTela() {
             </span>
           </p>
         </section>
+        {marca && <SuaRegiao brandId={marca} lojas={dados.stores} />}
       </div>
     );
   }

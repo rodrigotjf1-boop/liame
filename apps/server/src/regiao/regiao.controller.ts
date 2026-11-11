@@ -5,6 +5,8 @@ import {
   GoogleProfileAddressRequest,
   GoogleProfileAddressResponse,
   ProblemDetails,
+  RegionOverviewQuery,
+  RegionOverviewResponse,
   ResourceId,
   SaveStoreLocationRequest,
   SaveStoreLocationResponse,
@@ -54,6 +56,21 @@ export class RegiaoController {
   @ApiNotFoundResponse({ standardSchema: ProblemDetails })
   lojas(@Auth() auth: AuthContext, @Query({ schema: StoreLocationsQuery }) query: StoreLocationsQuery): Promise<StoreLocationsResponse> {
     return this.regiao.lojas(auth, query.brand_id);
+  }
+
+  @Get('region/overview')
+  @Permissao('dossie.ver')
+  @ApiOperation({
+    summary: 'Sua região',
+    description:
+      'O retrato da região de uma loja, calculado pelo sistema com as fontes públicas, sem IA: o bairro da loja no Censo 2022 (pessoas, área, densidade e a renda do responsável pelo domicílio, mediana e média, em reais de 2022, com a posição entre os bairros do município), a gente das áreas de entrega e os números do município (população, estimativa, renda per capita e restaurantes da CNAE 56.11-2), cada um com a fonte e o período, e a situação de cada fonte (`em_dia`, `lendo`, `falhou`). Sem endereço, `status` é `sem_endereco`; com a função `regiao` desligada, `availability.status` é `desligado_pela_liame`.',
+  })
+  @ApiOkResponse({ standardSchema: RegionOverviewResponse })
+  @ApiBadRequestResponse({ standardSchema: ProblemDetails })
+  @ApiForbiddenResponse({ standardSchema: ProblemDetails })
+  @ApiNotFoundResponse({ standardSchema: ProblemDetails })
+  raioX(@Auth() auth: AuthContext, @Query({ schema: RegionOverviewQuery }) query: RegionOverviewQuery): Promise<RegionOverviewResponse> {
+    return this.regiao.raioX(auth, query.brand_id, query.unit_id);
   }
 
   @Post('region/address-lookup')

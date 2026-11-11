@@ -79,6 +79,7 @@ import { PesquisaLoop } from './pesquisa-loop.js';
 import { PesquisadorService } from './pesquisa.service.js';
 import { RotinaDoCrmLoop } from './rotina-do-crm-loop.js';
 import { SearchConsoleLoop } from './search-console-loop.js';
+import { RegiaoFontesService } from './regiao-fontes.service.js';
 import { ComparacaoDmsIdLoop } from './comparacao-dms-id.js';
 import { RotinaDoCrmService } from './rotina-do-crm.service.js';
 import { SugestoesDeRespostaLoop } from './sugestoes-de-resposta-loop.js';
@@ -154,6 +155,8 @@ import { WebhookDeliverer } from './webhook-deliverer.js';
     PerfilLoop,
     // Search Console (A6, Z3): os números por dia e as buscas da semana dos sites ligados; só com a função `search_console` ligada.
     SearchConsoleLoop,
+    // Os números da região (plano da região, R2): os bairros do Censo e os números do município das lojas no mapa, do IBGE.
+    RegiaoFontesService,
     // Hub DMS (F2, A3): compara as leituras do RegemCast pelas duas credenciais; só com a função `comparacao_dms_id` ligada.
     ComparacaoDmsIdLoop,
     // Fotos dos produtos (A6, Z4): tira do armazenamento o arquivo da foto apagada (e do envio que não terminou), e depois a linha.

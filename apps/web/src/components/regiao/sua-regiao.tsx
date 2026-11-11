@@ -1,0 +1,387 @@
+'use client';
+
+import type { RegionOverviewResponse, StoreLocation } from '@liame/contracts';
+import { type ReactNode, useEffect, useId, useRef, useState } from 'react';
+import { Estado } from '@/components/ui/estado';
+import { Faixa } from '@/components/ui/faixa';
+import { Icone } from '@/components/ui/icone';
+import { api, chamar, mensagemDe } from '@/lib/api';
+import { disparar } from '@/lib/disparar';
+import { useDetalhes } from '@/lib/modo';
+import { GavetaFontes } from './gaveta-fontes';
+import { comparaDensidade, FONTES_DA_REGIAO, fonteDoNumero, fontesQueFalharam, fraseDaRenda, frescor, hora, inteiro, reais, umaCasa } from './textos-da-regiao';
+
+// Sua região (protótipo P40, aprovado em 11/11/2026; plano da região, R2, parte 2): o retrato da região de uma loja,
+// calculado pelo sistema com dados públicos, sem IA (`GET /v1/region/overview`). Uma loja por vez; enquanto as fontes são
+// lidas (a rotina do worker olha a cada minuto), a tela lê de novo a cada 10 segundos, por até 3 minutos.
+
+const RELER_MS = 10_000;
+const ESPERA_MAXIMA_MS = 3 * 60_000;
+
+type Carga = { tipo: 'carregando'; loja: string } | { tipo: 'ok'; loja: string; r: RegionOverviewResponse } | { tipo: 'erro'; loja: string; texto: string };
+
+function Numero({ valor, obs, fonte, pro, classe, extra, mostraPro }: { valor: ReactNode; obs: ReactNode; fonte: string; pro?: string; classe?: string; extra?: ReactNode; mostraPro: boolean }) {
+  return (
+    <div className={`rg-num${classe ? ` ${classe}` : ''}`}>
+      <p className="rg-num-v">{valor}</p>
+      <p className="rg-num-o">{obs}</p>
+      {extra}
+      <p className="rg-num-f">{fonte}</p>
+      {pro && mostraPro && <p className="rg-num-c">{pro}</p>}
+    </div>
+  );
+}
+
+export function SuaRegiao({ brandId, lojas }: { brandId: string; lojas: StoreLocation[] }) {
+  const ids = useId();
+  const titulo = useRef<HTMLHeadingElement>(null);
+  const noMapa = lojas.filter((l) => l.address);
+  const [sel, setSel] = useState<string | null>(noMapa[0]?.unit_id ?? null);
+  const [carga, setCarga] = useState<Carga | null>(null);
+  const [fontes, setFontes] = useState(false);
+  const [tentativa, setTentativa] = useState(0);
+  const { pro, aberto, mostraPro, alternar } = useDetalhes();
+  const seq = useRef(0);
+  const desde = useRef(0);
+  const loja = noMapa.find((l) => l.unit_id === sel) ?? noMapa[0] ?? null;
+  const lojaId = loja?.unit_id ?? null;
+  const assinatura = loja ? JSON.stringify([loja.address, loja.delivery_areas]) : '';
+
+  // A leitura vale só para a loja de que veio (V64); a loja salva de novo (outro endereço) lê de novo.
+  useEffect(() => {
+    if (!lojaId) return;
+    const id = ++seq.current;
+    desde.current = Date.now();
+    let espera: ReturnType<typeof setTimeout> | undefined;
+    const ler = async () => {
+      const r = await chamar(() => api.GET('/v1/region/overview', { params: { query: { brand_id: brandId, unit_id: lojaId } } }));
+      if (id !== seq.current) return;
+      if (!r.ok) return setCarga({ tipo: 'erro', loja: lojaId, texto: mensagemDe(r.problema) });
+      setCarga({ tipo: 'ok', loja: lojaId, r: r.data });
+      if (r.data.status === 'lendo' && Date.now() - desde.current < ESPERA_MAXIMA_MS) espera = setTimeout(() => disparar(ler()), RELER_MS);
+    };
+    setCarga({ tipo: 'carregando', loja: lojaId });
+    disparar(ler());
+    return () => clearTimeout(espera);
+    // `assinatura` muda quando a loja é salva de novo, e `tentativa` no "Tentar de novo": o retrato é lido outra vez.
+  }, [brandId, lojaId, assinatura, tentativa]);
+
+  const cab = (acoes?: ReactNode) => (
+    <div className="rg-card-cab">
+      <div>
+        <h2 id={`${ids}-t`} tabIndex={-1} ref={titulo}>
+          Sua região <span className="st st--espera">Sem IA</span>
+        </h2>
+        <p className="card-sub">
+          Calculada pelo sistema com dados públicos{noMapa.length > 1 ? ', uma loja por vez' : loja ? ` em volta da loja ${loja.unit_name}` : ''}. Cada número diz de onde veio e de quando é.
+        </p>
+      </div>
+      {acoes && <div className="rg-cab-acoes">{acoes}</div>}
+    </div>
+  );
+
+  if (!loja) {
+    return (
+      <section className="card rg-card" aria-labelledby={`${ids}-t`}>
+        {cab()}
+        <Estado icone="map-pin" titulo="Sua região aparece quando a loja estiver no mapa" compacto>
+          Com o endereço, o Liame lê o IBGE pelos códigos do bairro e do município e mostra aqui a gente, o bolso e a concorrência em volta, cada número com a fonte e o período.
+        </Estado>
+      </section>
+    );
+  }
+
+  const r = carga?.tipo === 'ok' && carga.loja === loja.unit_id ? carga.r : null;
+  const seletor =
+    noMapa.length > 1 ? (
+      <div className="rg-lojas-seg">
+        <span className="eixo-nota" id={`${ids}-seg`}>
+          Loja
+        </span>
+        <div className="seg" role="group" aria-labelledby={`${ids}-seg`}>
+          {noMapa.map((l) => (
+            <button key={l.unit_id} type="button" aria-pressed={l.unit_id === loja.unit_id} onClick={() => setSel(l.unit_id)}>
+              {l.unit_name}
+              {l.address?.district ? ` · ${l.address.district}` : ''}
+            </button>
+          ))}
+        </div>
+      </div>
+    ) : null;
+
+  let corpo: ReactNode;
+  if (carga?.tipo === 'erro' && carga.loja === loja.unit_id) {
+    corpo = (
+      <Estado
+        icone="alert-circle"
+        titulo="Não deu para abrir Sua região"
+        perigo
+        compacto
+        acao={
+          <div className="vazio-acoes">
+            <button className="btn" type="button" onClick={() => setTentativa((t) => t + 1)}>
+              <Icone nome="refresh" />
+              Tentar de novo
+            </button>
+          </div>
+        }
+      >
+        {carga.texto} Nada foi perdido.
+      </Estado>
+    );
+  } else if (!r) {
+    corpo = (
+      <p className="lite-frase" role="status">
+        Abrindo Sua região…
+      </p>
+    );
+  } else if (r.status === 'lendo') {
+    const censo = r.sources.find((s) => s.source === 'ibge_censo_bairro');
+    const cidadeLida = r.sources.filter((s) => s.source !== 'ibge_censo_bairro').every((s) => s.status === 'em_dia');
+    const passo = (ok: boolean, texto: string) => (
+      <li className={ok ? 'rg-ok' : undefined}>
+        <Icone nome={ok ? 'check-circle' : 'clock'} />
+        <span>{texto}</span>
+        <span className={`st ${ok ? 'st--concluido' : 'st--info'}`}>{ok ? 'Pronto' : 'Lendo'}</span>
+      </li>
+    );
+    corpo = (
+      <div className="rg-lendo" aria-busy="true">
+        <div className="rg-lendo-cab">
+          <h3 tabIndex={-1}>Lendo a região da loja {loja.unit_name}…</h3>
+        </div>
+        <p className="lite-frase">Leva até 1 minuto: o Liame consulta o IBGE pelos códigos do bairro e do município. A tela atualiza sozinha; você pode sair daqui.</p>
+        <ul className="rg-passos">
+          {passo(true, `Os códigos pelo CEP: ${loja.address?.city ?? ''} (${loja.address?.ibge_city_code ?? ''})${loja.address?.district ? `, ${loja.address.district}` : ''}`)}
+          {passo(censo?.status === 'em_dia', `O bairro no Censo 2022${loja.address?.district ? `: ${loja.address.district}` : ''}`)}
+          {passo(cidadeLida, 'O município no IBGE: população, renda e restaurantes')}
+        </ul>
+      </div>
+    );
+  } else {
+    const falhas = fontesQueFalharam(r);
+    const b = r.district;
+    const c = r.city;
+    const falhou = (fonte: string) => falhas.some((f) => f.source === fonte);
+    const proxima = falhas.map((f) => f.next_try_at).filter((x): x is string => x !== null)[0];
+    const linhaDaFalha = (o: string) => (
+      <p className="rg-falhou">
+        <Icone nome="alert-circle" />
+        <span>
+          <b>{o}: o IBGE não respondeu.</b> {proxima ? `Tentamos de novo às ${hora(proxima)}.` : 'Tentamos de novo em 1 hora.'} Os outros números valem.
+        </span>
+      </p>
+    );
+    const regua =
+      b?.income_rank && b.head_income_median !== null ? (
+        <>
+          <div className="rg-regua" role="img" aria-label={`O bairro ${b.name} fica acima de ${b.income_rank.above_pct}% dos ${inteiro(b.income_rank.districts)} bairros do município; o bairro típico tem ${reais(b.income_rank.typical_median)}.`}>
+            <span className="rg-regua-trilho" />
+            <span className="rg-regua-marca" style={{ left: '50%' }} />
+            <span className="rg-regua-ponto" style={{ left: `${Math.min(98, Math.max(2, b.income_rank.above_pct))}%` }} />
+          </div>
+          <p className="rg-regua-rot" aria-hidden="true">
+            <span>menor renda</span>
+            <span>maior renda</span>
+          </p>
+          <p className="rg-regua-chave" aria-hidden="true">
+            <span>
+              <i className="rg-ch-marca" />
+              bairro típico do município: {reais(b.income_rank.typical_median)}
+            </span>
+            <span>
+              <i className="rg-ch-ponto" />
+              {b.name}: {reais(b.head_income_median)}
+            </span>
+          </p>
+        </>
+      ) : null;
+    const semBairro =
+      r.district_status === 'nao_achado' ? (
+        <Numero
+          classe="rg-num--falta"
+          valor="Bairro fora do Censo"
+          obs={`O bairro “${loja.address?.district ?? ''}” do CEP não está entre os bairros do Censo do município${c?.name ? ` (${c.name})` : ''}. Sua região mostra o município.`}
+          fonte="IBGE · Censo 2022, agregados por bairro"
+          mostraPro={mostraPro}
+        />
+      ) : null;
+    corpo = (
+      <>
+        {falhas.length > 0 && (
+          <Faixa
+            tipo="atencao"
+            icone={<Icone nome="alert" />}
+            titulo="O IBGE não respondeu"
+            texto={`${falhas.map((f) => FONTES_DA_REGIAO[f.source]?.dado ?? f.source).join(', ')} ficaram de fora. Tentamos de novo ${proxima ? `às ${hora(proxima)}` : 'em 1 hora'}; os outros números valem.`}
+          />
+        )}
+        <div className="rg-grupos">
+          <section className="rg-grupo" aria-labelledby={`${ids}-gente`}>
+            <div className="rg-grupo-cab">
+              <h3 id={`${ids}-gente`}>Gente</h3>
+              <p>no bairro da loja</p>
+            </div>
+            <div className="rg-nums">
+              {b && b.population !== null && (
+                <Numero
+                  valor={inteiro(b.population)}
+                  obs={`pessoas moram no bairro ${b.name}${b.area_km2 !== null ? `, em ${umaCasa(Math.round(b.area_km2 * 100) / 100)} km²` : ''}`}
+                  fonte="IBGE · Censo 2022"
+                  pro={`Censo 2022, agregados por bairro · v0001 e AREA_KM2 · bairro ${b.code}`}
+                  mostraPro={mostraPro}
+                />
+              )}
+              {b && b.density !== null && (
+                <Numero
+                  valor={
+                    <>
+                      {inteiro(b.density)} <small>por km²</small>
+                    </>
+                  }
+                  obs={c?.density ? comparaDensidade(b.density, c.density.value, c.name) : 'pessoas por km² no bairro'}
+                  fonte="Conta do sistema com o Censo 2022"
+                  pro={c?.density ? `v0001 ÷ AREA_KM2 · ${c.name}: tabela 4714, variável 614` : 'v0001 ÷ AREA_KM2'}
+                  mostraPro={mostraPro}
+                />
+              )}
+              {r.delivery_area.matched > 0 && r.delivery_area.population !== null && (
+                <Numero
+                  valor={inteiro(r.delivery_area.population)}
+                  obs={`pessoas em ${r.delivery_area.matched} ${r.delivery_area.matched === 1 ? 'bairro' : 'bairros'} da área de entrega${r.delivery_area.total > r.delivery_area.matched ? ` (de ${r.delivery_area.total}; os outros não estão no Censo com esse nome)` : ''}`}
+                  fonte="IBGE · Censo 2022, a soma dos bairros"
+                  mostraPro={mostraPro}
+                />
+              )}
+              {semBairro}
+            </div>
+          </section>
+
+          <section className="rg-grupo" aria-labelledby={`${ids}-bolso`}>
+            <div className="rg-grupo-cab">
+              <h3 id={`${ids}-bolso`}>Bolso</h3>
+              <p>renda de quem mora em volta</p>
+            </div>
+            {falhou('ibge_censo_bairro') && linhaDaFalha('A renda do bairro')}
+            <div className="rg-nums">
+              {b && b.head_income_median !== null && (
+                <Numero
+                  classe="rg-num--largo"
+                  valor={reais(b.head_income_median)}
+                  obs={fraseDaRenda(r)}
+                  extra={regua}
+                  fonte="IBGE · Censo 2022 · valor de 2022, sem correção"
+                  pro={`renda do responsável por bairro · V06006 (mediana)${b.head_income_mean !== null ? ` · média: ${reais(b.head_income_mean)} (V06004)` : ''}`}
+                  mostraPro={mostraPro}
+                />
+              )}
+              {mostraPro && c?.income_pc_median && (
+                <Numero
+                  valor={reais(c.income_pc_median.value)}
+                  obs={`é a renda por pessoa (mediana) no município (${c.name})${c.income_pc_mean ? `; a média é ${reais(c.income_pc_mean.value)}` : ''}`}
+                  fonte={`${fonteDoNumero(c.income_pc_median)} · valor de ${c.income_pc_median.period}`}
+                  pro={`tabela 10295 · variáveis 13534 (mediana) e 13431 (média) · município ${c.code}`}
+                  mostraPro={mostraPro}
+                />
+              )}
+              {!b && semBairro === null && <p className="lite-frase">A renda do bairro aparece quando o bairro da loja estiver no Censo.</p>}
+            </div>
+            <p className="rg-nota">
+              <Icone nome="lock" pequeno />
+              <span>
+                A renda escolhe a oferta e a verba; <b>nunca vai para o texto do anúncio</b>.
+              </span>
+            </p>
+          </section>
+
+          <section className="rg-grupo" aria-labelledby={`${ids}-conc`}>
+            <div className="rg-grupo-cab">
+              <h3 id={`${ids}-conc`}>Concorrência</h3>
+              <p>no município</p>
+            </div>
+            {falhou('ibge_9528') ? (
+              linhaDaFalha('Os restaurantes do município')
+            ) : (
+              <div className="rg-nums">
+                {c?.restaurants && (
+                  <Numero
+                    valor={inteiro(c.restaurants.value)}
+                    obs={`restaurantes e similares no município (${c.name})`}
+                    fonte={fonteDoNumero(c.restaurants)}
+                    pro={`tabela 9528 · variável 706 · CNAE 56.11-2 (categoria 117551) · município ${c.code}`}
+                    mostraPro={mostraPro}
+                  />
+                )}
+                {c?.restaurants_per_10k !== null && c?.restaurants_per_10k !== undefined && (
+                  <Numero
+                    valor={
+                      <>
+                        {umaCasa(c.restaurants_per_10k)} <small>por 10 mil habitantes</small>
+                      </>
+                    }
+                    obs="restaurantes para cada 10 mil pessoas do município"
+                    fonte={`Conta do sistema: restaurantes ÷ ${c.population_estimate ? `${inteiro(c.population_estimate.value)} pessoas (IBGE, estimativa de ${c.population_estimate.period})` : c.population ? `${inteiro(c.population.value)} pessoas (IBGE, Censo 2022)` : 'a população'}`}
+                    pro={c.population ? `tabela 6579 · variável 9324 · Censo 2022: ${inteiro(c.population.value)} pessoas (tabela 4714, variável 93)` : undefined}
+                    mostraPro={mostraPro}
+                  />
+                )}
+              </div>
+            )}
+          </section>
+
+          <section className="rg-grupo" aria-labelledby={`${ids}-ainda`}>
+            <div className="rg-grupo-cab">
+              <h3 id={`${ids}-ainda`}>Ainda não</h3>
+              <p>o que depende de outra entrega</p>
+            </div>
+            <ul className="rg-ainda">
+              {[
+                ['Preço de comer fora e a semana que vem', 'A inflação do lanche e da refeição na região (IBGE, IPCA), a previsão do tempo, os feriados e as datas comerciais chegam na próxima entrega.'],
+                ['Pedidos por hora e tíquete médio da loja', 'Aparecem com os pedidos do Regem (R3). Sem ele, a medida de pedido é o cupom exclusivo de cada campanha.'],
+                ['Pessoas no raio, na Meta', 'Aparece com a conta de anúncios: a Meta estima quantas pessoas há no raio, por faixa de idade, antes de gastar (R6).'],
+                ['Concorrentes no raio', 'Aparece com o servidor de mapas próprio (R8). Hoje, a conta é a do município.'],
+              ].map(([t, s]) => (
+                <li key={t}>
+                  <span className="st st--espera">Ainda não</span>
+                  <span>
+                    <b>{t}</b>
+                    <small>{s}</small>
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </section>
+        </div>
+        {!pro && (
+          <div className="rg-loja-acoes">
+            <button className="detalhes-bt" type="button" onClick={alternar} aria-expanded={aberto}>
+              <span>{aberto ? 'Menos detalhes' : 'Ver detalhes'}</span>
+              <Icone nome="chevron-down" pequeno />
+            </button>
+          </div>
+        )}
+      </>
+    );
+  }
+
+  const acoes = r ? (
+    <>
+      <span className="rg-frescor">{frescor(r)}</span>
+      {r.status !== 'lendo' && (
+        <button className="btn btn--sm" type="button" onClick={() => setFontes(true)} aria-haspopup="dialog">
+          <Icone nome="file" pequeno />
+          Ver as fontes
+        </button>
+      )}
+    </>
+  ) : undefined;
+
+  return (
+    <section className="card rg-card" aria-labelledby={`${ids}-t`}>
+      {cab(acoes)}
+      {seletor}
+      {corpo}
+      {fontes && r && <GavetaFontes loja={loja} r={r} reserva={titulo} aoFechar={() => setFontes(false)} />}
+    </section>
+  );
+}

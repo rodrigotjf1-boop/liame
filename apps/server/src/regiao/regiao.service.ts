@@ -4,6 +4,7 @@ import {
   type CreateStoreRequest,
   type GoogleProfileAddressRequest,
   type GoogleProfileAddressResponse,
+  type RegionOverviewResponse,
   type SaveStoreLocationRequest,
   type SaveStoreLocationResponse,
   type StoreAddress,
@@ -29,7 +30,9 @@ import { AppProblem } from '../errors/problems.js';
 import { FlagService } from '../flags/flag.service.js';
 import { VaultService } from '../vault/vault.service.js';
 import { buscarCep, cepNormalizado, type EnderecoDoCep } from './cep.js';
-import { type Coordenada, ProcuraDeCoordenada } from './coordenada.js';
+import { FONTE_CENSO_BAIRRO } from './censo.js';
+import { type Coordenada, nomeComparavel, ProcuraDeCoordenada } from './coordenada.js';
+import { acimaDe, densidade, FONTES_DO_RETRATO, type LeituraGuardada, type NumeroGuardado, numeroMaisNovo, por10Mil, situacaoDaFonte, situacaoDoRetrato } from './raio-x.js';
 import { areasDeEntrega, ATRIBUICAO, FLAG_DA_REGIAO, fusoDaUf, type LinhaDaLoja, lojaNoMapa, ruaENumero } from './regiao.js';
 
 // A loja no mapa na API (plano da região, R1). Listar e salvar rodam na transação da requisição; conferir um endereço
@@ -341,6 +344,119 @@ export class RegiaoService {
     const store = await this.lojaSalva(unitId);
     auditDetail({ resourceId: unitId, before: null, after: { unit_name: store.unit_name, ...paraAuditoria(store) } });
     return { store };
+  }
+
+  /**
+   * Sua região (R2): o retrato da região de uma loja, pelas tabelas do sistema (os bairros do Censo e os números do
+   * município); a rotina do worker lê as fontes. Sem IA e sem dado de pessoa; o endereço da loja não sai daqui.
+   */
+  async raioX(auth: AuthContext, brandId: string, unitId: string, agora = new Date()): Promise<RegionOverviewResponse> {
+    const tx = currentTx();
+    await this.marca(brandId);
+    const vazio = {
+      brand_id: brandId,
+      unit_id: unitId,
+      district: null,
+      delivery_area: { matched: 0, total: 0, population: null },
+      city: null,
+      generated_at: agora.toISOString(),
+    };
+    if (!(await this.ligada(auth, brandId))) {
+      return { ...vazio, availability: { status: 'desligado_pela_liame' }, status: 'sem_endereco', district_status: 'sem_bairro', sources: [] };
+    }
+    const loja = (
+      await tx.execute<{ address_district: string | null; address_city: string | null; address_state: string | null; ibge_city_code: string | null; delivery_areas: unknown }>(sql`
+        select address_district, address_city, address_state, ibge_city_code, delivery_areas from liame.unit where id = ${unitId} and brand_id = ${brandId}`)
+    ).rows[0];
+    if (!loja) throw new AppProblem(404, 'loja-nao-encontrada', 'Não encontramos', 'Loja não encontrada nesta marca.');
+    const cidade = loja.ibge_city_code;
+    if (!cidade) return { ...vazio, availability: { status: 'disponivel' }, status: 'sem_endereco', district_status: 'sem_bairro', sources: [] };
+
+    const leituras = (
+      await tx.execute<LeituraGuardada>(sql`
+        select source, geo_code, last_ok_at, last_error, next_try_at from liame.region_source_read
+         where (source = ${FONTE_CENSO_BAIRRO} and geo_code = '0') or geo_code = ${cidade}`)
+    ).rows;
+    const fontes = FONTES_DO_RETRATO.map((f) => situacaoDaFonte(f, leituras.find((l) => l.source === f && l.geo_code === (f === FONTE_CENSO_BAIRRO ? '0' : cidade))));
+    const censoLido = fontes[0]!.status === 'em_dia';
+
+    // O bairro da loja no Censo, pelo nome sem acento no mesmo município (o maior, se dois tiverem o mesmo nome).
+    type Bairro = { district_code: string; name: string; population: number | null; area_km2: string | null; head_income_mean: string | null; head_income_median: string | null };
+    const bairro = loja.address_district
+      ? ((
+          await tx.execute<Bairro>(sql`
+            select district_code, name, population, area_km2, head_income_mean, head_income_median from liame.region_district
+             where city_code = ${cidade} and name_key = ${nomeComparavel(loja.address_district)}
+             order by population desc nulls last, district_code limit 1`)
+        ).rows[0] ?? null)
+      : null;
+    const mediana = bairro?.head_income_median === null || bairro?.head_income_median === undefined ? null : Number(bairro.head_income_median);
+    const posicao =
+      mediana === null
+        ? null
+        : (
+            await tx.execute<{ abaixo: number; total: number; tipica: number | null }>(sql`
+              select count(*) filter (where head_income_median < ${mediana})::int as abaixo, count(*)::int as total,
+                     percentile_cont(0.5) within group (order by head_income_median)::float8 as tipica
+                from liame.region_district where city_code = ${cidade} and head_income_median is not null`)
+          ).rows[0];
+    const pessoas = bairro?.population ?? null;
+    const area = bairro?.area_km2 === null || bairro?.area_km2 === undefined ? null : Number(bairro.area_km2);
+
+    // A gente das áreas de entrega: as que casam com bairros do Censo do município.
+    const areas = Array.isArray(loja.delivery_areas) ? loja.delivery_areas.filter((a): a is string => typeof a === 'string') : [];
+    const chaves = [...new Set(areas.map((a) => nomeComparavel(a)))];
+    const entrega = chaves.length
+      ? (
+          await tx.execute<{ casaram: number; pessoas: number | null }>(sql`
+            select count(*)::int as casaram, sum(population)::int as pessoas from (
+              select distinct on (name_key) name_key, population from liame.region_district
+               where city_code = ${cidade} and name_key = any(array(select jsonb_array_elements_text(${JSON.stringify(chaves)}::jsonb)))
+               order by name_key, population desc nulls last) b`)
+        ).rows[0]
+      : { casaram: 0, pessoas: null };
+
+    const numeros = (
+      await tx.execute<NumeroGuardado>(sql`
+        select indicator, period, value::float8 as value, source from liame.region_fact where geo_level = 'municipio' and geo_code = ${cidade}`)
+    ).rows;
+    const populacao = numeroMaisNovo(numeros, 'populacao');
+    const estimada = numeroMaisNovo(numeros, 'populacao_estimada');
+    const restaurantes = numeroMaisNovo(numeros, 'restaurantes');
+    return {
+      brand_id: brandId,
+      unit_id: unitId,
+      availability: { status: 'disponivel' },
+      status: situacaoDoRetrato(fontes),
+      district_status: !censoLido ? 'lendo' : !loja.address_district ? 'sem_bairro' : bairro ? 'achado' : 'nao_achado',
+      district: bairro
+        ? {
+            code: bairro.district_code,
+            name: bairro.name,
+            population: pessoas,
+            area_km2: area,
+            density: densidade(pessoas, area),
+            head_income_median: mediana,
+            head_income_mean: bairro.head_income_mean === null ? null : Number(bairro.head_income_mean),
+            income_rank: posicao && posicao.total > 0 && posicao.tipica !== null ? { above_pct: acimaDe(posicao.abaixo, posicao.total), districts: posicao.total, typical_median: posicao.tipica } : null,
+          }
+        : null,
+      delivery_area: { matched: entrega?.casaram ?? 0, total: chaves.length, population: entrega?.casaram ? (entrega.pessoas ?? null) : null },
+      city: {
+        code: cidade,
+        name: loja.address_city ?? '',
+        state: loja.address_state ?? '',
+        population: populacao,
+        density: numeroMaisNovo(numeros, 'densidade'),
+        population_estimate: estimada,
+        income_pc_median: numeroMaisNovo(numeros, 'renda_pc_mediana'),
+        income_pc_mean: numeroMaisNovo(numeros, 'renda_pc_media'),
+        restaurants: restaurantes,
+        restaurants_per_10k: por10Mil(restaurantes?.value ?? null, (estimada ?? populacao)?.value ?? null),
+      },
+      sources: fontes,
+      generated_at: agora.toISOString(),
+    };
   }
 
   private async lojaSalva(unitId: string): Promise<StoreLocation> {
