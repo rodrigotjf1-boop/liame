@@ -111,6 +111,8 @@ const SUBTELAS: Record<string, { titulo: string; modos: boolean }> = {
   '/resultados/relatorio': { titulo: 'Resultados · Relatório do mês', modos: false },
   // Revisar e mandar o relatório de um cliente (P29; A7, W7, parte 5b).
   '/agencia/relatorios/revisar': { titulo: 'Relatórios · Revisar e mandar', modos: false },
+  // A loja no mapa e Sua região (P40, D-RG-11 e D-RG-19): abaixo de Minha marca, que é uma tela só, mas com Lite e Pro.
+  '/marca/regiao': { titulo: 'Minha marca · Região', modos: true },
 };
 
 export function tituloDa(caminho: string): string {
@@ -143,6 +145,8 @@ export function emFerramenta(caminho: string): boolean {
 
 /** A tela aberta tem as visões Lite e Pro e a pessoa pode vê-la (sem permissão, a tela é só o aviso). */
 export function temModos(caminho: string, pode: (permissao: string) => boolean): boolean {
-  if (SUBTELAS[caminho] && !SUBTELAS[caminho].modos) return false;
-  return NAVEGACAO.some((g) => g.itens.some((i) => i.modos && itemAtual(caminho, i.href) && (!i.permissao || pode(i.permissao))));
+  const sub = SUBTELAS[caminho];
+  if (sub && !sub.modos) return false;
+  // A subtela com modos os tem mesmo quando o item de cima é uma tela só (Minha marca › Região).
+  return NAVEGACAO.some((g) => g.itens.some((i) => (i.modos || sub?.modos) && itemAtual(caminho, i.href) && (!i.permissao || pode(i.permissao))));
 }

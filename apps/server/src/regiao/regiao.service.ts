@@ -1,16 +1,18 @@
-import type {
-  AddressLookupRequest,
-  AddressLookupResponse,
-  GoogleProfileAddressRequest,
-  GoogleProfileAddressResponse,
-  SaveStoreLocationRequest,
-  SaveStoreLocationResponse,
-  StoreAddress,
-  StoreCoordinates,
-  StoreLocation,
-  StoreLocationsResponse,
+import {
+  type AddressLookupRequest,
+  type AddressLookupResponse,
+  type CreateStoreRequest,
+  type GoogleProfileAddressRequest,
+  type GoogleProfileAddressResponse,
+  type SaveStoreLocationRequest,
+  type SaveStoreLocationResponse,
+  type StoreAddress,
+  type StoreCoordinates,
+  type StoreLocation,
+  type StoreLocationsResponse,
+  STORES_PER_BRAND_MAX,
 } from '@liame/contracts';
-import type { Database } from '@liame/database';
+import { type Database, uuidv7 } from '@liame/database';
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import { sql } from 'drizzle-orm';
 import { naTransacaoDaEmpresa } from '../ai/na-empresa.js';
@@ -28,7 +30,7 @@ import { FlagService } from '../flags/flag.service.js';
 import { VaultService } from '../vault/vault.service.js';
 import { buscarCep, cepNormalizado, type EnderecoDoCep } from './cep.js';
 import { type Coordenada, ProcuraDeCoordenada } from './coordenada.js';
-import { areasDeEntrega, ATRIBUICAO, FLAG_DA_REGIAO, type LinhaDaLoja, lojaNoMapa, ruaENumero } from './regiao.js';
+import { areasDeEntrega, ATRIBUICAO, FLAG_DA_REGIAO, fusoDaUf, type LinhaDaLoja, lojaNoMapa, ruaENumero } from './regiao.js';
 
 // A loja no mapa na API (plano da região, R1). Listar e salvar rodam na transação da requisição; conferir um endereço
 // e ler o do Perfil do Google chamam serviços de fora (ViaCEP, OpenStreetMap, Google) e por isso rodam sem transação
@@ -36,11 +38,19 @@ import { areasDeEntrega, ATRIBUICAO, FLAG_DA_REGIAO, type LinhaDaLoja, lojaNoMap
 // vai para o modelo de IA (D-A3-4, D-RG-2).
 
 const TEMPO_DO_GOOGLE_MS = 8_000;
+/** Teto da lista de lojas de uma marca (as do Regem não passam pelo limite de criar aqui, mas são poucas por marca). */
+const LOJAS_NA_LISTA = 200;
 const ESPERA_PELA_COTA_MS = 2_000;
 
-const COLUNAS_DA_LOJA = sql`u.id, u.name, u.address_postal_code, u.address_street, u.address_number, u.address_district, u.address_city,
-  u.address_state, u.ibge_city_code, u.latitude, u.longitude, u.location_precision, u.location_source, u.delivery_radius_km,
-  u.delivery_areas, u.location_set_at, p.id as user_id, p.name as user_name`;
+// `created_here`: nenhuma conta do Regem (nem a desconectada) apontou para a loja, então ela nasceu no Liame (D-RG-17).
+// `google_profile_account_id`: o Perfil do Google conectado que é desta loja (D-RG-16).
+const COLUNAS_DA_LOJA = sql`u.id, u.name, u.address_postal_code, u.address_street, u.address_number, u.address_complement,
+  u.address_district, u.address_city, u.address_state, u.ibge_city_code, u.latitude, u.longitude, u.location_precision,
+  u.location_source, u.delivery_radius_km, u.delivery_areas, u.location_set_at, p.id as user_id, p.name as user_name,
+  not exists (select 1 from liame.connected_account r where r.unit_id = u.id and r.provider = 'regem') as created_here,
+  (select g.id from liame.connected_account g
+    where g.unit_id = u.id and g.provider = ${PROVEDOR_PERFIL_GOOGLE} and ${contaConectada('g')}
+    order by g.connected_at, g.id limit 1) as google_profile_account_id`;
 
 function desligada(): AppProblem {
   return new AppProblem(409, 'funcao-desligada', 'Função desligada', 'A região ainda não está ligada para esta empresa.');
@@ -65,7 +75,7 @@ function cepForaDoAr(): AppProblem {
 const paraCoordenadas = (c: Coordenada | null): StoreCoordinates | null => (c ? { latitude: c.latitude, longitude: c.longitude, precision: c.precisao } : null);
 
 function paraEndereco(cep: EnderecoDoCep, rua: string | null, numero: string | null, bairro: string | null): StoreAddress {
-  return { postal_code: cep.cep, street: rua, number: numero, district: bairro, city: cep.cidade, state: cep.uf, ibge_city_code: cep.codigoIbge };
+  return { postal_code: cep.cep, street: rua, number: numero, complement: null, district: bairro, city: cep.cidade, state: cep.uf, ibge_city_code: cep.codigoIbge };
 }
 
 @Injectable()
@@ -105,28 +115,61 @@ export class RegiaoService {
     await this.marca(brandId);
     const base = { brand_id: brandId, attribution: ATRIBUICAO, generated_at: agora.toISOString() };
     if (!(await this.ligada(auth, brandId))) {
-      return { ...base, availability: { status: 'desligado_pela_liame' }, stores: [], google_profiles: [], can_edit: false };
+      return { ...base, availability: { status: 'desligado_pela_liame' }, stores: [], google_profiles: [], can_edit: false, has_regem: false, can_create_store: false };
     }
     const lojas = await tx.execute<LinhaDaLoja>(sql`
       select ${COLUNAS_DA_LOJA}
         from liame.unit u left join liame.app_user p on p.id = u.location_set_by
        where u.brand_id = ${brandId}
-       order by u.created_at, u.id`);
+       order by u.created_at, u.id
+       limit ${LOJAS_NA_LISTA}`);
     const perfis = (await this.ligada(auth, brandId, FLAG_PERFIL_GOOGLE))
       ? (
-          await tx.execute<{ id: string; name: string }>(sql`
-            select a.id, a.name from liame.connected_account a
+          await tx.execute<{ id: string; name: string; unit_id: string | null }>(sql`
+            select a.id, a.name, a.unit_id from liame.connected_account a
              where a.provider = ${PROVEDOR_PERFIL_GOOGLE} and a.brand_id = ${brandId} and ${contaConectada('a')}
              order by a.name, a.id limit 20`)
         ).rows
       : [];
+    const podeEditar = auth.permissions.has('dossie.editar');
+    const temRegem = await this.temRegem(brandId);
     return {
       ...base,
       availability: { status: 'disponivel' },
       stores: lojas.rows.map(lojaNoMapa),
-      google_profiles: perfis.map((p) => ({ account_id: p.id, name: p.name })),
-      can_edit: auth.permissions.has('dossie.editar'),
+      google_profiles: perfis.map((p) => ({ account_id: p.id, name: p.name, unit_id: p.unit_id })),
+      can_edit: podeEditar,
+      has_regem: temRegem,
+      can_create_store: podeEditar && !temRegem,
     };
+  }
+
+  /** A marca tem o Regem conectado: as lojas vêm dele (a conexão cria a loja ou se liga à de mesmo nome). */
+  private async temRegem(brandId: string): Promise<boolean> {
+    const r = await currentTx().execute<{ tem: boolean }>(sql`
+      select exists (
+        select 1 from liame.connected_account a where a.provider = 'regem' and a.brand_id = ${brandId} and ${contaConectada('a')}
+      ) as tem`);
+    return r.rows[0]?.tem === true;
+  }
+
+  /**
+   * O Perfil do Google escolhido passa a ser desta loja (D-RG-16: cada perfil vale para uma loja). O que já é de outra
+   * loja volta 409; o que já é desta não muda. Roda na transação da requisição: um erro depois desfaz a ligação.
+   */
+  private async ligarPerfil(brandId: string, unitId: string, accountId: string): Promise<void> {
+    const tx = currentTx();
+    const r = await tx.execute<{ unit_id: string | null; unit_name: string | null }>(sql`
+      select a.unit_id, u.name as unit_name
+        from liame.connected_account a left join liame.unit u on u.id = a.unit_id
+       where a.id = ${accountId} and a.provider = ${PROVEDOR_PERFIL_GOOGLE} and a.brand_id = ${brandId} and ${contaConectada('a')}
+       for update of a`);
+    const conta = r.rows[0];
+    if (!conta) throw perfilNaoEncontrado();
+    if (conta.unit_id && conta.unit_id !== unitId) {
+      throw new AppProblem(409, 'perfil-de-outra-loja', 'Perfil de outra loja', `Esse Perfil do Google já é da loja ${conta.unit_name ?? 'de outra loja'}. Cada perfil vale para uma loja.`);
+    }
+    if (!conta.unit_id) await tx.execute(sql`update liame.connected_account set unit_id = ${unitId}, updated_at = now() where id = ${accountId}`);
   }
 
   /** A marca existe e a função está ligada: a transação curta antes de chamar os serviços de fora. */
@@ -235,30 +278,88 @@ export class RegiaoService {
     ).rows[0];
     if (!antes) throw new AppProblem(404, 'loja-nao-encontrada', 'Não encontramos', 'Loja não encontrada nesta empresa.');
     if (!(await this.ligada(auth, antes.brand_id))) throw desligada();
+    // O perfil só conta com a origem `perfil_google`; com o CEP, a ligação que a loja já tem fica como está.
+    if (body.source === 'perfil_google' && body.google_profile_account_id) await this.ligarPerfil(antes.brand_id, unitId, body.google_profile_account_id);
     const a = body.address;
     const c = body.coordinates;
     const areas = areasDeEntrega(body.delivery_areas);
     await tx.execute(sql`
       update liame.unit set
              address_postal_code = ${a.postal_code}, address_street = ${a.street}, address_number = ${a.number},
-             address_district = ${a.district}, address_city = ${a.city}, address_state = ${a.state}, ibge_city_code = ${a.ibge_city_code},
+             address_complement = ${a.complement ?? null}, address_district = ${a.district}, address_city = ${a.city},
+             address_state = ${a.state}, ibge_city_code = ${a.ibge_city_code},
              latitude = ${c ? c.latitude : null}, longitude = ${c ? c.longitude : null}, location_precision = ${c ? c.precision : null},
              location_source = ${body.source}, delivery_radius_km = ${body.delivery_radius_km}, delivery_areas = ${JSON.stringify(areas)}::jsonb,
              location_set_at = now(), location_set_by = ${auth.userId}
        where id = ${unitId}`);
-    const depois = (
-      await tx.execute<LinhaDaLoja>(sql`
-        select ${COLUNAS_DA_LOJA} from liame.unit u left join liame.app_user p on p.id = u.location_set_by where u.id = ${unitId}`)
-    ).rows[0]!;
-    const store = lojaNoMapa(depois);
+    const store = await this.lojaSalva(unitId);
     auditDetail({ resourceId: unitId, before: paraAuditoria(lojaNoMapa(antes)), after: paraAuditoria(store) });
     return { store };
   }
+
+  /**
+   * Cria a loja já no mapa (a marca sem o Regem, D-RG-17): o Dono e o Administrador, com a função ligada. A marca fica
+   * travada até o fim (duas criações ao mesmo tempo não passam juntas pelo nome nem pelo limite). Quando o Regem for
+   * conectado depois, ele se liga à loja de mesmo nome (`connections.service`, sem diferença de caixa).
+   */
+  async criar(auth: AuthContext, body: CreateStoreRequest): Promise<SaveStoreLocationResponse> {
+    const tx = currentTx();
+    const marca = (
+      await tx.execute<{ tenant_id: string }>(sql`select tenant_id from liame.brand where id = ${body.brand_id} and archived_at is null for update`)
+    ).rows[0];
+    if (!marca) throw marcaNaoEncontrada();
+    if (!(await this.ligada(auth, body.brand_id))) throw desligada();
+    if (await this.temRegem(body.brand_id)) {
+      throw new AppProblem(409, 'marca-com-regem', 'As lojas vêm do Regem', 'Esta marca tem o Regem conectado: as lojas vêm dele. Ponha no mapa uma loja da lista.');
+    }
+    const nome = body.name.trim().replace(/\s+/g, ' ');
+    const daMarca = (
+      await tx.execute<{ total: number; mesmo_nome: boolean }>(sql`
+        select count(*)::int as total, coalesce(bool_or(lower(btrim(name)) = lower(${nome})), false) as mesmo_nome
+          from liame.unit where brand_id = ${body.brand_id}`)
+    ).rows[0]!;
+    if (daMarca.mesmo_nome) {
+      throw new AppProblem(409, 'loja-com-este-nome', 'Já existe uma loja com esse nome', 'A marca já tem uma loja com esse nome. Escolha outro nome ou ponha no mapa a loja da lista.');
+    }
+    if (daMarca.total >= STORES_PER_BRAND_MAX) {
+      throw new AppProblem(409, 'limite-de-lojas', 'Limite de lojas', `A marca chegou a ${STORES_PER_BRAND_MAX} lojas. Fale com a Liame para pôr mais.`);
+    }
+    const unitId = uuidv7();
+    const a = body.address;
+    const c = body.coordinates;
+    const areas = areasDeEntrega(body.delivery_areas);
+    await tx.execute(sql`
+      insert into liame.unit (id, tenant_id, brand_id, name, timezone,
+             address_postal_code, address_street, address_number, address_complement, address_district, address_city,
+             address_state, ibge_city_code, latitude, longitude, location_precision, location_source, delivery_radius_km,
+             delivery_areas, location_set_at, location_set_by)
+      values (${unitId}, ${marca.tenant_id}, ${body.brand_id}, ${nome}, ${fusoDaUf(a.state)},
+             ${a.postal_code}, ${a.street}, ${a.number}, ${a.complement ?? null}, ${a.district}, ${a.city},
+             ${a.state}, ${a.ibge_city_code}, ${c ? c.latitude : null}, ${c ? c.longitude : null}, ${c ? c.precision : null},
+             ${body.source}, ${body.delivery_radius_km}, ${JSON.stringify(areas)}::jsonb, now(), ${auth.userId})`);
+    if (body.source === 'perfil_google' && body.google_profile_account_id) await this.ligarPerfil(body.brand_id, unitId, body.google_profile_account_id);
+    const store = await this.lojaSalva(unitId);
+    auditDetail({ resourceId: unitId, before: null, after: { unit_name: store.unit_name, ...paraAuditoria(store) } });
+    return { store };
+  }
+
+  private async lojaSalva(unitId: string): Promise<StoreLocation> {
+    const r = await currentTx().execute<LinhaDaLoja>(sql`
+      select ${COLUNAS_DA_LOJA} from liame.unit u left join liame.app_user p on p.id = u.location_set_by where u.id = ${unitId}`);
+    return lojaNoMapa(r.rows[0]!);
+  }
 }
 
-/** O que vai para a auditoria: onde a loja fica, o raio e as áreas (quem e quando a auditoria já guarda). */
+/** O que vai para a auditoria: onde a loja fica, o raio, as áreas e o perfil (quem e quando a auditoria já guarda). */
 function paraAuditoria(l: StoreLocation): Record<string, unknown> {
-  return { address: l.address, coordinates: l.coordinates, source: l.source, delivery_radius_km: l.delivery_radius_km, delivery_areas: l.delivery_areas };
+  return {
+    address: l.address,
+    coordinates: l.coordinates,
+    source: l.source,
+    delivery_radius_km: l.delivery_radius_km,
+    delivery_areas: l.delivery_areas,
+    google_profile_account_id: l.google_profile_account_id,
+  };
 }
 
 function perfilNaoEncontrado(): AppProblem {

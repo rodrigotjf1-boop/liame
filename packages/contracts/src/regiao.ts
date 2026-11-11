@@ -29,6 +29,8 @@ export const StoreAddress = z.strictObject({
   /** Nula quando o CEP é geral do município e a pessoa ainda não informou a rua. */
   street: z.string().nullable(),
   number: z.string().nullable(),
+  /** O complemento ("Loja 2", "fundos"), opcional. */
+  complement: z.string().nullable(),
   district: z.string().nullable(),
   city: z.string(),
   state: Uf,
@@ -59,6 +61,10 @@ export const StoreLocation = z.strictObject({
   /** Quem salvou por último e quando (nulo quando a pessoa saiu da empresa, ou ninguém salvou). */
   set_by: z.strictObject({ id: z.uuid(), name: z.string() }).nullable(),
   set_at: z.iso.datetime().nullable(),
+  /** A loja nasceu no Liame (marca sem Regem, D-RG-17), e não pela conexão com o Regem. */
+  created_here: z.boolean(),
+  /** O Perfil da Empresa no Google desta loja (cada perfil vale para uma loja, D-RG-16); nulo sem perfil. */
+  google_profile_account_id: z.uuid().nullable(),
 });
 export type StoreLocation = z.infer<typeof StoreLocation>;
 
@@ -70,10 +76,17 @@ export const StoreLocationsResponse = z.strictObject({
   /** `disponivel` ou `desligado_pela_liame` (a função `regiao` desta empresa). */
   availability: z.strictObject({ status: Slug }),
   stores: z.array(StoreLocation),
-  /** Os Perfis da Empresa no Google ligados à marca, para "Usar o endereço do Perfil do Google". */
-  google_profiles: z.array(z.strictObject({ account_id: z.uuid(), name: z.string() })),
+  /**
+   * Os Perfis da Empresa no Google ligados à marca, para "Usar o endereço do Perfil do Google", com a loja de cada um
+   * (nula quando o perfil ainda não é de loja nenhuma).
+   */
+  google_profiles: z.array(z.strictObject({ account_id: z.uuid(), name: z.string(), unit_id: z.uuid().nullable() })),
   /** A pessoa pode salvar (o Dono e o Administrador, como o dossiê). */
   can_edit: z.boolean(),
+  /** A marca tem o Regem conectado: as lojas vêm dele. */
+  has_regem: z.boolean(),
+  /** A pessoa pode criar loja aqui (pode salvar e a marca não tem o Regem; D-RG-17). */
+  can_create_store: z.boolean(),
   attribution: z.string(),
   generated_at: z.iso.datetime(),
 });
@@ -127,6 +140,8 @@ export const SaveStoreLocationRequest = z.strictObject({
     postal_code: Cep,
     street: z.string().trim().min(1).max(200).nullable(),
     number: z.string().trim().min(1).max(20).nullable(),
+    /** Opcional ("Loja 2", "fundos"). */
+    complement: z.string().trim().min(1).max(60).nullable().optional(),
     district: z.string().trim().min(1).max(120).nullable(),
     city: z.string().trim().min(1).max(120),
     state: Uf,
@@ -135,6 +150,11 @@ export const SaveStoreLocationRequest = z.strictObject({
   /** A coordenada que a conferência devolveu (nula quando ela não achou). */
   coordinates: z.strictObject({ latitude: Latitude, longitude: Longitude, precision: z.enum(LOCATION_PRECISIONS) }).nullable(),
   source: z.enum(LOCATION_SOURCES),
+  /**
+   * Com `source` `perfil_google`: o Perfil do Google escolhido (`google_profiles[].account_id`). Ele passa a ser desta
+   * loja; o perfil que já é de outra loja volta 409.
+   */
+  google_profile_account_id: z.uuid().nullable().optional(),
   delivery_radius_km: z.number().min(DELIVERY_RADIUS_KM.min).max(DELIVERY_RADIUS_KM.max).multipleOf(DELIVERY_RADIUS_KM.step),
   delivery_areas: z.array(z.string().trim().min(1).max(80)).max(DELIVERY_AREAS_MAX),
 });
@@ -142,3 +162,14 @@ export type SaveStoreLocationRequest = z.infer<typeof SaveStoreLocationRequest>;
 
 export const SaveStoreLocationResponse = z.strictObject({ store: StoreLocation });
 export type SaveStoreLocationResponse = z.infer<typeof SaveStoreLocationResponse>;
+
+/** As lojas que uma marca pode criar aqui (a marca sem o Regem, D-RG-17). */
+export const STORES_PER_BRAND_MAX = 50;
+
+/** Criar a loja ao pôr no mapa (a marca sem o Regem, D-RG-17): o nome e o mesmo corpo de salvar. */
+export const CreateStoreRequest = SaveStoreLocationRequest.extend({
+  brand_id: z.uuid(),
+  /** O nome do Perfil do Google ou, sem perfil, "Loja" e o bairro. O Regem conectado depois se liga à loja de mesmo nome. */
+  name: z.string().trim().min(1).max(80),
+});
+export type CreateStoreRequest = z.infer<typeof CreateStoreRequest>;

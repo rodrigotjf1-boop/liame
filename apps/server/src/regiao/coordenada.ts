@@ -44,11 +44,23 @@ export function nomeComparavel(texto: string): string {
   return texto.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/\s+/g, ' ').trim();
 }
 
-/** As consultas, da mais precisa para a menos; a do endereço só existe com a rua. */
+/** O número de verdade do endereço (os algarismos do começo: "450", "450A" → "450"); "s/n" e vazio não têm. */
+export function numeroDoEndereco(numero: string | null): string | null {
+  const t = (numero ?? '').trim();
+  let fim = 0;
+  while (fim < t.length && fim < 10 && t[fim]! >= '0' && t[fim]! <= '9') fim++;
+  return fim > 0 ? t.slice(0, fim) : null;
+}
+
+/**
+ * As consultas, da mais precisa para a menos. A do endereço só existe com a rua E o número: sem o número ("s/n"), o
+ * ponto de uma rua comprida cairia longe da loja, e o centro do bairro é mais honesto (D-RG-14).
+ */
 export function consultasDoEndereco(e: EnderecoParaProcurar): Array<{ precisao: PrecisaoDaCoordenada; params: Record<string, string> }> {
   const base = { city: e.cidade, state: NOME_DA_UF[e.uf] ?? e.uf, country: 'Brasil' };
   const lista: Array<{ precisao: PrecisaoDaCoordenada; params: Record<string, string> }> = [];
-  if (e.rua) lista.push({ precisao: 'endereco', params: { ...base, street: e.numero ? `${e.numero} ${e.rua}` : e.rua } });
+  const numero = numeroDoEndereco(e.numero);
+  if (e.rua && numero) lista.push({ precisao: 'endereco', params: { ...base, street: `${numero} ${e.rua}` } });
   // O bairro vai como texto livre junto da cidade: o Nominatim não tem campo de bairro na consulta estruturada.
   if (e.bairro) lista.push({ precisao: 'bairro', params: { q: `${e.bairro}, ${e.cidade}, ${NOME_DA_UF[e.uf] ?? e.uf}, Brasil` } });
   lista.push({ precisao: 'cidade', params: base });

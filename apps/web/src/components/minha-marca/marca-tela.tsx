@@ -2,6 +2,7 @@
 
 import type { BrandDossierContent, BrandDossierResponse, BrandDossierSuggestion, BrandResponse, DossierSection, ResearchListResponse, ResearchResponse } from '@liame/contracts';
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { LinhaDaRegiao } from '@/components/regiao/linha-da-regiao';
 import { useAvisar } from '@/components/ui/avisos';
 import { Estado } from '@/components/ui/estado';
 import { Faixa } from '@/components/ui/faixa';
@@ -473,6 +474,7 @@ export function MarcaTela() {
                 situacao={situacao}
                 nomeDaMarca={nomeDaMarca}
                 acoes={acoes}
+                extra={s.id === 'regiao' ? <LinhaDaRegiao brandId={dossie.brand_id} /> : undefined}
                 tituloRef={(el) => {
                   titulosDasPartes.current[s.id] = el;
                 }}

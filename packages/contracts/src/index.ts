@@ -296,6 +296,7 @@ export {
 export {
   AddressLookupRequest,
   AddressLookupResponse,
+  CreateStoreRequest,
   DELIVERY_AREAS_MAX,
   DELIVERY_RADIUS_KM,
   GoogleProfileAddressRequest,
@@ -310,6 +311,7 @@ export {
   StoreLocation,
   StoreLocationsQuery,
   StoreLocationsResponse,
+  STORES_PER_BRAND_MAX,
 } from './regiao.js';
 export {
   CONVERSATION_MESSAGE_MAX,

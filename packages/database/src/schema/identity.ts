@@ -119,6 +119,8 @@ export const unit = liame.table('unit', {
   addressPostalCode: text('address_postal_code'),
   addressStreet: text('address_street'),
   addressNumber: text('address_number'),
+  // O complemento (0135; P40): opcional, só com o endereço.
+  addressComplement: text('address_complement'),
   addressDistrict: text('address_district'),
   addressCity: text('address_city'),
   addressState: text('address_state'),

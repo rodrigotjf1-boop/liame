@@ -1,6 +1,7 @@
 import {
   AddressLookupRequest,
   AddressLookupResponse,
+  CreateStoreRequest,
   GoogleProfileAddressRequest,
   GoogleProfileAddressResponse,
   ProblemDetails,
@@ -15,6 +16,7 @@ import {
   ApiBadRequestResponse,
   ApiConflictResponse,
   ApiCookieAuth,
+  ApiCreatedResponse,
   ApiForbiddenResponse,
   ApiNotFoundResponse,
   ApiOkResponse,
@@ -111,5 +113,22 @@ export class RegiaoController {
   @ApiUnprocessableEntityResponse({ standardSchema: ProblemDetails })
   salvar(@Auth() auth: AuthContext, @Param('id', { schema: ResourceId }) id: string, @Body({ schema: SaveStoreLocationRequest }) body: SaveStoreLocationRequest): Promise<SaveStoreLocationResponse> {
     return this.regiao.salvar(auth, id, body);
+  }
+
+  @Post('region/stores')
+  @Permissao('dossie.editar')
+  @Auditar('loja.criar', { recurso: 'unit' })
+  @ApiOperation({
+    summary: 'Criar a loja e pôr no mapa',
+    description:
+      'Para a marca sem o Regem (D-RG-17): cria a loja com o nome escolhido (o do Perfil do Google ou "Loja" e o bairro) e já salva onde ela fica, como em `PUT /v1/units/{id}/location`. O Regem conectado depois se liga à loja de mesmo nome. A marca com o Regem conectado volta 409 (as lojas vêm dele); o nome que a marca já tem, 409; acima de 50 lojas, 409. Fica na auditoria.',
+  })
+  @ApiCreatedResponse({ standardSchema: SaveStoreLocationResponse })
+  @ApiBadRequestResponse({ standardSchema: ProblemDetails })
+  @ApiForbiddenResponse({ standardSchema: ProblemDetails })
+  @ApiNotFoundResponse({ standardSchema: ProblemDetails })
+  @ApiConflictResponse({ standardSchema: ProblemDetails })
+  criar(@Auth() auth: AuthContext, @Body({ schema: CreateStoreRequest }) body: CreateStoreRequest): Promise<SaveStoreLocationResponse> {
+    return this.regiao.criar(auth, body);
   }
 }
