@@ -1,4 +1,4 @@
-import type { StoreLocation, StoreLocationsResponse } from '@liame/contracts';
+import type { RegionOverviewResponse, StoreLocation, StoreLocationsResponse } from '@liame/contracts';
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
@@ -19,6 +19,7 @@ import {
   semNumero,
   textoDoPonto,
 } from '@/components/regiao/textos';
+import { comparaDensidade, fonteDoNumero, fraseDaRenda, frescor, inteiro, reais, situacaoEmPalavras, umaCasa } from '@/components/regiao/textos-da-regiao';
 import { temModos, tituloDa } from '@/components/shell/navegacao';
 import { ModoProvider } from '@/lib/modo';
 
@@ -170,5 +171,57 @@ describe('Minha marca › Região', () => {
     expect(temModos('/marca/regiao', (p) => p === 'dossie.ver')).toBe(true);
     expect(temModos('/marca/regiao', () => false)).toBe(false);
     expect(temModos('/marca', (p) => p === 'dossie.ver')).toBe(false);
+  });
+});
+
+describe('Sua região (R2, parte 2)', () => {
+  const retrato: RegionOverviewResponse = {
+    brand_id: '0190d2b0-0000-7000-8000-000000000050',
+    unit_id: LOJA.unit_id,
+    availability: { status: 'disponivel' },
+    status: 'pronto',
+    district_status: 'achado',
+    district: { code: '3304557030', name: 'Tijuca', population: 142909, area_km2: 9.9413, density: 14375.3, head_income_median: 5500, head_income_mean: 8056.52, income_rank: { above_pct: 87, districts: 162, typical_median: 2000 } },
+    delivery_area: { matched: 2, total: 3, population: 167909 },
+    city: {
+      code: '3304557',
+      name: 'Rio de Janeiro',
+      state: 'RJ',
+      population: { value: 6211223, period: '2022', source: 'ibge_4714' },
+      density: { value: 5174.6, period: '2022', source: 'ibge_4714' },
+      population_estimate: { value: 6731133, period: '2026', source: 'ibge_6579' },
+      income_pc_median: { value: 1212, period: '2022', source: 'ibge_10295' },
+      income_pc_mean: { value: 2515.32, period: '2022', source: 'ibge_10295' },
+      restaurants: { value: 16242, period: '2024', source: 'ibge_9528' },
+      restaurants_per_10k: 24.1,
+    },
+    sources: [
+      { source: 'ibge_censo_bairro', status: 'em_dia', read_at: '2026-11-11T09:10:00.000Z', next_try_at: null },
+      { source: 'ibge_9528', status: 'falhou', read_at: null, next_try_at: '2026-11-11T18:00:00.000Z' },
+    ],
+    generated_at: '2026-11-11T15:00:00.000Z',
+  };
+
+  it('os números como a tela escreve: inteiro, uma casa e reais sem centavos quando redondo', () => {
+    expect([inteiro(142909), umaCasa(5174.6), umaCasa(24), reais(5500), reais(8056.52)]).toEqual(['142.909', '5.174,6', '24', 'R$ 5.500', 'R$ 8.056,52']);
+  });
+
+  it('a densidade comparada à do município, a renda com a posição entre os bairros (valor de 2022) e a fonte com o período', () => {
+    // Sem preposição colada no nome do lugar ("no Rio", "em São Paulo", "na Tijuca", "no Grajaú" variam).
+    expect(comparaDensidade(14375.3, 5174.6, 'Rio de Janeiro')).toBe('2,8 vezes a densidade do município (Rio de Janeiro: 5.174,6 por km²)');
+    expect(comparaDensidade(3000, 5174.6, 'Rio de Janeiro')).toMatch(/^menos denso que a média do município/);
+    expect(fraseDaRenda(retrato)).toBe('é a renda mediana do responsável pelo domicílio no bairro Tijuca. O bairro típico do município (Rio de Janeiro) tem R$ 2.000: este fica acima de 87% dos 162 bairros.');
+    expect(fraseDaRenda({ ...retrato, district: null })).toBeNull();
+    expect(fonteDoNumero(retrato.city!.restaurants!)).toBe('IBGE · Cadastro Central de Empresas, 2024');
+    expect(fonteDoNumero(retrato.city!.population!)).toBe('IBGE · Censo 2022');
+  });
+
+  it('o frescor e a situação de cada fonte em palavras', () => {
+    expect(frescor(retrato)).toBe('Lida em 11/11/2026');
+    expect(frescor({ ...retrato, status: 'parcial' })).toBe('Lida em 11/11/2026 · uma fonte falhou');
+    expect(frescor({ ...retrato, status: 'lendo' })).toBe('Lendo agora');
+    expect(situacaoEmPalavras(retrato.sources[0]!)).toEqual({ texto: 'Em dia', tipo: 'ok' });
+    expect(situacaoEmPalavras(retrato.sources[1]!).tipo).toBe('falhou');
+    expect(situacaoEmPalavras(retrato.sources[1]!).texto).toMatch(/^Não respondeu · de novo às \d{2}:\d{2}$/);
   });
 });
