@@ -23,7 +23,7 @@ export const VARIACAO_MAXIMA_DA_VERBA_PCT = 10;
  */
 export const PLATFORM_POLICY: LoadedPolicy = {
   source: 'platform',
-  version: 12,
+  version: 13,
   document: {
     rules: [
       // Conteúdo político bloqueado por padrão (ADR-007; TSE 23.755/2026, base §6.1).
@@ -92,6 +92,11 @@ export const PLATFORM_POLICY: LoadedPolicy = {
       // comentário entre os marcados) é conferido no pedido e de novo na execução; a ferramenta só se pede por ele. Uma
       // pessoa que pedisse esta ação cairia na regra de cima (Aprovação).
       { type: 'autonomy', action: 'comentario.responder_automatico', actor: 'agent', mode: 'AUTO' },
+      // v13 (A6, Z12, parte 2; P39, D-A6-109): a resposta numa conversa do Direct é direta quando quem pede é uma pessoa
+      // da equipe: ela escreve (ou escolhe a sugestão) e manda, sem pedido em Aprovações; o código do app vem uma vez, ao
+      // abrir o atendimento (8 horas), e a rota da conversa confere o atendimento aberto antes de pedir (a ferramenta
+      // declara `directByPerson` e só se pede pela rota, `onlyByRoute`). O funcionário de IA não pede esta ação.
+      { type: 'autonomy', action: 'direct.responder', actor: 'human', mode: 'AUTO' },
     ],
   },
 };

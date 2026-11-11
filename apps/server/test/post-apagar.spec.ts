@@ -124,7 +124,7 @@ describe('a ferramenta post_apagar e a política v10', () => {
       actor: 'human',
       ...extra,
     });
-    expect(PLATFORM_POLICY.version).toBe(12);
+    expect(PLATFORM_POLICY.version).toBe(13);
     expect(chooseMode([PLATFORM_POLICY], proposta()).mode).toBe('APPROVAL');
     expect(chooseMode([PLATFORM_POLICY], proposta({ actor: 'agent' })).mode).toBe('APPROVAL');
   });

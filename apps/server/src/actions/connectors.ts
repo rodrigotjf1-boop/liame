@@ -1,6 +1,8 @@
 import type { Tx } from '@liame/database';
 import { sql } from 'drizzle-orm';
 import { comentarioDoRecurso, comentarioNaPaginaConnector, comentarioNoInstagramConnector } from './comentario-na-rede.js';
+import { directNoInstagramConnector } from './direct-na-rede.js';
+import { conversaDoRecurso } from './direct-plano.js';
 import { googleAnunciosConnector } from './google-anuncios.js';
 import { metaAnunciosConnector } from './meta-anuncios.js';
 import { perfilAvaliacaoConnector } from './perfil-avaliacao.js';
@@ -128,6 +130,8 @@ export class ConectorPorRecurso implements Connector {
   constructor(
     private readonly doPost: Connector,
     private readonly doComentario: Connector,
+    /** A conversa do Direct (A6, Z12, parte 2): `direct:<id>`, só na conta do Instagram. */
+    private readonly doDirect: Connector | null = null,
   ) {
     this.provider = doPost.provider;
     this.writeFlag = doPost.writeFlag;
@@ -135,9 +139,11 @@ export class ConectorPorRecurso implements Connector {
     if (doPost.needsWriteAuthorization !== undefined) this.needsWriteAuthorization = doPost.needsWriteAuthorization;
   }
 
-  /** O conector do recurso: o do comentário para `comentario:<id>`, o do post para o resto. */
+  /** O conector do recurso: o do comentário para `comentario:<id>`, o do Direct para `direct:<id>`, o do post para o resto. */
   de(resourceId: string): Connector {
-    return comentarioDoRecurso(resourceId) ? this.doComentario : this.doPost;
+    if (comentarioDoRecurso(resourceId)) return this.doComentario;
+    if (this.doDirect && conversaDoRecurso(resourceId)) return this.doDirect;
+    return this.doPost;
   }
 
   read(tx: Tx, ref: ResourceRef): Promise<ReadResult | null> {
@@ -162,6 +168,8 @@ export const CONNECTORS: Record<string, Connector> = {
   // escrita `social_write` ligada. O Instagram publica desde a parte 2; a Página é a parte 3 (o post com ela recusa).
   // A6, Z11, parte 2: o comentário de um post da marca (responder, ocultar e mostrar), na mesma conta, pelo recurso
   // `comentario:<id>`. Só com a flag do conector (`social_write`) e a da ferramenta (`comentarios_responder`) ligadas.
-  instagram: new ConectorPorRecurso(postNoInstagramConnector, comentarioNoInstagramConnector),
+  // A6, Z12, parte 2: a resposta numa conversa do Direct, na mesma conta do Instagram, pelo recurso `direct:<id>`. Só com
+  // a flag do conector (`social_write`) e a da ferramenta (`direct_responder`) ligadas.
+  instagram: new ConectorPorRecurso(postNoInstagramConnector, comentarioNoInstagramConnector, directNoInstagramConnector),
   facebook_page: new ConectorPorRecurso(postNaPaginaConnector, comentarioNaPaginaConnector),
 };

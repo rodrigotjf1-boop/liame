@@ -59,6 +59,10 @@ export const TOKEN_DO_INSTAGRAM = `token-do-instagram-${randomBytes(6).toString(
 export const SEGREDO_DO_APP = `segredo-do-app-${randomBytes(6).toString('hex')}`;
 /** O token que a lista das Páginas devolve para a Página da marca (é com ele que a foto é publicada). */
 export const TOKEN_DA_PAGINA = `token-da-pagina-${randomBytes(6).toString('hex')}`;
+/** O id do app do Liame na Meta, como o dono da conversa o devolve (Z12, parte 2: o Conversation Routing). */
+export const APP_DA_META = '1234567890123';
+
+const objetoDe = (v: unknown): Record<string, unknown> => (v && typeof v === 'object' ? (v as Record<string, unknown>) : {});
 
 export type FotoNaPagina = { id: string; pagina: string; name: string; created_time: string; link: string; page_story_id: string; imagem: Buffer | null };
 
@@ -209,6 +213,10 @@ export class InstagramDeMentira {
   readonly conversasDoDirect: ConversaNoDirect[] = [];
   /** A autorização sem a permissão de mensagens (`instagram_manage_messages`): a recusa (#10). */
   semPermissaoDeMensagens = false;
+  /** O app dono das conversas (o Conversation Routing): nulo = nenhum dono informado (a Meta não diz). */
+  donoDasConversas: string | null = null;
+  /** A próxima mensagem sai, mas a resposta não chega (a Meta responde 503 depois de mandar; Z12, parte 2). */
+  perderARespostaDaMensagem = false;
   /** O @ da conta do Instagram dos testes (o `empresaComCanais` liga a conta como `@casabrasa`). */
   usuarioDaConta = 'casabrasa';
   base = '';
@@ -255,6 +263,8 @@ export class InstagramDeMentira {
     this.perderARespostaDoComentario = false;
     this.semPermissaoDeModerar = false;
     this.semPermissaoDeMensagens = false;
+    this.donoDasConversas = null;
+    this.perderARespostaDaMensagem = false;
     this.chamadas.length = 0;
     this.defeitos.length = 0;
   }
@@ -387,9 +397,36 @@ export class InstagramDeMentira {
    * uma conversa (`GET /{conversation-id}?fields=messages{…}`, só as 20 mais novas, a mais nova primeiro). Nulo para o
    * que não é do Direct.
    */
-  private doDirect(metodo: string, id: string, aresta: string | undefined, params: Record<string, string>): Resposta | null {
-    if (metodo !== 'GET') return null;
+  private doDirect(metodo: string, id: string, aresta: string | undefined, params: Record<string, string>, corpo: Record<string, unknown> | null): Resposta | null {
     const daMarca = (pagina: string) => ({ id: `ig-${pagina}`, username: this.usuarioDaConta });
+    // Mandar (Z12, parte 2): `POST /{page-id}/messages` com recipient.id e message.text, a tarefa de mensagens na Página,
+    // só dentro da janela de 24 horas (fora dela, 10/2534022) e só o app dono da conversa (com o dono, 100/2534037).
+    if (metodo === 'POST' && aresta === 'messages' && this.paginas.has(id)) {
+      const tarefas = this.paginas.get(id) ?? [];
+      if (!tarefas.includes('MESSAGING') && !tarefas.includes('MODERATE')) return erro(403, 200, 'Requires the MESSAGING task on the Page');
+      if (this.semPermissaoDeMensagens) return erro(403, 10, '(#10) Application does not have permission for this action');
+      const para = String(objetoDe(corpo?.recipient).id ?? '');
+      const texto = String(objetoDe(corpo?.message).text ?? '');
+      const c = this.conversasDoDirect.find((x) => x.pagina === id && x.pessoa.id === para);
+      if (!c) return erro(400, 100, '(#100) No matching user found', 2018001);
+      if (Buffer.byteLength(texto, 'utf8') > 1000) return erro(400, 100, '(#100) Message text is too long');
+      if (this.donoDasConversas && this.donoDasConversas !== 'liame') return erro(400, 100, '(#100) Another app is controlling this thread', 2534037);
+      const ultima = [...c.mensagens].reverse().find((m) => !m.daMarca);
+      if (!ultima || Date.parse(ultima.created_time) + 24 * 3_600_000 <= Date.now()) return erro(400, 10, '(#10) This message is sent outside of allowed window.', 2534022);
+      const mid = `mid.${randomBytes(9).toString('hex')}`;
+      c.mensagens.push({ id: mid, created_time: new Date().toISOString(), daMarca: true, texto });
+      c.updated_time = new Date().toISOString();
+      if (this.perderARespostaDaMensagem) {
+        this.perderARespostaDaMensagem = false;
+        return erro(503, 2, 'Service temporarily unavailable');
+      }
+      return { status: 200, corpo: { recipient_id: para, message_id: mid } };
+    }
+    if (metodo !== 'GET') return null;
+    // O dono da conversa (o Conversation Routing): o app dono, quando há; sem dono, a lista vazia.
+    if (aresta === 'thread_owner' && this.paginas.has(id)) {
+      return { status: 200, corpo: { data: this.donoDasConversas ? [{ thread_owner: { app_id: this.donoDasConversas === 'liame' ? APP_DA_META : this.donoDasConversas } }] : [] } };
+    }
     if (aresta === 'conversations' && this.paginas.has(id)) {
       if (params.platform !== 'instagram') return erro(400, 100, '(#100) The parameter platform is required for Instagram conversations');
       if (!(this.paginas.get(id) ?? []).includes('MODERATE')) return erro(403, 200, 'Requires the MODERATE task on the Page');
@@ -732,7 +769,7 @@ export class InstagramDeMentira {
     if (falha) return falha;
 
     // O Direct (A6, Z12, parte 1).
-    const doDirect = this.doDirect(metodo, id ?? '', aresta, params);
+    const doDirect = this.doDirect(metodo, id ?? '', aresta, params, corpo);
     if (doDirect) return doDirect;
 
     // Os comentários (A6, Z11, parte 1).

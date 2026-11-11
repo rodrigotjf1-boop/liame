@@ -41,6 +41,13 @@ export const PERMISSOES_DA_LEITURA = ['pedidos.ler', 'clientes.telefone.ler', 'c
 /** As de criar o cupom de campanha (decisão F3-5: criar cupom pela ligação pode). */
 export const PERMISSOES_DA_ESCRITA = [...PERMISSOES_DA_LEITURA, 'cupons.criar'] as const;
 
+/**
+ * O que a autorização por clique pede à loja (o `scope` do pedido): as de escrita e a dos canais que a Central de
+ * atendimento do Regem atende (A6, Z12, D-A6-107; Regem #907), para o Liame não responder o Direct que o Regem já
+ * responde. O token do DMS ID que empurra o pedido segue com as de escrita: a dos canais só vai na chamada dela.
+ */
+export const PERMISSOES_DO_CLIQUE_NO_REGEM = [...PERMISSOES_DA_ESCRITA, 'atendimento.canais.ler'] as const;
+
 /** O recurso do Regem no DMS ID: o endereço das rotas de integração, que é o `aud` dos tokens (Regem `DMS_ID_RECURSO`). */
 export function recursoDoRegem(apiUrl: string): string {
   return apiUrl.replace(/\/+$/, '');

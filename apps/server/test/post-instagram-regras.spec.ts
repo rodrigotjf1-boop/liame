@@ -133,12 +133,12 @@ describe('o post no Instagram: as regras puras (A6 · Z5b, parte 2)', () => {
     const contas = {
       data: [
         { id: '111111111111111', access_token: DA_PAGINA_A, tasks: ['ANALYZE', 'ADVERTISE'] },
-        { id: '222222222222222', access_token: DA_PAGINA_B, tasks: ['MANAGE', 'CREATE_CONTENT', 'MODERATE'] },
+        { id: '222222222222222', access_token: DA_PAGINA_B, tasks: ['MANAGE', 'CREATE_CONTENT', 'MODERATE', 'MESSAGING'] },
         { id: '333333333333333', tasks: ['CREATE_CONTENT'] },
       ],
     };
-    expect(tokenDaPagina(contas, '222222222222222')).toEqual({ token: DA_PAGINA_B, podePublicar: true, podeAnalisar: false, podeModerar: true });
-    expect(tokenDaPagina(contas, '111111111111111')).toEqual({ token: DA_PAGINA_A, podePublicar: false, podeAnalisar: true, podeModerar: false });
+    expect(tokenDaPagina(contas, '222222222222222')).toEqual({ token: DA_PAGINA_B, podePublicar: true, podeAnalisar: false, podeModerar: true, podeMandarMensagem: true });
+    expect(tokenDaPagina(contas, '111111111111111')).toEqual({ token: DA_PAGINA_A, podePublicar: false, podeAnalisar: true, podeModerar: false, podeMandarMensagem: false });
     // Sem o token na lista, ou a Página fora da autorização: nulo.
     expect(tokenDaPagina(contas, '333333333333333')).toBeNull();
     expect(tokenDaPagina(contas, '444444444444444')).toBeNull();

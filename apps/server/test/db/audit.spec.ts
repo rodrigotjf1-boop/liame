@@ -44,6 +44,9 @@ const WITHOUT_AUDIT = [
   // Conversa (A3, I10): a mensagem é conteúdo da própria pessoa (30 dias); o que a LIA registra em nome dela, a
   // demanda, entra na auditoria como ação do agente, na mesma transação.
   'POST /v1/conversations/messages',
+  // O Direct (A6, Z12, parte 2): marcar a conversa como lida só tira o "não lida" da lista do Liame quando alguém a
+  // abre; nada muda na Meta nem no que a conversa diz (mandar, concluir e o atendimento são auditados).
+  'POST /v1/direct/conversations/:id/read',
   'POST /v1/inbox/:provider',
   'POST /v1/inbox/:provider/:connectionId',
   'POST /v1/invitations/preview',

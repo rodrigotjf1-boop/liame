@@ -245,6 +245,10 @@ export const DATA_CLASSES: Record<string, TableClassification> = {
   // duas saem com a conta desligada ou quando o Regem passa a atender o Direct dela (D-A6-107).
   direct_setting: { class: 'INTERNAL', retention: 'enquanto a marca existir (sai com ela)' },
   direct_conversation: { class: 'PERSONAL', retention: 'com a conta conectada; sai quando não sobra mensagem guardada (90 dias depois da última)', purge: { job: 'direct_conversa', days: 90 } },
+  // O atendimento aberto de cada pessoa da equipe (A6, Z12, parte 2; migration 0131; D-A6-109): quando abriu, até quando
+  // vale (8 horas) e quando fechou. Uma linha por pessoa na empresa, regravada a cada abertura; sai com a pessoa ou a
+  // empresa. Cada abertura fica também na auditoria.
+  direct_attendance: { class: 'INTERNAL', retention: 'enquanto a pessoa tiver acesso à empresa (sai com ela); regravada a cada abertura' },
   direct_message: { class: 'PERSONAL', retention: '90 dias depois de enviada; antes, se a conta for desligada ou o Regem passar a atender o Direct dela', purge: { job: 'direct_mensagem', days: 90 } },
   // Os posts da marca (A6, Z5b, migration 0086): a foto (pela referência e o resumo), a hora e cada canal com o texto
   // que a empresa escreveu em nome dela e o que aconteceu na rede. Conteúdo da empresa, sem dado de pessoa. Fica com a

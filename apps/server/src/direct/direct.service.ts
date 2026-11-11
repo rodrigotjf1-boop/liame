@@ -1,7 +1,12 @@
 import {
+  DIRECT_ATTENDANCE_HOURS,
   DIRECT_LIST_LIMIT,
   DIRECT_MESSAGES_LIMIT,
   type DirectAccount,
+  type DirectAttendanceRequest,
+  type DirectAttendanceResponse,
+  type DirectReplyRequest,
+  type DirectReplyResponse,
   type DirectConversation,
   type DirectConversationResponse,
   type DirectConversationsQuery,
@@ -13,6 +18,8 @@ import {
 } from '@liame/contracts';
 import { Injectable } from '@nestjs/common';
 import { sql } from 'drizzle-orm';
+import { ActionService } from '../actions/action.service.js';
+import { recursoDaConversa } from '../actions/direct-plano.js';
 import { ConfirmacaoService } from '../auth/confirmacao.service.js';
 import { contaConectada } from '../connections/conectada.js';
 import { PROVEDOR_INSTAGRAM } from '../connectors/meta/publicacao.js';
@@ -31,6 +38,8 @@ import type { CursorDoDirect } from './sincronizador-do-direct.js';
 const PERMISSAO_DE_LIGAR = 'politicas.gerenciar';
 /** Desligar: quem aprova, na hora e sem código (a rota pede esta). */
 const PERMISSAO_DE_DESLIGAR = 'acoes.aprovar';
+/** Responder no Direct: o Dono, os Administradores e quem aprova (D-A6-109; a rota pede esta). */
+const PERMISSAO_DE_RESPONDER = 'acoes.aprovar';
 /** Quantas conversas a lista olha para contar e filtrar (a mais nova primeiro). */
 const CONVERSAS_OLHADAS = 500;
 
@@ -56,7 +65,114 @@ export class DirectService {
   constructor(
     private readonly flags: FlagService,
     private readonly confirmacao: ConfirmacaoService,
+    private readonly acoes: ActionService,
   ) {}
+
+  /** O atendimento aberto da pessoa: aberto agora (não fechado e dentro das 8 horas) e até quando. */
+  private async atendimentoDe(tenantId: string, userId: string): Promise<{ open: boolean; until: string | null }> {
+    const r = await currentTx().execute<{ expires_at: Date | string; aberto: boolean }>(sql`
+      select expires_at, (closed_at is null and expires_at > now()) as aberto
+        from liame.direct_attendance where tenant_id = ${tenantId} and user_id = ${userId}`);
+    const l = r.rows[0];
+    return l?.aberto ? { open: true, until: iso(l.expires_at) } : { open: false, until: null };
+  }
+
+  /** O atendimento da pessoa (D-A6-109): aberto, até quando e se ela pode responder no Direct. */
+  async verAtendimento(auth: AuthContext): Promise<DirectAttendanceResponse> {
+    const quem = quemPede(auth);
+    return { ...(await this.atendimentoDe(quem.tenantId, quem.userId)), can_reply: auth.permissions.has(PERMISSAO_DE_RESPONDER) };
+  }
+
+  /**
+   * Abre o atendimento (D-A6-109): a confirmação de quem é (o código do app ou a chave de acesso) uma vez, e por 8 horas
+   * as respostas da pessoa no Direct saem sem pedir de novo. Abrir de novo recomeça as 8 horas. Fica na auditoria.
+   */
+  async abrirAtendimento(auth: AuthContext, body: DirectAttendanceRequest): Promise<DirectAttendanceResponse> {
+    const quem = quemPede(auth);
+    const tx = currentTx();
+    await this.confirmacao.confirmar(tx, quem.userId, body);
+    const r = await tx.execute<{ expires_at: Date | string }>(sql`
+      insert into liame.direct_attendance (tenant_id, user_id, opened_at, expires_at, closed_at)
+      values (${quem.tenantId}, ${quem.userId}, now(), now() + make_interval(hours => ${DIRECT_ATTENDANCE_HOURS}), null)
+      on conflict (tenant_id, user_id) do update set opened_at = excluded.opened_at, expires_at = excluded.expires_at, closed_at = null
+      returning expires_at`);
+    auditDetail({ resourceId: quem.userId, after: { until: iso(r.rows[0]!.expires_at), hours: DIRECT_ATTENDANCE_HOURS } });
+    return this.verAtendimento(auth);
+  }
+
+  /** Fecha o atendimento antes da hora: a próxima resposta pede o código de novo. */
+  async fecharAtendimento(auth: AuthContext): Promise<DirectAttendanceResponse> {
+    const quem = quemPede(auth);
+    await currentTx().execute(sql`
+      update liame.direct_attendance set closed_at = now()
+       where tenant_id = ${quem.tenantId} and user_id = ${quem.userId} and closed_at is null and expires_at > now()`);
+    auditDetail({ resourceId: quem.userId, after: { closed: true } });
+    return this.verAtendimento(auth);
+  }
+
+  /**
+   * Manda a resposta numa conversa (D-A6-109 e D-A6-111): o Direct ligado e lido na marca, o atendimento aberto e a
+   * conversa guardada; o pedido vai pelo trilho de ações (a trava, as flags `social_write` e `direct_responder`, a
+   * política v13 e o plano, que confere a janela de 24 horas e o texto) e nasce aprovado, para o executor mandar.
+   */
+  async responder(auth: AuthContext, conversationId: string, body: DirectReplyRequest): Promise<DirectReplyResponse> {
+    const quem = quemPede(auth);
+    const brandId = body.brand_id;
+    await marcaDaEmpresa(brandId);
+    const conta = await this.contaDaMarca(brandId);
+    if (!conta || !(await this.lendo(quem.tenantId, quem.userId, brandId, conta))) {
+      throw new AppProblem(409, 'direct-desligado', 'O Direct não está ligado', 'O Direct desta marca não está ligado no Liame, ou o Regem atende o Direct desta conta.');
+    }
+    if (!(await this.atendimentoDe(quem.tenantId, quem.userId)).open) {
+      throw new AppProblem(409, 'atendimento-fechado', 'Abra o atendimento', 'Para responder no Direct, abra o atendimento com o código do app: vale por 8 horas.');
+    }
+    const tx = currentTx();
+    const existe = await tx.execute<{ conversation_id: string }>(sql`
+      select conversation_id from liame.direct_conversation where connected_account_id = ${conta.id} and conversation_id = ${conversationId}`);
+    if (!existe.rows[0]) throw new AppProblem(404, 'nao-encontrado', 'Não encontramos', 'Conversa não encontrada nesta marca.');
+    const id = await this.acoes.pedirPelaRota(auth, {
+      tool: 'direct_responder',
+      brand_id: brandId,
+      provider: PROVEDOR_INSTAGRAM,
+      account_id: conta.id,
+      resource_id: recursoDaConversa(conversationId),
+      params: { texto: body.text },
+    });
+    const r = await tx.execute<{ status: string; status_reason: string | null }>(sql`select status, status_reason from liame.action_request where id = ${id}`);
+    const pedido = r.rows[0]!;
+    return { action_id: id, status: pedido.status, status_reason: pedido.status_reason };
+  }
+
+  /** Conclui a conversa sem responder (P39): sai de "Esperam resposta"; a mensagem nova da pessoa reabre. */
+  async concluir(auth: AuthContext, conversationId: string, brandId: string): Promise<DirectConversationResponse> {
+    const conta = await this.conversaDaMarca(auth, brandId, conversationId);
+    await currentTx().execute(sql`
+      update liame.direct_conversation set concluded_at = now(), unread = false
+       where connected_account_id = ${conta} and conversation_id = ${conversationId}`);
+    auditDetail({ resourceId: conversationId, after: { concluded: true } });
+    return this.conversa(auth, brandId, conversationId);
+  }
+
+  /** Marca a conversa como lida no Liame (a pessoa abriu): só o "não lida" da lista; o Instagram não muda. */
+  async marcarLida(auth: AuthContext, conversationId: string, brandId: string): Promise<DirectConversationResponse> {
+    const conta = await this.conversaDaMarca(auth, brandId, conversationId);
+    await currentTx().execute(sql`
+      update liame.direct_conversation set unread = false where connected_account_id = ${conta} and conversation_id = ${conversationId}`);
+    return this.conversa(auth, brandId, conversationId);
+  }
+
+  /** A conta da conversa, conferida na marca e no Direct ligado; 404 quando não está. */
+  private async conversaDaMarca(auth: AuthContext, brandId: string, conversationId: string): Promise<string> {
+    const quem = quemPede(auth);
+    await marcaDaEmpresa(brandId);
+    const conta = await this.contaDaMarca(brandId);
+    const naoAchou = new AppProblem(404, 'nao-encontrado', 'Não encontramos', 'Conversa não encontrada nesta marca.');
+    if (!conta || !(await this.lendo(quem.tenantId, quem.userId, brandId, conta))) throw naoAchou;
+    const r = await currentTx().execute<{ conversation_id: string }>(sql`
+      select conversation_id from liame.direct_conversation where connected_account_id = ${conta.id} and conversation_id = ${conversationId}`);
+    if (!r.rows[0]) throw naoAchou;
+    return conta.id;
+  }
 
   private disponivel(tenantId: string, userId: string, brandId: string): Promise<boolean> {
     return this.flags.isEnabled(FLAG_DO_DIRECT, this.flags.context({ tenantId, userId, brandId }));

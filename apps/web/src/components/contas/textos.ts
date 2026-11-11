@@ -652,6 +652,11 @@ const ESCOPOS_EXTRAS: Record<string, { rotulo: string; texto: string }> = {
     rotulo: 'Telefone do cliente, pseudonimizado',
     texto: 'O telefone vira um identificador pseudonimizado na chegada e não fica guardado; liga a conversa do anúncio ao pedido.',
   },
+  // A6, Z12 (D-A6-107; Regem #907): o Direct do Liame desliga sozinho na conta que a Central do Regem atende.
+  'atendimento.canais.ler': {
+    rotulo: 'Canais da Central de atendimento',
+    texto: 'Quais contas do Instagram e páginas do Facebook a Central do Regem atende, para o Liame não responder o Direct que o Regem já responde. Sem mensagens nem dados de cliente.',
+  },
 };
 
 export type EscopoDaLoja = { cod: string; rotulo: string; texto: string; estado: 'liberado' | 'nao_liberado' | 'desligado' };
@@ -783,16 +788,21 @@ export function regemRevogado(c: ConnectionResponse): boolean {
 /**
  * "O que o Liame pede" no diálogo de conectar: o que vai sempre e o que o presidente decide na página do
  * Regem (o custo, que exige permissão financeira lá, e o cupom de campanha). Na autorização por clique (Hub DMS, F3,
- * parte C), o Liame pede também o telefone do cliente no pedido: um dado pessoal, que o presidente liga ou não.
+ * parte C), o Liame pede também o telefone do cliente no pedido: um dado pessoal, que o presidente liga ou não. Os canais
+ * que a Central do Regem atende (A6, Z12, D-A6-107) vão sempre, pelos dois caminhos (o Regem os dá ao Liame sempre).
  */
 export function pedidosAoRegem(porClique = false): { cod: string; rotulo: string; texto: string; opcional: boolean; nota: string | null }[] {
-  const pedidos = ESCOPOS_REGEM.map((e) => ({
-    cod: e.cod,
-    rotulo: e.rotulo,
-    texto: e.texto,
-    opcional: Boolean(e.financeiro || e.escrita),
-    nota: e.financeiro ? 'só com permissão financeira' : e.escrita ? 'com aprovação' : null,
-  }));
+  const canais = ESCOPOS_EXTRAS['atendimento.canais.ler']!;
+  const pedidos = [
+    ...ESCOPOS_REGEM.map((e) => ({
+      cod: e.cod,
+      rotulo: e.rotulo,
+      texto: e.texto,
+      opcional: Boolean(e.financeiro || e.escrita),
+      nota: e.financeiro ? 'só com permissão financeira' : e.escrita ? 'com aprovação' : null,
+    })),
+    { cod: 'atendimento.canais.ler', rotulo: canais.rotulo, texto: canais.texto, opcional: false, nota: null },
+  ];
   if (!porClique) return pedidos;
   const telefone = ESCOPOS_EXTRAS['clientes.telefone.ler']!;
   return [...pedidos, { cod: 'clientes.telefone.ler', rotulo: telefone.rotulo, texto: telefone.texto, opcional: true, nota: 'dado pessoal' }];
