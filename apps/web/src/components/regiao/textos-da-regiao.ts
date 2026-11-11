@@ -28,7 +28,49 @@ export const FONTES_DA_REGIAO: Record<string, { dado: string; fonte: string; rec
     consulta: 'tabela 9528 · variável 706 · CNAE 56.11-2 (categoria 117551)',
     renova: 'uma vez por ano',
   },
+  ibge_rm: { dado: 'A região metropolitana do município', fonte: 'IBGE · regiões metropolitanas', recorte: 'município', consulta: 'api/v1/localidades/regioes-metropolitanas', renova: 'a cada 6 meses' },
+  ibge_1737_censo: { dado: 'IPCA de julho de 2022 (o mês do Censo)', fonte: 'IBGE · IPCA', recorte: 'Brasil', consulta: 'tabela 1737 · variável 2266 (número-índice) · 202207', renova: 'fixo' },
+  ibge_1737: { dado: 'IPCA do mês mais novo (corrige a renda de 2022)', fonte: 'IBGE · IPCA', recorte: 'Brasil', consulta: 'tabela 1737 · variável 2266 (número-índice)', renova: 'todo mês' },
+  ibge_7531: { dado: 'Renda por pessoa no estado', fonte: 'IBGE · PNAD Contínua anual', recorte: 'UF', consulta: 'tabela 7531 · variável 10824', renova: 'uma vez por ano' },
+  ibge_7395: { dado: 'Renda por pessoa na região metropolitana', fonte: 'IBGE · PNAD Contínua anual', recorte: 'região metropolitana', consulta: 'tabela 7395 · variável 4196', renova: 'uma vez por ano' },
+  ibge_6472: { dado: 'Renda do trabalho na capital', fonte: 'IBGE · PNAD Contínua trimestral', recorte: 'capital', consulta: 'tabela 6472 · variável 5933 (real, habitual) · média de 4 trimestres', renova: 'todo trimestre' },
+  ibge_7060: { dado: 'Inflação de comer fora na região', fonte: 'IBGE · IPCA', recorte: 'região metropolitana ou município', consulta: 'tabela 7060 · variável 2265 (12 meses) · subitens 7432, 7434 e 7435', renova: 'todo mês' },
+  ibge_7060_brasil: { dado: 'Inflação de comer fora no Brasil', fonte: 'IBGE · IPCA', recorte: 'Brasil', consulta: 'tabela 7060 · variável 2265 (12 meses) · subitens 7432, 7434 e 7435', renova: 'todo mês' },
+  bcb_pix: { dado: 'Pagamentos com Pix no município', fonte: 'Banco Central · dados abertos do Pix', recorte: 'município', consulta: 'TransacoesPixPorMunicipio · QT_PES_PagadorPF e VL_PagadorPF', renova: 'todo mês' },
 };
+
+const MESES = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
+
+/** O mês "2026-09" como a tela escreve: "set/2026". */
+export function mesAno(periodo: string): string {
+  const m = Number(periodo.slice(5, 7));
+  return m >= 1 && m <= 12 ? `${MESES[m - 1]}/${periodo.slice(0, 4)}` : periodo;
+}
+
+/** O trimestre pelo mês em que termina ("2026-06" → "2º tri/2026"). */
+export function trimestre(periodo: string): string {
+  const m = Number(periodo.slice(5, 7));
+  return m % 3 === 0 ? `${m / 3}º tri/${periodo.slice(0, 4)}` : periodo;
+}
+
+/** Números grandes por extenso curto: "5,1 milhões", "44,2 bilhões". */
+export function grande(v: number): string {
+  if (v >= 1e9) return `${umaCasa(Math.round(v / 1e8) / 10)} bilhões`;
+  if (v >= 1e6) return `${umaCasa(Math.round(v / 1e5) / 10)} milhões`;
+  return inteiro(v);
+}
+
+/** A variação contra o ano anterior: "+4,3%", "−2,0%"; nula sem o ano anterior. */
+export function variacao(agora: number, antes: number | null): string | null {
+  if (antes === null || antes <= 0) return null;
+  const p = Math.round(((agora - antes) / antes) * 1000) / 10;
+  return `${p >= 0 ? '+' : '−'}${umaCasa(Math.abs(p))}%`;
+}
+
+/** Porcentagem com uma ou duas casas: "4,31%". */
+export function pct(v: number): string {
+  return `${v.toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}%`;
+}
 
 const fmt = (v: number, casas = 0) => v.toLocaleString('pt-BR', { minimumFractionDigits: casas, maximumFractionDigits: casas });
 
@@ -69,10 +111,17 @@ export function comparaDensidade(bairro: number, cidade: number, nomeDaCidade: s
 export function fraseDaRenda(r: RegionOverviewResponse): string | null {
   const b = r.district;
   if (!b || b.head_income_median === null) return null;
-  const base = `é a renda mediana do responsável pelo domicílio no bairro ${b.name}.`;
+  const hoje = b.head_income_median_today !== null && r.ipca;
+  const base = `é a renda mediana do responsável pelo domicílio no bairro ${b.name}${hoje ? `, a preços de ${mesAno(r.ipca!.to)}` : ''}.`;
   const p = b.income_rank;
   if (!p || !r.city) return base;
-  return `${base} O bairro típico do município (${r.city.name}) tem ${reais(p.typical_median)}: este fica acima de ${p.above_pct}% dos ${inteiro(p.districts)} bairros.`;
+  const tipica = hoje ? Math.round(p.typical_median * r.ipca!.factor) : p.typical_median;
+  return `${base} O bairro típico do município (${r.city.name}) tem ${reais(tipica)}: este fica acima de ${p.above_pct}% dos ${inteiro(p.districts)} bairros.`;
+}
+
+/** A fonte da renda do bairro: corrigida pelo IPCA quando dá, senão "valor de 2022, sem correção" (D-RG-20). */
+export function fonteDaRendaDoBairro(r: RegionOverviewResponse): string {
+  return r.ipca && r.district?.head_income_median_today !== null ? `IBGE · Censo 2022, corrigido pelo IPCA até ${mesAno(r.ipca.to)}` : 'IBGE · Censo 2022 · valor de 2022, sem correção';
 }
 
 /** A fonte curta de um número: "IBGE · Censo 2022", "IBGE · Cadastro Central de Empresas, 2024". */

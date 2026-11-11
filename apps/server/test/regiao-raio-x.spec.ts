@@ -1,7 +1,21 @@
 import { describe, expect, it } from 'vitest';
 import { bairrosDoBasico, csvDoZip, juntarRenda, linhasDoCsv, numeroDoCenso } from '../src/regiao/censo.js';
-import { enderecoDoAgregado, LEITURAS_DO_MUNICIPIO, numerosDaResposta } from '../src/regiao/ibge.js';
-import { acimaDe, densidade, numeroMaisNovo, por10Mil, situacaoDaFonte, situacaoDoRetrato } from '../src/regiao/raio-x.js';
+import { enderecoDoAgregado, enderecoDoPix, LEITURAS_DO_MUNICIPIO, lugarDaLeitura, numerosDaResposta, numerosDoPix, periodoDoIbge, rmDoMunicipio } from '../src/regiao/ibge.js';
+import {
+  acimaDe,
+  correcaoDoIpca,
+  corrigido,
+  densidade,
+  fontesDoRetrato,
+  inflacaoDeComerFora,
+  mediaDosTrimestres,
+  numeroMaisNovo,
+  pixDoMunicipio,
+  por10Mil,
+  situacaoDaFonte,
+  situacaoDoRetrato,
+} from '../src/regiao/raio-x.js';
+import { mesEmBrasilia, mesesAntes } from '../src/worker/regiao-fontes.service.js';
 import { arquivosDoZip, ZipInvalido } from '../src/regiao/zip.js';
 import { zipCom } from './helpers/zip-de-mentira.js';
 
@@ -117,5 +131,104 @@ describe('as contas do retrato', () => {
     expect(situacaoDoRetrato([renovacaoFalhou, falhou])).toBe('parcial');
     expect(situacaoDoRetrato([renovacaoFalhou, situacaoDaFonte('x', undefined)])).toBe('lendo');
     expect(situacaoDoRetrato([renovacaoFalhou])).toBe('pronto');
+  });
+});
+
+describe('as fontes mais novas que o Censo (parte 3; base §19.5)', () => {
+  const leitura = (fonte: string) => LEITURAS_DO_MUNICIPIO.find((l) => l.fonte === fonte)!;
+
+  it('o período do IBGE: o ano, o mês e o trimestre pelo mês em que termina', () => {
+    expect([periodoDoIbge('2025', false), periodoDoIbge('202609', false), periodoDoIbge('202602', true), periodoDoIbge('202604', true), periodoDoIbge('202605', true), periodoDoIbge('202613', false)]).toEqual([
+      '2025',
+      '2026-09',
+      '2026-06',
+      '2026-12',
+      null,
+      null,
+    ]);
+  });
+
+  it('o lugar de cada leitura: a UF, a capital (só ela), a RM (só com a RM resolvida), o IPCA local e o Brasil', () => {
+    const rio = '3304557';
+    const niteroi = '3303302';
+    expect(lugarDaLeitura(leitura('ibge_7531'), niteroi, '3301')).toEqual({ nivel: 'uf', codigo: '33', localidade: 'N3[33]' });
+    expect(lugarDaLeitura(leitura('ibge_6472'), rio, '3301')).toEqual({ nivel: 'municipio', codigo: rio, localidade: `N6[${rio}]` });
+    expect(lugarDaLeitura(leitura('ibge_6472'), niteroi, '3301')).toBeNull();
+    expect(lugarDaLeitura(leitura('ibge_7395'), niteroi, '3301')).toEqual({ nivel: 'rm', codigo: '3301', localidade: 'N7[3301]' });
+    expect(lugarDaLeitura(leitura('ibge_7395'), niteroi, null)).toBeNull();
+    expect(lugarDaLeitura(leitura('ibge_7060'), niteroi, '3301')).toMatchObject({ nivel: 'rm', codigo: '3301' });
+    // Goiânia: o IPCA cobre o município sozinho; Manaus: a RM da PNAD existe (1301), mas o IPCA não a cobre.
+    expect(lugarDaLeitura(leitura('ibge_7060'), '5208707', '5201')).toMatchObject({ nivel: 'municipio', codigo: '5208707' });
+    expect(lugarDaLeitura(leitura('ibge_7060'), '1302603', '1301')).toBeNull();
+    expect(lugarDaLeitura(leitura('ibge_1737'), niteroi, null)).toEqual({ nivel: 'brasil', codigo: '1', localidade: 'N1[all]' });
+    expect(fontesDoRetrato(niteroi, null).map((f) => f.fonte)).not.toContain('ibge_6472');
+  });
+
+  it('a RM do município: a RM legal que tem ele e a capital da UF vira a RM da PNAD ("UF01")', () => {
+    const lista = [{ municipios: [{ id: 3304557 }, { id: 3303302 }] }, { municipios: [{ id: 3300100 }] }];
+    expect([rmDoMunicipio(lista, '3303302'), rmDoMunicipio(lista, '3304557'), rmDoMunicipio(lista, '3300100'), rmDoMunicipio({ erro: 1 }, '3304557')]).toEqual(['3301', '3301', null, null]);
+  });
+
+  it('a resposta com categorias (IPCA de comer fora) e com todos os trimestres (renda do trabalho)', () => {
+    const ipca = [
+      {
+        id: '2265',
+        resultados: [
+          { classificacoes: [{ categoria: { '7432': 'Alimentação fora do domicílio' } }], series: [{ localidade: { id: '3301' }, serie: { '202609': '4.31' } }] },
+          { classificacoes: [{ categoria: { '7435': 'Lanche' } }], series: [{ localidade: { id: '3301' }, serie: { '202609': '7.75' } }] },
+          { classificacoes: [{ categoria: { '9999': 'Outra' } }], series: [{ localidade: { id: '3301' }, serie: { '202609': '1' } }] },
+        ],
+      },
+    ];
+    expect(numerosDaResposta(ipca, leitura('ibge_7060'), '3301')).toEqual([
+      { indicador: 'ipca_fora_12m', periodo: '2026-09', valor: 4.31 },
+      { indicador: 'ipca_lanche_12m', periodo: '2026-09', valor: 7.75 },
+    ]);
+    const trimestres = [{ id: '5933', resultados: [{ series: [{ localidade: { id: '3304557' }, serie: { '202601': '5791', '202602': '5227' } }] }] }];
+    expect(numerosDaResposta(trimestres, leitura('ibge_6472'), '3304557')).toEqual([
+      { indicador: 'renda_trabalho', periodo: '2026-03', valor: 5791 },
+      { indicador: 'renda_trabalho', periodo: '2026-06', valor: 5227 },
+    ]);
+  });
+
+  it('o Pix: só os meses completos do município; o endereço pede desde 13 meses antes', () => {
+    const corpo = { value: [{ AnoMes: 202610, Municipio_Ibge: 3304557, VL_PagadorPF: 10.5, QT_PES_PagadorPF: 7 }, { AnoMes: 202611, Municipio_Ibge: 3304557, VL_PagadorPF: 1, QT_PES_PagadorPF: 1 }] };
+    expect(numerosDoPix(corpo, '3304557', '202611')).toEqual([
+      { indicador: 'pix_pf_pagadores', periodo: '2026-10', valor: 7 },
+      { indicador: 'pix_pf_valor', periodo: '2026-10', valor: 10.5 },
+    ]);
+    expect(enderecoDoPix('3304557', '202510')).toContain("@DataBase='202510'");
+    expect(() => enderecoDoPix('33', '202510')).toThrow();
+    expect([mesesAntes('202611', 13), mesesAntes('202601', 1), mesEmBrasilia(new Date('2026-12-01T01:00:00Z'))]).toEqual(['202510', '202512', '202611']);
+  });
+
+  it('as contas: o IPCA desde julho de 2022, a média dos trimestres, o Pix um ano antes e a inflação de comer fora', () => {
+    const n = (geo_level: string, geo_code: string, indicator: string, period: string, value: number, source = 'x') => ({ geo_level, geo_code, indicator, period, value, source });
+    const numeros = [
+      n('brasil', '1', 'ipca_indice', '2022-07', 6411.95),
+      n('brasil', '1', 'ipca_indice', '2026-09', 7695.82),
+      n('municipio', '3304557', 'renda_trabalho', '2025-09', 5907),
+      n('municipio', '3304557', 'renda_trabalho', '2025-12', 5844),
+      n('municipio', '3304557', 'renda_trabalho', '2026-03', 5791),
+      n('municipio', '3304557', 'renda_trabalho', '2026-06', 5227),
+      n('municipio', '3304557', 'renda_trabalho', '2025-06', 1),
+      n('municipio', '3304557', 'pix_pf_pagadores', '2026-10', 5109806),
+      n('municipio', '3304557', 'pix_pf_valor', '2026-10', 44.2),
+      n('municipio', '3304557', 'pix_pf_pagadores', '2025-10', 4900000),
+      n('rm', '3301', 'ipca_fora_12m', '2026-09', 4.31),
+      n('rm', '3301', 'ipca_refeicao_12m', '2026-09', 2.66),
+      n('brasil', '1', 'ipca_fora_12m', '2026-09', 5.79),
+    ];
+    const ipca = correcaoDoIpca(numeros);
+    expect(ipca).toEqual({ from: '2022-07', to: '2026-09', factor: 1.2002 });
+    expect([corrigido(5500, ipca), corrigido(null, ipca), corrigido(5500, null)]).toEqual([6601, null, null]);
+    expect(correcaoDoIpca(numeros.filter((x) => x.period !== '2022-07'))).toBeNull();
+    // A média dos 4 trimestres mais novos (o de jun/2025 fica de fora).
+    expect(mediaDosTrimestres(numeros, 'renda_trabalho', '3304557')).toEqual({ value: 5692, period: '2026-06', quarters: 4, source: 'x' });
+    expect(pixDoMunicipio(numeros, '3304557')).toEqual({ period: '2026-10', payers: 5109806, value: 44.2, payers_prev_year: 4900000, value_prev_year: null });
+    expect(inflacaoDeComerFora(numeros, 'rm', '3301')).toEqual({ scope: 'rm', period: '2026-09', away: 4.31, meal: 2.66, snack: null, brasil: { away: 5.79, meal: null, snack: null } });
+    // O número de outro lugar não se mistura.
+    expect(numeroMaisNovo(numeros, 'ipca_fora_12m', 'rm', '3301')).toMatchObject({ value: 4.31 });
+    expect(numeroMaisNovo(numeros, 'ipca_fora_12m', 'brasil', '1')).toMatchObject({ value: 5.79 });
   });
 });

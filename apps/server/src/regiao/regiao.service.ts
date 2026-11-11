@@ -32,7 +32,23 @@ import { VaultService } from '../vault/vault.service.js';
 import { buscarCep, cepNormalizado, type EnderecoDoCep } from './cep.js';
 import { FONTE_CENSO_BAIRRO } from './censo.js';
 import { type Coordenada, nomeComparavel, ProcuraDeCoordenada } from './coordenada.js';
-import { acimaDe, densidade, FONTES_DO_RETRATO, type LeituraGuardada, type NumeroGuardado, numeroMaisNovo, por10Mil, situacaoDaFonte, situacaoDoRetrato } from './raio-x.js';
+import { MUNICIPIOS_DO_IPCA, RMS_DO_IPCA } from './ibge.js';
+import {
+  acimaDe,
+  correcaoDoIpca,
+  corrigido,
+  densidade,
+  fontesDoRetrato,
+  inflacaoDeComerFora,
+  type LeituraGuardada,
+  mediaDosTrimestres,
+  type NumeroGuardado,
+  numeroMaisNovo,
+  pixDoMunicipio,
+  por10Mil,
+  situacaoDaFonte,
+  situacaoDoRetrato,
+} from './raio-x.js';
 import { areasDeEntrega, ATRIBUICAO, FLAG_DA_REGIAO, fusoDaUf, type LinhaDaLoja, lojaNoMapa, ruaENumero } from './regiao.js';
 
 // A loja no mapa na API (plano da região, R1). Listar e salvar rodam na transação da requisição; conferir um endereço
@@ -357,6 +373,7 @@ export class RegiaoService {
       brand_id: brandId,
       unit_id: unitId,
       district: null,
+      ipca: null,
       delivery_area: { matched: 0, total: 0, population: null },
       city: null,
       generated_at: agora.toISOString(),
@@ -372,12 +389,29 @@ export class RegiaoService {
     const cidade = loja.ibge_city_code;
     if (!cidade) return { ...vazio, availability: { status: 'disponivel' }, status: 'sem_endereco', district_status: 'sem_bairro', sources: [] };
 
+    // Os números do município, da UF, da RM e do Brasil; a RM do município (a rotina a resolve, "0" fora de RM da PNAD).
+    const uf = cidade.slice(0, 2);
+    const doMunicipio = (
+      await tx.execute<{ rm: string | null }>(sql`
+        select value::bigint::text as rm from liame.region_fact
+         where geo_level = 'municipio' and geo_code = ${cidade} and indicator = 'rm_pnad' order by period desc limit 1`)
+    ).rows[0];
+    const rm = doMunicipio?.rm && doMunicipio.rm !== '0' ? doMunicipio.rm : null;
+    const numeros = (
+      await tx.execute<NumeroGuardado>(sql`
+        select geo_level, geo_code, indicator, period, value::float8 as value, source from liame.region_fact
+         where (geo_level = 'municipio' and geo_code = ${cidade}) or (geo_level = 'uf' and geo_code = ${uf})
+            or (geo_level = 'rm' and geo_code = ${rm ?? '-'}) or (geo_level = 'brasil' and geo_code = '1')`)
+    ).rows;
+
+    const pares = fontesDoRetrato(cidade, rm);
     const leituras = (
       await tx.execute<LeituraGuardada>(sql`
-        select source, geo_code, last_ok_at, last_error, next_try_at from liame.region_source_read
-         where (source = ${FONTE_CENSO_BAIRRO} and geo_code = '0') or geo_code = ${cidade}`)
+        select r.source, r.geo_code, r.last_ok_at, r.last_error, r.next_try_at
+          from liame.region_source_read r
+          join jsonb_to_recordset(${JSON.stringify(pares)}::jsonb) as p (fonte text, lugar text) on p.fonte = r.source and p.lugar = r.geo_code`)
     ).rows;
-    const fontes = FONTES_DO_RETRATO.map((f) => situacaoDaFonte(f, leituras.find((l) => l.source === f && l.geo_code === (f === FONTE_CENSO_BAIRRO ? '0' : cidade))));
+    const fontes = pares.map((p) => situacaoDaFonte(p.fonte, leituras.find((l) => l.source === p.fonte && l.geo_code === p.lugar)));
     const censoLido = fontes[0]!.status === 'em_dia';
 
     // O bairro da loja no Censo, pelo nome sem acento no mesmo município (o maior, se dois tiverem o mesmo nome).
@@ -416,13 +450,14 @@ export class RegiaoService {
         ).rows[0]
       : { casaram: 0, pessoas: null };
 
-    const numeros = (
-      await tx.execute<NumeroGuardado>(sql`
-        select indicator, period, value::float8 as value, source from liame.region_fact where geo_level = 'municipio' and geo_code = ${cidade}`)
-    ).rows;
-    const populacao = numeroMaisNovo(numeros, 'populacao');
-    const estimada = numeroMaisNovo(numeros, 'populacao_estimada');
-    const restaurantes = numeroMaisNovo(numeros, 'restaurantes');
+    const noMunicipio = (indicador: string) => numeroMaisNovo(numeros, indicador, 'municipio', cidade);
+    const populacao = noMunicipio('populacao');
+    const estimada = noMunicipio('populacao_estimada');
+    const restaurantes = noMunicipio('restaurantes');
+    const ipca = correcaoDoIpca(numeros);
+    const media = bairro?.head_income_mean === null || bairro?.head_income_mean === undefined ? null : Number(bairro.head_income_mean);
+    const ipcaLocal = MUNICIPIOS_DO_IPCA.has(cidade) ? inflacaoDeComerFora(numeros, 'municipio', cidade) : rm && RMS_DO_IPCA.has(rm) ? inflacaoDeComerFora(numeros, 'rm', rm) : null;
+    const ipcaBrasil = inflacaoDeComerFora(numeros, 'brasil', '1');
     return {
       brand_id: brandId,
       unit_id: unitId,
@@ -437,22 +472,35 @@ export class RegiaoService {
             area_km2: area,
             density: densidade(pessoas, area),
             head_income_median: mediana,
-            head_income_mean: bairro.head_income_mean === null ? null : Number(bairro.head_income_mean),
+            head_income_mean: media,
+            head_income_median_today: corrigido(mediana, ipca),
+            head_income_mean_today: corrigido(media, ipca),
             income_rank: posicao && posicao.total > 0 && posicao.tipica !== null ? { above_pct: acimaDe(posicao.abaixo, posicao.total), districts: posicao.total, typical_median: posicao.tipica } : null,
           }
         : null,
+      ipca,
       delivery_area: { matched: entrega?.casaram ?? 0, total: chaves.length, population: entrega?.casaram ? (entrega.pessoas ?? null) : null },
       city: {
         code: cidade,
         name: loja.address_city ?? '',
         state: loja.address_state ?? '',
         population: populacao,
-        density: numeroMaisNovo(numeros, 'densidade'),
+        density: noMunicipio('densidade'),
         population_estimate: estimada,
-        income_pc_median: numeroMaisNovo(numeros, 'renda_pc_mediana'),
-        income_pc_mean: numeroMaisNovo(numeros, 'renda_pc_media'),
+        income_pc_median: noMunicipio('renda_pc_mediana'),
+        income_pc_mean: noMunicipio('renda_pc_media'),
         restaurants: restaurantes,
         restaurants_per_10k: por10Mil(restaurantes?.value ?? null, (estimada ?? populacao)?.value ?? null),
+        rm_code: rm,
+        income_pc_uf: numeroMaisNovo(numeros, 'renda_pc_pnad', 'uf', uf),
+        income_pc_rm: rm ? numeroMaisNovo(numeros, 'renda_pc_pnad', 'rm', rm) : null,
+        work_income_capital: mediaDosTrimestres(numeros, 'renda_trabalho', cidade),
+        pix: pixDoMunicipio(numeros, cidade),
+        food_away_inflation: ipcaLocal
+          ? { ...ipcaLocal, brasil: ipcaLocal.brasil }
+          : ipcaBrasil
+            ? { scope: 'brasil', period: ipcaBrasil.period, away: ipcaBrasil.away, meal: ipcaBrasil.meal, snack: ipcaBrasil.snack, brasil: null }
+            : null,
       },
       sources: fontes,
       generated_at: agora.toISOString(),

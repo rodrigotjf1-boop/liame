@@ -19,7 +19,22 @@ import {
   semNumero,
   textoDoPonto,
 } from '@/components/regiao/textos';
-import { comparaDensidade, fonteDoNumero, fraseDaRenda, frescor, inteiro, reais, situacaoEmPalavras, umaCasa } from '@/components/regiao/textos-da-regiao';
+import {
+  comparaDensidade,
+  fonteDaRendaDoBairro,
+  fonteDoNumero,
+  fraseDaRenda,
+  frescor,
+  grande,
+  inteiro,
+  mesAno,
+  pct,
+  reais,
+  situacaoEmPalavras,
+  trimestre,
+  umaCasa,
+  variacao,
+} from '@/components/regiao/textos-da-regiao';
 import { temModos, tituloDa } from '@/components/shell/navegacao';
 import { ModoProvider } from '@/lib/modo';
 
@@ -181,7 +196,19 @@ describe('Sua região (R2, parte 2)', () => {
     availability: { status: 'disponivel' },
     status: 'pronto',
     district_status: 'achado',
-    district: { code: '3304557030', name: 'Tijuca', population: 142909, area_km2: 9.9413, density: 14375.3, head_income_median: 5500, head_income_mean: 8056.52, income_rank: { above_pct: 87, districts: 162, typical_median: 2000 } },
+    district: {
+      code: '3304557030',
+      name: 'Tijuca',
+      population: 142909,
+      area_km2: 9.9413,
+      density: 14375.3,
+      head_income_median: 5500,
+      head_income_mean: 8056.52,
+      head_income_median_today: 6601,
+      head_income_mean_today: 9669,
+      income_rank: { above_pct: 87, districts: 162, typical_median: 2000 },
+    },
+    ipca: { from: '2022-07', to: '2026-09', factor: 1.2002 },
     delivery_area: { matched: 2, total: 3, population: 167909 },
     city: {
       code: '3304557',
@@ -194,6 +221,12 @@ describe('Sua região (R2, parte 2)', () => {
       income_pc_mean: { value: 2515.32, period: '2022', source: 'ibge_10295' },
       restaurants: { value: 16242, period: '2024', source: 'ibge_9528' },
       restaurants_per_10k: 24.1,
+      rm_code: '3301',
+      income_pc_uf: { value: 2732, period: '2025', source: 'ibge_7531' },
+      income_pc_rm: { value: 2972, period: '2025', source: 'ibge_7395' },
+      work_income_capital: { value: 5692, period: '2026-06', quarters: 4, source: 'ibge_6472' },
+      pix: { period: '2026-10', payers: 5109806, value: 44244787453.94, payers_prev_year: 4900000, value_prev_year: 40000000000 },
+      food_away_inflation: { scope: 'rm', period: '2026-09', away: 4.31, meal: 2.66, snack: 7.75, brasil: { away: 5.79, meal: 5.01, snack: 7.59 } },
     },
     sources: [
       { source: 'ibge_censo_bairro', status: 'em_dia', read_at: '2026-11-11T09:10:00.000Z', next_try_at: null },
@@ -210,7 +243,21 @@ describe('Sua região (R2, parte 2)', () => {
     // Sem preposição colada no nome do lugar ("no Rio", "em São Paulo", "na Tijuca", "no Grajaú" variam).
     expect(comparaDensidade(14375.3, 5174.6, 'Rio de Janeiro')).toBe('2,8 vezes a densidade do município (Rio de Janeiro: 5.174,6 por km²)');
     expect(comparaDensidade(3000, 5174.6, 'Rio de Janeiro')).toMatch(/^menos denso que a média do município/);
-    expect(fraseDaRenda(retrato)).toBe('é a renda mediana do responsável pelo domicílio no bairro Tijuca. O bairro típico do município (Rio de Janeiro) tem R$ 2.000: este fica acima de 87% dos 162 bairros.');
+    // Com o IPCA lido, a renda (e o bairro típico) a preços do mês mais novo; sem ele, "valor de 2022, sem correção" (D-RG-20).
+    expect(fraseDaRenda(retrato)).toBe('é a renda mediana do responsável pelo domicílio no bairro Tijuca, a preços de set/2026. O bairro típico do município (Rio de Janeiro) tem R$ 2.400: este fica acima de 87% dos 162 bairros.');
+    expect(fonteDaRendaDoBairro(retrato)).toBe('IBGE · Censo 2022, corrigido pelo IPCA até set/2026');
+    const semIpca = { ...retrato, ipca: null, district: { ...retrato.district!, head_income_median_today: null, head_income_mean_today: null } };
+    expect(fraseDaRenda(semIpca)).toBe('é a renda mediana do responsável pelo domicílio no bairro Tijuca. O bairro típico do município (Rio de Janeiro) tem R$ 2.000: este fica acima de 87% dos 162 bairros.');
+    expect(fonteDaRendaDoBairro(semIpca)).toBe('IBGE · Censo 2022 · valor de 2022, sem correção');
+    expect([mesAno('2026-09'), trimestre('2026-06'), grande(5109806), grande(44244787453.94), variacao(5109806, 4900000), variacao(1, null), pct(4.31)]).toEqual([
+      'set/2026',
+      '2º tri/2026',
+      '5,1 milhões',
+      '44,2 bilhões',
+      '+4,3%',
+      null,
+      '4,31%',
+    ]);
     expect(fraseDaRenda({ ...retrato, district: null })).toBeNull();
     expect(fonteDoNumero(retrato.city!.restaurants!)).toBe('IBGE · Cadastro Central de Empresas, 2024');
     expect(fonteDoNumero(retrato.city!.population!)).toBe('IBGE · Censo 2022');
