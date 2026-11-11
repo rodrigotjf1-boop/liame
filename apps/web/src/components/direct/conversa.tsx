@@ -1,6 +1,6 @@
 'use client';
 
-import type { DirectConversationResponse, DirectMessage } from '@liame/contracts';
+import type { DirectConversationResponse, DirectMessage, DirectSuggestion } from '@liame/contracts';
 import { type FormEvent, useEffect, useId, useRef, useState } from 'react';
 import { Estado } from '@/components/ui/estado';
 import { Icone } from '@/components/ui/icone';
@@ -193,7 +193,7 @@ export function ConversaDoDirect({ marca, marcaNome, id, leitura, focar, agora, 
     );
   }
 
-  const { conversation: c, messages } = carga.dados;
+  const { conversation: c, messages, suggestion: sugestao } = carga.dados;
   const janela = janelaDaConversa(c, agora);
   const quem = quemEscreveu(c.username);
   const usados = bytesDoTexto(texto.trim());
@@ -235,6 +235,20 @@ export function ConversaDoDirect({ marca, marcaNome, id, leitura, focar, agora, 
           </div>
         )}
       </div>
+      {sugestao && (
+        <SugestaoDoDirect
+          s={sugestao}
+          aoUsar={
+            podeResponder && naJanela
+              ? (t) => {
+                  setTexto(t);
+                  setErro(null);
+                  campo.current?.focus();
+                }
+              : null
+          }
+        />
+      )}
       {!podeResponder ? (
         <div className="dir-travado">
           <Icone nome="eye" />
@@ -249,6 +263,22 @@ export function ConversaDoDirect({ marca, marcaNome, id, leitura, focar, agora, 
             <b>Não dá para responder agora.</b> A Meta só deixa a marca responder até 24 horas depois da última mensagem da pessoa. Quando ela escrever de novo, a conversa volta para
             “Esperam resposta”.
           </span>
+        </div>
+      ) : sugestao?.kind === 'golpe' ? (
+        // Golpe (P39): nada sai para esta conversa; concluir tira da lista do Liame.
+        <div className="dir-resp">
+          {erro && (
+            <p className="campo-erro" role="alert">
+              {erro}
+            </p>
+          )}
+          <div className="dir-resp-pe">
+            <span className="dir-resp-dica">Nada sai para esta conversa. Concluir tira da lista do Liame; o Instagram não muda.</span>
+            <button className="btn" type="button" disabled={ocupado} onClick={() => disparar(concluir())}>
+              <Icone nome="check" pequeno />
+              Concluir a conversa
+            </button>
+          </div>
         </div>
       ) : (
         <form className="dir-resp" onSubmit={(e) => disparar(mandar(e))} noValidate>
@@ -288,6 +318,61 @@ export function ConversaDoDirect({ marca, marcaNome, id, leitura, focar, agora, 
       )}
     </>
   );
+}
+
+/**
+ * A sugestão sem IA (parte 4a; P39): a resposta pronta do elogio e da menção no story (com "Usar esta"), o "como
+ * proceder" da reclamação e o aviso do golpe. Um tipo que esta versão da tela não conhece não aparece (V23).
+ */
+function SugestaoDoDirect({ s, aoUsar }: { s: DirectSuggestion; aoUsar: ((texto: string) => void) | null }) {
+  if (s.kind === 'golpe') {
+    return (
+      <div className="dir-sug dir-sug--golpe">
+        <p className="dir-sug-cab">
+          <Icone nome="alert" />
+          <b>Parece golpe</b>
+        </p>
+        <p className="dir-sug-texto">O Liame não sugere resposta a golpe. Concluir tira a conversa da lista do Liame; denunciar e bloquear ficam no Instagram.</p>
+      </div>
+    );
+  }
+  if (s.kind === 'passos' && s.steps.length) {
+    return (
+      <div className="dir-sug">
+        <p className="dir-sug-cab">
+          <Icone nome="sparkles" />
+          <b>Como proceder</b>
+          <span>numa reclamação</span>
+        </p>
+        <ol className="dir-passos">
+          {s.steps.map((p) => (
+            <li key={p}>{p}</li>
+          ))}
+        </ol>
+      </div>
+    );
+  }
+  if (s.kind === 'pronta' && s.text) {
+    const texto = s.text;
+    return (
+      <div className="dir-sug">
+        <p className="dir-sug-cab">
+          <Icone nome="sparkles" />
+          <b>Resposta pronta</b>
+          <span>sem IA, como a do elogio nos comentários</span>
+        </p>
+        <p className="dir-sug-texto">{texto}</p>
+        {aoUsar && (
+          <div>
+            <button className="btn btn--sm" type="button" onClick={() => aoUsar(texto)}>
+              Usar esta
+            </button>
+          </div>
+        )}
+      </div>
+    );
+  }
+  return null;
 }
 
 /** Uma mensagem: o texto em balão, ou a frase do que só o Instagram guarda (foto, vídeo, story). */

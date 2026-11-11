@@ -622,4 +622,5 @@ export {
   DirectSettingsQuery,
   DirectSettingsRequest,
   DirectSettingsResponse,
+  DirectSuggestion,
 } from './direct.js';

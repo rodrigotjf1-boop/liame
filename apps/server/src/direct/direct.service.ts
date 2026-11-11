@@ -29,10 +29,12 @@ import { FlagService } from '../flags/flag.service.js';
 import { marcaDaEmpresa, quemPede } from '../fotos/fotos.service.js';
 import { DATASET_DO_DIRECT, type DirecaoDoDirect, FLAG_DO_DIRECT, situacaoDaConversa } from './direct.js';
 import type { CursorDoDirect } from './sincronizador-do-direct.js';
+import { PENDENTES_DO_TIPO, sugestaoNoDirect, tipoNoDirect } from './tipo-no-direct.js';
 
 // O Direct do Instagram na API (A6, Z12, parte 1; P39, D-A6-106 a D-A6-112): o ajuste da marca (ligar, com o código do
 // app, e desligar, na hora) e o que a tela lê do que a rotina `direct` guardou. Nada aqui chama a Meta nem o Regem:
-// a leitura é do worker (V53), e responder vem à parte (Z12, parte 3).
+// a leitura é do worker (V53). Responder, com o atendimento aberto, pelo trilho de ações (parte 2); o tipo de cada
+// conversa e a sugestão sem IA (parte 4a), por `tipo-no-direct.ts`.
 
 /** Ligar o Direct: o Dono ou um Administrador (D-A6-109, como o automático dos comentários). */
 const PERMISSAO_DE_LIGAR = 'politicas.gerenciar';
@@ -55,7 +57,24 @@ type LinhaDaConversa = {
   m_direction: string | null;
   m_kind: string | null;
   m_body: string | null;
+  /** O que a pessoa mandou desde a última resposta da marca (e depois de concluída), da mais velha à mais nova. */
+  p_pendentes: { id: string; kind: string; body: string }[] | null;
 };
+
+/**
+ * As mensagens da pessoa depois da última resposta da marca e de "concluir" (as mais novas, até `PENDENTES_DO_TIPO`),
+ * para o tipo da conversa (parte 4a). O texto de cada uma, cortado em 600 (a regra olha o começo).
+ */
+const PENDENTES = sql`
+  left join lateral (
+    select coalesce(jsonb_agg(jsonb_build_object('id', y.message_id, 'kind', y.kind, 'body', left(y.body, 600)) order by y.sent_at, y.message_id), '[]'::jsonb) as p_pendentes
+      from (select z.message_id, z.kind, z.body, z.sent_at from liame.direct_message z
+             where z.connected_account_id = c.connected_account_id and z.conversation_id = c.conversation_id and z.direction = 'entrada'
+               and z.sent_at > coalesce(c.concluded_at, '-infinity'::timestamptz)
+               and z.sent_at > coalesce((select max(w.sent_at) from liame.direct_message w
+                                          where w.connected_account_id = c.connected_account_id and w.conversation_id = c.conversation_id
+                                            and w.direction = 'saida'), '-infinity'::timestamptz)
+             order by z.sent_at desc, z.message_id desc limit ${PENDENTES_DO_TIPO}) y) p on true`;
 
 const iso = (v: Date | string): string => (v instanceof Date ? v : new Date(v)).toISOString();
 const ZERO: DirectCounts = { espera: 0, fechando: 0, respondida: 0, fora: 0, todas: 0 };
@@ -289,18 +308,19 @@ export class DirectService {
     const linhas = (
       await currentTx().execute<LinhaDaConversa>(sql`
         select c.conversation_id, c.username, c.last_message_at, c.last_inbound_at, c.last_direction, c.concluded_at, c.unread,
-               m.direction as m_direction, m.kind as m_kind, m.body as m_body
+               m.direction as m_direction, m.kind as m_kind, m.body as m_body, p.p_pendentes
           from liame.direct_conversation c
           left join lateral (
             select x.direction, x.kind, x.body from liame.direct_message x
              where x.connected_account_id = c.connected_account_id and x.conversation_id = c.conversation_id
              order by x.sent_at desc, x.message_id desc limit 1) m on true
+          ${PENDENTES}
          where c.connected_account_id = ${conta.id}
            ${busca ? sql`and (c.username ilike ${busca} or exists (select 1 from liame.direct_message y where y.connected_account_id = c.connected_account_id and y.conversation_id = c.conversation_id and y.body ilike ${busca}))` : sql``}
          order by c.last_message_at desc, c.conversation_id
          limit ${CONVERSAS_OLHADAS}`)
     ).rows;
-    const todas = linhas.map((l) => conversaDaLinha(l, agora));
+    const todas = linhas.map((l) => conversaDaLinha(l, agora, conta.usuario));
     const counts: DirectCounts = {
       espera: todas.filter((c) => c.status === 'espera').length,
       fechando: todas.filter((c) => c.status === 'espera' && c.closing).length,
@@ -332,12 +352,13 @@ export class DirectService {
     const linha = (
       await tx.execute<LinhaDaConversa>(sql`
         select c.conversation_id, c.username, c.last_message_at, c.last_inbound_at, c.last_direction, c.concluded_at, c.unread,
-               m.direction as m_direction, m.kind as m_kind, m.body as m_body
+               m.direction as m_direction, m.kind as m_kind, m.body as m_body, p.p_pendentes
           from liame.direct_conversation c
           left join lateral (
             select x.direction, x.kind, x.body from liame.direct_message x
              where x.connected_account_id = c.connected_account_id and x.conversation_id = c.conversation_id
              order by x.sent_at desc, x.message_id desc limit 1) m on true
+          ${PENDENTES}
          where c.connected_account_id = ${conta.id} and c.conversation_id = ${conversationId}`)
     ).rows[0];
     if (!linha) throw naoAchou;
@@ -350,10 +371,15 @@ export class DirectService {
            limit ${DIRECT_MESSAGES_LIMIT}) z
          order by sent_at, message_id`)
     ).rows;
+    const conversation = conversaDaLinha(linha, agora, conta.usuario);
+    // A sugestão sem IA só para o que espera resposta (P39), variando pela última mensagem da pessoa.
+    const ultima = linha.p_pendentes?.at(-1);
+    const suggestion = conversation.status === 'espera' && ultima ? sugestaoNoDirect(tipoNoDirect(linha.p_pendentes ?? [], conta.usuario), ultima.id) : null;
     return {
       brand_id: brandId,
-      conversation: conversaDaLinha(linha, agora),
+      conversation,
       messages: mensagens.map((m) => ({ id: m.message_id, direction: m.direction, kind: m.kind, text: m.body, sent_at: iso(m.sent_at) })),
+      suggestion,
     };
   }
 
@@ -373,7 +399,7 @@ function leitura(ligado: boolean, conta: LinhaDaConta | null): string {
   return conta.last_error ? 'falhou' : 'nunca';
 }
 
-function conversaDaLinha(l: LinhaDaConversa, agora: Date): DirectConversation {
+function conversaDaLinha(l: LinhaDaConversa, agora: Date, usuarioDaMarca: string | null): DirectConversation {
   const s = situacaoDaConversa({ last_direction: l.last_direction, last_inbound_at: l.last_inbound_at, concluded_at: l.concluded_at }, agora);
   return {
     id: l.conversation_id,
@@ -382,6 +408,7 @@ function conversaDaLinha(l: LinhaDaConversa, agora: Date): DirectConversation {
     closing: s.fechando,
     window_until: s.janelaAte,
     unread: l.unread,
+    kind: tipoNoDirect(l.p_pendentes ?? [], usuarioDaMarca),
     last_message_at: iso(l.last_message_at),
     last_message: l.m_direction ? { direction: l.m_direction, kind: l.m_kind ?? 'texto', text: l.m_body ?? '' } : null,
   };

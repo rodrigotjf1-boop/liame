@@ -98,6 +98,12 @@ export const DirectConversation = z.strictObject({
   window_until: z.iso.datetime().nullable(),
   /** Chegou mensagem da pessoa que ninguém abriu no Liame. */
   unread: z.boolean(),
+  /**
+   * O tipo, pelo que a pessoa escreveu desde a última resposta da marca (A6, Z12, parte 4a; a regra dos comentários):
+   * `pergunta`, `reclamacao`, `elogio`, `golpe`, `ofensivo` ou `mencao` (a menção no story); nulo quando a regra não
+   * decide ou não há nada esperando. A lista pode crescer (V23).
+   */
+  kind: Codigo.nullable(),
   last_message_at: z.iso.datetime(),
   /** A última mensagem: de quem (`entrada`, da pessoa; `saida`, da marca), o tipo e o texto (vazio no que não é texto). */
   last_message: z.strictObject({ direction: Codigo, kind: Codigo, text: z.string() }).nullable(),
@@ -174,10 +180,24 @@ export type DirectReplyResponse = z.infer<typeof DirectReplyResponse>;
 export const DirectBrandRequest = z.strictObject({ brand_id: z.uuid() });
 export type DirectBrandRequest = z.infer<typeof DirectBrandRequest>;
 
+/**
+ * A sugestão sem IA da conversa (A6, Z12, parte 4a): `pronta` (o agradecimento do elogio e da menção no story, em
+ * `text`), `passos` (o "como proceder" da reclamação, em `steps`) ou `golpe` (o Liame não sugere resposta). A lista pode
+ * crescer (V23).
+ */
+export const DirectSuggestion = z.strictObject({
+  kind: Codigo,
+  text: z.string().max(1000).nullable(),
+  steps: z.array(z.string().max(300)).max(8),
+});
+export type DirectSuggestion = z.infer<typeof DirectSuggestion>;
+
 export const DirectConversationResponse = z.strictObject({
   brand_id: z.uuid(),
   conversation: DirectConversation,
   /** As mensagens guardadas, da mais velha para a mais nova. */
   messages: z.array(DirectMessage).max(DIRECT_MESSAGES_LIMIT),
+  /** A sugestão sem IA para o que espera resposta; nula quando não há (a pergunta espera o Social media, parte 4b). */
+  suggestion: DirectSuggestion.nullable(),
 });
 export type DirectConversationResponse = z.infer<typeof DirectConversationResponse>;

@@ -4,9 +4,11 @@ import type { AddressInfo } from 'node:net';
 import { resolve } from 'node:path';
 import { type Database, runMigrations, withTenant } from '@liame/database';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { RESPOSTAS_PRONTAS } from '../../src/ai/social/comentario.js';
 import { currentStep, totpCode } from '../../src/auth/totp.js';
 import { APP_CONFIG, type AppConfig } from '../../src/config.js';
 import { DATABASE } from '../../src/database/database.module.js';
+import { PASSOS_DA_RECLAMACAO, RESPOSTAS_DA_MENCAO } from '../../src/direct/tipo-no-direct.js';
 import { FlagService } from '../../src/flags/flag.service.js';
 import { VaultService } from '../../src/vault/vault.service.js';
 import { DirectLoop } from '../../src/worker/direct-loop.js';
@@ -123,7 +125,8 @@ describe.skipIf(!hasDb)('o Direct do Instagram: a leitura e o ajuste (A6 · Z12,
   const ler = (e: EmpresaComCanais, agora = new Date()) => fila.executarLote(10, { tenantIds: [e.tenantId] }, agora);
   const problema = (r: { status: number; body: unknown }) => [r.status, (r.body as { code?: string }).code];
   const emMinutos = (n: number) => new Date(Date.now() + n * 60_000);
-  type Lista = { counts: Record<string, number>; items: { id: string; username: string; status: string; unread: boolean }[] };
+  type Lista = { counts: Record<string, number>; items: { id: string; username: string; status: string; unread: boolean; kind: string | null }[] };
+  type Sugestao = { kind: string; text: string | null; steps: string[] } | null;
 
   it('liga com o código e a confirmação; a leitura traz as conversas; a tela lista com as situações e a busca; a segunda leitura só relê a que mudou', async () => {
     const e = await empresa('Casa Brasa Direct');
@@ -166,6 +169,43 @@ describe.skipIf(!hasDb)('o Direct do Instagram: a leitura e o ajuste (A6 · Z12,
     expect(((await lista(e)).body as Lista).items.map((i) => i.username)).toEqual(['ana.paula_rj', 'lucas_fern']);
     expect(((await lista(e, 'todas', 'combo')).body as Lista).items.map((i) => i.username)).toEqual(['lucas_fern']);
     expect(((await lista(e, 'todas', 'ana.paula')).body as Lista).items.map((i) => i.username)).toEqual(['ana.paula_rj']);
+    expect(meta.defeitos).toEqual([]);
+  }, 120_000);
+
+  it('parte 4a (D-A6-118): o tipo de cada conversa pela regra e a sugestão sem IA; respondida ou concluída, sem tipo nem sugestão', async () => {
+    const e = await empresa('Casa Brasa Direct Tipos');
+    const pagina = e.pagina!.externo;
+    const carla = meta.escreveuNoDirect(pagina, { usuario: 'carla.m', texto: 'Que delícia esse smash!', minutos: 9 });
+    const bia = meta.escreveuNoDirect(pagina, { usuario: 'bia.costa', story: 'mention', minutos: 8 });
+    const rui = meta.escreveuNoDirect(pagina, { usuario: 'rui.s', texto: 'Chegou frio e faltou a batata. Pedido 4821.', minutos: 7 });
+    const promo = meta.escreveuNoDirect(pagina, { usuario: 'promo_seguidores', texto: 'Ganhe seguidores reais hoje! Clique no link', minutos: 6 });
+    const ana = meta.escreveuNoDirect(pagina, { usuario: 'ana.paula_rj', texto: 'Vocês entregam na Penha?', minutos: 5 });
+    const lucas = meta.escreveuNoDirect(pagina, { usuario: 'lucas_fern', texto: 'Amei o combo!', minutos: 40 });
+    meta.marcaNoDirect(lucas, 'Obrigado pelo carinho!', 30);
+    expect((await mudar(e, { enabled: true, no_other_app: true, code: await codigo(e) })).status).toBe(200);
+    expect((await ler(e))[0]).toMatchObject({ status: 'ok', conversas: 6 });
+
+    const tipos = Object.fromEntries(((await lista(e, 'todas')).body as Lista).items.map((i) => [i.username, i.kind]));
+    expect(tipos).toEqual({ 'carla.m': 'elogio', 'bia.costa': 'mencao', 'rui.s': 'reclamacao', promo_seguidores: 'golpe', 'ana.paula_rj': 'pergunta', lucas_fern: null });
+    const sugestao = async (id: string): Promise<Sugestao> => ((await conversa(e, id)).body as { suggestion: Sugestao }).suggestion;
+    const doElogio = (await sugestao(carla))!;
+    expect(doElogio.kind).toBe('pronta');
+    expect(RESPOSTAS_PRONTAS.elogio).toContain(doElogio.text);
+    const daMencao = (await sugestao(bia))!;
+    expect(daMencao.kind).toBe('pronta');
+    expect(RESPOSTAS_DA_MENCAO).toContain(daMencao.text);
+    expect(await sugestao(rui)).toEqual({ kind: 'passos', text: null, steps: [...PASSOS_DA_RECLAMACAO] });
+    expect(await sugestao(promo)).toEqual({ kind: 'golpe', text: null, steps: [] });
+    // A pergunta espera o Social media (parte 4b); a respondida não tem o que sugerir.
+    expect(await sugestao(ana)).toBeNull();
+    expect(await sugestao(lucas)).toBeNull();
+
+    // Concluir sem responder tira o tipo e a sugestão; a mensagem nova da pessoa traz de novo.
+    const concluida = await api.call('POST', `/v1/direct/conversations/${promo}/conclude`, { cookie: e.cookie, body: { brand_id: e.brandId } });
+    expect(concluida.body).toMatchObject({ conversation: { status: 'respondida', kind: null }, suggestion: null });
+    meta.escreveuNoDirect(pagina, { usuario: 'promo_seguidores', texto: 'Última chance: ganhe seguidores reais! www.promo-seguidores.shop' });
+    expect((await ler(e, emMinutos(2)))[0]).toMatchObject({ status: 'ok', relidas: 1 });
+    expect(await sugestao(promo)).toEqual({ kind: 'golpe', text: null, steps: [] });
     expect(meta.defeitos).toEqual([]);
   }, 120_000);
 

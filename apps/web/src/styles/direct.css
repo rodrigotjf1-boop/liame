@@ -85,6 +85,17 @@
 .dir-anexo .ic { flex: none; }
 .dir-anexo a { color: var(--link); font-weight: 600; }
 
+/* a sugestão sem IA (parte 4a): a resposta pronta, o "como proceder" da reclamação e o golpe */
+.dir-sug { display: grid; gap: var(--sp-2); margin: 0 var(--sp-4) var(--sp-3); padding: var(--sp-3) var(--sp-4); border: 1px solid color-mix(in srgb, var(--ai) 35%, var(--border)); border-radius: var(--radius-lg); background: var(--ai-soft); min-width: 0; }
+.dir-sug--golpe { border-color: color-mix(in srgb, var(--danger) 35%, var(--border)); background: var(--danger-soft); }
+.dir-sug-cab { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-1) var(--sp-2); font-size: var(--text-sm); }
+.dir-sug-cab .ic { width: 16px; height: 16px; flex: none; color: var(--ai); }
+.dir-sug--golpe .dir-sug-cab .ic { color: var(--danger); }
+.dir-sug-cab b { font-weight: 600; }
+.dir-sug-cab span { color: var(--text-muted); }
+.dir-sug-texto { font-size: var(--text-sm); overflow-wrap: anywhere; }
+.dir-passos { display: grid; gap: 6px; margin: 0; padding-left: 1.25em; list-style: decimal; font-size: var(--text-sm); overflow-wrap: anywhere; }
+
 /* a resposta */
 .dir-resp { display: grid; gap: var(--sp-2); margin-top: auto; padding: var(--sp-3) var(--sp-4) var(--sp-4); border-top: 1px solid var(--border); background: var(--surface); }
 .dir-resp label { font-size: var(--text-sm); font-weight: 600; overflow-wrap: anywhere; }
