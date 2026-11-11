@@ -1,7 +1,7 @@
 import type { Tx } from '@liame/database';
 import { sql } from 'drizzle-orm';
 import { comentarioDoRecurso, comentarioNaPaginaConnector, comentarioNoInstagramConnector } from './comentario-na-rede.js';
-import { directNoInstagramConnector } from './direct-na-rede.js';
+import { directNoInstagramConnector, directNoMessengerConnector } from './direct-na-rede.js';
 import { conversaDoRecurso } from './direct-plano.js';
 import { googleAnunciosConnector } from './google-anuncios.js';
 import { metaAnunciosConnector } from './meta-anuncios.js';
@@ -130,7 +130,7 @@ export class ConectorPorRecurso implements Connector {
   constructor(
     private readonly doPost: Connector,
     private readonly doComentario: Connector,
-    /** A conversa do Direct (A6, Z12, parte 2): `direct:<id>`, só na conta do Instagram. */
+    /** A conversa (`direct:<id>`): o Direct na conta do Instagram (A6, Z12, parte 2) e o Messenger na da Página (Z14). */
     private readonly doDirect: Connector | null = null,
   ) {
     this.provider = doPost.provider;
@@ -171,5 +171,6 @@ export const CONNECTORS: Record<string, Connector> = {
   // A6, Z12, parte 2: a resposta numa conversa do Direct, na mesma conta do Instagram, pelo recurso `direct:<id>`. Só com
   // a flag do conector (`social_write`) e a da ferramenta (`direct_responder`) ligadas.
   instagram: new ConectorPorRecurso(postNoInstagramConnector, comentarioNoInstagramConnector, directNoInstagramConnector),
-  facebook_page: new ConectorPorRecurso(postNaPaginaConnector, comentarioNaPaginaConnector),
+  // A6, Z14, parte 2: a resposta numa conversa do Messenger, na conta da Página, pelo mesmo recurso `direct:<id>`.
+  facebook_page: new ConectorPorRecurso(postNaPaginaConnector, comentarioNaPaginaConnector, directNoMessengerConnector),
 };

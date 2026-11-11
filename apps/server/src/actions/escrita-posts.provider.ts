@@ -9,7 +9,7 @@ import { ARMAZEM_DE_IMAGENS, type ArmazemDeImagens } from '../imagens/armazem.js
 import { KillSwitchService } from '../kill-switch/kill-switch.service.js';
 import { VaultService } from '../vault/vault.service.js';
 import { comentarioNaPaginaConnector, comentarioNoInstagramConnector, type DependenciasDoComentario } from './comentario-na-rede.js';
-import { directNoInstagramConnector } from './direct-na-rede.js';
+import { type DependenciasDoDirect, directNoInstagramConnector, directNoMessengerConnector } from './direct-na-rede.js';
 import { type DependenciasDoPost, postNaPaginaConnector, postNoInstagramConnector } from './post-publicacao.js';
 
 /**
@@ -64,13 +64,16 @@ export class EscritaPosts implements OnModuleInit {
     comentarioNaPaginaConnector.ligar(doComentario);
     // A resposta numa conversa do Direct (A6, Z12, parte 2), na mesma conta do Instagram e pelo mesmo cofre. O id do app
     // do Liame na Meta serve para conferir o dono da conversa (`thread_owner`, D-A6-107).
-    directNoInstagramConnector.ligar({
+    // O Messenger da Página (Z14, parte 2) usa o mesmo, na conta da Página.
+    const doDirect: DependenciasDoDirect = {
       lerSegredo: deps.lerSegredo,
       cliente: doComentario.cliente,
       graphUrl: deps.graphUrl,
       appSecret: deps.appSecret,
       appId: this.config.oauth.meta?.appId ?? null,
       versao: (capacidade) => versaoRegistrada(database.db, 'meta_ads', capacidade),
-    });
+    };
+    directNoInstagramConnector.ligar(doDirect);
+    directNoMessengerConnector.ligar(doDirect);
   }
 }

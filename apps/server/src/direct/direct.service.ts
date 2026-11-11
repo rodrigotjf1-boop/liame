@@ -186,14 +186,11 @@ export class DirectService {
          where connected_account_id in ${lidas.map((c) => c.id)} and conversation_id = ${conversationId}`)
     ).rows[0];
     if (!existe) throw new AppProblem(404, 'nao-encontrado', 'Não encontramos', 'Conversa não encontrada nesta marca.');
-    // Responder no Messenger pelo Liame vem na parte 2 da Z14 (o conector da Página).
-    if (existe.channel === 'messenger') {
-      throw new AppProblem(409, 'messenger-sem-resposta', 'Ainda não responde no Messenger', 'Responder no Messenger pelo Liame chega na próxima parte; por enquanto, responda pelo Messenger da Página.');
-    }
     const id = await this.acoes.pedirPelaRota(auth, {
       tool: 'direct_responder',
       brand_id: brandId,
-      provider: PROVEDOR_INSTAGRAM,
+      // O Messenger sai pela conta da Página (Z14, parte 2); o Direct, pela do Instagram.
+      provider: existe.channel === 'messenger' ? PROVEDOR_PAGINA : PROVEDOR_INSTAGRAM,
       account_id: existe.connected_account_id,
       resource_id: recursoDaConversa(conversationId),
       params: { texto: body.text },
@@ -496,8 +493,10 @@ export class DirectService {
     const quem = quemPede(auth);
     const brandId = query.brand_id;
     await marcaDaEmpresa(brandId);
-    const conta = await this.contaDaMarca(brandId);
-    if (!conta || !(await this.lendo(quem.tenantId, quem.userId, brandId, conta))) return { items: [] };
+    // As contas lidas agora: o Direct e o Messenger (Z14, parte 2), com o mesmo automático.
+    const lidas = await this.contasLidas(quem.tenantId, quem.userId, brandId);
+    if (!lidas.length) return { items: [] };
+    const usuarioDoInstagram = lidas.find((c) => c.canal === 'instagram')?.usuario ?? null;
     const linhas = (
       await currentTx().execute<LinhaDaConversa>(sql`
         select c.connected_account_id, c.conversation_id, c.username, c.channel, c.display_name, c.last_message_at, c.last_inbound_at,
@@ -508,14 +507,14 @@ export class DirectService {
              where x.connected_account_id = c.connected_account_id and x.conversation_id = c.conversation_id
              order by x.sent_at desc, x.message_id desc limit 1) m on true
           ${PENDENTES}
-         where c.connected_account_id = ${conta.id} and c.last_direction = 'entrada'
+         where c.connected_account_id in ${lidas.map((c) => c.id)} and c.last_direction = 'entrada'
            and c.last_inbound_at > ${agora.toISOString()}::timestamptz - make_interval(hours => ${JANELA_DO_DIRECT_HORAS})
          order by c.last_inbound_at desc
          limit ${PREVIA_OLHADAS}`)
     ).rows;
     const items: DirectAutoReplyPreviewResponse['items'] = [];
     for (const l of linhas) {
-      const c = conversaDaLinha(l, agora, conta.usuario);
+      const c = conversaDaLinha(l, agora, l.channel === 'messenger' ? null : usuarioDoInstagram);
       const ultima = l.p_pendentes?.at(-1);
       if (c.status !== 'espera' || !ultima || !c.kind || !tipoDoAutomatico(c.kind as TipoNoDirect)) continue;
       if (pedeUmaPessoa((l.p_pendentes ?? []).map((p) => p.body).join(' '))) continue;

@@ -3,7 +3,8 @@ import type { Tx } from '@liame/database';
 import { sql } from 'drizzle-orm';
 import { ACAO_DE_RESPONDER_NO_DIRECT_SOZINHO, FERRAMENTA_DO_DIRECT_AUTOMATICO, FLAG_DE_RESPONDER_NO_DIRECT } from '../actions/direct-plano.js';
 import type { FlagService } from '../flags/flag.service.js';
-import { DATASET_DO_DIRECT, FLAG_DO_DIRECT, JANELA_DO_DIRECT_HORAS } from './direct.js';
+import { PROVEDOR_PAGINA } from '../connectors/meta/publicacao.js';
+import { DATASET_DO_DIRECT, FLAG_DO_DIRECT, FLAG_DO_MESSENGER, JANELA_DO_DIRECT_HORAS } from './direct.js';
 import { sugestaoNoDirect, type TipoNoDirect, tipoNoDirect } from './tipo-no-direct.js';
 
 // O atendimento automático do Direct (A6, Z12, parte 5a; P39 versão 2; D-A6-115 e D-A6-119; migration 0133). Com ele
@@ -119,17 +120,21 @@ export async function oQueSeguraODirectAutomatico(
   agora: Date,
 ): Promise<{ segura: string } | { resposta: RespostaDoAutomatico }> {
   const contexto = flags.context({ tenantId: alvo.tenantId, brandId: alvo.brandId, accountId: alvo.connectedAccountId });
-  for (const f of [FLAG_DO_DIRECT_AUTOMATICO, FLAG_DO_DIRECT, FLAG_DE_RESPONDER_NO_DIRECT]) {
+  for (const f of [FLAG_DO_DIRECT_AUTOMATICO, FLAG_DE_RESPONDER_NO_DIRECT]) {
     if (!(await flags.isEnabled(f, contexto))) return { segura: 'automatico_desligado' };
   }
   const ajuste = (
-    await tx.execute<{ enabled: boolean; regem: string | null; usuario: string | null }>(sql`
-      select coalesce(s.enabled, false) as enabled, st.cursor->>'regem' as regem, a.provider_attributes->>'usuario' as usuario
+    await tx.execute<{ enabled: boolean; regem: string | null; usuario: string | null; messenger: boolean }>(sql`
+      select coalesce(case when a.provider = ${PROVEDOR_PAGINA} then m.enabled else s.enabled end, false) as enabled,
+             st.cursor->>'regem' as regem, a.provider_attributes->>'usuario' as usuario, coalesce(a.provider = ${PROVEDOR_PAGINA}, false) as messenger
         from (select 1) um
         left join liame.direct_setting s on s.brand_id = ${alvo.brandId}
+        left join liame.messenger_setting m on m.brand_id = ${alvo.brandId}
         left join liame.sync_state st on st.connected_account_id = ${alvo.connectedAccountId}::uuid and st.dataset = ${DATASET_DO_DIRECT}
         left join liame.connected_account a on a.id = ${alvo.connectedAccountId}::uuid`)
   ).rows[0];
+  // A função e o ajuste do canal da conta: o Direct (o Instagram) ou o Messenger (a Página, Z14, parte 2).
+  if (!(await flags.isEnabled(ajuste?.messenger ? FLAG_DO_MESSENGER : FLAG_DO_DIRECT, contexto))) return { segura: 'automatico_desligado' };
   if (!ajuste?.enabled) return { segura: 'direct_desligado' };
   if (ajuste.regem === 'atende') return { segura: 'regem_atende' };
   const marca = await automaticoDoDirect(tx, alvo.brandId);
@@ -141,8 +146,8 @@ export async function oQueSeguraODirectAutomatico(
        where connected_account_id = ${alvo.connectedAccountId}::uuid and conversation_id = ${alvo.conversationId} and tenant_id = ${alvo.tenantId}`)
   ).rows[0];
   if (!c) return { segura: 'conversa_sumiu' };
-  // O automático no Messenger vem com a resposta pela Página (A6, Z14, parte 2): por enquanto, só o Direct do Instagram.
-  if (c.channel !== 'instagram') return { segura: 'canal_sem_automatico' };
+  // A conversa é do canal da conta (o Messenger na Página; o Direct no Instagram).
+  if ((c.channel === 'messenger') !== ajuste.messenger) return { segura: 'conversa_sumiu' };
   const ultima = c.last_inbound_at ? new Date(c.last_inbound_at) : null;
   if (c.last_direction !== 'entrada' || !ultima || (c.concluded_at && new Date(c.concluded_at) >= ultima)) return { segura: 'respondida' };
   if (ultima.getTime() + JANELA_DO_DIRECT_HORAS * 3_600_000 <= agora.getTime()) return { segura: 'fora_da_janela' };
@@ -163,7 +168,8 @@ export async function oQueSeguraODirectAutomatico(
   }
   const ultimaDaPessoa = pendentes.at(-1);
   if (!ultimaDaPessoa) return { segura: 'respondida' };
-  const tipo = tipoNoDirect(pendentes, ajuste.usuario);
+  // No Messenger não há @ da marca (a marcação não existe lá).
+  const tipo = tipoNoDirect(pendentes, ajuste.messenger ? null : ajuste.usuario);
   const doAutomatico = tipoDoAutomatico(tipo);
   if (!tipo || !doAutomatico || !marca.kinds.includes(doAutomatico)) return { segura: 'tipo_fora_do_automatico' };
   if (pedeUmaPessoa(pendentes.map((p) => p.body).join(' '))) return { segura: 'pede_uma_pessoa' };

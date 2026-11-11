@@ -93,7 +93,7 @@ export function planoDaRespostaNoDirect(before: unknown, params: unknown, agora:
   if (!lido.success) return { ok: false, motivo: 'O pedido não é de uma conversa do Direct.' };
   const e = lido.data;
   if (!e.existe) return { ok: false, motivo: SUMIU };
-  if (!e.ultima_da_pessoa) return { ok: false, motivo: 'A pessoa ainda não escreveu nesta conversa: o Instagram só deixa a marca responder depois.' };
+  if (!e.ultima_da_pessoa) return { ok: false, motivo: 'A pessoa ainda não escreveu nesta conversa: a Meta só deixa a marca responder depois.' };
   if (!janelaAberta(e.ultima_da_pessoa, agora)) return { ok: false, motivo: FORA_DA_JANELA };
   const pedido = ParametrosDaRespostaNoDirect.safeParse(params);
   const texto = pedido.success ? textoDaRespostaNoDirect(pedido.data.texto) : null;

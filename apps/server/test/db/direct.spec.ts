@@ -29,8 +29,8 @@ import { hasDb, OWNER_URL } from './env.js';
 //   - sem a permissão de mensagens, a leitura diz `sem_permissao`;
 //   - o Messenger da Página (A6, Z14, parte 1; D-A6-120 a D-A6-124): liga separado, com a função `messenger`; a leitura
 //     traz a conversa com o nome, sem @, só com a tarefa MESSAGING na Página; a lista mostra o canal e filtra por ele, a
-//     busca olha o nome, o contador soma os dois canais; responder no Messenger espera a parte 2; a Central do Regem
-//     atendendo a Página apaga só o Messenger.
+//     busca olha o nome, o contador soma os dois canais; a Central do Regem atendendo a Página apaga só o Messenger
+//     (responder no Messenger: `direct-responder.spec.ts`).
 
 /** O token da loja no Regem de mentira (só deste arquivo). */
 const DA_LOJA = `rgm_it_${randomUUID().replace(/-/g, '')}`;
@@ -288,7 +288,7 @@ describe.skipIf(!hasDb)('o Direct do Instagram: a leitura e o ajuste (A6 · Z12,
       [true, false, false],
     ]);
   }, 120_000);
-  it('Z14, parte 1 (D-A6-120 a D-A6-124): o Messenger da Página na mesma caixa: liga separado, lê com o nome, o canal na lista e no filtro, o contador, responder espera a parte 2 e o Regem pela Página', async () => {
+  it('Z14, parte 1 (D-A6-120 a D-A6-124): o Messenger da Página na mesma caixa: liga separado, lê com o nome, o canal na lista e no filtro, o contador e o Regem pela Página', async () => {
     const e = await empresa('Casa Brasa Messenger');
     const pagina = e.pagina!.externo;
     // Só a tarefa de mensagens na Página: lê o Direct e o Messenger (D-A6-124).
@@ -336,11 +336,6 @@ describe.skipIf(!hasDb)('o Direct do Instagram: a leitura e o ajuste (A6 · Z12,
     });
     // O contador do menu soma os dois canais.
     expect(((await api.call('GET', '/v1/direct/waiting', { cookie: e.cookie })).body as { waiting: number }).waiting).toBe(2);
-
-    // Responder no Messenger pelo Liame chega na parte 2: por enquanto, a recusa diz o porquê.
-    expect((await api.call('POST', '/v1/direct/attendance', { cookie: e.cookie, body: { code: await codigo(e) } })).status).toBe(200);
-    const resposta = await api.call('POST', `/v1/direct/conversations/${joana}/reply`, { cookie: e.cookie, body: { brand_id: e.brandId, text: 'Abrimos sim, das 18h às 23h.' } });
-    expect(problema(resposta)).toEqual([409, 'messenger-sem-resposta']);
 
     // A Central do Regem atende o Messenger desta Página: o Liame apaga só as conversas do Messenger e segue com o Direct.
     await lojaDoRegem(e, ['atendimento.canais.ler']);
