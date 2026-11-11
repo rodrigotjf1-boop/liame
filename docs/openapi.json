@@ -98893,13 +98893,14 @@
                     "type": "boolean"
                   },
                   "kinds": {
-                    "maxItems": 2,
+                    "maxItems": 3,
                     "type": "array",
                     "items": {
                       "type": "string",
                       "enum": [
                         "elogio",
-                        "marcacao"
+                        "marcacao",
+                        "pergunta"
                       ]
                     }
                   },

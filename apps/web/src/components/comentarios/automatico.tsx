@@ -232,7 +232,7 @@ export function GavetaDoAutomatico({ r, reserva, aoSalvar, aoFechar, confirmar }
           <section className="com-auto-bloco" aria-labelledby={`${ids}-espera`}>
             <h3 id={`${ids}-espera`}>O que sempre espera você</h3>
             {nota('message', 'Vão para você com o passo a passo e as sugestões de resposta.', 'Reclamações.')}
-            {nota('info', 'Por enquanto, vão para você com uma sugestão.', 'Perguntas.')}
+            {nota('info', 'Vai para você com uma sugestão.', 'Pergunta que ele não sabe responder com certeza.')}
             {nota('eye-off', 'O Liame nunca responde; ocultar espera a sua aprovação.', 'Golpe ou ofensa.')}
           </section>
           <section className="com-auto-bloco" aria-labelledby={`${ids}-como`}>

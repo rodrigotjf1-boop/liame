@@ -2,8 +2,8 @@ import { generateText, NoObjectGeneratedError, Output } from 'ai';
 import type { ModelosIa } from '../modelos.js';
 import { limparTexto } from '../sanitizar.js';
 import { contextoDoComentario, mensagemDoComentario } from '../social/comentario-contexto.js';
+import { RespostaDoComentario } from '../social/comentario.js';
 import { PROMPT_SOCIAL_COMENTARIO } from '../social/prompt.js';
-import { RespostaDoSocial } from '../social/resposta.js';
 import type { AlvoDoEval, RespostaDoEval } from './responder.js';
 import { type CasoDoComentario, pedidoDoCasoDoComentario } from './social-comentario.js';
 
@@ -24,7 +24,7 @@ export async function responderSugestoesDoComentario(modelos: ModelosIa, alvo: A
       model,
       instructions: modelos.sistema(alvo.provider, limparTexto(PROMPT_SOCIAL_COMENTARIO.content).texto, limparTexto(contextoDoComentario(pedido)).texto, false),
       messages: [{ role: 'user', content: limparTexto(mensagemDoComentario(pedido)).texto }],
-      output: Output.object({ schema: RespostaDoSocial }),
+      output: Output.object({ schema: RespostaDoComentario }),
       maxOutputTokens: alvo.maxOutputTokens ?? 1500,
       abortSignal: AbortSignal.timeout(alvo.timeoutMs ?? 120_000),
       maxRetries: 2,

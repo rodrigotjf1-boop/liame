@@ -7,11 +7,11 @@ import { EstadoDoComentario, ParametrosDaRespostaAoComentario, resumoDoComentari
 import { AiError, AiGateway } from '../ai/gateway.js';
 import { naTransacaoDaEmpresa } from '../ai/na-empresa.js';
 import { registrarRecusa } from '../ai/recusas.js';
-import { respostaPronta, sugestoesDoComentario } from '../ai/social/comentario.js';
+import { RespostaDoComentario, respondeComCerteza, respostaPronta, sugestoesDoComentario } from '../ai/social/comentario.js';
 import { baseDoComentario, contextoDoComentario, mensagemDoComentario, type PedidoDeComentarioDoSocial, type TipoComSugestao } from '../ai/social/comentario-contexto.js';
 import type { SugestaoVista } from '../ai/social/contexto.js';
 import { PROMPT_SOCIAL_COMENTARIO, SOCIAL, TAREFA_SOCIAL_COMENTARIO, WORKFLOW_DO_SOCIAL_COMENTARIO } from '../ai/social/prompt.js';
-import { type BaseDoTextoDeResposta, RespostaDoSocial } from '../ai/social/resposta.js';
+import type { BaseDoTextoDeResposta } from '../ai/social/resposta.js';
 import { activeTraceId, writeAudit } from '../audit/audit.js';
 import { achadosQueBarraram, codigoDoMotivo, esperaDaIa, itensQueBarraram, minutosAteATentativa, SEGUNDA_RODADA_DO_PEDIDO_RETIRADO } from '../avaliacoes/sugestoes.js';
 import {
@@ -170,7 +170,7 @@ export class PedidosDosComentariosService {
         instructions: PROMPT_SOCIAL_COMENTARIO.content,
         context: contextoDoComentario(ia.pedido),
         messages: [{ role: 'user', content: mensagemDoComentario(ia.pedido) }],
-        schema: RespostaDoSocial,
+        schema: RespostaDoComentario,
       });
     } catch (err) {
       if (!(err instanceof AiError)) throw err;
@@ -180,7 +180,7 @@ export class PedidosDosComentariosService {
       const ate = err.detalhe.voltaEm ?? new Date(agora.getTime() + MINUTOS_DE_ESPERA_DOS_PEDIDOS * MINUTO_MS);
       return this.naEmpresa(alvo, (tx) => this.esperar(tx, alvo, esperaDaIa(err.code, err.detalhe.teto), ate, agora));
     }
-    const resposta = RespostaDoSocial.safeParse(r.object);
+    const resposta = RespostaDoComentario.safeParse(r.object);
     if (!resposta.success) return this.falhou(alvo, 'formato', agora);
 
     // No "Pedir outra", a sugestão que repete uma das que a pessoa já viu também é descartada.
@@ -223,6 +223,12 @@ export class PedidosDosComentariosService {
     if (lido.rodada === 2) return this.trocar(alvo, lido, passaram, r.usageId, agora, barradasNaVez);
     // O texto que vai à rede começa sendo o da primeira sugestão (a pessoa escolhe outra, ou ajusta, antes de aprovar).
     const params = { texto: passaram[0]!.texto, sugestoes: passaram.map((s) => ({ enfoque: s.enfoque, texto: s.texto, rodada: 1 as const })) };
+    // A pergunta que ele sabe responder com certeza (parte 2e-3; D-A6-92): com o automático ligado para perguntas, o
+    // "sim" do Social media, a conferência sem aviso nenhum e o caminho para falar com a equipe, ela sai sozinha; senão,
+    // vai para uma pessoa, com a sugestão. Se a conferência barrou alguma sugestão da mesma resposta, uma pessoa olha antes.
+    if (lido.automatico && !barradasNaVez && respondeComCerteza(lido.tipo as TipoComSugestao, resposta.data, passaram[0], ia.pedido.contato)) {
+      return this.responderSozinho(alvo, lido, passaram[0]!.texto, agora, { params, sugestoes: passaram.length, usageId: r.usageId });
+    }
     return this.criar(alvo, lido, params, passaram.length, r.usageId, agora, barradasNaVez);
   }
 
@@ -543,10 +549,18 @@ export class PedidosDosComentariosService {
    * A resposta automática (A6, Z11, parte 2e-1; D-A6-92): a resposta pronta, com o aviso de resposta automática, sai pelo
    * Action Service sem pedido de aprovação (o portão é conferido de novo lá, na mesma transação, e no executor), e a vez
    * acaba pronta, ligada a ela. Se o portão fechou no meio (desligaram, tiraram o tipo, a política da empresa pede
-   * aprovação), o comentário vai para uma pessoa: o pedido de sempre, em Aprovações.
+   * aprovação), o comentário vai para uma pessoa: o pedido de sempre, em Aprovações. Na pergunta (parte 2e-3), o texto
+   * é a sugestão do Social media, e o pedido de sempre leva as sugestões dela (`comPessoa`).
    */
-  private async responderSozinho(alvo: DonoDaVez, lido: Lido, texto: string, agora: Date): Promise<VezDoPedido> {
+  private async responderSozinho(
+    alvo: DonoDaVez,
+    lido: Lido,
+    texto: string,
+    agora: Date,
+    comPessoa: { params: Record<string, unknown>; sugestoes: number; usageId: string | null } = { params: { texto }, sugestoes: 1, usageId: null },
+  ): Promise<VezDoPedido> {
     const funcionario = { tenantId: alvo.tenantId, agentKey: SOCIAL.key, agentLabel: SOCIAL.name, emNomeDe: lido.dono! };
+    const usageId = comPessoa.usageId;
     try {
       return await naTransacaoDaEmpresa<VezDoPedido>(this.banco(), { tenantId: alvo.tenantId, userId: null }, async () => {
         const tx = currentTx();
@@ -558,15 +572,15 @@ export class PedidosDosComentariosService {
           resource_id: recursoDoComentario(lido.commentId),
           params: { texto: comAviso(texto) },
         });
-        if (!(await marcarVezPronta(tx, alvo, { pedido, sugestoes: 1, usageId: null }, agora))) throw new ForaDaFila();
-        await this.auditar(tx, alvo, 'comentario.responder_sozinho', { operation: lido.operacao, kind: lido.tipo, action_id: pedido });
+        if (!(await marcarVezPronta(tx, alvo, { pedido, sugestoes: 1, usageId }, agora))) throw new ForaDaFila();
+        await this.auditar(tx, alvo, 'comentario.responder_sozinho', { operation: lido.operacao, kind: lido.tipo, action_id: pedido, usage_id: usageId });
         return { status: 'pronta', pedido, sugestoes: 1 };
       });
     } catch (err) {
       if (err instanceof ForaDaFila) return { status: 'fora' };
-      if (err instanceof AppProblem && err.code === 'automatico-segurado') return this.criar(alvo, { ...lido, automatico: false }, { texto }, 1, null, agora);
+      if (err instanceof AppProblem && err.code === 'automatico-segurado') return this.criar(alvo, { ...lido, automatico: false }, comPessoa.params, comPessoa.sugestoes, usageId, agora);
       if (!(err instanceof AppProblem)) throw err;
-      return this.pedidoRecusado(alvo, err, null, agora);
+      return this.pedidoRecusado(alvo, err, usageId, agora);
     }
   }
 

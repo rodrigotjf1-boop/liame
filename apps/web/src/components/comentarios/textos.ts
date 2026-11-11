@@ -84,14 +84,22 @@ export function avisosDasContas(accounts: CommentsResponse['accounts']): AvisoDa
 export const TIPOS_DO_AUTOMATICO: ReadonlyArray<{ id: (typeof COMMENT_AUTO_REPLY_KINDS)[number]; rotulo: string; texto: string }> = [
   { id: 'elogio', rotulo: 'Elogios', texto: 'Um agradecimento curto, com variação, para não repetir a mesma frase.' },
   { id: 'marcacao', rotulo: 'Marcações de amigo', texto: 'Um convite curto, quando alguém marca um amigo no post.' },
+  {
+    id: 'pergunta',
+    rotulo: 'Perguntas que ele sabe responder com certeza',
+    texto: 'Preço, horário, endereço e entrega: só o que está em Minha marca ou na legenda do post. A resposta leva o caminho para falar com a equipe.',
+  },
 ];
 
 /** A linha do topo da tela: o que está valendo agora. */
 export function resumoDoAutomatico(r: CommentAutoReplyResponse): string {
-  if (!r.enabled) return 'Desligado: nenhuma resposta sai sem a aprovação de uma pessoa. Ligado, o Liame responde sozinho os elogios e as marcações de amigo; reclamações e perguntas esperam você.';
+  if (!r.enabled) {
+    return 'Desligado: nenhuma resposta sai sem a aprovação de uma pessoa. Ligado, o Liame responde sozinho os elogios, as marcações de amigo e as perguntas que sabe responder com certeza; reclamações esperam você.';
+  }
   if (r.last_hour >= r.hourly_limit) return `Chegou a ${r.hourly_limit} respostas sozinho nesta hora, o teto: o resto espera a hora seguinte.`;
   const n = r.last_hour === 1 ? '1 resposta' : `${r.last_hour} respostas`;
-  return `${n} sozinho nesta hora (no máximo ${r.hourly_limit}). Reclamações e perguntas esperam você.`;
+  const esperam = r.kinds.includes('pergunta') ? 'Reclamações e as perguntas sem certeza esperam você.' : 'Reclamações e perguntas esperam você.';
+  return `${n} sozinho nesta hora (no máximo ${r.hourly_limit}). ${esperam}`;
 }
 
 /** O botão da linha do topo: ajustar (ligado), ver e ligar (quem liga) ou ver como funciona (os outros). */
