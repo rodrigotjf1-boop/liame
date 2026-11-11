@@ -36,10 +36,13 @@ export const CasoDoComentario = z.strictObject({
   texto: z.string().min(1).max(2000),
   /** Como a resposta chama para conversar, de Minha marca; nulo sem o campo. */
   contato: z.string().min(3).max(80).nullable().default(null),
-  /** No "Pedir outra" (o grupo `outra`): a sugestão que a pessoa já viu e quer trocar. */
+  /**
+   * No "Pedir outra" (o grupo `outra`): as sugestões que a pessoa já viu e quer trocar (uma na pergunta, três na
+   * reclamação; D-A6-103).
+   */
   anteriores: z
     .array(z.strictObject({ enfoque: z.string().min(1).max(60), texto: z.string().min(1).max(600) }))
-    .max(1)
+    .max(3)
     .default([]),
   espera: z.strictObject({
     /** Em cada sugestão, pelo menos um termo de cada lista, sem olhar acento nem maiúscula. */

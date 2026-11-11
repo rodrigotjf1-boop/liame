@@ -138,19 +138,33 @@ export function porQueOcultar(a: AcaoDeComentario): string {
   return 'O Social media sugere ocultar este comentário.';
 }
 
+/** Quantas sugestões, por extenso, na frase (de duas a seis: três da reclamação e mais três do "Pedir outra"). */
+const POR_EXTENSO: Record<number, string> = { 2: 'duas', 3: 'três', 4: 'quatro', 5: 'cinco', 6: 'seis' };
+
 /** A palavra do tipo na frase: "a pergunta", "a reclamação", "o comentário". */
 const doTipo = (tipo: string | null): string => (tipo === 'pergunta' ? 'a pergunta' : tipo === 'reclamacao' ? 'a reclamação' : 'o comentário');
 
 /**
  * A frase do modo Lite, em pedaços (o que vai em negrito): "O Social media propõe uma resposta para a pergunta que
  * @ana.paula deixou no Instagram. Ela é pública e sai em nome da marca. Se você aprovar, o Liame responde no Instagram."
- * Quem lê e não pode aprovar não lê a última frase.
+ * Quem lê e não pode aprovar não lê a última frase. Com mais de uma sugestão do Social media (a reclamação, ou depois
+ * do "Pedir outra"; parte 3c), a frase diz quantas, e só quem pode escolher lê o convite (como nas avaliações, V128).
  */
-export function fraseDoComentario(a: AcaoDeComentario, opcoes: { euPedi: boolean; possoAprovar: boolean }): Pedaco[] {
+export function fraseDoComentario(a: AcaoDeComentario, opcoes: { euPedi: boolean; possoAprovar: boolean; possoMexer?: boolean }): Pedaco[] {
   const quem = quemPediu(a);
   const autor = autorDo(a);
   const onde = ondeDo(a.comment.channel);
   const deQuem = autor ? ` que ${autor} deixou` : ' deixado';
+  const sugestoes = a.comment.suggestions?.length ?? 0;
+  if (operacaoDo(a) === 'responder' && quem.funcionario && sugestoes > 1) {
+    return [
+      { t: `${quem.nome} escreveu ${POR_EXTENSO[sugestoes] ?? String(sugestoes)} sugestões de resposta para ${doTipo(a.comment.current?.kind ?? null)}${deQuem} ${onde}.` },
+      { t: opcoes.possoMexer ? ' Escolha a que preferir e ajuste se quiser: a resposta é ' : ' A resposta é ' },
+      { t: 'pública', b: true },
+      { t: ' e sai em nome da marca.' },
+      ...(opcoes.possoAprovar ? [{ t: ` Se você aprovar, o Liame responde ${onde} com a escolhida.` }] : []),
+    ];
+  }
   if (operacaoDo(a) === 'ocultar') {
     const sujeito = quem.funcionario ? `${quem.nome} sugere` : opcoes.euPedi ? 'Você pediu para' : `${quem.nome} pediu para`;
     return [

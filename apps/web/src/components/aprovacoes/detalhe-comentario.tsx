@@ -4,6 +4,7 @@ import { type ReactNode, type RefObject, useEffect, useId, useRef, useState } fr
 import type { Prova } from '@/lib/chave-de-acesso';
 import { haQuanto } from '@/components/avaliacoes/textos';
 import { Icone } from '@/components/ui/icone';
+import { disparar } from '@/lib/disparar';
 import { quandoComHora } from '@/lib/formato';
 import { quemPediu } from './anuncio-textos';
 import { BarraDaDecisao, type Decisao } from './barra-da-decisao';
@@ -25,6 +26,8 @@ import {
 } from './comentario-textos';
 import type { Feito } from './detalhe-mensagem';
 import { Frase, FormularioDoTexto, Resultado, Voltar } from './detalhe-resposta';
+import { ListaDasOpcoes } from './detalhe-sugestoes';
+import { escolhaDe, type Opcao, outrasDe } from './sugestoes-textos';
 import { type Grupo, identidadeDoPlano, prazoDe, riscoDe } from './textos';
 
 // O pedido sobre um comentário do Instagram ou da Página aberto em Aprovações (mockups/prototipo-comentarios.html, P38
@@ -98,10 +101,32 @@ type Props = {
   aoVoltar: () => void;
   aoAprovar: (acao: AcaoDeComentario, prova: Prova) => Promise<Decisao>;
   aoRecusar: (acao: AcaoDeComentario, motivo: string) => Promise<Decisao>;
-  aoSalvarTexto: (acao: AcaoDeComentario, texto: string) => Promise<Feito>;
+  /** Grava o texto do pedido (o editado, ou a sugestão escolhida, com o aviso que a tela mostra). */
+  aoSalvarTexto: (acao: AcaoDeComentario, texto: string, aviso?: string) => Promise<Feito>;
+  /** O "Pedir outra" (A6 · Z11, parte 3c), no pedido do Social media que tem sugestões. */
+  aoPedirOutra: (acao: AcaoDeComentario) => Promise<Feito>;
+  aoAvisar: (texto: string) => void;
 };
 
-export function DetalheComentario({ acao, grupo, agora, pro, euPedi, podeDecidir, podeOperar, temApp, temChave = false, titulo, campoCodigo, aoVoltar, aoAprovar, aoRecusar, aoSalvarTexto }: Props) {
+export function DetalheComentario({
+  acao,
+  grupo,
+  agora,
+  pro,
+  euPedi,
+  podeDecidir,
+  podeOperar,
+  temApp,
+  temChave = false,
+  titulo,
+  campoCodigo,
+  aoVoltar,
+  aoAprovar,
+  aoRecusar,
+  aoSalvarTexto,
+  aoPedirOutra,
+  aoAvisar,
+}: Props) {
   const ids = useId();
   const quem = quemPediu(acao);
   const plano = identidadeDoPlano(acao);
@@ -113,11 +138,58 @@ export function DetalheComentario({ acao, grupo, agora, pro, euPedi, podeDecidir
   const [editando, setEditando] = useState(false);
   const botaoEditar = useRef<HTMLButtonElement>(null);
   const voltarAoEditar = useRef(false);
+  // As sugestões do Social media (a pergunta e a reclamação; A6 · Z11, parte 3c): escolher uma é alterar o texto do
+  // pedido, como nas avaliações (P31); "Pedir outra" uma vez por comentário.
+  const comSugestoes = responder && quem.funcionario && Boolean(acao.comment.suggestions?.length);
+  const escolha = escolhaDe(acao.comment);
+  const opcoes = [...(escolha.ajustada ? [escolha.ajustada] : []), ...escolha.novas];
+  const outras = comSugestoes ? outrasDe(acao.comment, agora) : null;
+  const umaNova = escolha.novas.length === 1;
+  const [escolhendo, setEscolhendo] = useState<string | null>(null);
+  const [pedindo, setPedindo] = useState(false);
+  const [erro, setErro] = useState<string | null>(null);
+  const legenda = useRef<HTMLLegendElement | null>(null);
+  const antes = useRef({ id: acao.id, outras });
 
   // Outro pedido aberto (ou o mesmo com outro texto): o que estava aberto era do anterior.
   useEffect(() => {
     setEditando(false);
   }, [acao.id, acao.plan_hash]);
+  useEffect(() => {
+    setEscolhendo(null);
+    setPedindo(false);
+    setErro(null);
+  }, [acao.id]);
+  // As novas chegaram (ou não deu) NESTE pedido: o aviso, e o foco vai para a lista, se ele não estiver num campo.
+  useEffect(() => {
+    const anterior = antes.current;
+    antes.current = { id: acao.id, outras };
+    if (anterior.id !== acao.id) return;
+    const eraEscrevendo = anterior.outras === 'escrevendo' || anterior.outras === 'demorando';
+    if (!eraEscrevendo || (outras !== 'feitas' && outras !== 'nao_deu')) return;
+    if (outras === 'feitas') aoAvisar(umaNova ? 'Uma sugestão nova. A primeira continua abaixo.' : 'Sugestões novas, uma para cada caminho. As primeiras continuam abaixo.');
+    else aoAvisar('Não deu para escrever outra sugestão. As primeiras continuam abaixo.');
+    const ativo = document.activeElement;
+    if (!ativo || ativo === document.body || !ativo.closest('input, textarea, select')) legenda.current?.focus();
+  }, [acao.id, outras, umaNova, aoAvisar]);
+
+  async function escolher(o: Opcao) {
+    if (escolhendo || o.chave === escolha.escolhida) return;
+    setEscolhendo(o.chave);
+    setErro(null);
+    const nomeDela = o.chave === escolha.ajustada?.chave ? 'A versão ajustada' : o.rotulo.split(' · ')[0];
+    const r = await aoSalvarTexto(acao, o.texto, `${nomeDela} escolhida. A aprovação vale para ela.`);
+    setEscolhendo(null);
+    if (!r.ok) setErro(r.texto);
+  }
+
+  async function pedirOutra() {
+    setPedindo(true);
+    setErro(null);
+    const r = await aoPedirOutra(acao);
+    setPedindo(false);
+    if (!r.ok) setErro(r.texto);
+  }
   // Quem cancela a edição volta ao botão que a abriu (depois de ele voltar à tela).
   useEffect(() => {
     if (!editando && voltarAoEditar.current) {
@@ -151,8 +223,70 @@ export function DetalheComentario({ acao, grupo, agora, pro, euPedi, podeDecidir
     </section>
   ) : (
     <section className="av-bloco" aria-labelledby={`${ids}-resp`}>
-      <h3 id={`${ids}-resp`}>{op === 'apagar_resposta' ? 'A resposta que sai do comentário' : grupo === 'pendente' ? (quem.funcionario ? 'A resposta proposta' : 'A sua resposta') : 'A resposta'}</h3>
-      {editando ? (
+      <h3 id={`${ids}-resp`}>
+        {op === 'apagar_resposta'
+          ? 'A resposta que sai do comentário'
+          : grupo !== 'pendente'
+            ? 'A resposta'
+            : comSugestoes && !editando
+              ? escolha.total === 1
+                ? 'A sugestão do Social media'
+                : 'As sugestões do Social media'
+              : quem.funcionario
+                ? 'A resposta proposta'
+                : 'A sua resposta'}
+      </h3>
+      {grupo === 'pendente' && outras === 'escrevendo' ? (
+        <div className="av-sug-escrevendo" role="status" id="co-sug-escrevendo">
+          <span className="av-sug-giro" aria-hidden="true" />
+          <span>O Social media está escrevendo {umaNova ? 'outra sugestão' : 'outras sugestões, uma para cada caminho'}. Costuma levar menos de um minuto; as primeiras continuam guardadas.</span>
+        </div>
+      ) : grupo === 'pendente' && comSugestoes && !editando ? (
+        <>
+          <ListaDasOpcoes
+            ids={ids}
+            opcoes={opcoes}
+            daPrimeira={escolha.daPrimeira}
+            escolhida={escolhendo ?? escolha.escolhida}
+            soLeitura={!podeOperar}
+            ocupado={escolhendo !== null}
+            legenda={legenda}
+            maximo={TAMANHO_DA_RESPOSTA_AO_COMENTARIO}
+            aoEscolher={(o) => disparar(escolher(o))}
+          />
+          {(outras === 'demorando' || outras === 'nao_deu') && (
+            <p className="nota" id="co-sug-outras">
+              <Icone nome={outras === 'demorando' ? 'clock' : 'info'} />
+              <span>
+                {outras === 'demorando'
+                  ? 'A sugestão nova está demorando mais que o normal. O Social media continua tentando, e ela aparece aqui quando ficar pronta; enquanto isso, dá para decidir com estas.'
+                  : 'Não deu para escrever outra sugestão. Para outro texto, edite o texto escolhido.'}
+              </span>
+            </p>
+          )}
+          {podeOperar && (
+            <div className="av-sug-acoes">
+              <button ref={botaoEditar} className="btn btn--sm" type="button" data-co-editar onClick={() => setEditando(true)}>
+                <Icone nome="pencil" pequeno />
+                Editar o texto escolhido
+              </button>
+              {outras === 'pode_pedir' && (
+                <button className="btn btn--sm" type="button" data-co-outra disabled={pedindo} aria-busy={pedindo || undefined} onClick={() => disparar(pedirOutra())}>
+                  <Icone nome="refresh" pequeno />
+                  {pedindo ? 'Pedindo…' : umaNova ? 'Pedir outra sugestão' : 'Pedir outras sugestões'}
+                </button>
+              )}
+            </div>
+          )}
+          {erro && (
+            <p className="campo-erro" role="alert" id="co-sug-erro">
+              {erro}
+            </p>
+          )}
+          {podeOperar && outras === 'feitas' && <p className="av-sug-conta">Esta é a segunda rodada: para outro texto, edite o texto escolhido.</p>}
+          <p>{acao.comment.channel === 'facebook' ? 'A escolhida sai como resposta da Página ao comentário.' : 'A escolhida sai como resposta ao comentário, em nome da marca. O Instagram avisa quem comentou.'}</p>
+        </>
+      ) : editando ? (
         <FormularioDoTexto
           ids={ids}
           inicial={acao.comment.reply_text ?? ''}
@@ -231,7 +365,7 @@ export function DetalheComentario({ acao, grupo, agora, pro, euPedi, podeDecidir
       {!pro && (
         <div className="secao secao--lite">
           <p className="lite-frase lite-frase--grande">
-            <Frase pedacos={fraseDoComentario(acao, { euPedi, possoAprovar: podeDecidir })} />
+            <Frase pedacos={fraseDoComentario(acao, { euPedi, possoAprovar: podeDecidir, possoMexer: podeOperar })} />
           </p>
           <div className="lite-chips">
             <span className={`risco risco--${risco}`}>{rotuloDoRisco}</span>
@@ -287,6 +421,13 @@ export function DetalheComentario({ acao, grupo, agora, pro, euPedi, podeDecidir
           <Icone nome="lock" />
           <span>Só quem pode aprovar decide este pedido. Você acompanha por aqui.</span>
         </p>
+      ) : outras === 'escrevendo' ? (
+        <div className="secao">
+          <p className="nota">
+            <Icone nome="info" />
+            <span>{umaNova ? 'Espere a sugestão nova para aprovar.' : 'Espere as sugestões novas para aprovar.'}</span>
+          </p>
+        </div>
       ) : editando ? (
         <div className="secao">
           <p className="nota">

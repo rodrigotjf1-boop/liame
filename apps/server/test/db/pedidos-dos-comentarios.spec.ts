@@ -186,6 +186,94 @@ describe.skipIf(!hasDb)('os pedidos do Social media para os comentários (A6 · 
     expect(meta.defeitos).toEqual([]);
   }, 120_000);
 
+  it('o "Pedir outra" (parte 3c): uma vez por comentário, só onde há sugestões; as novas entram no mesmo pedido, antes das que já estavam, e o texto ajustado fica', async () => {
+    await ia.rotaCompartilhada(modelos, 'social_comentario', simulado);
+    modelos.porChave.set('teste/compartilhado_social_comentario', simulado);
+    const e = await empresa('Casa Brasa Pedir Outra');
+    const post = meta.publicadoForaDoLiame(e.instagram!.externo, { caption: 'Combo duplo na chapa', horas: 2, comments_count: 3 });
+    const elogio = meta.comentouNoInstagram(post, { texto: 'Melhor smash da cidade, parabéns!', usuario: 'bia_lima' });
+    const pergunta = meta.comentouNoInstagram(post, { texto: 'Quanto custa o combo duplo?', usuario: 'ana_paula' });
+    const reclamacao = meta.comentouNoInstagram(post, { texto: 'Demorou demais e veio frio', usuario: 'rui_s' });
+    await ler(e);
+    meta.normalizar();
+    expect((await fila.executarLote(10, { tenantIds: [e.tenantId] })).map((f) => f.feito.status)).toEqual(['pronta', 'pronta', 'pronta']);
+    const porComentario = new Map((await vezes(e)).map((v) => [v.comment_id, v.action_id!]));
+    const ver = async (id: string) => (await api.call('GET', `/v1/actions/${id}`, { cookie: e.cookie })).body as { plan_hash: string; comment: Record<string, unknown> };
+    const pedirOutra = (id: string) => api.call('POST', `/v1/actions/${id}/more-suggestions`, { cookie: e.cookie });
+
+    // A resposta pronta do elogio não tem sugestões: nada a pedir.
+    expect((await ver(porComentario.get(elogio)!)).comment).toMatchObject({ suggestions: null, more_suggestions: null });
+    const semSugestoes = await pedirOutra(porComentario.get(elogio)!);
+    expect([semSugestoes.status, (semSugestoes.body as { code: string }).code]).toEqual([409, 'sem-sugestoes']);
+
+    // A pergunta: uma sugestão; pede outra, e a segunda vez é recusada.
+    const daPergunta = porComentario.get(pergunta)!;
+    expect((await ver(daPergunta)).comment).toMatchObject({ suggestions: [{ focus: 'Responde e chama a equipe', text: DA_PERGUNTA, round: 1 }], more_suggestions: 'pode_pedir', more_suggestions_asked_at: null });
+    const hashAntes = (await ver(daPergunta)).plan_hash;
+    const pedida = await pedirOutra(daPergunta);
+    expect(pedida.status, JSON.stringify(pedida.body)).toBe(200);
+    expect((pedida.body as { comment: Record<string, unknown> }).comment).toMatchObject({ more_suggestions: 'escrevendo', more_suggestions_asked_at: expect.any(String) });
+    const deNovo = await pedirOutra(daPergunta);
+    expect([deNovo.status, (deNovo.body as { code: string }).code]).toEqual([409, 'outras-ja-pedidas']);
+
+    // A reclamação: a pessoa ajustou o texto antes de pedir outras; o ajuste fica.
+    const daReclamacao = porComentario.get(reclamacao)!;
+    const AJUSTADO = 'Sentimos muito pela demora. Chama a gente pelos contatos do perfil da loja com o número do pedido.';
+    const ajuste = await api.call('PATCH', `/v1/actions/${daReclamacao}`, { cookie: e.cookie, body: { params: { texto: AJUSTADO } } });
+    expect(ajuste.status, JSON.stringify(ajuste.body)).toBe(200);
+    expect((await pedirOutra(daReclamacao)).status).toBe(200);
+
+    const OUTRA = 'Sai por R$ 39,90 o Combo duplo. Se quiser saber mais, chama a gente pelos contatos do perfil da loja.';
+    responder = (pedido) =>
+      pedido.includes('O tipo do comentário: reclamação')
+        ? { sugestoes: [...ENFOQUES_DA_RECLAMACAO].map((enfoque, i) => ({ enfoque, texto: `${['Poxa, sentimos muito.', 'Na sexta a saída atrasou.', 'Valeu por avisar.'][i]} Chama a gente pelos contatos do perfil da loja com o número do pedido.` })) }
+        : { sugestoes: [{ enfoque: 'Responde e chama a equipe', texto: OUTRA }] };
+    // As duas vezes do "Pedir outra" saem primeiro na fila; o modelo viu as sugestões que a pessoa já tinha visto.
+    const feitas = await fila.executarLote(10, { tenantIds: [e.tenantId] });
+    expect(feitas.map((f) => f.feito)).toEqual([
+      { status: 'pronta', pedido: daPergunta, sugestoes: 1 },
+      { status: 'pronta', pedido: daReclamacao, sugestoes: 3 },
+    ]);
+    expect(vistos.some((v) => v.includes('A sugestão que a pessoa já viu e quer trocar') && v.includes(DA_PERGUNTA))).toBe(true);
+    expect(vistos.some((v) => v.includes('As sugestões que a pessoa já viu e quer trocar') && v.includes('Desculpa pela demora.'))).toBe(true);
+    for (const v of vistos) for (const quem of ['ana_paula', 'rui_s']) expect(v).not.toContain(quem);
+
+    // A pergunta: o texto passa a ser o da nova; o plano é outro, e a resposta é a da tela.
+    expect((await pedidoDe(e, daPergunta)).params).toEqual({
+      texto: OUTRA,
+      sugestoes: [
+        { enfoque: 'Responde e chama a equipe', texto: OUTRA, rodada: 2 },
+        { enfoque: 'Responde e chama a equipe', texto: DA_PERGUNTA, rodada: 1 },
+      ],
+    });
+    const pergundaDepois = await ver(daPergunta);
+    expect(pergundaDepois.plan_hash).not.toBe(hashAntes);
+    expect(pergundaDepois.comment).toMatchObject({ reply_text: OUTRA, more_suggestions: 'feitas' });
+    // A reclamação: as seis (as três novas antes), e o texto ajustado continua o do pedido.
+    const daReclamacaoDepois = await pedidoDe(e, daReclamacao);
+    expect(daReclamacaoDepois.params.texto).toBe(AJUSTADO);
+    expect(daReclamacaoDepois.params.sugestoes!.map((s) => [s.enfoque, (s as { rodada: number }).rodada])).toEqual([
+      ...ENFOQUES_DA_RECLAMACAO.map((x) => [x, 2]),
+      ...ENFOQUES_DA_RECLAMACAO.map((x) => [x, 1]),
+    ]);
+    // As vezes da rodada 2 acabam prontas, sem apontar o pedido (ele é da rodada 1).
+    const segundas = await ownerQuery<{ status: string; action_id: string | null; requested_by: string | null }>(
+      `select status, action_id, requested_by from liame.comment_suggestion where tenant_id = $1 and round = 2`,
+      [e.tenantId],
+    );
+    expect(segundas).toEqual([
+      { status: 'pronta', action_id: null, requested_by: e.userId },
+      { status: 'pronta', action_id: null, requested_by: e.userId },
+    ]);
+
+    // Aprovado o texto novo, é ele que sai na rede.
+    const aprovado = await api.call('POST', `/v1/actions/${daPergunta}/approve`, { cookie: e.cookie, body: { plan_hash: pergundaDepois.plan_hash, code: await codigo(e) } });
+    expect(aprovado.status, JSON.stringify(aprovado.body)).toBe(200);
+    await executor.runCycle(20, { tenantIds: [e.tenantId] });
+    expect(meta.comentariosNoInstagram.get(post)!.find((c) => c.id === pergunta)!.respostas.map((r) => r.text)).toEqual([OUTRA]);
+    expect(meta.defeitos).toEqual([]);
+  }, 120_000);
+
   it('a IA que não atende faz a pergunta esperar, sem contar tentativa; a conferência barra a sugestão com o preço inventado; e a função desligada não abre a vez', async () => {
     // Sem a função, a leitura não abre a vez de ninguém.
     const desligada = await empresa('Casa Brasa Pedidos Desligados', { pedidos: false });
