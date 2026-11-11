@@ -1,6 +1,6 @@
 'use client';
 
-import type { BrandResponse, CommentsResponse, SocialComment } from '@liame/contracts';
+import type { BrandResponse, CommentAutoReplyResponse, CommentsResponse, SocialComment } from '@liame/contracts';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useRef, useState } from 'react';
@@ -8,6 +8,7 @@ import { haQuanto } from '@/components/avaliacoes/textos';
 import { ROTULO_DO_TIPO, TAMANHO_DA_RESPOSTA_AO_COMENTARIO, textoDoComentarioValido } from '@/components/aprovacoes/comentario-textos';
 import { Canal, DICA_DO_COMENTARIO } from '@/components/aprovacoes/detalhe-comentario';
 import { FormularioDoTexto } from '@/components/aprovacoes/detalhe-resposta';
+import { useAvisar } from '@/components/ui/avisos';
 import { ConfirmaNaLinha } from '@/components/ui/confirma-na-linha';
 import { Estado } from '@/components/ui/estado';
 import { Faixa } from '@/components/ui/faixa';
@@ -17,7 +18,21 @@ import { api, chamar, mensagemDe, type Problema } from '@/lib/api';
 import { useContadorComentarios } from '@/lib/contador-comentarios';
 import { disparar } from '@/lib/disparar';
 import { useSessao } from '@/lib/sessao';
-import { autorDoComentario, avisosDasContas, erroDoPedido, FILTROS, type Filtro, legendaDoPost, lerAgora, lidoHa, pedidoDoComentario, ROTULO_DA_SITUACAO, vazioDoFiltro } from './textos';
+import { GavetaDoAutomatico, LinhaDoAutomatico } from './automatico';
+import {
+  autorDoComentario,
+  avisosDasContas,
+  erroDoPedido,
+  FILTROS,
+  type Filtro,
+  legendaDoPost,
+  lerAgora,
+  lidoHa,
+  pedidoDoComentario,
+  respondidoSozinho,
+  ROTULO_DA_SITUACAO,
+  vazioDoFiltro,
+} from './textos';
 
 // "Comentários" (mockups/prototipo-comentarios.html, P38 aprovado em 07/11/2026; A6, Z11, parte 3b): os comentários
 // dos posts da marca no Instagram e na Página, como o Liame os guardou (`GET /v1/comments`), com as situações que
@@ -51,6 +66,25 @@ export function ComentariosTela() {
   // O contador do menu (parte 3c) lê de novo quando a contagem "Pedem resposta" da tela muda entre duas leituras.
   const { recarregar: recarregarMenu } = useContadorComentarios();
   const pedemAntes = useRef<number | null>(null);
+  // O atendimento automático da marca (parte 2e-2): a linha no topo e a gaveta, só com a função liberada.
+  const avisar = useAvisar();
+  const [automatico, setAutomatico] = useState<CommentAutoReplyResponse | null>(null);
+  const [gavetaDoAutomatico, setGavetaDoAutomatico] = useState(false);
+
+  useEffect(() => {
+    if (!marca) return;
+    let vivo = true;
+    setAutomatico(null);
+    disparar(
+      chamar(() => api.GET('/v1/comments/auto-reply', { params: { query: { brand_id: marca } } })).then((r) => {
+        // Sem resposta, a linha não aparece: nada muda na lista, e a pessoa decide pedido a pedido, como sempre.
+        if (vivo && r.ok) setAutomatico(r.data);
+      }),
+    );
+    return () => {
+      vivo = false;
+    };
+  }, [marca]);
 
   const carregarMarcas = useCallback(async () => {
     setErroMarcas(null);
@@ -221,6 +255,7 @@ export function ComentariosTela() {
             }
           />
         ))}
+        {automatico?.available && automatico.brand_id === marca && <LinhaDoAutomatico r={automatico} aoAbrir={() => setGavetaDoAutomatico(true)} />}
         <article className="card" id="com-lista" aria-labelledby="t-com-lista">
           <div className="card-cab">
             <div>
@@ -322,6 +357,17 @@ export function ComentariosTela() {
         </div>
       )}
       {corpo}
+      {gavetaDoAutomatico && automatico && (
+        <GavetaDoAutomatico
+          r={automatico}
+          reserva={titulo}
+          aoSalvar={(novo, aviso) => {
+            setAutomatico(novo);
+            avisar(aviso);
+          }}
+          aoFechar={() => setGavetaDoAutomatico(false)}
+        />
+      )}
     </section>
   );
 }
@@ -332,7 +378,11 @@ export type Pedir = (c: SocialComment, ferramenta: 'comentario_responder' | 'com
 /** Uma linha da lista: o canal, quem comentou e quando, o tipo, a situação, o texto, o post e as respostas na rede. */
 function ItemDoComentario({ c, legenda, agora, aoPedir }: { c: SocialComment; legenda: string | null; agora: Date; aoPedir: Pedir | null }) {
   const autor = autorDoComentario(c);
-  const situacao = ROTULO_DA_SITUACAO[c.situation] ?? { rotulo: c.situation, classe: 'neutro' as const };
+  // A resposta que saiu pelo atendimento automático (parte 2e-2): "Respondido sozinho".
+  const situacao =
+    c.situation === 'respondido' && respondidoSozinho(c)
+      ? { rotulo: 'Respondido sozinho', classe: 'concluido' as const }
+      : (ROTULO_DA_SITUACAO[c.situation] ?? { rotulo: c.situation, classe: 'neutro' as const });
   const pedido = pedidoDoComentario(c);
   const [aberto, setAberto] = useState<'nao' | 'responder' | 'ocultar' | 'mostrar'>('nao');
   const [ocupado, setOcupado] = useState(false);

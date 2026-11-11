@@ -3,6 +3,7 @@
 import { type ReactNode, type RefObject, useEffect, useId, useRef, useState } from 'react';
 import type { Prova } from '@/lib/chave-de-acesso';
 import { haQuanto } from '@/components/avaliacoes/textos';
+import { ConfirmaNaLinha } from '@/components/ui/confirma-na-linha';
 import { Icone } from '@/components/ui/icone';
 import { disparar } from '@/lib/disparar';
 import { quandoComHora } from '@/lib/formato';
@@ -11,6 +12,7 @@ import { BarraDaDecisao, type Decisao } from './barra-da-decisao';
 import {
   type AcaoDeComentario,
   autorDo,
+  ehRespostaAutomatica,
   fraseDoComentario,
   MOTIVOS_DE_OCULTAR,
   MOTIVOS_DO_COMENTARIO,
@@ -20,6 +22,7 @@ import {
   ROTULO_DO_CANAL,
   ROTULO_DO_TIPO,
   resultadoDoComentario,
+  situacaoDoComentario,
   TAMANHO_DA_RESPOSTA_AO_COMENTARIO,
   textoDoComentarioValido,
   tituloDoComentario,
@@ -105,6 +108,8 @@ type Props = {
   aoSalvarTexto: (acao: AcaoDeComentario, texto: string, aviso?: string) => Promise<Feito>;
   /** O "Pedir outra" (A6 · Z11, parte 3c), no pedido do Social media que tem sugestões. */
   aoPedirOutra: (acao: AcaoDeComentario) => Promise<Feito>;
+  /** Apagar a resposta que o Liame publicou (a volta do pedido, sem código; A6 · Z11, parte 2e). */
+  aoApagar: (acao: AcaoDeComentario) => Promise<Feito>;
   aoAvisar: (texto: string) => void;
 };
 
@@ -125,6 +130,7 @@ export function DetalheComentario({
   aoRecusar,
   aoSalvarTexto,
   aoPedirOutra,
+  aoApagar,
   aoAvisar,
 }: Props) {
   const ids = useId();
@@ -150,6 +156,11 @@ export function DetalheComentario({
   const [erro, setErro] = useState<string | null>(null);
   const legenda = useRef<HTMLLegendElement | null>(null);
   const antes = useRef({ id: acao.id, outras });
+  // A resposta automática (parte 2e) e o apagar da resposta publicada.
+  const automatica = ehRespostaAutomatica(acao);
+  const [apagando, setApagando] = useState<'nao' | 'confirmando' | 'enviando'>('nao');
+  const [erroAoApagar, setErroAoApagar] = useState<string | null>(null);
+  const botaoApagar = useRef<HTMLButtonElement>(null);
 
   // Outro pedido aberto (ou o mesmo com outro texto): o que estava aberto era do anterior.
   useEffect(() => {
@@ -159,7 +170,17 @@ export function DetalheComentario({
     setEscolhendo(null);
     setPedindo(false);
     setErro(null);
+    setApagando('nao');
+    setErroAoApagar(null);
   }, [acao.id]);
+
+  async function apagar() {
+    setApagando('enviando');
+    setErroAoApagar(null);
+    const r = await aoApagar(acao);
+    setApagando('nao');
+    if (!r.ok) setErroAoApagar(r.texto);
+  }
   // As novas chegaram (ou não deu) NESTE pedido: o aviso, e o foco vai para a lista, se ele não estiver num campo.
   useEffect(() => {
     const anterior = antes.current;
@@ -202,11 +223,11 @@ export function DetalheComentario({
     <>
       <div className="det-cab">
         <span>
-          <b>{quem.nome}</b> {quem.funcionario ? 'sugeriu' : 'pediu'}
+          <b>{quem.nome}</b> {quem.funcionario ? (automatica ? 'respondeu sozinho' : 'sugeriu') : 'pediu'}
         </span>
         <span>
           · {quandoComHora(acao.created_at, agora)}
-          {quem.funcionario ? ' · funcionário de IA' : euPedi ? ' · escrita por você' : ''}
+          {quem.funcionario ? (automatica ? ' · atendimento automático' : ' · funcionário de IA') : euPedi ? ' · escrita por você' : ''}
         </span>
       </div>
       <h2 className="det-titulo" id="ap-det-titulo" ref={titulo} tabIndex={-1}>
@@ -330,6 +351,8 @@ export function DetalheComentario({
   );
 
   if (grupo !== 'pendente') {
+    // A resposta que o Liame publicou (aprovada ou automática) pode ser apagada, sem código, com a confirmação (P38 v2).
+    const mostraApagar = responder && situacaoDoComentario(acao) === 'feito' && podeOperar && !acao.undone_by;
     return (
       <>
         <Voltar aoVoltar={aoVoltar} />
@@ -337,6 +360,40 @@ export function DetalheComentario({
         <p className="plano-id">Plano {plano.plano}</p>
         <div className="secao">
           <Resultado id="co-resultado" {...resultadoDoComentario(acao)} />
+          {mostraApagar && (
+            <div className="desfazer">
+              {apagando === 'nao' ? (
+                <button ref={botaoApagar} className="btn" type="button" data-co-apagar onClick={() => setApagando('confirmando')}>
+                  <Icone nome="undo" pequeno />
+                  Apagar a resposta
+                </button>
+              ) : (
+                <ConfirmaNaLinha
+                  texto={`A resposta sai do comentário ${onde}. Quem comentou pode já ter visto.`}
+                  rotulo="Apagar a resposta"
+                  rotuloOcupado="Apagando…"
+                  voltar="Manter"
+                  ocupado={apagando === 'enviando'}
+                  aoConfirmar={() => disparar(apagar())}
+                  aoCancelar={() => {
+                    setApagando('nao');
+                    requestAnimationFrame(() => botaoApagar.current?.focus());
+                  }}
+                />
+              )}
+              {erroAoApagar && (
+                <p className="campo-erro" role="alert">
+                  {erroAoApagar}
+                </p>
+              )}
+            </div>
+          )}
+          {acao.undone_by && (
+            <p className="nota">
+              <Icone nome="undo" />
+              <span>A resposta foi apagada pelo Liame depois de publicada.</span>
+            </p>
+          )}
         </div>
         <div className="secao">
           <p className="rotulo-marca">O que foi pedido</p>

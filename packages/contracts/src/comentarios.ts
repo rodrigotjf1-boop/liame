@@ -167,6 +167,11 @@ export type CommentsWaitingResponse = z.infer<typeof CommentsWaitingResponse>;
 export const COMMENT_AUTO_REPLY_KINDS = ['elogio', 'marcacao'] as const;
 /** No máximo tantas respostas sozinho por hora, por marca; o que passar espera a hora seguinte. */
 export const COMMENT_AUTO_REPLY_HOURLY_LIMIT = 30;
+/**
+ * O aviso no fim de cada resposta automática (Termos 6.3: quem fala com um funcionário de IA é avisado). A tela reconhece
+ * por ele a resposta que saiu sozinha ("Respondido sozinho").
+ */
+export const COMMENT_AUTO_REPLY_NOTICE = ' · resposta automática';
 
 export const CommentAutoReplyQuery = z.strictObject({ brand_id: z.uuid() });
 export type CommentAutoReplyQuery = z.infer<typeof CommentAutoReplyQuery>;

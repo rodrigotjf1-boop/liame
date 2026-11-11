@@ -536,6 +536,17 @@ export function AprovacoesTela() {
     return { ok: true };
   }
 
+  // Apagar a resposta que o Liame publicou num comentário (aprovada ou automática; A6 · Z11, parte 2e): a volta do pedido,
+  // sem código, com a confirmação na tela.
+  async function apagarRespostaDoComentario(acao: AcaoDeComentario): Promise<Feito> {
+    const r = await chamar(() => api.POST('/v1/actions/{id}/undo', { params: { path: { id: acao.id } } }));
+    if (!r.ok) return { ok: false, texto: mensagemDe(r.problema) };
+    avisar(`Pedido feito: o Liame apaga a resposta ${acao.comment.channel === 'facebook' ? 'na Página' : 'no Instagram'} em instantes.`);
+    await carregar();
+    focarOTitulo();
+    return { ok: true };
+  }
+
   // O "Pedir outra" no comentário (A6 · Z11, parte 3c; uma vez por comentário): como o "Pedir outras" da avaliação.
   async function pedirOutraAoComentario(acao: AcaoDeComentario): Promise<Feito> {
     const r = await chamar(() => api.POST('/v1/actions/{id}/more-suggestions', { params: { path: { id: acao.id } } }));
@@ -987,6 +998,7 @@ export function AprovacoesTela() {
         aoRecusar={recusar}
         aoSalvarTexto={salvarTextoDoComentario}
         aoPedirOutra={pedirOutraAoComentario}
+        aoApagar={apagarRespostaDoComentario}
         aoAvisar={avisar}
       />
     );

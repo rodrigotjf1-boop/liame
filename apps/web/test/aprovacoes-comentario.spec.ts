@@ -108,6 +108,7 @@ function desenho(a: AcaoDeComentario, o: { pro?: boolean; podeDecidir?: boolean;
       aoRecusar: async () => ({ ok: true }) as const,
       aoSalvarTexto: async () => ({ ok: true }) as const,
       aoPedirOutra: async () => ({ ok: true }) as const,
+      aoApagar: async () => ({ ok: true }) as const,
       aoAvisar: () => {},
     }),
   );
@@ -269,6 +270,24 @@ describe('o pedido sobre um comentário em Aprovações: o detalhe (A6 · Z11, p
     expect(semMarcas(leitura)).toContain('Sugestão 1 · Caminho 1 · a escolhida');
     expect(semMarcas(leitura)).not.toContain('Pedir outras');
     expect(semMarcas(leitura)).not.toContain('Escolha a que preferir');
+  });
+
+  it('a resposta automática (parte 2e-2): o título, a etiqueta, o resultado (saindo, publicada, segurada) e o apagar sem código', () => {
+    const auto = (o: Partial<ActionResponse> = {}) => doSocial({ tool: 'comentario_responder_auto', action: 'comentario.responder_automatico', mode: 'AUTO', status: 'executada', ...o }, {}, { kind: 'elogio', message: 'Melhor smash!' });
+    expect(ehPedidoDeComentario(auto())).toBe(true);
+    expect(tituloDoComentario(auto())).toBe('Resposta automática ao comentário de @duda.come.bem');
+    expect(etiquetaDoComentario(auto())).toBe('Respondido sozinho');
+    expect(resultadoDoComentario(auto())).toMatchObject({ tom: 'ok', forte: 'Respondido sozinho no Instagram, pelo atendimento automático, em nome da marca.' });
+    expect(resultadoDoComentario(auto({ status: 'aprovada' }))).toMatchObject({ tom: 'espera', forte: 'Pelo atendimento automático da marca.' });
+    expect(resultadoDoComentario(auto({ status: 'falhou', status_reason: 'atendimento automático: automatico_desligado' }))).toMatchObject({ tom: 'falha', forte: 'O atendimento automático segurou esta resposta.' });
+    // No detalhe: quem respondeu, e o apagar para quem pode pedir; a resposta aprovada por uma pessoa também.
+    const t = semMarcas(desenho(auto()));
+    expect(t).toContain('Social media respondeu sozinho');
+    expect(t).toContain('atendimento automático');
+    expect(t).toContain('Apagar a resposta');
+    expect(semMarcas(desenho(pedido({ status: 'executada', approvals: aprovacao() })))).toContain('Apagar a resposta');
+    expect(semMarcas(desenho(auto(), { podeOperar: false }))).not.toContain('Apagar a resposta');
+    expect(semMarcas(desenho(auto({ undone_by: { id: uuid(9) } as ActionResponse['undone_by'] })))).toContain('A resposta foi apagada pelo Liame');
   });
 
   it('decidido: o resultado e o que foi pedido, sem a decisão', () => {

@@ -1,16 +1,23 @@
-import type { CommentsResponse } from '@liame/contracts';
+import { COMMENT_AUTO_REPLY_NOTICE, type CommentAutoReplyResponse, type CommentsResponse } from '@liame/contracts';
 import { describe, expect, it } from 'vitest';
 import {
   autorDoComentario,
   avisosDasContas,
+  botaoDoAutomatico,
   comentariosFalados,
+  erroDoAutomatico,
   erroDoPedido,
+  estadoDoAutomatico,
   FILTROS,
   legendaDoPost,
   lerAgora,
   lidoHa,
+  pedeConfirmacao,
   pedidoDoComentario,
+  respondidoSozinho,
+  resumoDoAutomatico,
   ROTULO_DA_SITUACAO,
+  TIPOS_DO_AUTOMATICO,
   vazioDoFiltro,
 } from '@/components/comentarios/textos';
 import { NAVEGACAO } from '@/components/shell/navegacao';
@@ -71,6 +78,42 @@ describe('a tela Comentários (A6 · Z11, parte 3b)', () => {
     expect(erroDoPedido({ code: 'escrita-desligada', title: 'x' })).toBe('Responder e ocultar comentários pelo Liame ainda não estão ligados para esta empresa.');
     expect(erroDoPedido({ code: 'sem-permissao-na-plataforma', title: 'x' })).toContain('Conecte a Meta de novo');
     expect(erroDoPedido({ code: 'outro', title: 'Título', detail: 'O detalhe.' })).toBe('O detalhe.');
+  });
+
+  it('o atendimento automático (parte 2e-2): a linha do topo, o botão de cada um, o estado, o que pede a confirmação, as recusas e o "Respondido sozinho"', () => {
+    const r = (o: Partial<CommentAutoReplyResponse> = {}): CommentAutoReplyResponse => ({
+      brand_id: 'b0000000-0000-4000-8000-000000000001',
+      available: true,
+      enabled: false,
+      kinds: [],
+      can_enable: true,
+      can_disable: true,
+      updated_at: null,
+      updated_by: null,
+      last_hour: 0,
+      hourly_limit: 30,
+      ...o,
+    });
+    expect(TIPOS_DO_AUTOMATICO.map((t) => t.id)).toEqual(['elogio', 'marcacao']);
+    expect(resumoDoAutomatico(r())).toContain('Desligado: nenhuma resposta sai sem a aprovação de uma pessoa.');
+    expect(resumoDoAutomatico(r({ enabled: true, kinds: ['elogio'], last_hour: 1 }))).toBe('1 resposta sozinho nesta hora (no máximo 30). Reclamações e perguntas esperam você.');
+    expect(resumoDoAutomatico(r({ enabled: true, kinds: ['elogio'], last_hour: 30 }))).toContain('o teto: o resto espera a hora seguinte');
+    // O botão: ajustar (ligado), ver e ligar (quem liga), ver como funciona (quem só aprova).
+    expect([botaoDoAutomatico(r({ enabled: true })), botaoDoAutomatico(r()), botaoDoAutomatico(r({ can_enable: false }))]).toEqual(['Ajustar', 'Ver e ligar', 'Ver como funciona']);
+    expect(estadoDoAutomatico(r({ enabled: true, updated_by: { id: 'u', name: 'Rodrigo' }, updated_at: '2026-11-10T15:00:00Z' }))).toMatch(/^Ligado por Rodrigo em \d{2}\/\d{2}\/2026, às \d{2}:\d{2}\. Desligar vale na hora/);
+    // Ligar e somar pedem a confirmação; desligar e tirar, não.
+    const antes = { enabled: true, kinds: ['elogio'] };
+    expect(pedeConfirmacao({ enabled: false, kinds: [] }, { enabled: true, kinds: ['elogio'] })).toBe(true);
+    expect(pedeConfirmacao(antes, { enabled: true, kinds: ['elogio', 'marcacao'] })).toBe(true);
+    expect(pedeConfirmacao(antes, { enabled: true, kinds: [] })).toBe(false);
+    expect(pedeConfirmacao(antes, { enabled: false, kinds: ['elogio', 'marcacao'] })).toBe(false);
+    expect(erroDoAutomatico({ code: 'so-dono-ou-administrador', title: 'x' })).toContain('Só o Dono ou um Administrador');
+    expect(erroDoAutomatico({ code: 'outro', title: 'T', detail: 'D' })).toBe('D');
+    // A resposta da marca que termina com o aviso é a automática.
+    const resposta = (message: string, by_brand = true) => ({ id: 'r', author: 'misterburgers', by_brand, message, published_at: '2026-11-10T15:00:00Z', hidden: false });
+    expect(respondidoSozinho({ replies: [resposta(`Obrigado!${COMMENT_AUTO_REPLY_NOTICE}`)] })).toBe(true);
+    expect(respondidoSozinho({ replies: [resposta('Obrigado!')] })).toBe(false);
+    expect(respondidoSozinho({ replies: [resposta(`Copiei${COMMENT_AUTO_REPLY_NOTICE}`, false)] })).toBe(false);
   });
 
   it('a lista vazia diz o que aparece em cada filtro; com a busca, a frase é a da busca', () => {

@@ -1,6 +1,6 @@
-import type { CommentsResponse, SocialComment } from '@liame/contracts';
+import { type COMMENT_AUTO_REPLY_KINDS, COMMENT_AUTO_REPLY_NOTICE, type CommentAutoReplyResponse, type CommentsResponse, type SocialComment } from '@liame/contracts';
 import { haQuanto } from '@/components/avaliacoes/textos';
-import { horaDe } from '@/lib/formato';
+import { dataCompleta, horaDe } from '@/lib/formato';
 
 // A tela Comentários (mockups/prototipo-comentarios.html, P38 aprovado em 07/11/2026; A6, Z11, parte 3b): os comentários
 // dos posts da marca no Instagram e na Página, como o Liame os guardou (`GET /v1/comments`), com as situações que
@@ -76,6 +76,55 @@ export function avisosDasContas(accounts: CommentsResponse['accounts']): AvisoDa
     else if (a.situation === 'primeira_leitura') avisos.push({ conta: a.name, tom: 'info', contas: false, texto: `A primeira leitura dos comentários ${onde(a.channel)} ${a.name} ainda não terminou. Leva alguns minutos.` });
   }
   return avisos;
+}
+
+// ---- O atendimento automático (A6 · Z11, parte 2e-2; P38 versão 2; D-A6-92 e D-A6-104)
+
+/** Os tipos que o Liame responde sozinho, nesta versão, como a gaveta os mostra (a resposta pronta, sem IA). */
+export const TIPOS_DO_AUTOMATICO: ReadonlyArray<{ id: (typeof COMMENT_AUTO_REPLY_KINDS)[number]; rotulo: string; texto: string }> = [
+  { id: 'elogio', rotulo: 'Elogios', texto: 'Um agradecimento curto, com variação, para não repetir a mesma frase.' },
+  { id: 'marcacao', rotulo: 'Marcações de amigo', texto: 'Um convite curto, quando alguém marca um amigo no post.' },
+];
+
+/** A linha do topo da tela: o que está valendo agora. */
+export function resumoDoAutomatico(r: CommentAutoReplyResponse): string {
+  if (!r.enabled) return 'Desligado: nenhuma resposta sai sem a aprovação de uma pessoa. Ligado, o Liame responde sozinho os elogios e as marcações de amigo; reclamações e perguntas esperam você.';
+  if (r.last_hour >= r.hourly_limit) return `Chegou a ${r.hourly_limit} respostas sozinho nesta hora, o teto: o resto espera a hora seguinte.`;
+  const n = r.last_hour === 1 ? '1 resposta' : `${r.last_hour} respostas`;
+  return `${n} sozinho nesta hora (no máximo ${r.hourly_limit}). Reclamações e perguntas esperam você.`;
+}
+
+/** O botão da linha do topo: ajustar (ligado), ver e ligar (quem liga) ou ver como funciona (os outros). */
+export function botaoDoAutomatico(r: CommentAutoReplyResponse): string {
+  if (r.enabled) return 'Ajustar';
+  return r.can_enable ? 'Ver e ligar' : 'Ver como funciona';
+}
+
+/** O estado, no topo da gaveta: quem ligou e quando, ou desligado. */
+export function estadoDoAutomatico(r: CommentAutoReplyResponse): string {
+  if (!r.enabled) return 'Desligado: nenhuma resposta sai sem a aprovação de uma pessoa.';
+  const quem = r.updated_by ? ` por ${r.updated_by.name}` : '';
+  const quando = r.updated_at ? ` em ${dataCompleta(r.updated_at)}, às ${horaDe(r.updated_at)}` : '';
+  return `Ligado${quem}${quando}. Desligar vale na hora, sem código, para quem aprova.`;
+}
+
+/** Ligar, ou somar um tipo com ele ligado, pede a confirmação; desligar e tirar um tipo, não (D-A6-92). */
+export function pedeConfirmacao(antes: { enabled: boolean; kinds: readonly string[] }, depois: { enabled: boolean; kinds: readonly string[] }): boolean {
+  if (!depois.enabled) return false;
+  return !antes.enabled || depois.kinds.some((k) => !antes.kinds.includes(k));
+}
+
+/** A recusa da mudança, nas palavras da gaveta; o resto, nas do servidor. */
+export function erroDoAutomatico(p: { code: string; detail?: string; title: string }): string {
+  if (p.code === 'so-dono-ou-administrador') return 'Só o Dono ou um Administrador liga o atendimento automático ou soma um tipo. Você pode desligar ou tirar um tipo.';
+  if (p.code === 'funcao-desligada') return 'O atendimento automático ainda não está liberado para esta empresa.';
+  if (p.code === 'sem-tipo') return 'Para ligar, marque pelo menos um tipo de comentário.';
+  return p.detail ?? p.title;
+}
+
+/** O comentário que a marca respondeu pelo atendimento automático (a resposta termina com o aviso). */
+export function respondidoSozinho(c: Pick<SocialComment, 'replies'>): boolean {
+  return c.replies.some((r) => r.by_brand && r.message.endsWith(COMMENT_AUTO_REPLY_NOTICE));
 }
 
 /** O que o leitor de tela ouve depois de "Comentários" no menu (P38): ", 1 pede resposta" ou ", 3 pedem resposta". */
