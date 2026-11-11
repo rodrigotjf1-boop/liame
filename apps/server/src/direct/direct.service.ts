@@ -1,10 +1,14 @@
 import {
   DIRECT_ATTENDANCE_HOURS,
+  DIRECT_AUTO_REPLY_PREVIEW_LIMIT,
   DIRECT_LIST_LIMIT,
   DIRECT_MESSAGES_LIMIT,
   type DirectAccount,
   type DirectAttendanceRequest,
   type DirectAttendanceResponse,
+  type DirectAutoReplyPreviewResponse,
+  type DirectAutoReplyRequest,
+  type DirectAutoReplyResponse,
   type DirectReplyRequest,
   type DirectReplyResponse,
   type DirectConversation,
@@ -15,6 +19,7 @@ import {
   type DirectSettingsQuery,
   type DirectSettingsRequest,
   type DirectSettingsResponse,
+  type DirectWaitingResponse,
 } from '@liame/contracts';
 import { Injectable } from '@nestjs/common';
 import { sql } from 'drizzle-orm';
@@ -27,9 +32,19 @@ import { type AuthContext, auditDetail, currentTx } from '../context/request-con
 import { AppProblem } from '../errors/problems.js';
 import { FlagService } from '../flags/flag.service.js';
 import { marcaDaEmpresa, quemPede } from '../fotos/fotos.service.js';
-import { DATASET_DO_DIRECT, type DirecaoDoDirect, FLAG_DO_DIRECT, situacaoDaConversa } from './direct.js';
+import { DATASET_DO_DIRECT, type DirecaoDoDirect, FLAG_DO_DIRECT, JANELA_DO_DIRECT_HORAS, situacaoDaConversa } from './direct.js';
 import type { CursorDoDirect } from './sincronizador-do-direct.js';
-import { PENDENTES_DO_TIPO, sugestaoNoDirect, tipoNoDirect } from './tipo-no-direct.js';
+import {
+  automaticoDoDirect,
+  comAvisoDoDirect,
+  FLAG_DO_DIRECT_AUTOMATICO,
+  pedeUmaPessoa,
+  RESPOSTAS_AUTOMATICAS_DO_DIRECT_POR_HORA,
+  respostasAutomaticasDoDirectNaHora,
+  TIPOS_DO_DIRECT_AUTOMATICO,
+  tipoDoAutomatico,
+} from './automatico.js';
+import { PENDENTES_DO_TIPO, sugestaoNoDirect, type TipoNoDirect, tipoNoDirect } from './tipo-no-direct.js';
 
 // O Direct do Instagram na API (A6, Z12, parte 1; P39, D-A6-106 a D-A6-112): o ajuste da marca (ligar, com o código do
 // app, e desligar, na hora) e o que a tela lê do que a rotina `direct` guardou. Nada aqui chama a Meta nem o Regem:
@@ -44,6 +59,18 @@ const PERMISSAO_DE_DESLIGAR = 'acoes.aprovar';
 const PERMISSAO_DE_RESPONDER = 'acoes.aprovar';
 /** Quantas conversas a lista olha para contar e filtrar (a mais nova primeiro). */
 const CONVERSAS_OLHADAS = 500;
+/** Quantas conversas recentes a prévia do automático olha para achar as que ele sabe responder. */
+const PREVIA_OLHADAS = 50;
+
+/** O que a pessoa mandou, para a prévia: o texto, ou o que só o Instagram guarda (o story). */
+function previaDaMensagem(c: DirectConversation): string {
+  const m = c.last_message;
+  if (!m) return '';
+  if (m.text) return m.text;
+  if (m.kind === 'story_mencao') return 'Marcou a marca no story';
+  if (m.kind === 'story_resposta') return 'Respondeu ao story';
+  return '';
+}
 
 type LinhaDaConta = { id: string; usuario: string | null; last_success_at: Date | string | null; last_error: string | null; cursor: CursorDoDirect | null };
 type LinhaDaConversa = {
@@ -197,6 +224,28 @@ export class DirectService {
     return this.flags.isEnabled(FLAG_DO_DIRECT, this.flags.context({ tenantId, userId, brandId }));
   }
 
+  /**
+   * O contador do menu (P39): as conversas que esperam resposta, somadas as marcas ativas da empresa em que o Liame mostra
+   * o Direct (a função, o Direct ligado na marca e o Regem sem atender a conta). A regra de "espera" é a de
+   * `situacaoDaConversa`, em SQL (V74): a última mensagem é da pessoa, sem "concluir" depois dela, dentro da janela.
+   */
+  async esperando(auth: AuthContext, agora = new Date()): Promise<DirectWaitingResponse> {
+    const quem = quemPede(auth);
+    const marcas = (await currentTx().execute<{ id: string }>(sql`select id from liame.brand where archived_at is null`)).rows;
+    const contas: string[] = [];
+    for (const m of marcas) {
+      const conta = await this.contaDaMarca(m.id);
+      if (conta && (await this.lendo(quem.tenantId, quem.userId, m.id, conta))) contas.push(conta.id);
+    }
+    if (!contas.length) return { waiting: 0 };
+    const r = await currentTx().execute<{ n: string | number }>(sql`
+      select count(*) as n from liame.direct_conversation c
+       where c.connected_account_id in ${contas} and c.last_direction = 'entrada' and c.last_inbound_at is not null
+         and c.last_inbound_at > ${agora.toISOString()}::timestamptz - make_interval(hours => ${JANELA_DO_DIRECT_HORAS})
+         and (c.concluded_at is null or c.concluded_at < c.last_inbound_at)`);
+    return { waiting: Number(r.rows[0]?.n ?? 0) };
+  }
+
   /** A conta do Instagram da marca (a primeira conectada) e o estado da leitura do Direct dela. */
   private async contaDaMarca(brandId: string): Promise<LinhaDaConta | null> {
     const r = await currentTx().execute<LinhaDaConta>(sql`
@@ -288,6 +337,111 @@ export class DirectService {
       after: { enabled: body.enabled, no_other_app: sem, confirmed: liga },
     });
     return this.verAjuste(auth, { brand_id: brandId });
+  }
+
+  /** O atendimento automático do Direct da marca (A6, Z12, parte 5a; D-A6-115): liberado, ligado, os tipos e a hora. */
+  async verAutomatico(auth: AuthContext, query: DirectSettingsQuery, agora = new Date()): Promise<DirectAutoReplyResponse> {
+    const quem = quemPede(auth);
+    const brandId = query.brand_id;
+    await marcaDaEmpresa(brandId);
+    const tx = currentTx();
+    const available = await this.flags.isEnabled(FLAG_DO_DIRECT_AUTOMATICO, this.flags.context({ tenantId: quem.tenantId, userId: quem.userId, brandId }));
+    const m = await automaticoDoDirect(tx, brandId);
+    const quemMudou = m.updatedBy ? (await tx.execute<{ id: string; name: string }>(sql`select id, name from liame.app_user where id = ${m.updatedBy}`)).rows[0] : undefined;
+    return {
+      brand_id: brandId,
+      available,
+      enabled: m.enabled,
+      kinds: m.kinds,
+      can_enable: auth.permissions.has(PERMISSAO_DE_LIGAR),
+      can_disable: auth.permissions.has(PERMISSAO_DE_DESLIGAR),
+      updated_at: m.updatedAt ? m.updatedAt.toISOString() : null,
+      updated_by: quemMudou ? { id: quemMudou.id, name: quemMudou.name } : null,
+      last_hour: await respostasAutomaticasDoDirectNaHora(tx, brandId, agora),
+      hourly_limit: RESPOSTAS_AUTOMATICAS_DO_DIRECT_POR_HORA,
+    };
+  }
+
+  /**
+   * Liga, desliga ou muda os tipos do atendimento automático do Direct (D-A6-115). Ligar e somar um tipo: o Dono ou um
+   * Administrador, com a função liberada, o Direct ligado na marca e a confirmação (o código do app ou a chave de acesso).
+   * Desligar e tirar um tipo: quem aprova, na hora e sem código; desligar segura também o que já estava na fila (o
+   * executor confere o portão de novo). Ligado pede pelo menos um tipo. A mudança vai para a auditoria.
+   */
+  async mudarAutomatico(auth: AuthContext, body: DirectAutoReplyRequest): Promise<DirectAutoReplyResponse> {
+    const quem = quemPede(auth);
+    const brandId = body.brand_id;
+    await marcaDaEmpresa(brandId);
+    const tx = currentTx();
+    const antes = await automaticoDoDirect(tx, brandId);
+    const kinds = TIPOS_DO_DIRECT_AUTOMATICO.filter((t) => body.kinds.includes(t));
+    if (body.enabled && kinds.length === 0) throw new AppProblem(422, 'sem-tipo', 'Marque um tipo', 'Para ligar o atendimento automático, marque pelo menos um tipo de conversa.');
+    const liga = body.enabled && !antes.enabled;
+    const soma = body.enabled && kinds.some((k) => !antes.kinds.includes(k));
+    const comCodigo = liga || soma;
+    if (comCodigo) {
+      if (!auth.permissions.has(PERMISSAO_DE_LIGAR)) {
+        throw new AppProblem(403, 'so-dono-ou-administrador', 'Só o Dono ou um Administrador', 'Só o Dono ou um Administrador liga o atendimento automático ou soma um tipo. Você pode desligar ou tirar um tipo.');
+      }
+      if (!(await this.flags.isEnabled(FLAG_DO_DIRECT_AUTOMATICO, this.flags.context({ tenantId: quem.tenantId, userId: quem.userId, brandId })))) {
+        throw new AppProblem(409, 'funcao-desligada', 'Ainda não está liberado', 'O atendimento automático do Direct ainda não está liberado para esta empresa.');
+      }
+      if (!(await this.ajusteDaMarca(brandId)).enabled) {
+        throw new AppProblem(409, 'direct-desligado', 'Ligue o Direct antes', 'O Direct está desligado nesta marca: ligue o Direct antes do atendimento automático.');
+      }
+      await this.confirmacao.confirmar(tx, quem.userId, body);
+    }
+    await tx.execute(sql`
+      insert into liame.direct_auto_reply (brand_id, tenant_id, enabled, kinds, updated_by, created_at, updated_at)
+      values (${brandId}, ${quem.tenantId}, ${body.enabled}, ${`{${kinds.join(',')}}`}::text[], ${quem.userId}, now(), now())
+      on conflict (brand_id) do update
+        set enabled = excluded.enabled, kinds = excluded.kinds, updated_by = excluded.updated_by, updated_at = excluded.updated_at`);
+    auditDetail({
+      resourceId: brandId,
+      before: { enabled: antes.enabled, kinds: antes.kinds },
+      after: { enabled: body.enabled, kinds, confirmed: comCodigo },
+    });
+    return this.verAutomatico(auth, { brand_id: brandId });
+  }
+
+  /**
+   * "Veja como ele teria respondido" (P39 versão 2): até 3 conversas da marca, das últimas 24 horas, que esperam resposta
+   * e que ele sabe responder (a resposta pronta), as mais novas primeiro, cada uma com a resposta que sairia (com o
+   * aviso). Nada disto é enviado. Com o Direct desligado ou o Regem atendendo a conta, vazia.
+   */
+  async previaDoAutomatico(auth: AuthContext, query: DirectSettingsQuery, agora = new Date()): Promise<DirectAutoReplyPreviewResponse> {
+    const quem = quemPede(auth);
+    const brandId = query.brand_id;
+    await marcaDaEmpresa(brandId);
+    const conta = await this.contaDaMarca(brandId);
+    if (!conta || !(await this.lendo(quem.tenantId, quem.userId, brandId, conta))) return { items: [] };
+    const linhas = (
+      await currentTx().execute<LinhaDaConversa>(sql`
+        select c.conversation_id, c.username, c.last_message_at, c.last_inbound_at, c.last_direction, c.concluded_at, c.unread,
+               m.direction as m_direction, m.kind as m_kind, m.body as m_body, p.p_pendentes
+          from liame.direct_conversation c
+          left join lateral (
+            select x.direction, x.kind, x.body from liame.direct_message x
+             where x.connected_account_id = c.connected_account_id and x.conversation_id = c.conversation_id
+             order by x.sent_at desc, x.message_id desc limit 1) m on true
+          ${PENDENTES}
+         where c.connected_account_id = ${conta.id} and c.last_direction = 'entrada'
+           and c.last_inbound_at > ${agora.toISOString()}::timestamptz - make_interval(hours => ${JANELA_DO_DIRECT_HORAS})
+         order by c.last_inbound_at desc
+         limit ${PREVIA_OLHADAS}`)
+    ).rows;
+    const items: DirectAutoReplyPreviewResponse['items'] = [];
+    for (const l of linhas) {
+      const c = conversaDaLinha(l, agora, conta.usuario);
+      const ultima = l.p_pendentes?.at(-1);
+      if (c.status !== 'espera' || !ultima || !c.kind || !tipoDoAutomatico(c.kind as TipoNoDirect)) continue;
+      if (pedeUmaPessoa((l.p_pendentes ?? []).map((p) => p.body).join(' '))) continue;
+      const s = sugestaoNoDirect(c.kind as TipoNoDirect, ultima.id);
+      if (s?.kind !== 'pronta') continue;
+      items.push({ conversation_id: c.id, username: c.username, message: previaDaMensagem(c), kind: c.kind, reply: comAvisoDoDirect(s.text) });
+      if (items.length >= DIRECT_AUTO_REPLY_PREVIEW_LIMIT) break;
+    }
+    return { items };
   }
 
   /**

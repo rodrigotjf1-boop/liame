@@ -23,7 +23,7 @@ export const VARIACAO_MAXIMA_DA_VERBA_PCT = 10;
  */
 export const PLATFORM_POLICY: LoadedPolicy = {
   source: 'platform',
-  version: 13,
+  version: 14,
   document: {
     rules: [
       // Conteúdo político bloqueado por padrão (ADR-007; TSE 23.755/2026, base §6.1).
@@ -97,6 +97,12 @@ export const PLATFORM_POLICY: LoadedPolicy = {
       // abrir o atendimento (8 horas), e a rota da conversa confere o atendimento aberto antes de pedir (a ferramenta
       // declara `directByPerson` e só se pede pela rota, `onlyByRoute`). O funcionário de IA não pede esta ação.
       { type: 'autonomy', action: 'direct.responder', actor: 'human', mode: 'AUTO' },
+      // v14 (A6, Z12, parte 5a; P39 versão 2; D-A6-115 e D-A6-119): a resposta automática numa conversa do Direct sai sem
+      // uma pessoa ver antes, só quando quem pede é o funcionário de IA, pelo atendimento automático que o Dono ou um
+      // Administrador ligou na marca com o código do app. O portão (a função, o Direct ligado, o automático ligado, a
+      // conversa de agora com o tipo marcado, sem pedir uma pessoa e sem duas automáticas seguidas) é conferido no pedido e
+      // de novo na execução; a ferramenta só se pede por ele.
+      { type: 'autonomy', action: 'direct.responder_automatico', actor: 'agent', mode: 'AUTO' },
     ],
   },
 };

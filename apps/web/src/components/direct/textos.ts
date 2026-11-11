@@ -1,12 +1,71 @@
-import type { DirectConversation, DirectMessage, DirectSettingsResponse } from '@liame/contracts';
+import { DIRECT_AUTO_REPLY_NOTICE, type DIRECT_AUTO_REPLY_KINDS, type DirectAutoReplyResponse, type DirectConversation, type DirectMessage, type DirectSettingsResponse } from '@liame/contracts';
 import { mensagemDe, type Problema } from '@/lib/api';
-import { diasAte, horaDe, quandoComHora } from '@/lib/formato';
+import { dataCompleta, diasAte, horaDe, quandoComHora } from '@/lib/formato';
+
+// ------------------------------------------------------------------ o atendimento automático (parte 5b; P39 versão 2)
+
+/** Os tipos que o automático do Direct responde sozinho, nesta versão (a pergunta entra com o Social media, na 4b). */
+export const TIPOS_DO_AUTOMATICO_DO_DIRECT: ReadonlyArray<{ id: (typeof DIRECT_AUTO_REPLY_KINDS)[number]; rotulo: string; texto: string }> = [
+  { id: 'pronta', rotulo: 'Elogios, respostas ao story e menções', texto: 'Um agradecimento curto, com a resposta pronta, sem IA, com variação.' },
+];
+
+/** O aviso no fim de cada resposta automática, como a pessoa lê no Instagram (sem as quebras de linha do começo). */
+export const AVISO_DO_DIRECT = DIRECT_AUTO_REPLY_NOTICE.trim();
+
+/** A mensagem da marca que saiu pelo atendimento automático (pelo aviso no fim; a Meta pode mexer nos espaços). */
+export function saiuSozinha(texto: string): boolean {
+  return texto.trimEnd().endsWith(AVISO_DO_DIRECT);
+}
+
+/** A linha do topo da caixa: o que está valendo agora. */
+export function resumoDoAutomaticoDoDirect(r: DirectAutoReplyResponse): string {
+  if (!r.enabled) {
+    return 'Desligado: nenhuma resposta sai sem uma pessoa da equipe. Ligado, o Liame responde sozinho os elogios, as respostas ao story e as menções.';
+  }
+  if (r.last_hour >= r.hourly_limit) return `Chegou a ${r.hourly_limit} respostas sozinho nesta hora, o teto: o resto fica com você.`;
+  const n = r.last_hour === 1 ? '1 resposta' : `${r.last_hour} respostas`;
+  return `${n} sozinho nesta hora (no máximo ${r.hourly_limit}). Perguntas, reclamações e quem pede alguém esperam você.`;
+}
+
+/** O botão da linha: ajustar (ligado), ver e ligar (quem liga) ou ver como funciona (os outros). */
+export function botaoDoAutomaticoDoDirect(r: DirectAutoReplyResponse): string {
+  if (r.enabled) return 'Ajustar';
+  return r.can_enable ? 'Ver e ligar' : 'Ver como funciona';
+}
+
+/** O estado, no topo da gaveta: quem ligou e quando, ou desligado. */
+export function estadoDoAutomaticoDoDirect(r: DirectAutoReplyResponse): string {
+  if (!r.enabled) return 'Desligado: nenhuma resposta sai sem uma pessoa da equipe.';
+  const quem = r.updated_by ? ` por ${r.updated_by.name}` : '';
+  const quando = r.updated_at ? ` em ${dataCompleta(r.updated_at)}, às ${horaDe(r.updated_at)}` : '';
+  return `Ligado${quem}${quando}. Desligar vale na hora, sem código, para quem aprova.`;
+}
+
+/** Ligar, ou somar um tipo com ele ligado, pede a confirmação; desligar e tirar um tipo, não. */
+export function pedeConfirmacaoDoDirect(antes: { enabled: boolean; kinds: readonly string[] }, depois: { enabled: boolean; kinds: readonly string[] }): boolean {
+  if (!depois.enabled) return false;
+  return !antes.enabled || depois.kinds.some((k) => !antes.kinds.includes(k));
+}
+
+/** A recusa da mudança, nas palavras da gaveta; o resto, nas do servidor. */
+export function erroDoAutomaticoDoDirect(p: Problema): string {
+  if (p.code === 'so-dono-ou-administrador') return 'Só o Dono ou um Administrador liga o atendimento automático ou soma um tipo. Você pode desligar ou tirar um tipo.';
+  if (p.code === 'funcao-desligada') return 'O atendimento automático do Direct ainda não está liberado para esta empresa.';
+  if (p.code === 'direct-desligado') return 'O Direct está desligado nesta marca: ligue o Direct antes do atendimento automático.';
+  if (p.code === 'sem-tipo') return 'Para ligar, marque pelo menos um tipo de conversa.';
+  return mensagemDe(p);
+}
 
 // Os textos e as regras da tela Direct (A6, Z12, parte 3; mockups/prototipo-direct.html, P39 aprovado em 11/11/2026):
 // o que a tela mostra para cada estado do ajuste da marca, as situações que filtram, a janela da Meta de cada conversa,
 // as mensagens que o Liame não guarda (foto, vídeo, story) e o espaço da resposta (a Meta aceita até 1.000 bytes).
 
 export type FiltroDoDirect = 'espera' | 'fechando' | 'respondida' | 'fora' | 'todas';
+
+/** O que o leitor de tela ouve depois de "Direct" no menu (P39). */
+export function conversasFaladas(n: number): string {
+  return n === 1 ? ', 1 espera resposta' : `, ${n} esperam resposta`;
+}
 
 /** As situações que filtram, na ordem do protótipo. */
 export const FILTROS_DO_DIRECT: [FiltroDoDirect, string][] = [
@@ -76,10 +135,18 @@ export function janelaDaConversa(c: Pick<DirectConversation, 'status' | 'closing
 }
 
 /** O selo da situação na lista (o que esperam não leva selo: o filtro já diz). */
-export function seloDaSituacao(c: Pick<DirectConversation, 'status' | 'closing' | 'window_until'>, agora: Date): { texto: string; classe: string } | null {
+export function seloDaSituacao(
+  c: Pick<DirectConversation, 'status' | 'closing' | 'window_until'> & Partial<Pick<DirectConversation, 'last_message'>>,
+  agora: Date,
+): { texto: string; classe: string } | null {
   if (c.status === 'espera' && c.closing && c.window_until) return { texto: `Janela fecha em ${falta(c.window_until, agora).replace('faltam ', '')}`, classe: 'st--perigo' };
   if (c.status === 'fora') return { texto: 'Fora da janela', classe: 'st--espera' };
-  if (c.status === 'respondida') return { texto: 'Respondida', classe: 'st--espera' };
+  if (c.status === 'respondida') {
+    // A resposta que saiu pelo atendimento automático (parte 5b; P39 versão 2).
+    const m = c.last_message;
+    if (m?.direction === 'saida' && saiuSozinha(m.text)) return { texto: 'Respondida sozinho', classe: 'st--concluido' };
+    return { texto: 'Respondida', classe: 'st--espera' };
+  }
   return null;
 }
 
@@ -123,7 +190,9 @@ export function previaDaConversa(c: Pick<DirectConversation, 'last_message'>): s
   if (!m) return 'Sem mensagem guardada';
   const anexo = anexoDaMensagem(m);
   const texto = anexo ? (m.text ? `${anexo.texto}: ${m.text}` : anexo.texto) : m.text;
-  return m.direction === 'saida' ? `Você: ${texto}` : texto;
+  if (m.direction !== 'saida') return texto;
+  // A resposta automática aparece sem o aviso, que a lista já diz no selo.
+  return saiuSozinha(texto) ? `Você: ${texto.trimEnd().slice(0, -AVISO_DO_DIRECT.length).trimEnd()}` : `Você: ${texto}`;
 }
 
 /** O vazio de cada situação (com busca, a frase da busca). */

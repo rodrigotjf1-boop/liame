@@ -7,7 +7,9 @@ import { recursoDoComentario } from '../actions/comentario-na-rede.js';
 import { type ApplyResult, CONNECTORS } from '../actions/connectors.js';
 import { TOOLS } from '../actions/tools.js';
 import { writeAudit } from '../audit/audit.js';
+import { conversaDoRecurso, FERRAMENTA_DO_DIRECT_AUTOMATICO } from '../actions/direct-plano.js';
 import { oQueSeguraOAutomatico } from '../comentarios/automatico.js';
+import { oQueSeguraODirectAutomatico } from '../direct/automatico.js';
 import { ErroConector } from '../connectors/cliente-http.js';
 import { CONTEINER_EM_PREPARO, COTA_DE_POSTS, VIDEO_EM_PREPARO } from '../connectors/meta/publicacao.js';
 import { DATABASE } from '../database/database.module.js';
@@ -339,6 +341,13 @@ export class ActionExecutor {
    * quando vale; senão, o porquê. Só o pedido do funcionário de IA, de um comentário de uma marca, passa.
    */
   private async portaoDoAutomatico(tx: Tx, row: ActionRow): Promise<string | null> {
+    // O Direct (A6, Z12, parte 5a): o portão da conversa de agora, o mesmo do pedido.
+    if (row.tool === FERRAMENTA_DO_DIRECT_AUTOMATICO) {
+      const conversationId = row.resource_id ? conversaDoRecurso(row.resource_id) : null;
+      if (row.actor_type !== 'agent' || !row.brand_id || !conversationId || !row.account_id) return 'fora_do_automatico';
+      const portao = await oQueSeguraODirectAutomatico(tx, this.flags, { tenantId: row.tenant_id, brandId: row.brand_id, connectedAccountId: row.account_id, conversationId }, new Date());
+      return 'segura' in portao ? portao.segura : null;
+    }
     const prefixo = recursoDoComentario('');
     const commentId = row.resource_id?.startsWith(prefixo) ? row.resource_id.slice(prefixo.length) : null;
     if (row.actor_type !== 'agent' || !row.brand_id || !commentId || !row.account_id) return 'fora_do_automatico';

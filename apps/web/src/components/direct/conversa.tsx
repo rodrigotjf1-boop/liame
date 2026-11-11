@@ -7,7 +7,7 @@ import { Icone } from '@/components/ui/icone';
 import { api, chamar, mensagemDe, type Problema } from '@/lib/api';
 import { disparar } from '@/lib/disparar';
 import { quandoComHora } from '@/lib/formato';
-import { anexoDaMensagem, bytesDoTexto, ESPACO_DA_RESPOSTA, erroDaResposta, janelaDaConversa, quemEscreveu, recusaDaResposta, situacaoDoEnvio } from './textos';
+import { anexoDaMensagem, bytesDoTexto, ESPACO_DA_RESPOSTA, erroDaResposta, janelaDaConversa, quemEscreveu, recusaDaResposta, saiuSozinha, situacaoDoEnvio } from './textos';
 
 // A conversa aberta (P39): quem escreveu, a janela da Meta, as mensagens guardadas e a resposta. Mandar passa pelo
 // atendimento aberto (a tela pede a confirmação uma vez e abre por 8 horas); o pedido nasce aprovado e sai na volta
@@ -379,9 +379,11 @@ function SugestaoDoDirect({ s, aoUsar }: { s: DirectSuggestion; aoUsar: ((texto:
 function Mensagem({ m, marcaNome, agora }: { m: DirectMessage; marcaNome: string; agora: Date }) {
   const nossa = m.direction === 'saida';
   const anexo = anexoDaMensagem(m);
+  // A resposta que saiu pelo atendimento automático (parte 5b; P39 versão 2): "Liame, sozinho".
+  const sozinha = nossa && saiuSozinha(m.text);
   const meta = (
     <span className="dir-msg-meta">
-      {nossa && <span>{marcaNome}</span>}
+      {nossa && <span>{sozinha ? 'Liame, sozinho' : marcaNome}</span>}
       <span>{quandoComHora(m.sent_at, agora)}</span>
     </span>
   );

@@ -43,6 +43,7 @@ import { PostsNumerosLoop } from './posts-numeros-loop.js';
 import { DoSeuInstagramLoop } from './do-seu-instagram-loop.js';
 import { ComentariosLoop } from './comentarios-loop.js';
 import { DirectLoop } from './direct-loop.js';
+import { DirectAutomaticoLoop } from './direct-automatico.js';
 import { SincronizacaoLoop } from './sincronizacao-loop.js';
 import { ExplicarService } from '../ai/explicar/explicar.service.js';
 import { AiGateway } from '../ai/gateway.js';
@@ -165,6 +166,8 @@ import { WebhookDeliverer } from './webhook-deliverer.js';
     ComentariosLoop,
     // O Direct do Instagram (A6, Z12, parte 1): as conversas de cada Instagram ligado a uma marca, a cada minuto.
     DirectLoop,
+    // O atendimento automático do Direct (A6, Z12, parte 5a): a resposta pronta, sozinha, nas marcas que ligaram.
+    DirectAutomaticoLoop,
     // Conversões para o Google (A5, Y1): a venda confirmada que veio de um anúncio do Google volta para ele; nasce desligada.
     ConversoesLoop,
     // Sombra de verdade (A3, I5): lê os resultados como a tela e registra o que o Liame recomendaria.

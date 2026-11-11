@@ -17,9 +17,10 @@ export type ItemNav = {
   permissao?: string;
   /**
    * Mostra ao lado um número: os avisos (crítico + atenção), os pedidos esperando aprovação ou, no Resumo, os
-   * pontos que pedem a pessoa (os avisos e, havendo pedido esperando, mais um); em Comentários, os que pedem resposta.
+   * pontos que pedem a pessoa (os avisos e, havendo pedido esperando, mais um); em Comentários, os que pedem resposta;
+   * no Direct, as conversas que esperam resposta.
    */
-  contador?: 'atencao' | 'aprovacoes' | 'resumo' | 'criativos' | 'comentarios';
+  contador?: 'atencao' | 'aprovacoes' | 'resumo' | 'criativos' | 'comentarios' | 'direct';
   /** A tela tem as duas visões (Lite e Pro): o seletor de modo aparece no topo. */
   modos?: boolean;
   /**
@@ -54,7 +55,7 @@ export const NAVEGACAO: GrupoNav[] = [
       // Os comentários dos posts (P38, D-A6-84): logo depois de Avaliações, uma tela só nos dois modos.
       { href: '/comentarios', rotulo: 'Comentários', icone: 'reply', permissao: 'campanhas.ver', contador: 'comentarios' },
       // O Direct do Instagram (P39, A6 · Z12): logo depois de Comentários, uma tela só nos dois modos.
-      { href: '/direct', rotulo: 'Direct', icone: 'instagram', permissao: 'campanhas.ver' },
+      { href: '/direct', rotulo: 'Direct', icone: 'instagram', permissao: 'campanhas.ver', contador: 'direct' },
       // A Agenda dos posts (P19, D-A6-24): logo abaixo de Avaliações, uma tela só nos dois modos.
       { href: '/agenda', rotulo: 'Agenda', icone: 'calendar', permissao: 'campanhas.ver' },
       { href: '/criativos', rotulo: 'Criativos', icone: 'image', permissao: 'campanhas.ver', contador: 'criativos', modos: true },

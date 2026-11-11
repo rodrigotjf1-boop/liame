@@ -1,6 +1,6 @@
 'use client';
 
-import type { BrandResponse, DirectAttendanceResponse, DirectConversationsResponse, DirectSettingsResponse } from '@liame/contracts';
+import type { BrandResponse, DirectAttendanceResponse, DirectAutoReplyResponse, DirectConversationsResponse, DirectSettingsResponse } from '@liame/contracts';
 import Link from 'next/link';
 import { type ReactNode, useCallback, useEffect, useRef, useState } from 'react';
 import { useAvisar } from '@/components/ui/avisos';
@@ -11,8 +11,10 @@ import { Icone } from '@/components/ui/icone';
 import { useAgora } from '@/lib/agora';
 import { api, chamar, mensagemDe, type Problema } from '@/lib/api';
 import { disparar } from '@/lib/disparar';
+import { useContadorDirect } from '@/lib/contador-direct';
 import { horaDe } from '@/lib/formato';
 import { useSessao } from '@/lib/sessao';
+import { GavetaDoAutomaticoDoDirect, LinhaDoAutomaticoDoDirect } from './automatico';
 import { type Confirmacao, DialogoDeConfirmar, type ResultadoDaConfirmacao } from './confirmar';
 import { ConversaDoDirect } from './conversa';
 import {
@@ -64,11 +66,15 @@ export function DirectTela() {
   const esperaAtendimento = useRef<((ok: boolean) => void) | null>(null);
   const [focarConversa, setFocarConversa] = useState(false);
   const [desligando, setDesligando] = useState<'nao' | 'confirmar' | 'enviando'>('nao');
+  const [automatico, setAutomatico] = useState<DirectAutoReplyResponse | null>(null);
+  const [gavetaDoAutomatico, setGavetaDoAutomatico] = useState(false);
   const [semOutro, setSemOutro] = useState(false);
   const [erroLigar, setErroLigar] = useState<string | null>(null);
   const agora = useAgora(60_000, lista.tipo === 'ok' ? lista.dados : null);
   const seqLista = useRef(0);
   const caixa = useRef<HTMLDivElement>(null);
+  const { recarregar: recarregarMenu } = useContadorDirect();
+  const esperamAntes = useRef<number | null>(null);
 
   const carregarMarcas = useCallback(async () => {
     setErroMarcas(null);
@@ -108,6 +114,22 @@ export function DirectTela() {
     };
   }, [marca, tentativa]);
 
+  // O atendimento automático da marca (parte 5b): a linha no topo da caixa e a gaveta, só com a função liberada.
+  useEffect(() => {
+    if (!marca) return;
+    let vivo = true;
+    setAutomatico(null);
+    disparar(
+      chamar(() => api.GET('/v1/direct/auto-reply', { params: { query: { brand_id: marca } } })).then((r) => {
+        // Sem resposta, a linha não aparece: nada muda na caixa, e a equipe responde como sempre.
+        if (vivo && r.ok) setAutomatico(r.data);
+      }),
+    );
+    return () => {
+      vivo = false;
+    };
+  }, [marca]);
+
   useEffect(() => {
     const t = setTimeout(() => setBuscando(busca.trim()), 350);
     return () => clearTimeout(t);
@@ -129,9 +151,13 @@ export function DirectTela() {
       chamar(() => api.GET('/v1/direct/conversations', { params: { query } })).then((r) => {
         if (id !== seqLista.current) return;
         setLista(r.ok ? { tipo: 'ok', dados: r.data } : { tipo: 'erro', problema: r.problema });
+        // O contador do menu lê de novo quando "Esperam resposta" muda entre duas leituras da tela.
+        if (!r.ok) return;
+        if (esperamAntes.current !== null && esperamAntes.current !== r.data.counts.espera) recarregarMenu();
+        esperamAntes.current = r.data.counts.espera;
       }),
     );
-  }, [marca, estado, filtro, buscando, tentativa]);
+  }, [marca, estado, filtro, buscando, tentativa, recarregarMenu]);
 
   // A primeira conversa da lista fica aberta no largo (no estreito, a lista fica sozinha até a pessoa escolher). A
   // conversa aberta não troca sozinha: respondida, ela sai de "Esperam resposta", e continua aberta até a pessoa escolher outra.
@@ -417,6 +443,7 @@ export function DirectTela() {
             </div>
           )}
         </div>
+        {automatico?.available && automatico.brand_id === marca && <LinhaDoAutomaticoDoDirect r={automatico} aoAbrir={() => setGavetaDoAutomatico(true)} />}
         {estado === 'primeira' ? (
           <div className="card">
             <Estado icone="refresh" titulo="Lendo as conversas pela primeira vez">
@@ -604,6 +631,17 @@ export function DirectTela() {
         <DialogoDeConfirmar titulo="Ligar o Direct no Liame" rotulo="Ligar o Direct" reserva={titulo} aoConfirmar={ligar} aoFechar={() => setPedido(null)}>
           <p>As mensagens do {conta} passam a chegar aqui. Ligar fica na auditoria, com o seu nome.</p>
         </DialogoDeConfirmar>
+      )}
+      {gavetaDoAutomatico && automatico && (
+        <GavetaDoAutomaticoDoDirect
+          r={automatico}
+          reserva={titulo}
+          aoSalvar={(novo, aviso) => {
+            setAutomatico(novo);
+            avisar(aviso);
+          }}
+          aoFechar={() => setGavetaDoAutomatico(false)}
+        />
       )}
     </section>
   );

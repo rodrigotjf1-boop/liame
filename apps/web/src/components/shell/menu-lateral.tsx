@@ -13,11 +13,13 @@ import { pendentesFalados } from '@/components/aprovacoes/textos';
 import { avisosFalados } from '@/components/atencao/textos';
 import { comentariosFalados } from '@/components/comentarios/textos';
 import { pecasFaladas } from '@/components/criativos/textos';
+import { conversasFaladas } from '@/components/direct/textos';
 import { contadorDoResumo, pontosFalados } from '@/components/resumo/textos';
 import { useContadorAprovacoes } from '@/lib/contador-aprovacoes';
 import { useContadorAtencao } from '@/lib/contador-atencao';
 import { useContadorComentarios } from '@/lib/contador-comentarios';
 import { useContadorCriativos } from '@/lib/contador-criativos';
+import { useContadorDirect } from '@/lib/contador-direct';
 import { useModo } from '@/lib/modo';
 import { BotaoTema } from './botao-tema';
 import { emFerramenta, type GrupoNav, itemAtual, itensVisiveis, NAVEGACAO } from './navegacao';
@@ -32,6 +34,7 @@ export function MenuLateral({ id, aoFechar, modos, inerte = false }: { id: strin
   const aprovacoes = useContadorAprovacoes();
   const criativos = useContadorCriativos();
   const comentarios = useContadorComentarios();
+  const direct = useContadorDirect();
   const caminho = usePathname();
   const { modo } = useModo();
   const idFerramentas = useId();
@@ -86,6 +89,8 @@ export function MenuLateral({ id, aoFechar, modos, inerte = false }: { id: strin
                     ? (criativos.total ?? 0)
                     : item.contador === 'comentarios'
                       ? (comentarios.total ?? 0)
+                      : item.contador === 'direct'
+                        ? (direct.total ?? 0)
                       : item.contador === 'resumo'
                         ? contadorDoResumo(contador.total, aprovacoes.total, criativos.total)
                         : 0;
@@ -96,6 +101,8 @@ export function MenuLateral({ id, aoFechar, modos, inerte = false }: { id: strin
                   ? pecasFaladas(n)
                   : item.contador === 'comentarios'
                     ? comentariosFalados(n)
+                    : item.contador === 'direct'
+                      ? conversasFaladas(n)
                     : item.contador === 'resumo'
                       ? pontosFalados(n)
                       : avisosFalados(n)

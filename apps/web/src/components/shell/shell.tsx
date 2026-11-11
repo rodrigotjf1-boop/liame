@@ -14,6 +14,7 @@ import { ContadorAprovacoesProvider } from '@/lib/contador-aprovacoes';
 import { ContadorAtencaoProvider } from '@/lib/contador-atencao';
 import { ContadorComentariosProvider } from '@/lib/contador-comentarios';
 import { ContadorCriativosProvider } from '@/lib/contador-criativos';
+import { ContadorDirectProvider } from '@/lib/contador-direct';
 import { ModoProvider } from '@/lib/modo';
 import { useSessao } from '@/lib/sessao';
 import { MenuLateral } from './menu-lateral';
@@ -32,11 +33,13 @@ export function Shell({ children }: { children: ReactNode }) {
         <ContadorAprovacoesProvider>
           <ContadorCriativosProvider>
             <ContadorComentariosProvider>
-              <ModoProvider>
-                <ConversaProvider disponivel={Boolean(empresa) && pode('conversa.usar')}>
-                  <Estrutura>{children}</Estrutura>
-                </ConversaProvider>
-              </ModoProvider>
+              <ContadorDirectProvider>
+                <ModoProvider>
+                  <ConversaProvider disponivel={Boolean(empresa) && pode('conversa.usar')}>
+                    <Estrutura>{children}</Estrutura>
+                  </ConversaProvider>
+                </ModoProvider>
+              </ContadorDirectProvider>
             </ContadorComentariosProvider>
           </ContadorCriativosProvider>
         </ContadorAprovacoesProvider>

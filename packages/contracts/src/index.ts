@@ -620,6 +620,11 @@ export {
 } from './comentarios.js';
 export {
   DIRECT_ATTENDANCE_HOURS,
+  DIRECT_AUTO_REPLY_HOURLY_LIMIT,
+  DIRECT_AUTO_REPLY_IN_A_ROW,
+  DIRECT_AUTO_REPLY_KINDS,
+  DIRECT_AUTO_REPLY_NOTICE,
+  DIRECT_AUTO_REPLY_PREVIEW_LIMIT,
   DIRECT_LIST_LIMIT,
   DIRECT_MESSAGES_LIMIT,
   DIRECT_STATUSES,
@@ -627,6 +632,9 @@ export {
   DirectAccount,
   DirectAttendanceRequest,
   DirectAttendanceResponse,
+  DirectAutoReplyPreviewResponse,
+  DirectAutoReplyRequest,
+  DirectAutoReplyResponse,
   DirectBrandRequest,
   DirectConversation,
   DirectConversationId,
@@ -641,4 +649,5 @@ export {
   DirectSettingsRequest,
   DirectSettingsResponse,
   DirectSuggestion,
+  DirectWaitingResponse,
 } from './direct.js';

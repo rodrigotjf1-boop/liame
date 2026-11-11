@@ -1,4 +1,4 @@
-import type { BudgetImpact, RiskLevel } from '@liame/contracts';
+import { type BudgetImpact, DIRECT_AUTO_REPLY_NOTICE, type RiskLevel } from '@liame/contracts';
 import { z } from 'zod';
 import { emMenorUnidade } from '../connectors/meta/verba.js';
 import { type ContextoDaAvaliacao, EstadoDaAvaliacao, ehNotaBaixa, ParametrosDaResposta, planoDaResposta, planoDeApagar } from './avaliacao-plano.js';
@@ -14,7 +14,13 @@ import {
   planoDeMostrar,
   planoDeOcultar,
 } from './comentario-plano.js';
-import { FLAG_DE_RESPONDER_NO_DIRECT, ParametrosDaRespostaNoDirect, planoDaRespostaNoDirect } from './direct-plano.js';
+import {
+  ACAO_DE_RESPONDER_NO_DIRECT_SOZINHO,
+  FERRAMENTA_DO_DIRECT_AUTOMATICO,
+  FLAG_DE_RESPONDER_NO_DIRECT,
+  ParametrosDaRespostaNoDirect,
+  planoDaRespostaNoDirect,
+} from './direct-plano.js';
 import { EstadoDaMensagem, faseDaMensagem, impedimentoDaMensagem } from './mensagem-plano.js';
 import { EstadoDoPost, planoDeApagarOPost, planoDeTentarDeNovo, planoDoPost, quandoSai } from '../posts/post-plano.js';
 import { motivoDoCompartilhado, orcamentoCompartilhado } from './orcamento-compartilhado.js';
@@ -667,6 +673,40 @@ export const TOOLS: Record<string, ToolDefinition> = {
       return {
         action: plano.acao,
         // Responder não gasta verba: nada a reservar no envelope do mês.
+        budgetImpact: 'none',
+        valueMicros: null,
+        currentValueMicros: null,
+        reserveMicros: 0,
+        desiredState: plano.desejado,
+        text: plano.texto,
+      };
+    },
+  },
+  // A resposta automática numa conversa do Direct (A6, Z12, parte 5a; P39 versão 2; D-A6-115 e D-A6-119): o
+  // atendimento automático, que o Dono ou um Administrador liga na marca com o código do app, responde sozinho os tipos
+  // marcados (nesta parte, o elogio, a resposta ao story e a menção, com a resposta pronta), sem uma pessoa ver antes.
+  // Só o Social media pede, pela rotina, que confere o portão antes; o executor confere de novo antes de mandar. O texto
+  // termina com o aviso de resposta automática e o caminho para uma pessoa (Termos 5.5 e 6.3). Sem volta pelo Liame.
+  [FERRAMENTA_DO_DIRECT_AUTOMATICO]: {
+    name: FERRAMENTA_DO_DIRECT_AUTOMATICO,
+    version: 1,
+    owner: 'social',
+    description:
+      'Manda sozinho, pelo atendimento automático que a marca ligou, a resposta pronta da marca numa conversa do Direct do Instagram (o agradecimento ao elogio, à resposta ao story ou à menção), com o aviso de resposta automática e o caminho para uma pessoa no fim. A mensagem é particular e só sai até 24 horas depois da última mensagem da pessoa.',
+    // Fala com uma pessoa em nome da marca sem uma pessoa ver antes: só pelo atendimento automático, com o portão dele.
+    risk: 'R2',
+    providers: ['instagram'],
+    compensation: 'sem_volta_pelo_liame',
+    atendimentoAutomatico: true,
+    flag: FLAG_DE_RESPONDER_NO_DIRECT,
+    params: ParametrosDaRespostaNoDirect,
+    plan(before, params) {
+      const texto = typeof params.texto === 'string' ? params.texto : '';
+      if (!texto.endsWith(DIRECT_AUTO_REPLY_NOTICE)) throw new PlanoRecusado('A resposta automática termina com o aviso de resposta automática.');
+      const plano = planoDaRespostaNoDirect(before, params);
+      if (!plano.ok) throw new PlanoRecusado(plano.motivo);
+      return {
+        action: ACAO_DE_RESPONDER_NO_DIRECT_SOZINHO,
         budgetImpact: 'none',
         valueMicros: null,
         currentValueMicros: null,
