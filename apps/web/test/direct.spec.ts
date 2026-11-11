@@ -5,20 +5,28 @@ import { describe, expect, it } from 'vitest';
 import { LinhaDoAutomaticoDoDirect } from '@/components/direct/automatico';
 import {
   anexoDaMensagem,
+  appDaConversa,
   avisoDaLeitura,
+  avisoDoMessenger,
+  CANAIS_DO_DIRECT,
+  doisCanais,
   bytesDoTexto,
   conversasFaladas,
   erroDaResposta,
   estadoDoDirect,
   falta,
   FILTROS_DO_DIRECT,
+  iniciaisDe,
   iniciaisDoArroba,
   janelaDaConversa,
   lidoDoDirect,
+  nomeDaCaixa,
+  ofereceMessenger,
   previaDaConversa,
   quemEscreveu,
   recusaDaResposta,
   seloDaSituacao,
+  situacaoDaPagina,
   situacaoDoEnvio,
   textoDoAtendimento,
   tipoDaConversa,
@@ -148,7 +156,7 @@ describe('a tela Direct (A6 · Z12, parte 3)', () => {
     expect(seloDaSituacao(fora, agora)).toEqual({ texto: 'Fora da janela', classe: 'st--espera' });
     expect(janelaDaConversa(conversa({ status: 'respondida' }), agora)).toEqual({ nivel: 'ok', texto: 'Respondida. Se a pessoa escrever de novo, a janela abre outra vez.' });
     expect(seloDaSituacao(conversa({ status: 'respondida' }), agora)).toEqual({ texto: 'Respondida', classe: 'st--espera' });
-    expect(janelaDaConversa(conversa({ window_until: null }), agora).texto).toContain('o Instagram só deixa a marca responder depois');
+    expect(janelaDaConversa(conversa({ window_until: null }), agora).texto).toContain('a Meta só deixa a marca responder depois');
     expect(seloDaSituacao(conversa(), agora)).toBeNull();
     expect(falta(daqui(120), agora)).toBe('faltam 2 h');
     expect(falta(daqui(-5), agora)).toBe('faltam 0 min');
@@ -248,5 +256,63 @@ describe('a tela Direct (A6 · Z12, parte 3)', () => {
     expect(seloDaSituacao(respondida, agora)).toEqual({ texto: 'Respondida sozinho', classe: 'st--concluido' });
     expect(previaDaConversa(respondida)).toBe('Você: Obrigado pelo carinho! Esperamos você de novo.');
     expect(seloDaSituacao(conversa({ status: 'respondida', last_message: { direction: 'saida', kind: 'texto', text: 'Oi!' } }), agora)).toEqual({ texto: 'Respondida', classe: 'st--espera' });
+  });
+});
+
+describe('o Messenger da Página na caixa do Direct (A6 · Z14, parte 3; P39 versão 3)', () => {
+  const messenger = (o: Partial<DirectSettingsResponse['messenger']> = {}): DirectSettingsResponse['messenger'] => ({
+    ...ajuste().messenger,
+    available: true,
+    enabled: true,
+    no_other_app: true,
+    page: { id: '00000000-0000-4000-8000-000000000003', name: 'Página Mister Burgers' },
+    regem: 'livre',
+    reading: 'ok',
+    ...o,
+  });
+
+  it('o nome da caixa e do menu segue o Messenger ligado; os dois canais só com ele lido; oferecer ligar só com a função e a Página', () => {
+    expect(nomeDaCaixa(messenger())).toBe('Direct e Messenger');
+    expect(nomeDaCaixa(messenger({ enabled: false }))).toBe('Direct');
+    expect(nomeDaCaixa(messenger({ available: false }))).toBe('Direct');
+    // Com o Regem atendendo a Página, o nome segue (a faixa diz o porquê); só o Direct fica na caixa.
+    expect(nomeDaCaixa(messenger({ regem: 'atende' }))).toBe('Direct e Messenger');
+    expect(nomeDaCaixa(null)).toBe('Direct');
+    expect(doisCanais(messenger())).toBe(true);
+    // O Regem atende a Página, ou falta a permissão: só o Direct na caixa (o nome segue "Direct e Messenger").
+    expect(doisCanais(messenger({ regem: 'atende' }))).toBe(false);
+    expect(doisCanais(messenger({ reading: 'sem_permissao' }))).toBe(false);
+    expect(doisCanais(messenger({ available: false }))).toBe(false);
+    expect(ofereceMessenger(messenger({ enabled: false }))).toBe(true);
+    expect(ofereceMessenger(messenger())).toBe(false);
+    expect(ofereceMessenger(messenger({ enabled: false, page: null }))).toBe(false);
+    expect(ofereceMessenger(messenger({ enabled: false, available: false }))).toBe(false);
+    expect(CANAIS_DO_DIRECT.map(([, r]) => r)).toEqual(['Instagram e Messenger', 'Instagram', 'Messenger']);
+  });
+
+  it('as faixas e a Página na linha da conta: o Regem atendendo a Página e a permissão que falta; o Direct segue', () => {
+    const regem = avisoDoMessenger(messenger({ regem: 'atende' }), 'Página Mister Burgers')!;
+    expect(regem).toMatchObject({ tipo: 'acao', titulo: 'O Messenger desta Página é atendido no Regem', contas: false });
+    expect(regem.texto).toContain('o Direct segue aqui');
+    expect(avisoDoMessenger(messenger({ reading: 'sem_permissao' }), 'Página Mister Burgers')).toMatchObject({ tipo: 'atencao', titulo: 'Falta a permissão de mensagens da Página', contas: true });
+    expect(avisoDoMessenger(messenger(), 'Página Mister Burgers')).toBeNull();
+    expect(avisoDoMessenger(messenger({ enabled: false, regem: 'atende' }), 'Página Mister Burgers')).toBeNull();
+    expect(situacaoDaPagina(messenger({ regem: 'atende' }))).toBe(' · Messenger com o Regem');
+    expect(situacaoDaPagina(messenger({ reading: 'sem_permissao' }))).toBe(' · Messenger sem permissão');
+    expect(situacaoDaPagina(messenger())).toBe('');
+  });
+
+  it('quem escreveu no Messenger: o nome do Facebook (sem @) e as iniciais dele; a conversa abre na caixa da Página', () => {
+    expect(quemEscreveu(null, 'Joana Lima')).toBe('Joana Lima');
+    expect(quemEscreveu('ana.paula_rj', 'Ana')).toBe('@ana.paula_rj');
+    expect(quemEscreveu(null, '  ')).toBe('Quem escreveu');
+    expect(iniciaisDe(null, 'Joana Maria Lima')).toBe('JL');
+    expect(iniciaisDe(null, 'Joana')).toBe('JO');
+    expect(iniciaisDe('ana.paula_rj', 'Ana Paula')).toBe('AP');
+    expect(iniciaisDe(null, null)).toBe('?');
+    expect(appDaConversa('messenger')).toEqual({ nome: 'Messenger', endereco: 'https://business.facebook.com/latest/inbox' });
+    expect(appDaConversa('instagram').nome).toBe('Instagram');
+    // Um canal que esta versão da tela não conhece abre no Instagram (V23).
+    expect(appDaConversa('outro').nome).toBe('Instagram');
   });
 });

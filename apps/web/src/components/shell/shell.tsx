@@ -14,7 +14,7 @@ import { ContadorAprovacoesProvider } from '@/lib/contador-aprovacoes';
 import { ContadorAtencaoProvider } from '@/lib/contador-atencao';
 import { ContadorComentariosProvider } from '@/lib/contador-comentarios';
 import { ContadorCriativosProvider } from '@/lib/contador-criativos';
-import { ContadorDirectProvider } from '@/lib/contador-direct';
+import { ContadorDirectProvider, useContadorDirect } from '@/lib/contador-direct';
 import { ModoProvider } from '@/lib/modo';
 import { useSessao } from '@/lib/sessao';
 import { MenuLateral } from './menu-lateral';
@@ -68,7 +68,9 @@ function Estrutura({ children }: { children: ReactNode }) {
   const [gaveta, setGaveta] = useState(false);
   const botaoMenu = useRef<HTMLButtonElement>(null);
   const largo = useLargo();
-  const titulo = tituloDa(caminho);
+  // Com o Messenger ligado em alguma marca, a trilha da tela do Direct diz "Direct e Messenger", como o menu (A6, Z14).
+  const direct = useContadorDirect();
+  const titulo = caminho.startsWith('/direct') && direct.messenger ? 'Direct e Messenger' : tituloDa(caminho);
   // Telas da própria pessoa (Segurança da conta) valem para todas as empresas: abrem sem empresa ativa
   // e a trilha começa pelo nome dela, como no protótipo.
   const pessoal = rotaPessoal(caminho);

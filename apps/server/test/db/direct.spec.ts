@@ -334,8 +334,8 @@ describe.skipIf(!hasDb)('o Direct do Instagram: a leitura e o ajuste (A6 · Z12,
       conversation: { id: joana, channel: 'messenger', name: 'Joana Lima', username: null },
       messages: [{ direction: 'entrada', text: 'Vocês abrem no feriado?' }],
     });
-    // O contador do menu soma os dois canais.
-    expect(((await api.call('GET', '/v1/direct/waiting', { cookie: e.cookie })).body as { waiting: number }).waiting).toBe(2);
+    // O contador do menu soma os dois canais e diz que há Messenger (o menu vira "Direct e Messenger").
+    expect((await api.call('GET', '/v1/direct/waiting', { cookie: e.cookie })).body).toEqual({ waiting: 2, messenger: true });
 
     // A Central do Regem atende o Messenger desta Página: o Liame apaga só as conversas do Messenger e segue com o Direct.
     await lojaDoRegem(e, ['atendimento.canais.ler']);

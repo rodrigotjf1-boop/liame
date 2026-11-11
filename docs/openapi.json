@@ -103508,10 +103508,14 @@
                       "type": "integer",
                       "minimum": 0,
                       "maximum": 9007199254740991
+                    },
+                    "messenger": {
+                      "type": "boolean"
                     }
                   },
                   "required": [
-                    "waiting"
+                    "waiting",
+                    "messenger"
                   ],
                   "additionalProperties": false
                 }
