@@ -123,7 +123,7 @@ describe.skipIf(!hasDb)('os pedidos do Social media para os comentários (A6 · 
     );
   const pedidoDe = async (e: EmpresaComCanais, id: string) =>
     (
-      await ownerQuery<{ tool: string; status: string; params: { texto?: string; sugestoes?: Array<{ enfoque: string; texto: string }> }; actor_type: string; agent_key: string | null; requested_by: string; plan_hash: string }>(
+      await ownerQuery<{ tool: string; status: string; params: { texto?: string; sugestoes?: Array<{ enfoque: string; texto: string; rodada?: number }> }; actor_type: string; agent_key: string | null; requested_by: string; plan_hash: string }>(
         `select tool, status, params, actor_type, agent_key, requested_by, plan_hash from liame.action_request where id = $1 and tenant_id = $2`,
         [id, e.tenantId],
       )
@@ -252,7 +252,7 @@ describe.skipIf(!hasDb)('os pedidos do Social media para os comentários (A6 · 
     // A reclamação: as seis (as três novas antes), e o texto ajustado continua o do pedido.
     const daReclamacaoDepois = await pedidoDe(e, daReclamacao);
     expect(daReclamacaoDepois.params.texto).toBe(AJUSTADO);
-    expect(daReclamacaoDepois.params.sugestoes!.map((s) => [s.enfoque, (s as { rodada: number }).rodada])).toEqual([
+    expect(daReclamacaoDepois.params.sugestoes!.map((s) => [s.enfoque, s.rodada])).toEqual([
       ...ENFOQUES_DA_RECLAMACAO.map((x) => [x, 2]),
       ...ENFOQUES_DA_RECLAMACAO.map((x) => [x, 1]),
     ]);
