@@ -119349,6 +119349,2142 @@
         ]
       }
     },
+    "/v1/region/stores": {
+      "get": {
+        "description": "As lojas da marca com o endereço (CEP, rua, número, bairro, município, UF e o código IBGE do município), a coordenada com a precisão dela (`endereco`, `bairro` ou `cidade`, do OpenStreetMap), de onde o endereço veio (`perfil_google` ou `cep`), o raio e as áreas de entrega, quem salvou e quando; os Perfis da Empresa no Google ligados à marca; e se a pessoa pode salvar (o Dono e o Administrador). Com a função `regiao` desligada, `availability.status` é `desligado_pela_liame` e as listas vêm vazias.",
+        "operationId": "RegiaoController_lojas",
+        "parameters": [
+          {
+            "name": "brand_id",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "brand_id": {
+                      "type": "string",
+                      "format": "uuid",
+                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                    },
+                    "availability": {
+                      "type": "object",
+                      "properties": {
+                        "status": {
+                          "type": "string",
+                          "maxLength": 60,
+                          "pattern": "^[a-z0-9_]+$"
+                        }
+                      },
+                      "required": [
+                        "status"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "stores": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "unit_id": {
+                            "type": "string",
+                            "format": "uuid",
+                            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                          },
+                          "unit_name": {
+                            "type": "string"
+                          },
+                          "address": {
+                            "type": [
+                              "object",
+                              "null"
+                            ],
+                            "properties": {
+                              "postal_code": {
+                                "type": "string",
+                                "pattern": "^[0-9]{8}$"
+                              },
+                              "street": {
+                                "type": [
+                                  "string",
+                                  "null"
+                                ]
+                              },
+                              "number": {
+                                "type": [
+                                  "string",
+                                  "null"
+                                ]
+                              },
+                              "district": {
+                                "type": [
+                                  "string",
+                                  "null"
+                                ]
+                              },
+                              "city": {
+                                "type": "string"
+                              },
+                              "state": {
+                                "type": "string",
+                                "pattern": "^[A-Z]{2}$"
+                              },
+                              "ibge_city_code": {
+                                "type": "string",
+                                "pattern": "^[0-9]{7}$"
+                              }
+                            },
+                            "required": [
+                              "postal_code",
+                              "street",
+                              "number",
+                              "district",
+                              "city",
+                              "state",
+                              "ibge_city_code"
+                            ],
+                            "additionalProperties": false
+                          },
+                          "coordinates": {
+                            "type": [
+                              "object",
+                              "null"
+                            ],
+                            "properties": {
+                              "latitude": {
+                                "type": "number",
+                                "minimum": -34,
+                                "maximum": 6
+                              },
+                              "longitude": {
+                                "type": "number",
+                                "minimum": -75,
+                                "maximum": -28
+                              },
+                              "precision": {
+                                "type": "string",
+                                "maxLength": 60,
+                                "pattern": "^[a-z0-9_]+$"
+                              }
+                            },
+                            "required": [
+                              "latitude",
+                              "longitude",
+                              "precision"
+                            ],
+                            "additionalProperties": false
+                          },
+                          "source": {
+                            "type": [
+                              "string",
+                              "null"
+                            ],
+                            "maxLength": 60,
+                            "pattern": "^[a-z0-9_]+$"
+                          },
+                          "delivery_radius_km": {
+                            "type": [
+                              "number",
+                              "null"
+                            ],
+                            "minimum": 1,
+                            "maximum": 15
+                          },
+                          "delivery_areas": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          },
+                          "set_by": {
+                            "type": [
+                              "object",
+                              "null"
+                            ],
+                            "properties": {
+                              "id": {
+                                "type": "string",
+                                "format": "uuid",
+                                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                              },
+                              "name": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "name"
+                            ],
+                            "additionalProperties": false
+                          },
+                          "set_at": {
+                            "type": [
+                              "string",
+                              "null"
+                            ],
+                            "format": "date-time",
+                            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+                          }
+                        },
+                        "required": [
+                          "unit_id",
+                          "unit_name",
+                          "address",
+                          "coordinates",
+                          "source",
+                          "delivery_radius_km",
+                          "delivery_areas",
+                          "set_by",
+                          "set_at"
+                        ],
+                        "additionalProperties": false
+                      }
+                    },
+                    "google_profiles": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "account_id": {
+                            "type": "string",
+                            "format": "uuid",
+                            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                          },
+                          "name": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "account_id",
+                          "name"
+                        ],
+                        "additionalProperties": false
+                      }
+                    },
+                    "can_edit": {
+                      "type": "boolean"
+                    },
+                    "attribution": {
+                      "type": "string"
+                    },
+                    "generated_at": {
+                      "type": "string",
+                      "format": "date-time",
+                      "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+                    }
+                  },
+                  "required": [
+                    "brand_id",
+                    "availability",
+                    "stores",
+                    "google_profiles",
+                    "can_edit",
+                    "attribution",
+                    "generated_at"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string",
+                      "format": "uri"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "integer",
+                      "minimum": 400,
+                      "maximum": 599
+                    },
+                    "detail": {
+                      "type": "string"
+                    },
+                    "instance": {
+                      "type": "string"
+                    },
+                    "code": {
+                      "type": "string"
+                    },
+                    "trace_id": {
+                      "type": "string"
+                    },
+                    "errors": {
+                      "description": "Campos inválidos, quando o erro é de validação",
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "path": {
+                            "type": "string"
+                          },
+                          "message": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "path",
+                          "message"
+                        ],
+                        "additionalProperties": false
+                      }
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "title",
+                    "status",
+                    "code",
+                    "trace_id"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string",
+                      "format": "uri"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "integer",
+                      "minimum": 400,
+                      "maximum": 599
+                    },
+                    "detail": {
+                      "type": "string"
+                    },
+                    "instance": {
+                      "type": "string"
+                    },
+                    "code": {
+                      "type": "string"
+                    },
+                    "trace_id": {
+                      "type": "string"
+                    },
+                    "errors": {
+                      "description": "Campos inválidos, quando o erro é de validação",
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "path": {
+                            "type": "string"
+                          },
+                          "message": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "path",
+                          "message"
+                        ],
+                        "additionalProperties": false
+                      }
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "title",
+                    "status",
+                    "code",
+                    "trace_id"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string",
+                      "format": "uri"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "integer",
+                      "minimum": 400,
+                      "maximum": 599
+                    },
+                    "detail": {
+                      "type": "string"
+                    },
+                    "instance": {
+                      "type": "string"
+                    },
+                    "code": {
+                      "type": "string"
+                    },
+                    "trace_id": {
+                      "type": "string"
+                    },
+                    "errors": {
+                      "description": "Campos inválidos, quando o erro é de validação",
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "path": {
+                            "type": "string"
+                          },
+                          "message": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "path",
+                          "message"
+                        ],
+                        "additionalProperties": false
+                      }
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "title",
+                    "status",
+                    "code",
+                    "trace_id"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "liame_sessao": []
+          }
+        ],
+        "summary": "As lojas no mapa",
+        "tags": [
+          "regiao"
+        ]
+      }
+    },
+    "/v1/region/address-lookup": {
+      "post": {
+        "description": "Completa o endereço pelo CEP (ViaCEP: rua, bairro, município, UF e o código IBGE do município) e procura a coordenada no OpenStreetMap, do endereço para o bairro e a cidade, só valendo a que cai no município do CEP. Não grava nada: a pessoa confere e salva. CEP fora do formato ou que não existe volta 422; o ViaCEP fora do ar, 503. O OpenStreetMap que não acha ou não responde volta `coordinates_status` `nao_achada`, e o endereço vale do mesmo jeito.",
+        "operationId": "RegiaoController_conferirEndereco",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "brand_id": {
+                    "type": "string",
+                    "format": "uuid",
+                    "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                  },
+                  "postal_code": {
+                    "type": "string",
+                    "minLength": 8,
+                    "maxLength": 9
+                  },
+                  "number": {
+                    "type": "string",
+                    "maxLength": 20
+                  },
+                  "street": {
+                    "type": "string",
+                    "maxLength": 200
+                  }
+                },
+                "required": [
+                  "brand_id",
+                  "postal_code"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "address": {
+                      "type": "object",
+                      "properties": {
+                        "postal_code": {
+                          "type": "string",
+                          "pattern": "^[0-9]{8}$"
+                        },
+                        "street": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "number": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "district": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "city": {
+                          "type": "string"
+                        },
+                        "state": {
+                          "type": "string",
+                          "pattern": "^[A-Z]{2}$"
+                        },
+                        "ibge_city_code": {
+                          "type": "string",
+                          "pattern": "^[0-9]{7}$"
+                        }
+                      },
+                      "required": [
+                        "postal_code",
+                        "street",
+                        "number",
+                        "district",
+                        "city",
+                        "state",
+                        "ibge_city_code"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "coordinates": {
+                      "type": [
+                        "object",
+                        "null"
+                      ],
+                      "properties": {
+                        "latitude": {
+                          "type": "number",
+                          "minimum": -34,
+                          "maximum": 6
+                        },
+                        "longitude": {
+                          "type": "number",
+                          "minimum": -75,
+                          "maximum": -28
+                        },
+                        "precision": {
+                          "type": "string",
+                          "maxLength": 60,
+                          "pattern": "^[a-z0-9_]+$"
+                        }
+                      },
+                      "required": [
+                        "latitude",
+                        "longitude",
+                        "precision"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "coordinates_status": {
+                      "type": "string",
+                      "maxLength": 60,
+                      "pattern": "^[a-z0-9_]+$"
+                    },
+                    "needs_street": {
+                      "type": "boolean"
+                    },
+                    "attribution": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "address",
+                    "coordinates",
+                    "coordinates_status",
+                    "needs_street",
+                    "attribution"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string",
+                      "format": "uri"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "integer",
+                      "minimum": 400,
+                      "maximum": 599
+                    },
+                    "detail": {
+                      "type": "string"
+                    },
+                    "instance": {
+                      "type": "string"
+                    },
+                    "code": {
+                      "type": "string"
+                    },
+                    "trace_id": {
+                      "type": "string"
+                    },
+                    "errors": {
+                      "description": "Campos inválidos, quando o erro é de validação",
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "path": {
+                            "type": "string"
+                          },
+                          "message": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "path",
+                          "message"
+                        ],
+                        "additionalProperties": false
+                      }
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "title",
+                    "status",
+                    "code",
+                    "trace_id"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string",
+                      "format": "uri"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "integer",
+                      "minimum": 400,
+                      "maximum": 599
+                    },
+                    "detail": {
+                      "type": "string"
+                    },
+                    "instance": {
+                      "type": "string"
+                    },
+                    "code": {
+                      "type": "string"
+                    },
+                    "trace_id": {
+                      "type": "string"
+                    },
+                    "errors": {
+                      "description": "Campos inválidos, quando o erro é de validação",
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "path": {
+                            "type": "string"
+                          },
+                          "message": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "path",
+                          "message"
+                        ],
+                        "additionalProperties": false
+                      }
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "title",
+                    "status",
+                    "code",
+                    "trace_id"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string",
+                      "format": "uri"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "integer",
+                      "minimum": 400,
+                      "maximum": 599
+                    },
+                    "detail": {
+                      "type": "string"
+                    },
+                    "instance": {
+                      "type": "string"
+                    },
+                    "code": {
+                      "type": "string"
+                    },
+                    "trace_id": {
+                      "type": "string"
+                    },
+                    "errors": {
+                      "description": "Campos inválidos, quando o erro é de validação",
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "path": {
+                            "type": "string"
+                          },
+                          "message": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "path",
+                          "message"
+                        ],
+                        "additionalProperties": false
+                      }
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "title",
+                    "status",
+                    "code",
+                    "trace_id"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string",
+                      "format": "uri"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "integer",
+                      "minimum": 400,
+                      "maximum": 599
+                    },
+                    "detail": {
+                      "type": "string"
+                    },
+                    "instance": {
+                      "type": "string"
+                    },
+                    "code": {
+                      "type": "string"
+                    },
+                    "trace_id": {
+                      "type": "string"
+                    },
+                    "errors": {
+                      "description": "Campos inválidos, quando o erro é de validação",
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "path": {
+                            "type": "string"
+                          },
+                          "message": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "path",
+                          "message"
+                        ],
+                        "additionalProperties": false
+                      }
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "title",
+                    "status",
+                    "code",
+                    "trace_id"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string",
+                      "format": "uri"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "integer",
+                      "minimum": 400,
+                      "maximum": 599
+                    },
+                    "detail": {
+                      "type": "string"
+                    },
+                    "instance": {
+                      "type": "string"
+                    },
+                    "code": {
+                      "type": "string"
+                    },
+                    "trace_id": {
+                      "type": "string"
+                    },
+                    "errors": {
+                      "description": "Campos inválidos, quando o erro é de validação",
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "path": {
+                            "type": "string"
+                          },
+                          "message": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "path",
+                          "message"
+                        ],
+                        "additionalProperties": false
+                      }
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "title",
+                    "status",
+                    "code",
+                    "trace_id"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string",
+                      "format": "uri"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "integer",
+                      "minimum": 400,
+                      "maximum": 599
+                    },
+                    "detail": {
+                      "type": "string"
+                    },
+                    "instance": {
+                      "type": "string"
+                    },
+                    "code": {
+                      "type": "string"
+                    },
+                    "trace_id": {
+                      "type": "string"
+                    },
+                    "errors": {
+                      "description": "Campos inválidos, quando o erro é de validação",
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "path": {
+                            "type": "string"
+                          },
+                          "message": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "path",
+                          "message"
+                        ],
+                        "additionalProperties": false
+                      }
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "title",
+                    "status",
+                    "code",
+                    "trace_id"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "liame_sessao": []
+          }
+        ],
+        "summary": "Conferir um endereço pelo CEP",
+        "tags": [
+          "regiao"
+        ]
+      }
+    },
+    "/v1/region/google-profile-address": {
+      "post": {
+        "description": "Lê agora o endereço e as áreas de entrega (até 20) de um Perfil da Empresa no Google ligado à marca, confere o CEP dele no ViaCEP e procura a coordenada (a do Google, quando ele a dá; senão, a do OpenStreetMap). Não grava nada e não muda nada no Google: a pessoa confere e salva. Perfil sem endereço (só atende na casa do cliente) volta `address` nulo, com as áreas. O Google fora do ar volta 503; sem acesso ao perfil, 409.",
+        "operationId": "RegiaoController_enderecoDoPerfil",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "brand_id": {
+                    "type": "string",
+                    "format": "uuid",
+                    "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                  },
+                  "account_id": {
+                    "type": "string",
+                    "format": "uuid",
+                    "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                  }
+                },
+                "required": [
+                  "brand_id",
+                  "account_id"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "profile_name": {
+                      "type": "string"
+                    },
+                    "address": {
+                      "type": [
+                        "object",
+                        "null"
+                      ],
+                      "properties": {
+                        "postal_code": {
+                          "type": "string",
+                          "pattern": "^[0-9]{8}$"
+                        },
+                        "street": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "number": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "district": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "city": {
+                          "type": "string"
+                        },
+                        "state": {
+                          "type": "string",
+                          "pattern": "^[A-Z]{2}$"
+                        },
+                        "ibge_city_code": {
+                          "type": "string",
+                          "pattern": "^[0-9]{7}$"
+                        }
+                      },
+                      "required": [
+                        "postal_code",
+                        "street",
+                        "number",
+                        "district",
+                        "city",
+                        "state",
+                        "ibge_city_code"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "coordinates": {
+                      "type": [
+                        "object",
+                        "null"
+                      ],
+                      "properties": {
+                        "latitude": {
+                          "type": "number",
+                          "minimum": -34,
+                          "maximum": 6
+                        },
+                        "longitude": {
+                          "type": "number",
+                          "minimum": -75,
+                          "maximum": -28
+                        },
+                        "precision": {
+                          "type": "string",
+                          "maxLength": 60,
+                          "pattern": "^[a-z0-9_]+$"
+                        }
+                      },
+                      "required": [
+                        "latitude",
+                        "longitude",
+                        "precision"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "coordinates_status": {
+                      "type": "string",
+                      "maxLength": 60,
+                      "pattern": "^[a-z0-9_]+$"
+                    },
+                    "delivery_areas": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "needs_street": {
+                      "type": "boolean"
+                    },
+                    "attribution": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "profile_name",
+                    "address",
+                    "coordinates",
+                    "coordinates_status",
+                    "delivery_areas",
+                    "needs_street",
+                    "attribution"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string",
+                      "format": "uri"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "integer",
+                      "minimum": 400,
+                      "maximum": 599
+                    },
+                    "detail": {
+                      "type": "string"
+                    },
+                    "instance": {
+                      "type": "string"
+                    },
+                    "code": {
+                      "type": "string"
+                    },
+                    "trace_id": {
+                      "type": "string"
+                    },
+                    "errors": {
+                      "description": "Campos inválidos, quando o erro é de validação",
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "path": {
+                            "type": "string"
+                          },
+                          "message": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "path",
+                          "message"
+                        ],
+                        "additionalProperties": false
+                      }
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "title",
+                    "status",
+                    "code",
+                    "trace_id"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string",
+                      "format": "uri"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "integer",
+                      "minimum": 400,
+                      "maximum": 599
+                    },
+                    "detail": {
+                      "type": "string"
+                    },
+                    "instance": {
+                      "type": "string"
+                    },
+                    "code": {
+                      "type": "string"
+                    },
+                    "trace_id": {
+                      "type": "string"
+                    },
+                    "errors": {
+                      "description": "Campos inválidos, quando o erro é de validação",
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "path": {
+                            "type": "string"
+                          },
+                          "message": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "path",
+                          "message"
+                        ],
+                        "additionalProperties": false
+                      }
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "title",
+                    "status",
+                    "code",
+                    "trace_id"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string",
+                      "format": "uri"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "integer",
+                      "minimum": 400,
+                      "maximum": 599
+                    },
+                    "detail": {
+                      "type": "string"
+                    },
+                    "instance": {
+                      "type": "string"
+                    },
+                    "code": {
+                      "type": "string"
+                    },
+                    "trace_id": {
+                      "type": "string"
+                    },
+                    "errors": {
+                      "description": "Campos inválidos, quando o erro é de validação",
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "path": {
+                            "type": "string"
+                          },
+                          "message": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "path",
+                          "message"
+                        ],
+                        "additionalProperties": false
+                      }
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "title",
+                    "status",
+                    "code",
+                    "trace_id"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string",
+                      "format": "uri"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "integer",
+                      "minimum": 400,
+                      "maximum": 599
+                    },
+                    "detail": {
+                      "type": "string"
+                    },
+                    "instance": {
+                      "type": "string"
+                    },
+                    "code": {
+                      "type": "string"
+                    },
+                    "trace_id": {
+                      "type": "string"
+                    },
+                    "errors": {
+                      "description": "Campos inválidos, quando o erro é de validação",
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "path": {
+                            "type": "string"
+                          },
+                          "message": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "path",
+                          "message"
+                        ],
+                        "additionalProperties": false
+                      }
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "title",
+                    "status",
+                    "code",
+                    "trace_id"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string",
+                      "format": "uri"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "integer",
+                      "minimum": 400,
+                      "maximum": 599
+                    },
+                    "detail": {
+                      "type": "string"
+                    },
+                    "instance": {
+                      "type": "string"
+                    },
+                    "code": {
+                      "type": "string"
+                    },
+                    "trace_id": {
+                      "type": "string"
+                    },
+                    "errors": {
+                      "description": "Campos inválidos, quando o erro é de validação",
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "path": {
+                            "type": "string"
+                          },
+                          "message": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "path",
+                          "message"
+                        ],
+                        "additionalProperties": false
+                      }
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "title",
+                    "status",
+                    "code",
+                    "trace_id"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "liame_sessao": []
+          }
+        ],
+        "summary": "Usar o endereço do Perfil do Google",
+        "tags": [
+          "regiao"
+        ]
+      }
+    },
+    "/v1/units/{id}/location": {
+      "put": {
+        "description": "Salva o endereço da loja (o que a conferência pelo CEP ou pelo Perfil do Google devolveu, com a rua e o número que a pessoa completou), a coordenada, de onde o endereço veio, o raio de entrega (de 1 a 15 km, de meio em meio) e as áreas de entrega (até 20). Dado da empresa: nunca vai para o modelo de IA. Fica na auditoria, com o antes e o depois.",
+        "operationId": "RegiaoController_salvar",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "address": {
+                    "type": "object",
+                    "properties": {
+                      "postal_code": {
+                        "type": "string",
+                        "pattern": "^[0-9]{8}$"
+                      },
+                      "street": {
+                        "type": [
+                          "string",
+                          "null"
+                        ],
+                        "minLength": 1,
+                        "maxLength": 200
+                      },
+                      "number": {
+                        "type": [
+                          "string",
+                          "null"
+                        ],
+                        "minLength": 1,
+                        "maxLength": 20
+                      },
+                      "district": {
+                        "type": [
+                          "string",
+                          "null"
+                        ],
+                        "minLength": 1,
+                        "maxLength": 120
+                      },
+                      "city": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 120
+                      },
+                      "state": {
+                        "type": "string",
+                        "pattern": "^[A-Z]{2}$"
+                      },
+                      "ibge_city_code": {
+                        "type": "string",
+                        "pattern": "^[0-9]{7}$"
+                      }
+                    },
+                    "required": [
+                      "postal_code",
+                      "street",
+                      "number",
+                      "district",
+                      "city",
+                      "state",
+                      "ibge_city_code"
+                    ],
+                    "additionalProperties": false
+                  },
+                  "coordinates": {
+                    "type": [
+                      "object",
+                      "null"
+                    ],
+                    "properties": {
+                      "latitude": {
+                        "type": "number",
+                        "minimum": -34,
+                        "maximum": 6
+                      },
+                      "longitude": {
+                        "type": "number",
+                        "minimum": -75,
+                        "maximum": -28
+                      },
+                      "precision": {
+                        "type": "string",
+                        "enum": [
+                          "endereco",
+                          "bairro",
+                          "cidade"
+                        ]
+                      }
+                    },
+                    "required": [
+                      "latitude",
+                      "longitude",
+                      "precision"
+                    ],
+                    "additionalProperties": false
+                  },
+                  "source": {
+                    "type": "string",
+                    "enum": [
+                      "perfil_google",
+                      "cep"
+                    ]
+                  },
+                  "delivery_radius_km": {
+                    "type": "number",
+                    "minimum": 1,
+                    "maximum": 15,
+                    "multipleOf": 0.5
+                  },
+                  "delivery_areas": {
+                    "maxItems": 20,
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 80
+                    }
+                  }
+                },
+                "required": [
+                  "address",
+                  "coordinates",
+                  "source",
+                  "delivery_radius_km",
+                  "delivery_areas"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "store": {
+                      "type": "object",
+                      "properties": {
+                        "unit_id": {
+                          "type": "string",
+                          "format": "uuid",
+                          "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                        },
+                        "unit_name": {
+                          "type": "string"
+                        },
+                        "address": {
+                          "type": [
+                            "object",
+                            "null"
+                          ],
+                          "properties": {
+                            "postal_code": {
+                              "type": "string",
+                              "pattern": "^[0-9]{8}$"
+                            },
+                            "street": {
+                              "type": [
+                                "string",
+                                "null"
+                              ]
+                            },
+                            "number": {
+                              "type": [
+                                "string",
+                                "null"
+                              ]
+                            },
+                            "district": {
+                              "type": [
+                                "string",
+                                "null"
+                              ]
+                            },
+                            "city": {
+                              "type": "string"
+                            },
+                            "state": {
+                              "type": "string",
+                              "pattern": "^[A-Z]{2}$"
+                            },
+                            "ibge_city_code": {
+                              "type": "string",
+                              "pattern": "^[0-9]{7}$"
+                            }
+                          },
+                          "required": [
+                            "postal_code",
+                            "street",
+                            "number",
+                            "district",
+                            "city",
+                            "state",
+                            "ibge_city_code"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "coordinates": {
+                          "type": [
+                            "object",
+                            "null"
+                          ],
+                          "properties": {
+                            "latitude": {
+                              "type": "number",
+                              "minimum": -34,
+                              "maximum": 6
+                            },
+                            "longitude": {
+                              "type": "number",
+                              "minimum": -75,
+                              "maximum": -28
+                            },
+                            "precision": {
+                              "type": "string",
+                              "maxLength": 60,
+                              "pattern": "^[a-z0-9_]+$"
+                            }
+                          },
+                          "required": [
+                            "latitude",
+                            "longitude",
+                            "precision"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "source": {
+                          "type": [
+                            "string",
+                            "null"
+                          ],
+                          "maxLength": 60,
+                          "pattern": "^[a-z0-9_]+$"
+                        },
+                        "delivery_radius_km": {
+                          "type": [
+                            "number",
+                            "null"
+                          ],
+                          "minimum": 1,
+                          "maximum": 15
+                        },
+                        "delivery_areas": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
+                        "set_by": {
+                          "type": [
+                            "object",
+                            "null"
+                          ],
+                          "properties": {
+                            "id": {
+                              "type": "string",
+                              "format": "uuid",
+                              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                            },
+                            "name": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "id",
+                            "name"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "set_at": {
+                          "type": [
+                            "string",
+                            "null"
+                          ],
+                          "format": "date-time",
+                          "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+                        }
+                      },
+                      "required": [
+                        "unit_id",
+                        "unit_name",
+                        "address",
+                        "coordinates",
+                        "source",
+                        "delivery_radius_km",
+                        "delivery_areas",
+                        "set_by",
+                        "set_at"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": [
+                    "store"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string",
+                      "format": "uri"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "integer",
+                      "minimum": 400,
+                      "maximum": 599
+                    },
+                    "detail": {
+                      "type": "string"
+                    },
+                    "instance": {
+                      "type": "string"
+                    },
+                    "code": {
+                      "type": "string"
+                    },
+                    "trace_id": {
+                      "type": "string"
+                    },
+                    "errors": {
+                      "description": "Campos inválidos, quando o erro é de validação",
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "path": {
+                            "type": "string"
+                          },
+                          "message": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "path",
+                          "message"
+                        ],
+                        "additionalProperties": false
+                      }
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "title",
+                    "status",
+                    "code",
+                    "trace_id"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string",
+                      "format": "uri"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "integer",
+                      "minimum": 400,
+                      "maximum": 599
+                    },
+                    "detail": {
+                      "type": "string"
+                    },
+                    "instance": {
+                      "type": "string"
+                    },
+                    "code": {
+                      "type": "string"
+                    },
+                    "trace_id": {
+                      "type": "string"
+                    },
+                    "errors": {
+                      "description": "Campos inválidos, quando o erro é de validação",
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "path": {
+                            "type": "string"
+                          },
+                          "message": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "path",
+                          "message"
+                        ],
+                        "additionalProperties": false
+                      }
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "title",
+                    "status",
+                    "code",
+                    "trace_id"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string",
+                      "format": "uri"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "integer",
+                      "minimum": 400,
+                      "maximum": 599
+                    },
+                    "detail": {
+                      "type": "string"
+                    },
+                    "instance": {
+                      "type": "string"
+                    },
+                    "code": {
+                      "type": "string"
+                    },
+                    "trace_id": {
+                      "type": "string"
+                    },
+                    "errors": {
+                      "description": "Campos inválidos, quando o erro é de validação",
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "path": {
+                            "type": "string"
+                          },
+                          "message": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "path",
+                          "message"
+                        ],
+                        "additionalProperties": false
+                      }
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "title",
+                    "status",
+                    "code",
+                    "trace_id"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string",
+                      "format": "uri"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "integer",
+                      "minimum": 400,
+                      "maximum": 599
+                    },
+                    "detail": {
+                      "type": "string"
+                    },
+                    "instance": {
+                      "type": "string"
+                    },
+                    "code": {
+                      "type": "string"
+                    },
+                    "trace_id": {
+                      "type": "string"
+                    },
+                    "errors": {
+                      "description": "Campos inválidos, quando o erro é de validação",
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "path": {
+                            "type": "string"
+                          },
+                          "message": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "path",
+                          "message"
+                        ],
+                        "additionalProperties": false
+                      }
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "title",
+                    "status",
+                    "code",
+                    "trace_id"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string",
+                      "format": "uri"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "integer",
+                      "minimum": 400,
+                      "maximum": 599
+                    },
+                    "detail": {
+                      "type": "string"
+                    },
+                    "instance": {
+                      "type": "string"
+                    },
+                    "code": {
+                      "type": "string"
+                    },
+                    "trace_id": {
+                      "type": "string"
+                    },
+                    "errors": {
+                      "description": "Campos inválidos, quando o erro é de validação",
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "path": {
+                            "type": "string"
+                          },
+                          "message": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "path",
+                          "message"
+                        ],
+                        "additionalProperties": false
+                      }
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "title",
+                    "status",
+                    "code",
+                    "trace_id"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "liame_sessao": []
+          }
+        ],
+        "summary": "Salvar onde a loja fica",
+        "tags": [
+          "regiao"
+        ]
+      }
+    },
     "/v1/auth/signup": {
       "post": {
         "description": "Cria a pessoa, a empresa (tenant) e o vínculo de dono, e manda o link de confirmação. A resposta é a mesma exista ou não a conta.",
@@ -127753,6 +129889,10 @@
     {
       "name": "cobranca",
       "description": "Plano e cobrança: os planos, a assinatura de cada marca e as faturas; assinar, trocar de plano, cancelar, manter e desistir em 7 dias; nenhum dado de cartão passa por aqui, e o pagamento entra com o meio de pagamento (A7)"
+    },
+    {
+      "name": "regiao",
+      "description": "Região: a loja no mapa (o endereço da loja, o código IBGE do município, a coordenada com a precisão dela, o raio e as áreas de entrega), conferida pelo CEP no ViaCEP e no OpenStreetMap ou lida do Perfil da Empresa no Google; dado da empresa, que nunca vai para o modelo de IA; nada é escrito em plataforma (plano da região, R1)"
     }
   ],
   "servers": [

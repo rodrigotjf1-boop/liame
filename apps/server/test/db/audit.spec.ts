@@ -58,6 +58,10 @@ const WITHOUT_AUDIT = [
   'POST /v1/ofrep/v1/evaluate/flags',
   'POST /v1/ofrep/v1/evaluate/flags/:key',
   'POST /v1/policies/evaluate',
+  // A loja no mapa (plano da região, R1): conferir o endereço pelo CEP e ler o do Perfil do Google não gravam nada; o
+  // que muda a loja é o `PUT /v1/units/:id/location`, auditado com o antes e o depois.
+  'POST /v1/region/address-lookup',
+  'POST /v1/region/google-profile-address',
 ];
 
 function mockServer(handler: (body: Buffer, contentType: string) => { status: number; body: Buffer | string }) {

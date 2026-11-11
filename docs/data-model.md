@@ -15,7 +15,7 @@
 ## 2. Tenancy e identidade
 
 ```text
-organization (tenant) ─┬─ brand ─┬─ unit (loja: endereço, geo, raio, horário, fuso)
+organization (tenant) ─┬─ brand ─┬─ unit (loja: fuso; endereço, coordenada, raio e áreas de entrega desde a 0132)
                        │         └─ connected_account (provider, external_id, status, freshness)
                        ├─ user ── membership (role) ── permission_grant (ABAC: recurso, ação, contexto, limites)
                        ├─ subscription / billing_invoice, por marca (A7, 0080; os planos, billing_plan, são do produto)
@@ -113,6 +113,7 @@ touchpoint (clique/visita/conversa) ─→ identity_link ─→ customer_ref ─
 - `coupon`: espelho dos cupons da loja no Regem, com regra, validade e usos (`origin` `regem`), e os **informados de outra plataforma de pedidos** (`origin` `externo`, `platform` `anotaai` ou `cardapioweb`, id na origem `externo:<CÓDIGO>`, `created_by`; migration 0026, F6): a regra e a validade ficam na plataforma, e o Liame reconhece o código nos pedidos da loja.
 - `campaign_coupon`: cupom ligado a uma campanha por período (dias no fuso da loja; um vínculo por vez, sem períodos que se cruzem); só o exclusivo é evidência. O vínculo agendado que ainda não começou pode ser apagado; o que já valeu fica.
 - `unit.order_platform` (0026): onde a loja recebe os pedidos online, informado pela empresa (`regem`, `anotaai`, `cardapioweb`, `brendi`, `outra` com `order_platform_url` https), com quem e quando informou.
+- **A loja no mapa (0132; plano da região, R1):** em `unit`, o endereço (`address_postal_code` com 8 dígitos, `address_street`, `address_number`, `address_district`, `address_city`, `address_state` com a sigla da UF), o `ibge_city_code` (7 dígitos: a chave das fontes públicas da região, base §19), a coordenada (`latitude` e `longitude` em `numeric(9,6)`, dentro do Brasil) com a `location_precision` (`endereco`, `bairro` ou `cidade`), a `location_source` (`perfil_google` ou `cep`), o `delivery_radius_km` (1 a 15, de meio em meio), as `delivery_areas` (jsonb, até 20 nomes) e quem salvou e quando (`location_set_by`, `location_set_at`). As regras `unit_coordenada_inteira` (coordenada com a precisão, ou nada) e `unit_endereco_inteiro` (com o CEP vêm o município, a UF, o código IBGE e a origem; sem ele, nada do endereço). Dado da empresa, `CONFIDENTIAL` (na loja que funciona na casa de alguém, é dado pessoal dessa pessoa): nunca vai para o modelo de IA.
 - `touchpoint`:
   - `clique`: ligado ao pedido pelo id na origem; `conversa`: ligada ao pedido pelo `customer_ref`;
   - ids de clique e da plataforma válidos ou ausentes; plataforma deduzida dos ids;

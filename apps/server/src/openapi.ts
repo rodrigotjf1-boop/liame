@@ -46,6 +46,7 @@ export function buildOpenApiDocument(app: INestApplication): OpenAPIObject {
     .addTag('fotos', 'Fotos dos produtos: as fotos de verdade que a empresa envia para os posts, guardadas no Liame (uma cópia em JPEG, sem os dados do celular, e a miniatura); enviar, ver, mudar o produto e apagar; nada vai para rede nenhuma por aqui (A6)')
     .addTag('posts', 'Posts da marca: a Agenda e o novo post, com a foto das Fotos, o texto de cada canal (o Instagram e a Página do Facebook) e a hora; o post vira um pedido em Aprovações e só sai com a aprovação de uma pessoa, com o código do app, na hora marcada (A6)')
     .addTag('cobranca', 'Plano e cobrança: os planos, a assinatura de cada marca e as faturas; assinar, trocar de plano, cancelar, manter e desistir em 7 dias; nenhum dado de cartão passa por aqui, e o pagamento entra com o meio de pagamento (A7)')
+    .addTag('regiao', 'Região: a loja no mapa (o endereço da loja, o código IBGE do município, a coordenada com a precisão dela, o raio e as áreas de entrega), conferida pelo CEP no ViaCEP e no OpenStreetMap ou lida do Perfil da Empresa no Google; dado da empresa, que nunca vai para o modelo de IA; nada é escrito em plataforma (plano da região, R1)')
     .addCookieAuth('liame_sessao', { type: 'apiKey', in: 'cookie', name: 'liame_sessao', description: 'Sessão aberta pelo POST /v1/auth/login (httpOnly)' }, 'liame_sessao')
     .build();
   return comFluxos(SwaggerModule.createDocument(app, config));

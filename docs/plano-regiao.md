@@ -1,6 +1,6 @@
 # Liame — Plano: tráfego pago pela região da loja
 
-> **Proposta de 09/11/2026, aguardando o dono.** Pedido do dono: o Liame trabalhar como um gestor de tráfego profissional, com campanhas por região, de reconhecimento, de seguidores e de pedidos, montadas em cima de dados da região de cada empresa (renda, gente, concorrência, horários, tíquete), buscados em fontes públicas e gratuitas que viram **padrão de pesquisa**: o mesmo caminho vale para uma empresa em qualquer município, não só para o piloto.
+> **Aprovado pelo dono em 11/11/2026** ("plano aprovado"), com as decisões D-RG-1 a D-RG-10 como recomendadas (seção 6). O andamento das entregas está na seção 8. Proposta de 09/11/2026. Pedido do dono: o Liame trabalhar como um gestor de tráfego profissional, com campanhas por região, de reconhecimento, de seguidores e de pedidos, montadas em cima de dados da região de cada empresa (renda, gente, concorrência, horários, tíquete), buscados em fontes públicas e gratuitas que viram **padrão de pesquisa**: o mesmo caminho vale para uma empresa em qualquer município, não só para o piloto.
 >
 > As fontes, com o endereço de cada consulta e o exemplo conferido, estão na base de conhecimento, **§19**. Este plano diz o que fazer com elas. As decisões estão na seção 6 (D-RG-1 a D-RG-10), cada uma com a recomendação. Quando aprovadas, as entregas entram no roadmap e nos planos das fases (a X5 da A4 e a Y9 da A5 já são prioridade e absorvem parte daqui).
 
@@ -125,3 +125,13 @@ Cada entrega nasce desligada, passa primeiro no piloto, tem protótipo aprovado 
 - **Medida fora do Regem:** em loja sem o Regem, a única medida de pedido é o cupom exclusivo (D-A2.5-12/13); as jogadas de reconhecimento e seguidores continuam medidas pelo alcance, pelo Perfil do Google e pelo Search Console.
 - **Autonomia:** criar campanha e mudar público continuam pedindo aprovação (D-A7-11); nada aqui antecipa o modo automático.
 - **Conferir antes do código:** os objetivos e destinos da Meta citados na seção 4.1 (alcance, visitas ao perfil do Instagram, engajamento), o uso de público de quem viu um vídeo diante da D-A5-18, os campos de endereço e área do Perfil do Google e as rotas de números da conta do Instagram entram na base, pela documentação oficial, antes da R4 e da R6.
+
+## 8. Andamento
+
+| Entrega | Situação | Onde |
+| --- | --- | --- |
+| **R1 · A loja no mapa** | **Servidor pronto, função `regiao` desligada** (11/11/2026). Migration 0132 (as colunas do endereço, da coordenada, do raio e das áreas em `unit`, com as regras que juntam colunas; a função `regiao`); as rotas `GET /v1/region/stores`, `POST /v1/region/address-lookup` (ViaCEP + OpenStreetMap, sem gravar), `POST /v1/region/google-profile-address` (o endereço e as áreas do Perfil do Google, lidos agora, sem gravar) e `PUT /v1/units/:id/location` (salvar, com a auditoria `loja.localizacao`). O endereço da loja nunca vai para o modelo (D-A3-4, D-RG-2). **Falta:** a tela (Minha marca › Região), que espera o protótipo P40; e a loja da marca sem Regem (hoje a loja só nasce com o Regem conectado), que espera a decisão do P40 | `apps/server/src/regiao/`, `packages/contracts/src/regiao.ts`, migration 0132 |
+| **R2 · Raio-x da região** | Começa depois da R1 (migration 0133 reservada) | — |
+| R3 a R9 | Na ordem da seção 5 | — |
+
+**Achados da R1 (conferidos na documentação oficial em 11/11/2026, base §19.1):** o Perfil da Empresa no Google dá o endereço (`storefrontAddress`) e até 20 áreas atendidas (`serviceArea.places.placeInfos`), mas a coordenada (`latlng`) só volta quando foi digitada ao criar o perfil; por isso a coordenada sai do endereço, pelo OpenStreetMap, do endereço para o bairro e a cidade, e só vale se cair no município do CEP.

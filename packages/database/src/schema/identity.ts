@@ -1,4 +1,4 @@
-import { bigint, boolean, inet, integer, pgSchema, primaryKey, text, timestamp, uuid } from 'drizzle-orm/pg-core';
+import { bigint, boolean, inet, integer, jsonb, numeric, pgSchema, primaryKey, text, timestamp, uuid } from 'drizzle-orm/pg-core';
 
 // Espelho TypeScript das tabelas da migration 0002 (o SQL é a fonte; um teste compara os dois).
 export const liame = pgSchema('liame');
@@ -115,6 +115,22 @@ export const unit = liame.table('unit', {
   orderPlatformUrl: text('order_platform_url'),
   orderPlatformSetAt: timestamp('order_platform_set_at', { withTimezone: true }),
   orderPlatformSetBy: uuid('order_platform_set_by'),
+  // A loja no mapa (0132; plano da região, R1): dado da empresa, nunca vai para o modelo de IA.
+  addressPostalCode: text('address_postal_code'),
+  addressStreet: text('address_street'),
+  addressNumber: text('address_number'),
+  addressDistrict: text('address_district'),
+  addressCity: text('address_city'),
+  addressState: text('address_state'),
+  ibgeCityCode: text('ibge_city_code'),
+  latitude: numeric('latitude', { precision: 9, scale: 6 }),
+  longitude: numeric('longitude', { precision: 9, scale: 6 }),
+  locationPrecision: text('location_precision'),
+  locationSource: text('location_source'),
+  deliveryRadiusKm: numeric('delivery_radius_km', { precision: 3, scale: 1 }),
+  deliveryAreas: jsonb('delivery_areas').notNull().default([]),
+  locationSetAt: timestamp('location_set_at', { withTimezone: true }),
+  locationSetBy: uuid('location_set_by'),
   createdAt: createdAt(),
   updatedAt: updatedAt(),
 });
