@@ -2,10 +2,13 @@
 
 import type { BrandResponse, CommentsResponse, SocialComment } from '@liame/contracts';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { haQuanto } from '@/components/avaliacoes/textos';
-import { Canal } from '@/components/aprovacoes/detalhe-comentario';
-import { ROTULO_DO_TIPO } from '@/components/aprovacoes/comentario-textos';
+import { ROTULO_DO_TIPO, TAMANHO_DA_RESPOSTA_AO_COMENTARIO, textoDoComentarioValido } from '@/components/aprovacoes/comentario-textos';
+import { Canal, DICA_DO_COMENTARIO } from '@/components/aprovacoes/detalhe-comentario';
+import { FormularioDoTexto } from '@/components/aprovacoes/detalhe-resposta';
+import { ConfirmaNaLinha } from '@/components/ui/confirma-na-linha';
 import { Estado } from '@/components/ui/estado';
 import { Faixa } from '@/components/ui/faixa';
 import { Icone } from '@/components/ui/icone';
@@ -13,7 +16,7 @@ import { useAgora } from '@/lib/agora';
 import { api, chamar, mensagemDe, type Problema } from '@/lib/api';
 import { disparar } from '@/lib/disparar';
 import { useSessao } from '@/lib/sessao';
-import { autorDoComentario, avisosDasContas, FILTROS, type Filtro, legendaDoPost, lerAgora, lidoHa, pedidoDoComentario, ROTULO_DA_SITUACAO, vazioDoFiltro } from './textos';
+import { autorDoComentario, avisosDasContas, erroDoPedido, FILTROS, type Filtro, legendaDoPost, lerAgora, lidoHa, pedidoDoComentario, ROTULO_DA_SITUACAO, vazioDoFiltro } from './textos';
 
 // "Comentários" (mockups/prototipo-comentarios.html, P38 aprovado em 07/11/2026; A6, Z11, parte 3b): os comentários
 // dos posts da marca no Instagram e na Página, como o Liame os guardou (`GET /v1/comments`), com as situações que
@@ -24,8 +27,11 @@ type Carga = { tipo: 'carregando' } | { tipo: 'ok'; dados: CommentsResponse } | 
 
 export function ComentariosTela() {
   const { pode } = useSessao();
+  const router = useRouter();
   const podeVer = pode('campanhas.ver');
   const podeVerContas = pode('contas.ver');
+  // Responder, ocultar e mostrar de novo é pedir uma ação: só para quem pode pedir (o servidor confere; a tela só não oferece).
+  const podePedir = pode('campanhas.operar');
   const titulo = useRef<HTMLHeadingElement>(null);
   const [marcas, setMarcas] = useState<BrandResponse[] | null>(null);
   const [erroMarcas, setErroMarcas] = useState<Problema | null>(null);
@@ -87,6 +93,19 @@ export function ComentariosTela() {
     // A leitura leva alguns segundos no worker: a lista é lida de novo logo depois.
     setTimeout(() => setTentativa((t) => t + 1), 8_000);
   }
+
+  // O pedido de uma pessoa (A6, Z11, parte 3c): responder com o texto dela, ocultar ou mostrar de novo. Ele nasce em
+  // Aprovações, e a pessoa vai para lá: a decisão é com o código do app, como a de todo pedido.
+  const pedir: Pedir = async (c, ferramenta, params) => {
+    const r = await chamar(() =>
+      api.POST('/v1/actions', {
+        body: { tool: ferramenta, brand_id: marca, provider: c.channel === 'facebook' ? 'facebook_page' : 'instagram', account_id: c.account_id, resource_id: `comentario:${c.id}`, params },
+      }),
+    );
+    if (!r.ok) return { ok: false, texto: erroDoPedido(r.problema) };
+    router.push(`/aprovacoes?pedido=${r.data.id}`);
+    return { ok: true };
+  };
 
   if (!podeVer) {
     return (
@@ -231,7 +250,7 @@ export function ComentariosTela() {
           {dados.items.length ? (
             <ul className="av-lista" aria-label="Comentários dos posts">
               {dados.items.map((c) => (
-                <ItemDoComentario key={`${c.account_id}:${c.id}`} c={c} legenda={legendaDoPost(dados.posts, c)} agora={agora} />
+                <ItemDoComentario key={`${c.account_id}:${c.id}`} c={c} legenda={legendaDoPost(dados.posts, c)} agora={agora} aoPedir={podePedir ? pedir : null} />
               ))}
             </ul>
           ) : (
@@ -300,11 +319,28 @@ export function ComentariosTela() {
   );
 }
 
+/** O que a linha pede: responder (com o texto), ocultar ou mostrar de novo; o pedido vai a Aprovações. */
+export type Pedir = (c: SocialComment, ferramenta: 'comentario_responder' | 'comentario_ocultar' | 'comentario_mostrar', params: Record<string, unknown>) => Promise<{ ok: true } | { ok: false; texto: string }>;
+
 /** Uma linha da lista: o canal, quem comentou e quando, o tipo, a situação, o texto, o post e as respostas na rede. */
-function ItemDoComentario({ c, legenda, agora }: { c: SocialComment; legenda: string | null; agora: Date }) {
+function ItemDoComentario({ c, legenda, agora, aoPedir }: { c: SocialComment; legenda: string | null; agora: Date; aoPedir: Pedir | null }) {
   const autor = autorDoComentario(c);
   const situacao = ROTULO_DA_SITUACAO[c.situation] ?? { rotulo: c.situation, classe: 'neutro' as const };
   const pedido = pedidoDoComentario(c);
+  const [aberto, setAberto] = useState<'nao' | 'responder' | 'ocultar' | 'mostrar'>('nao');
+  const [ocupado, setOcupado] = useState(false);
+  const [erro, setErro] = useState<string | null>(null);
+  // Sem pedido em aberto, quem pode pedir responde (o que pede resposta ou não tem), oculta o que está à vista e mostra
+  // de novo o oculto. Com pedido, a linha leva a Aprovações.
+  const acoes = aoPedir && !pedido;
+  const podeResponder = acoes && !c.hidden && (c.situation === 'pede_resposta' || c.situation === 'sem_resposta');
+  async function confirmar(ferramenta: 'comentario_ocultar' | 'comentario_mostrar') {
+    setOcupado(true);
+    setErro(null);
+    const r = await aoPedir!(c, ferramenta, {});
+    setOcupado(false);
+    if (!r.ok) setErro(r.texto);
+  }
   return (
     <li className="av-item">
       <div>
@@ -324,6 +360,41 @@ function ItemDoComentario({ c, legenda, agora }: { c: SocialComment; legenda: st
             ))}
           </ul>
         )}
+        {aberto === 'responder' && (
+          <div className="com-responder">
+            <FormularioDoTexto
+              ids={`com-${c.id}`}
+              inicial=""
+              podeCancelar
+              dica={DICA_DO_COMENTARIO}
+              maximo={TAMANHO_DA_RESPOSTA_AO_COMENTARIO}
+              validar={textoDoComentarioValido}
+              aoSalvar={(texto) => aoPedir!(c, 'comentario_responder', { texto })}
+              aoCancelar={() => setAberto('nao')}
+            />
+            <p className="eixo-nota">Salvar manda a resposta para Aprovações: ela só sai com a aprovação de quem aprova, com o código do app.</p>
+          </div>
+        )}
+        {(aberto === 'ocultar' || aberto === 'mostrar') && (
+          <div className="com-responder">
+            <ConfirmaNaLinha
+              texto={aberto === 'ocultar' ? 'O pedido de ocultar vai para Aprovações. Os outros deixam de ver o comentário quando ele for aprovado; dá para mostrar de novo.' : 'O pedido de mostrar de novo vai para Aprovações.'}
+              rotulo={aberto === 'ocultar' ? 'Pedir para ocultar' : 'Pedir para mostrar'}
+              rotuloOcupado="Pedindo…"
+              ocupado={ocupado}
+              aoConfirmar={() => disparar(confirmar(aberto === 'ocultar' ? 'comentario_ocultar' : 'comentario_mostrar'))}
+              aoCancelar={() => {
+                setAberto('nao');
+                setErro(null);
+              }}
+            />
+            {erro && (
+              <p className="campo-erro" role="alert">
+                {erro}
+              </p>
+            )}
+          </div>
+        )}
       </div>
       <div className="av-item-acao">
         <span className={`st st--${situacao.classe}`}>
@@ -334,6 +405,27 @@ function ItemDoComentario({ c, legenda, agora }: { c: SocialComment; legenda: st
           <Link className="btn btn--sm btn--primary" href={pedido.href}>
             {pedido.rotulo}
           </Link>
+        )}
+        {acoes && aberto === 'nao' && (
+          <div className="com-acoes">
+            {podeResponder && (
+              <button className="btn btn--sm btn--primary" type="button" data-com-responder onClick={() => setAberto('responder')}>
+                <Icone nome="reply" pequeno />
+                Responder
+              </button>
+            )}
+            {c.hidden ? (
+              <button className="btn btn--sm" type="button" data-com-mostrar onClick={() => setAberto('mostrar')}>
+                <Icone nome="eye" pequeno />
+                Mostrar de novo
+              </button>
+            ) : (
+              <button className="btn btn--sm" type="button" data-com-ocultar onClick={() => setAberto('ocultar')}>
+                <Icone nome="eye-off" pequeno />
+                Ocultar
+              </button>
+            )}
+          </div>
         )}
       </div>
     </li>

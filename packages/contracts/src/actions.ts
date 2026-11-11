@@ -345,6 +345,25 @@ export const ActionComment = z.strictObject({
     .regex(/^[a-z_]{2,40}$/)
     .nullable()
     .optional(),
+  /**
+   * As sugestões do Social media no pedido de responder que ele escreveu (A6, Z11, partes 2d e 3c): uma na pergunta,
+   * três na reclamação (uma por caminho). A pessoa escolhe uma (o texto do pedido, `reply_text`, é o escolhido, ou a
+   * versão que ela ajustou), e as da rodada 2 vêm antes das da rodada 1. Nulo no pedido de uma pessoa, na resposta pronta
+   * (o elogio e a marcação) e nos outros pedidos.
+   */
+  suggestions: z.array(ActionReviewSuggestion).nullable().optional(),
+  /**
+   * O "Pedir outra", no pedido do Social media que tem sugestões (A6, Z11, parte 3c; uma vez por comentário, D-A6-88),
+   * em código: `pode_pedir`, `escrevendo`, `feitas` (as novas estão em `suggestions`, com `round` 2) ou `nao_deu`. Os
+   * mesmos códigos de `review.more_suggestions`. Nulo nos outros pedidos e no decidido sem rodada 2. A lista pode crescer.
+   */
+  more_suggestions: z
+    .string()
+    .regex(/^[a-z_]{2,40}$/)
+    .nullable()
+    .optional(),
+  /** Quando a outra sugestão foi pedida (a rodada 2 nasceu), em ISO; nulo nos mesmos casos de `more_suggestions`. */
+  more_suggestions_asked_at: z.iso.datetime().nullable().optional(),
 });
 export type ActionComment = z.infer<typeof ActionComment>;
 

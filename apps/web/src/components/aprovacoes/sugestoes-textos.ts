@@ -46,9 +46,22 @@ export const CHAVE_DA_AJUSTADA = 'ajustada';
  * numeradas nessa ordem ("Sugestão 1 · Curta"); a ajustada não tem número.
  */
 export function escolhaDoPedido(a: AcaoDeResposta): Escolha {
-  const todas = a.review.suggestions ?? [];
+  return escolhaDe(a.review);
+}
+
+/** As sugestões e o texto do pedido, na avaliação (`review`) ou no comentário (`comment`, A6 · Z11, parte 3c). */
+export type FonteDasSugestoes = {
+  suggestions?: ActionReviewSuggestion[] | null;
+  reply_text: string | null;
+  more_suggestions?: string | null;
+  more_suggestions_asked_at?: string | null;
+};
+
+/** A escolha a partir das sugestões e do texto do pedido: a mesma regra na avaliação e no comentário. */
+export function escolhaDe(fonte: FonteDasSugestoes): Escolha {
+  const todas = fonte.suggestions ?? [];
   const segunda = todas.some((s) => s.round === 2);
-  const texto = a.review.reply_text ?? '';
+  const texto = fonte.reply_text ?? '';
   let n = 0;
   const opcao = (s: ActionReviewSuggestion): Opcao => {
     n += 1;
@@ -61,8 +74,8 @@ export function escolhaDoPedido(a: AcaoDeResposta): Escolha {
   return { ajustada, novas, daPrimeira, escolhida, total: novas.length + daPrimeira.length + (ajustada ? 1 : 0) };
 }
 
-/** "120 de 1.500 caracteres", contados como a pessoa os vê. */
-export const contaDeCaracteres = (t: string): string => `${[...t].length.toLocaleString('pt-BR')} de ${TAMANHO_DA_RESPOSTA.toLocaleString('pt-BR')} caracteres`;
+/** "120 de 1.500 caracteres", contados como a pessoa os vê (o teto é o da resposta à avaliação, ou o que vier). */
+export const contaDeCaracteres = (t: string, maximo: number = TAMANHO_DA_RESPOSTA): string => `${[...t].length.toLocaleString('pt-BR')} de ${maximo.toLocaleString('pt-BR')} caracteres`;
 
 /**
  * Até quando a tela espera as outras sugestões com as primeiras guardadas. A rotina olha a fila de 15 em 15 segundos,
@@ -80,9 +93,14 @@ export const ESPERA_DAS_OUTRAS_MS = 2 * 60_000;
 export type OutrasNaTela = 'pode_pedir' | 'escrevendo' | 'demorando' | 'feitas' | 'nao_deu' | null;
 
 export function outrasNaTela(a: AcaoDeResposta, agora: Date): OutrasNaTela {
-  const situacao = a.review.more_suggestions ?? null;
+  return outrasDe(a.review, agora);
+}
+
+/** O "Pedir outras" pelo que o servidor diz, na avaliação ou no comentário (os mesmos códigos). */
+export function outrasDe(fonte: FonteDasSugestoes, agora: Date): OutrasNaTela {
+  const situacao = fonte.more_suggestions ?? null;
   if (situacao === 'escrevendo') {
-    const desde = a.review.more_suggestions_asked_at ? new Date(a.review.more_suggestions_asked_at).getTime() : Number.NaN;
+    const desde = fonte.more_suggestions_asked_at ? new Date(fonte.more_suggestions_asked_at).getTime() : Number.NaN;
     return !Number.isNaN(desde) && agora.getTime() - desde >= ESPERA_DAS_OUTRAS_MS ? 'demorando' : 'escrevendo';
   }
   return situacao === 'pode_pedir' || situacao === 'feitas' || situacao === 'nao_deu' ? situacao : null;

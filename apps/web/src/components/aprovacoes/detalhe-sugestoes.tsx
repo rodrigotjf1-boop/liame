@@ -26,7 +26,7 @@ const MOTIVOS = MOTIVOS_DAS_SUGESTOES.map((m) => ({ valor: m, rotulo: m }));
  * botões de opção, com a legenda "Escolha a resposta"). O P31 repetia o título do bloco numa legenda ("As sugestões do
  * Social media" duas vezes na leitura, e "A sugestão do Social media" duas vezes com uma sugestão só); aqui, não.
  */
-function ListaDasOpcoes({
+export function ListaDasOpcoes({
   ids,
   opcoes,
   daPrimeira,
@@ -34,6 +34,7 @@ function ListaDasOpcoes({
   soLeitura,
   ocupado,
   legenda,
+  maximo,
   aoEscolher,
 }: {
   ids: string;
@@ -43,6 +44,8 @@ function ListaDasOpcoes({
   soLeitura: boolean;
   ocupado: boolean;
   legenda: RefObject<HTMLLegendElement | null>;
+  /** O teto de caracteres da resposta (o do comentário é menor que o da avaliação). */
+  maximo?: number;
   aoEscolher: (o: Opcao) => void;
 }) {
   const cartao = (o: Opcao) => {
@@ -51,7 +54,7 @@ function ListaDasOpcoes({
       <span className="av-sug-txt">
         <span className="av-sug-rot">{soLeitura && eh ? `${o.rotulo} · a escolhida` : o.rotulo}</span>
         <span className="av-sug-fala">{o.texto}</span>
-        <span className="av-sug-conta">{contaDeCaracteres(o.texto)}</span>
+        <span className="av-sug-conta">{contaDeCaracteres(o.texto, maximo)}</span>
       </span>
     );
     if (soLeitura)

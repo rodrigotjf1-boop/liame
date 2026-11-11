@@ -36,7 +36,7 @@ import { chaveDaAcao, chaveDoPlano, type ItemDaLista, montarLista, pendentesDe }
 import { dinheiroDoPlano, erroDoPlano, etiquetaDoPlano, type MotivoDaRecusa, riscoDoPlano } from './planos-textos';
 import { type AcaoDePost, canaisDaLista, ehPedidoDePost, etiquetaDoPost, postApresentado, quandoDoPost } from './post-textos';
 import { type AcaoDeResposta, ehPedidoDeResposta, erroDoTexto, estrelasDoPedido, estrelasEscritas, etiquetaDaResposta, respostaApresentada, riscoDaResposta, situacaoDaResposta } from './resposta-textos';
-import { ehDoSocialMedia, ESPERA_DAS_OUTRAS_MS, escolhaDoPedido, outrasNaTela, resultadoDasSugestoes } from './sugestoes-textos';
+import { ehDoSocialMedia, ESPERA_DAS_OUTRAS_MS, escolhaDoPedido, outrasDe, resultadoDasSugestoes } from './sugestoes-textos';
 import { apresentar, avisoDepoisDeAprovar, erroDaDecisao, etiquetaDoDecidido, type Grupo, grupoDe, pedidoDaUrl, prazoDe, riscoDe, ROTULO_GRUPO, ROTULO_RISCO } from './textos';
 
 // "Aprovações" (mockups/prototipo-app.html, vista "aprovacoes"; os planos, mockups/prototipo-resumo.html, P8): à
@@ -318,9 +318,12 @@ export function AprovacoesTela() {
   // minutos, e no limite de IA, em uma hora. Por isso a releitura curta vai até a espera da tela (dois minutos desde o
   // pedido): quando a situação muda, ou a espera acaba, a lista é lida de novo (e a tela passa a "demorando", com as
   // primeiras sugestões para decidir); depois, a leitura de sempre, de 30 em 30 segundos, traz as outras quando vierem.
-  const escrevendo = aberta?.tipo === 'acao' && ehPedidoDeResposta(aberta.acao) && outrasNaTela(aberta.acao, agora) === 'escrevendo' ? aberta.acao : null;
+  // O mesmo no comentário (A6 · Z11, parte 3c), pelo `comment.more_suggestions`.
+  const fonteEscrevendo =
+    aberta?.tipo !== 'acao' ? null : ehPedidoDeResposta(aberta.acao) ? aberta.acao.review : ehPedidoDeComentario(aberta.acao) ? aberta.acao.comment : null;
+  const escrevendo = aberta?.tipo === 'acao' && fonteEscrevendo && outrasDe(fonteEscrevendo, agora) === 'escrevendo' ? aberta.acao : null;
   const idEscrevendo = escrevendo?.id ?? null;
-  const pedidaEm = escrevendo?.review.more_suggestions_asked_at ?? null;
+  const pedidaEm = fonteEscrevendo?.more_suggestions_asked_at ?? null;
   useEffect(() => {
     if (!idEscrevendo) return;
     let vivo = true;
@@ -334,7 +337,7 @@ export function AprovacoesTela() {
       }
       disparar(
         chamar(() => api.GET('/v1/actions/{id}', { params: { path: { id: idEscrevendo } } })).then((r) => {
-          if (vivo && r.ok && r.data.review?.more_suggestions !== 'escrevendo') disparar(carregar());
+          if (vivo && r.ok && (r.data.review ?? r.data.comment)?.more_suggestions !== 'escrevendo') disparar(carregar());
         }),
       );
     }, RELER_OUTRAS_MS);
@@ -520,10 +523,27 @@ export function AprovacoesTela() {
 
   // ---- a resposta a um comentário (P38): o texto se edita como o da resposta à avaliação (o plano é outro, e a
   // aprovação vale para ele); as sugestões do Social media ficam no pedido.
-  async function salvarTextoDoComentario(acao: AcaoDeComentario, texto: string): Promise<Feito> {
+  async function salvarTextoDoComentario(acao: AcaoDeComentario, texto: string, aviso?: string): Promise<Feito> {
     const r = await chamar(() => api.PATCH('/v1/actions/{id}', { params: { path: { id: acao.id } }, body: { params: { texto } } }));
-    if (!r.ok) return { ok: false, texto: r.problema.status >= 500 ? mensagemDe(r.problema) : erroDoTexto(r.problema) };
-    avisar('Texto salvo e conferido de novo. A aprovação vale para este texto.');
+    if (!r.ok) {
+      if (r.problema.code === 'acao-nao-aguarda') setTentativa((n) => n + 1);
+      return { ok: false, texto: r.problema.status >= 500 ? mensagemDe(r.problema) : erroDoTexto(r.problema) };
+    }
+    avisar(aviso ?? 'Texto salvo e conferido de novo. A aprovação vale para este texto.');
+    await carregar();
+    // Quem escolheu uma sugestão fica na lista das opções; quem salvou o texto vai ao título do pedido.
+    if (!aviso) focarOTitulo();
+    return { ok: true };
+  }
+
+  // O "Pedir outra" no comentário (A6 · Z11, parte 3c; uma vez por comentário): como o "Pedir outras" da avaliação.
+  async function pedirOutraAoComentario(acao: AcaoDeComentario): Promise<Feito> {
+    const r = await chamar(() => api.POST('/v1/actions/{id}/more-suggestions', { params: { path: { id: acao.id } } }));
+    if (!r.ok) {
+      if (r.problema.code === 'outras-ja-pedidas' || r.problema.code === 'acao-nao-aguarda') setTentativa((n) => n + 1);
+      return { ok: false, texto: mensagemDe(r.problema) };
+    }
+    avisar((acao.comment.suggestions?.length ?? 0) > 1 ? 'O Social media está escrevendo outras sugestões.' : 'O Social media está escrevendo outra sugestão.');
     await carregar();
     focarOTitulo();
     return { ok: true };
@@ -966,6 +986,8 @@ export function AprovacoesTela() {
         aoAprovar={aprovar}
         aoRecusar={recusar}
         aoSalvarTexto={salvarTextoDoComentario}
+        aoPedirOutra={pedirOutraAoComentario}
+        aoAvisar={avisar}
       />
     );
   } else if (aberta?.tipo === 'acao') {

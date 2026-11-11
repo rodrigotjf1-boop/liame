@@ -558,10 +558,11 @@ export const TOOLS: Record<string, ToolDefinition> = {
   // estado do recurso é o comentário, lido da rede na hora, sem o texto dele e sem nada de quem comentou
   // (`comentario-plano.ts`). O texto da resposta é o parâmetro: entra no hash do plano, e a aprovação vale só para ele.
   // Sem a flag de escrita dos posts (`social_write`, a do conector) e a da ferramenta (`comentarios_responder`), nenhum
-  // pedido chega aqui. O atendimento automático (D-A6-92) vem na parte 2e.
+  // pedido chega aqui. O atendimento automático (D-A6-92) vem na parte 2e. v2 (Z11, parte 3c; D-A6-103): o pedido do
+  // Social media leva até seis sugestões (as três da reclamação e as três do "Pedir outra").
   comentario_responder: {
     name: 'comentario_responder',
-    version: 1,
+    version: 2,
     owner: 'social',
     description:
       'Publica a resposta da marca a um comentário de um post dela, no Instagram ou na Página do Facebook, com o texto que a pessoa aprova. A resposta é pública e fica no post, embaixo do comentário.',

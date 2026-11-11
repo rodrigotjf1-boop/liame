@@ -20235,6 +20235,49 @@
                             "null"
                           ],
                           "pattern": "^[a-z_]{2,40}$"
+                        },
+                        "suggestions": {
+                          "type": [
+                            "array",
+                            "null"
+                          ],
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "focus": {
+                                "type": "string"
+                              },
+                              "text": {
+                                "type": "string"
+                              },
+                              "round": {
+                                "type": "integer",
+                                "minimum": 1,
+                                "maximum": 2
+                              }
+                            },
+                            "required": [
+                              "focus",
+                              "text",
+                              "round"
+                            ],
+                            "additionalProperties": false
+                          }
+                        },
+                        "more_suggestions": {
+                          "type": [
+                            "string",
+                            "null"
+                          ],
+                          "pattern": "^[a-z_]{2,40}$"
+                        },
+                        "more_suggestions_asked_at": {
+                          "type": [
+                            "string",
+                            "null"
+                          ],
+                          "format": "date-time",
+                          "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
                         }
                       },
                       "required": [
@@ -22261,6 +22304,49 @@
                                   "null"
                                 ],
                                 "pattern": "^[a-z_]{2,40}$"
+                              },
+                              "suggestions": {
+                                "type": [
+                                  "array",
+                                  "null"
+                                ],
+                                "items": {
+                                  "type": "object",
+                                  "properties": {
+                                    "focus": {
+                                      "type": "string"
+                                    },
+                                    "text": {
+                                      "type": "string"
+                                    },
+                                    "round": {
+                                      "type": "integer",
+                                      "minimum": 1,
+                                      "maximum": 2
+                                    }
+                                  },
+                                  "required": [
+                                    "focus",
+                                    "text",
+                                    "round"
+                                  ],
+                                  "additionalProperties": false
+                                }
+                              },
+                              "more_suggestions": {
+                                "type": [
+                                  "string",
+                                  "null"
+                                ],
+                                "pattern": "^[a-z_]{2,40}$"
+                              },
+                              "more_suggestions_asked_at": {
+                                "type": [
+                                  "string",
+                                  "null"
+                                ],
+                                "format": "date-time",
+                                "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
                               }
                             },
                             "required": [
@@ -24939,6 +25025,49 @@
                             "null"
                           ],
                           "pattern": "^[a-z_]{2,40}$"
+                        },
+                        "suggestions": {
+                          "type": [
+                            "array",
+                            "null"
+                          ],
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "focus": {
+                                "type": "string"
+                              },
+                              "text": {
+                                "type": "string"
+                              },
+                              "round": {
+                                "type": "integer",
+                                "minimum": 1,
+                                "maximum": 2
+                              }
+                            },
+                            "required": [
+                              "focus",
+                              "text",
+                              "round"
+                            ],
+                            "additionalProperties": false
+                          }
+                        },
+                        "more_suggestions": {
+                          "type": [
+                            "string",
+                            "null"
+                          ],
+                          "pattern": "^[a-z_]{2,40}$"
+                        },
+                        "more_suggestions_asked_at": {
+                          "type": [
+                            "string",
+                            "null"
+                          ],
+                          "format": "date-time",
+                          "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
                         }
                       },
                       "required": [
@@ -26780,6 +26909,49 @@
                             "null"
                           ],
                           "pattern": "^[a-z_]{2,40}$"
+                        },
+                        "suggestions": {
+                          "type": [
+                            "array",
+                            "null"
+                          ],
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "focus": {
+                                "type": "string"
+                              },
+                              "text": {
+                                "type": "string"
+                              },
+                              "round": {
+                                "type": "integer",
+                                "minimum": 1,
+                                "maximum": 2
+                              }
+                            },
+                            "required": [
+                              "focus",
+                              "text",
+                              "round"
+                            ],
+                            "additionalProperties": false
+                          }
+                        },
+                        "more_suggestions": {
+                          "type": [
+                            "string",
+                            "null"
+                          ],
+                          "pattern": "^[a-z_]{2,40}$"
+                        },
+                        "more_suggestions_asked_at": {
+                          "type": [
+                            "string",
+                            "null"
+                          ],
+                          "format": "date-time",
+                          "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
                         }
                       },
                       "required": [
@@ -28603,6 +28775,49 @@
                             "null"
                           ],
                           "pattern": "^[a-z_]{2,40}$"
+                        },
+                        "suggestions": {
+                          "type": [
+                            "array",
+                            "null"
+                          ],
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "focus": {
+                                "type": "string"
+                              },
+                              "text": {
+                                "type": "string"
+                              },
+                              "round": {
+                                "type": "integer",
+                                "minimum": 1,
+                                "maximum": 2
+                              }
+                            },
+                            "required": [
+                              "focus",
+                              "text",
+                              "round"
+                            ],
+                            "additionalProperties": false
+                          }
+                        },
+                        "more_suggestions": {
+                          "type": [
+                            "string",
+                            "null"
+                          ],
+                          "pattern": "^[a-z_]{2,40}$"
+                        },
+                        "more_suggestions_asked_at": {
+                          "type": [
+                            "string",
+                            "null"
+                          ],
+                          "format": "date-time",
+                          "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
                         }
                       },
                       "required": [
@@ -30534,6 +30749,49 @@
                             "null"
                           ],
                           "pattern": "^[a-z_]{2,40}$"
+                        },
+                        "suggestions": {
+                          "type": [
+                            "array",
+                            "null"
+                          ],
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "focus": {
+                                "type": "string"
+                              },
+                              "text": {
+                                "type": "string"
+                              },
+                              "round": {
+                                "type": "integer",
+                                "minimum": 1,
+                                "maximum": 2
+                              }
+                            },
+                            "required": [
+                              "focus",
+                              "text",
+                              "round"
+                            ],
+                            "additionalProperties": false
+                          }
+                        },
+                        "more_suggestions": {
+                          "type": [
+                            "string",
+                            "null"
+                          ],
+                          "pattern": "^[a-z_]{2,40}$"
+                        },
+                        "more_suggestions_asked_at": {
+                          "type": [
+                            "string",
+                            "null"
+                          ],
+                          "format": "date-time",
+                          "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
                         }
                       },
                       "required": [
@@ -32479,6 +32737,49 @@
                                   "null"
                                 ],
                                 "pattern": "^[a-z_]{2,40}$"
+                              },
+                              "suggestions": {
+                                "type": [
+                                  "array",
+                                  "null"
+                                ],
+                                "items": {
+                                  "type": "object",
+                                  "properties": {
+                                    "focus": {
+                                      "type": "string"
+                                    },
+                                    "text": {
+                                      "type": "string"
+                                    },
+                                    "round": {
+                                      "type": "integer",
+                                      "minimum": 1,
+                                      "maximum": 2
+                                    }
+                                  },
+                                  "required": [
+                                    "focus",
+                                    "text",
+                                    "round"
+                                  ],
+                                  "additionalProperties": false
+                                }
+                              },
+                              "more_suggestions": {
+                                "type": [
+                                  "string",
+                                  "null"
+                                ],
+                                "pattern": "^[a-z_]{2,40}$"
+                              },
+                              "more_suggestions_asked_at": {
+                                "type": [
+                                  "string",
+                                  "null"
+                                ],
+                                "format": "date-time",
+                                "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
                               }
                             },
                             "required": [
@@ -34463,6 +34764,49 @@
                             "null"
                           ],
                           "pattern": "^[a-z_]{2,40}$"
+                        },
+                        "suggestions": {
+                          "type": [
+                            "array",
+                            "null"
+                          ],
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "focus": {
+                                "type": "string"
+                              },
+                              "text": {
+                                "type": "string"
+                              },
+                              "round": {
+                                "type": "integer",
+                                "minimum": 1,
+                                "maximum": 2
+                              }
+                            },
+                            "required": [
+                              "focus",
+                              "text",
+                              "round"
+                            ],
+                            "additionalProperties": false
+                          }
+                        },
+                        "more_suggestions": {
+                          "type": [
+                            "string",
+                            "null"
+                          ],
+                          "pattern": "^[a-z_]{2,40}$"
+                        },
+                        "more_suggestions_asked_at": {
+                          "type": [
+                            "string",
+                            "null"
+                          ],
+                          "format": "date-time",
+                          "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
                         }
                       },
                       "required": [
@@ -34720,7 +35064,7 @@
     },
     "/v1/actions/{id}/more-suggestions": {
       "post": {
-        "description": "No pedido de resposta que o Social media fez e que espera a decisão (A6, Z6), pede outras sugestões, uma vez por avaliação: as novas chegam no mesmo pedido, antes das que já estavam (`review.suggestions` com `round` 2), e `review.more_suggestions` diz se ele ainda está escrevendo. A de 1 ou 2 estrelas, só o dono pede. Já pedidas, desligadas para a loja ou pedido sem sugestões: 409.",
+        "description": "No pedido de resposta que o Social media fez e que espera a decisão (A6, Z6), pede outras sugestões, uma vez por avaliação: as novas chegam no mesmo pedido, antes das que já estavam (`review.suggestions` com `round` 2), e `review.more_suggestions` diz se ele ainda está escrevendo. A de 1 ou 2 estrelas, só o dono pede. No pedido de responder a um comentário (A6, Z11, parte 3c), o mesmo, uma vez por comentário, em `comment.suggestions` e `comment.more_suggestions`: só na pergunta e na reclamação (o elogio e a marcação têm a resposta pronta). Já pedidas, desligadas para a marca ou pedido sem sugestões: 409.",
         "operationId": "ActionsController_maisSugestoes",
         "parameters": [
           {
@@ -36414,6 +36758,49 @@
                             "null"
                           ],
                           "pattern": "^[a-z_]{2,40}$"
+                        },
+                        "suggestions": {
+                          "type": [
+                            "array",
+                            "null"
+                          ],
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "focus": {
+                                "type": "string"
+                              },
+                              "text": {
+                                "type": "string"
+                              },
+                              "round": {
+                                "type": "integer",
+                                "minimum": 1,
+                                "maximum": 2
+                              }
+                            },
+                            "required": [
+                              "focus",
+                              "text",
+                              "round"
+                            ],
+                            "additionalProperties": false
+                          }
+                        },
+                        "more_suggestions": {
+                          "type": [
+                            "string",
+                            "null"
+                          ],
+                          "pattern": "^[a-z_]{2,40}$"
+                        },
+                        "more_suggestions_asked_at": {
+                          "type": [
+                            "string",
+                            "null"
+                          ],
+                          "format": "date-time",
+                          "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
                         }
                       },
                       "required": [
@@ -38365,6 +38752,49 @@
                             "null"
                           ],
                           "pattern": "^[a-z_]{2,40}$"
+                        },
+                        "suggestions": {
+                          "type": [
+                            "array",
+                            "null"
+                          ],
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "focus": {
+                                "type": "string"
+                              },
+                              "text": {
+                                "type": "string"
+                              },
+                              "round": {
+                                "type": "integer",
+                                "minimum": 1,
+                                "maximum": 2
+                              }
+                            },
+                            "required": [
+                              "focus",
+                              "text",
+                              "round"
+                            ],
+                            "additionalProperties": false
+                          }
+                        },
+                        "more_suggestions": {
+                          "type": [
+                            "string",
+                            "null"
+                          ],
+                          "pattern": "^[a-z_]{2,40}$"
+                        },
+                        "more_suggestions_asked_at": {
+                          "type": [
+                            "string",
+                            "null"
+                          ],
+                          "format": "date-time",
+                          "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
                         }
                       },
                       "required": [
@@ -40188,6 +40618,49 @@
                             "null"
                           ],
                           "pattern": "^[a-z_]{2,40}$"
+                        },
+                        "suggestions": {
+                          "type": [
+                            "array",
+                            "null"
+                          ],
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "focus": {
+                                "type": "string"
+                              },
+                              "text": {
+                                "type": "string"
+                              },
+                              "round": {
+                                "type": "integer",
+                                "minimum": 1,
+                                "maximum": 2
+                              }
+                            },
+                            "required": [
+                              "focus",
+                              "text",
+                              "round"
+                            ],
+                            "additionalProperties": false
+                          }
+                        },
+                        "more_suggestions": {
+                          "type": [
+                            "string",
+                            "null"
+                          ],
+                          "pattern": "^[a-z_]{2,40}$"
+                        },
+                        "more_suggestions_asked_at": {
+                          "type": [
+                            "string",
+                            "null"
+                          ],
+                          "format": "date-time",
+                          "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
                         }
                       },
                       "required": [

@@ -107,6 +107,8 @@ function desenho(a: AcaoDeComentario, o: { pro?: boolean; podeDecidir?: boolean;
       aoAprovar: async () => ({ ok: true }) as const,
       aoRecusar: async () => ({ ok: true }) as const,
       aoSalvarTexto: async () => ({ ok: true }) as const,
+      aoPedirOutra: async () => ({ ok: true }) as const,
+      aoAvisar: () => {},
     }),
   );
 }
@@ -231,6 +233,42 @@ describe('o pedido sobre um comentário em Aprovações: o detalhe (A6 · Z11, p
   it('o comentário que mudou avisa antes da decisão; o que saiu da guarda do Liame diz isso no lugar do texto', () => {
     expect(semMarcas(desenho(doSocial({}, { changed: true })))).toContain('O comentário mudou depois deste pedido.');
     expect(semMarcas(desenho(doSocial({}, { current: null })))).toContain('O Liame não guarda mais este comentário');
+  });
+
+  it('as sugestões do Social media (parte 3c): escolher uma, editar a escolhida e pedir outra uma vez; escrevendo, a decisão espera', () => {
+    const sugestoes = [1, 2, 3].map((n) => ({ focus: `Caminho ${n}`, text: `Texto ${n}. Chama a gente pelos contatos do perfil da loja.`, round: 1 }));
+    const reclamacao = doSocial({}, { reply_text: sugestoes[0]!.text, suggestions: sugestoes, more_suggestions: 'pode_pedir' }, { kind: 'reclamacao' });
+    const html = desenho(reclamacao);
+    const t = semMarcas(html);
+    expect(t).toContain('As sugestões do Social media');
+    expect(t).toContain('Escolha a resposta');
+    expect(t).toContain('Sugestão 1 · Caminho 1');
+    expect(html.match(/type="radio"/g)?.length).toBe(3);
+    expect(t).toContain('Editar o texto escolhido');
+    expect(t).toContain('Pedir outras sugestões');
+    expect(t).toContain('Social media escreveu três sugestões de resposta para a reclamação que @duda.come.bem deixou no Instagram. Escolha a que preferir e ajuste se quiser');
+    // A pergunta tem uma sugestão: "Pedir outra sugestão".
+    const umaSo = { suggestions: [{ focus: 'Responde e chama a equipe', text: RESPOSTA, round: 1 }] };
+    expect(semMarcas(desenho(doSocial({}, { ...umaSo, more_suggestions: 'pode_pedir' })))).toContain('Pedir outra sugestão');
+    // Escrevendo: a espera no lugar das opções, e a decisão espera a nova.
+    const escrevendo = semMarcas(desenho(doSocial({}, { ...umaSo, more_suggestions: 'escrevendo', more_suggestions_asked_at: new Date(agora.getTime() - 30_000).toISOString() })));
+    expect(escrevendo).toContain('O Social media está escrevendo outra sugestão');
+    expect(escrevendo).toContain('Espere a sugestão nova para aprovar.');
+    expect(escrevendo).not.toContain('Código do app');
+    // Feitas: a nova primeiro, a da primeira rodada embaixo, sem pedir de novo.
+    const NOVA = 'Fazemos entrega no Centro e na Lapa. Chama a gente pelos contatos do perfil da loja.';
+    const feitas = semMarcas(
+      desenho(doSocial({}, { reply_text: NOVA, suggestions: [{ focus: 'Responde e chama a equipe', text: NOVA, round: 2 }, ...umaSo.suggestions], more_suggestions: 'feitas' })),
+    );
+    expect(feitas.indexOf(NOVA)).toBeLessThan(feitas.indexOf('As da primeira rodada'));
+    expect(feitas).not.toContain('Pedir outra');
+    expect(feitas).toContain('Esta é a segunda rodada');
+    // Quem só lê vê os cartões, com a escolhida marcada, sem escolher nem pedir.
+    const leitura = desenho(reclamacao, { podeOperar: false, podeDecidir: false });
+    expect(leitura).not.toContain('type="radio"');
+    expect(semMarcas(leitura)).toContain('Sugestão 1 · Caminho 1 · a escolhida');
+    expect(semMarcas(leitura)).not.toContain('Pedir outras');
+    expect(semMarcas(leitura)).not.toContain('Escolha a que preferir');
   });
 
   it('decidido: o resultado e o que foi pedido, sem a decisão', () => {

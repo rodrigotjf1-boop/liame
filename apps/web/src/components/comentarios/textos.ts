@@ -4,8 +4,8 @@ import { horaDe } from '@/lib/formato';
 
 // A tela Comentários (mockups/prototipo-comentarios.html, P38 aprovado em 07/11/2026; A6, Z11, parte 3b): os comentários
 // dos posts da marca no Instagram e na Página, como o Liame os guardou (`GET /v1/comments`), com as situações que
-// filtram, o canal e a busca. Decidir a resposta ou o ocultar é em Aprovações (parte 3a); escrever a resposta e pedir
-// outra sugestão chegam na parte 3c. Funções puras.
+// filtram, o canal e a busca. Decidir a resposta ou o ocultar é em Aprovações (parte 3a); uma pessoa pede a resposta
+// ou o ocultar na própria linha (parte 3c); o "Pedir outra" sugestão vem depois. Funções puras.
 
 export type Filtro = 'pedem' | 'ocultar' | 'respondidos' | 'ocultos' | 'todos';
 /** As situações que filtram, na ordem da tela, com o rótulo e a contagem que o servidor manda. */
@@ -76,6 +76,14 @@ export function avisosDasContas(accounts: CommentsResponse['accounts']): AvisoDa
     else if (a.situation === 'primeira_leitura') avisos.push({ conta: a.name, tom: 'info', contas: false, texto: `A primeira leitura dos comentários ${onde(a.channel)} ${a.name} ainda não terminou. Leva alguns minutos.` });
   }
   return avisos;
+}
+
+/** A recusa do pedido de uma pessoa (responder, ocultar, mostrar), nas palavras da tela; o resto, nas do servidor. */
+export function erroDoPedido(p: { code: string; detail?: string; title: string }): string {
+  if (p.code === 'acao-duplicada') return 'Já há um pedido em aberto para este comentário. Abra a lista de novo e siga para Aprovações.';
+  if (p.code === 'escrita-desligada') return 'Responder e ocultar comentários pelo Liame ainda não estão ligados para esta empresa.';
+  if (p.code === 'sem-permissao-na-plataforma') return 'A autorização da Meta não deixa o Liame responder ou ocultar este comentário. Conecte a Meta de novo em Contas conectadas.';
+  return p.detail ?? p.title;
 }
 
 /** O "Ler agora": disponível, ou a hora em que fica. */

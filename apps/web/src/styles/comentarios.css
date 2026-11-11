@@ -17,3 +17,9 @@
 .com-respostas { display: grid; gap: var(--sp-1); margin: var(--sp-2) 0 0; padding: 0 0 0 var(--sp-3); border-left: 2px solid var(--border); list-style: none; }
 .com-respostas li { font-size: var(--text-xs); color: var(--text-muted); overflow-wrap: anywhere; }
 .com-respostas b { color: var(--text); font-weight: 600; }
+/* As ações de uma pessoa (parte 3c): os botões ao lado da situação, e o campo da resposta ou a confirmação embaixo. */
+.com-acoes { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: var(--sp-2); }
+.com-responder { display: grid; gap: var(--sp-2); margin-top: var(--sp-3); }
+.com-responder .av-editar { display: grid; gap: var(--sp-2); }
+.com-responder .av-editar textarea { width: 100%; min-height: 110px; padding: var(--sp-3); border: 1px solid var(--border-strong); border-radius: var(--radius); background: var(--surface); color: var(--text); font: inherit; font-size: var(--text-sm); resize: vertical; }
+.com-responder .av-editar-acoes { display: flex; flex-wrap: wrap; gap: var(--sp-2); }

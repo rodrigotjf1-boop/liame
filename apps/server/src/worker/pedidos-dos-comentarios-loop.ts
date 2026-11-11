@@ -17,8 +17,11 @@ export type VezDoComentario = { id: string; tenantId: string; feito: VezDoPedido
 /** A vez reservada, com a posição dela na fila: o lote é tratado nessa ordem (ERR-135). */
 type Reservada = { id: string; tenant_id: string; vez: string };
 
-/** A posição na fila, como texto que se ordena: a mais atrasada primeiro, a mesma ordem do `order by` da reserva (V127). */
-const vezDoPedido = vezNaFila(sql`coalesce(s.next_attempt_at, s.created_at)`);
+/**
+ * A posição na fila, como texto que se ordena: o "Pedir outra" (a rodada 2, parte 3c) primeiro, porque uma pessoa espera
+ * na tela; depois, a mais atrasada primeiro. A mesma ordem do `order by` da reserva (V127).
+ */
+const vezDoPedido = sql`(case when s.round = 2 then '0' else '1' end) || ${vezNaFila(sql`coalesce(s.next_attempt_at, s.created_at)`)}`;
 
 /**
  * A fila dos pedidos do Social media para os comentários (A6, Z11, parte 2d-2; migration 0125): os comentários que esperam
@@ -49,7 +52,7 @@ export class PedidosDosComentariosLoop {
              where s.status = 'esperando'
                and (s.next_attempt_at is null or s.next_attempt_at <= ${ref})
                ${tenantFilter(scope, sql`s.tenant_id`)}
-             order by coalesce(s.next_attempt_at, s.created_at), s.id
+             order by s.round desc, coalesce(s.next_attempt_at, s.created_at), s.id
              limit ${limite}
              for update of s skip locked
           )

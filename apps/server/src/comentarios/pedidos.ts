@@ -222,14 +222,75 @@ export async function marcarVezOlhada(tx: Tx, alvo: DonoDaVez, agora: Date): Pro
      where id = ${alvo.id} and tenant_id = ${alvo.tenantId} and status = 'pronta'`);
 }
 
-/** O pedido está em Aprovações: a vez acaba pronta, ligada a ele, com quantas sugestões foram (nulo no ocultar). */
-export async function marcarVezPronta(tx: Tx, alvo: DonoDaVez, feito: { pedido: string; sugestoes: number | null; usageId: string | null }, agora: Date): Promise<boolean> {
+/**
+ * O pedido está em Aprovações: a vez acaba pronta, ligada a ele, com quantas sugestões foram (nulo no ocultar). Na
+ * rodada 2 (o "Pedir outra"), o pedido é nulo: as sugestões novas entram no pedido da rodada 1, e um pedido é de uma vez
+ * só (`uq_comment_suggestion_pedido`).
+ */
+export async function marcarVezPronta(tx: Tx, alvo: DonoDaVez, feito: { pedido: string | null; sugestoes: number | null; usageId: string | null }, agora: Date): Promise<boolean> {
   const quando = sql`${agora.toISOString()}::timestamptz`;
   const r = await tx.execute(sql`
     update liame.comment_suggestion
        set status = 'pronta', reason = null, action_id = ${feito.pedido}, suggestions = ${feito.sugestoes}, usage_id = ${feito.usageId},
            next_attempt_at = null, finished_at = ${quando}, updated_at = ${quando}
      where id = ${alvo.id} and tenant_id = ${alvo.tenantId} and status = 'esperando'
+    returning id`);
+  return r.rows.length === 1;
+}
+
+// ---- O "Pedir outra" (D-A6-88, uma vez por comentário; A6, Z11, parte 3c) ------------------------------------------
+// No pedido de responder que o Social media escreveu (a pergunta e a reclamação) e que espera a decisão, a pessoa pede
+// outra sugestão: a vez da rodada 2 do mesmo comentário, com quem pediu. A rotina escreve as novas, diferentes das que a
+// pessoa já viu, e elas entram no mesmo pedido, antes das que já estavam (`trocarSugestoesPeloFuncionario`). A rodada 2
+// não aponta o pedido: ele é da rodada 1. A situação que a tela mostra é a das avaliações (`maisSugestoes`), e a rodada 2
+// que acaba porque o pedido saiu de Aprovações leva o mesmo porquê (`SEGUNDA_RODADA_DO_PEDIDO_RETIRADO`).
+
+type DoComentario = { tenantId: string; contaId: string; commentId: string };
+
+/**
+ * Abre a rodada 2: a vez nova do mesmo comentário, esperando o Social media, com quem pediu. Só parte da rodada 1 de
+ * responder que está pronta e ligada a este pedido. Devolve `aberta`, `ja_pedida` (a rodada 2 já existe) ou
+ * `sem_primeira` (o pedido não nasceu de uma vez do Social media).
+ */
+export async function abrirSegundaRodadaDoComentario(
+  tx: Tx,
+  alvo: DoComentario & { pedido: string; quem: string },
+  agora: Date,
+): Promise<'aberta' | 'ja_pedida' | 'sem_primeira'> {
+  const instante = sql`${agora.toISOString()}::timestamptz`;
+  const r = await tx.execute(sql`
+    insert into liame.comment_suggestion (id, tenant_id, brand_id, connected_account_id, comment_id, round, status, operation, requested_by, next_attempt_at, created_at, updated_at)
+    select gen_random_uuid(), s.tenant_id, s.brand_id, s.connected_account_id, s.comment_id, 2, 'esperando', 'responder', ${alvo.quem}, ${instante}, ${instante}, ${instante}
+      from liame.comment_suggestion s
+     where s.tenant_id = ${alvo.tenantId} and s.connected_account_id = ${alvo.contaId}::uuid and s.comment_id = ${alvo.commentId}
+       and s.round = 1 and s.status = 'pronta' and s.operation = 'responder' and s.action_id = ${alvo.pedido}
+    on conflict (connected_account_id, comment_id, round) do nothing
+    returning id`);
+  if (r.rows.length === 1) return 'aberta';
+  const ja = await tx.execute(sql`
+    select 1 from liame.comment_suggestion
+     where tenant_id = ${alvo.tenantId} and connected_account_id = ${alvo.contaId}::uuid and comment_id = ${alvo.commentId} and round = 2`);
+  return ja.rows.length ? 'ja_pedida' : 'sem_primeira';
+}
+
+/** A rodada 1 pronta do comentário, com o pedido que saiu dela: é o pedido que a rodada 2 atualiza. Nula quando não há. */
+export async function primeiraRodadaDoComentario(tx: Tx, alvo: DoComentario): Promise<{ id: string; action_id: string } | null> {
+  const r = await tx.execute<{ id: string; action_id: string }>(sql`
+    select id, action_id from liame.comment_suggestion
+     where tenant_id = ${alvo.tenantId} and connected_account_id = ${alvo.contaId}::uuid and comment_id = ${alvo.commentId}
+       and round = 1 and status = 'pronta' and action_id is not null`);
+  return r.rows[0] ?? null;
+}
+
+/** O pedido da rodada 1 saiu de Aprovações (a retirada): a rodada 2 que esperava acaba descartada, com o porquê. */
+export async function encerrarSegundaRodadaDoComentario(tx: Tx, alvo: DoComentario, motivo: string, agora: Date): Promise<boolean> {
+  exigirCodigo(motivo, 'o motivo');
+  const quando = sql`${agora.toISOString()}::timestamptz`;
+  const r = await tx.execute(sql`
+    update liame.comment_suggestion
+       set status = 'descartada', reason = ${motivo}, next_attempt_at = null, finished_at = ${quando}, updated_at = ${quando}
+     where tenant_id = ${alvo.tenantId} and connected_account_id = ${alvo.contaId}::uuid and comment_id = ${alvo.commentId}
+       and round = 2 and status = 'esperando'
     returning id`);
   return r.rows.length === 1;
 }
