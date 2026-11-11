@@ -9,7 +9,24 @@ import { api, chamar, mensagemDe } from '@/lib/api';
 import { disparar } from '@/lib/disparar';
 import { useDetalhes } from '@/lib/modo';
 import { GavetaFontes } from './gaveta-fontes';
-import { comparaDensidade, FONTES_DA_REGIAO, fonteDoNumero, fontesQueFalharam, fraseDaRenda, frescor, hora, inteiro, reais, umaCasa } from './textos-da-regiao';
+import {
+  comparaDensidade,
+  FONTES_DA_REGIAO,
+  fonteDaRendaDoBairro,
+  fonteDoNumero,
+  fontesQueFalharam,
+  fraseDaRenda,
+  frescor,
+  grande,
+  hora,
+  inteiro,
+  mesAno,
+  pct,
+  reais,
+  trimestre,
+  umaCasa,
+  variacao,
+} from './textos-da-regiao';
 
 // Sua região (protótipo P40, aprovado em 11/11/2026; plano da região, R2, parte 2): o retrato da região de uma loja,
 // calculado pelo sistema com dados públicos, sem IA (`GET /v1/region/overview`). Uma loja por vez; enquanto as fontes são
@@ -172,10 +189,13 @@ export function SuaRegiao({ brandId, lojas }: { brandId: string; lojas: StoreLoc
         </span>
       </p>
     );
+    // Os valores da régua na mesma base do número de cima: corrigidos pelo IPCA quando ele foi lido.
+    const tipico = b?.income_rank ? (r.ipca && b.head_income_median_today !== null ? Math.round(b.income_rank.typical_median * r.ipca.factor) : b.income_rank.typical_median) : 0;
+    const doBairro = b ? (b.head_income_median_today ?? b.head_income_median ?? 0) : 0;
     const regua =
       b?.income_rank && b.head_income_median !== null ? (
         <>
-          <div className="rg-regua" role="img" aria-label={`O bairro ${b.name} fica acima de ${b.income_rank.above_pct}% dos ${inteiro(b.income_rank.districts)} bairros do município; o bairro típico tem ${reais(b.income_rank.typical_median)}.`}>
+          <div className="rg-regua" role="img" aria-label={`O bairro ${b.name} fica acima de ${b.income_rank.above_pct}% dos ${inteiro(b.income_rank.districts)} bairros do município; o bairro típico tem ${reais(tipico)}.`}>
             <span className="rg-regua-trilho" />
             <span className="rg-regua-marca" style={{ left: '50%' }} />
             <span className="rg-regua-ponto" style={{ left: `${Math.min(98, Math.max(2, b.income_rank.above_pct))}%` }} />
@@ -187,11 +207,11 @@ export function SuaRegiao({ brandId, lojas }: { brandId: string; lojas: StoreLoc
           <p className="rg-regua-chave" aria-hidden="true">
             <span>
               <i className="rg-ch-marca" />
-              bairro típico do município: {reais(b.income_rank.typical_median)}
+              bairro típico do município: {reais(tipico)}
             </span>
             <span>
               <i className="rg-ch-ponto" />
-              {b.name}: {reais(b.head_income_median)}
+              {b.name}: {reais(doBairro)}
             </span>
           </p>
         </>
@@ -253,8 +273,18 @@ export function SuaRegiao({ brandId, lojas }: { brandId: string; lojas: StoreLoc
                   mostraPro={mostraPro}
                 />
               )}
+              {c?.population_estimate && (
+                <Numero
+                  valor={inteiro(c.population_estimate.value)}
+                  obs={`pessoas no município (${c.name}) pela estimativa mais nova do IBGE`}
+                  fonte={`IBGE · Estimativas de População, ${c.population_estimate.period}`}
+                  pro={`tabela 6579 · variável 9324 · série com base própria: não se compara com o Censo de 2022 (${c.population ? inteiro(c.population.value) : '—'} pessoas)`}
+                  mostraPro={mostraPro}
+                />
+              )}
               {semBairro}
             </div>
+            <p className="eixo-nota">O bairro só tem número no Censo de 2022: nenhuma pesquisa mais nova desce até o bairro.</p>
           </section>
 
           <section className="rg-grupo" aria-labelledby={`${ids}-bolso`}>
@@ -267,11 +297,38 @@ export function SuaRegiao({ brandId, lojas }: { brandId: string; lojas: StoreLoc
               {b && b.head_income_median !== null && (
                 <Numero
                   classe="rg-num--largo"
-                  valor={reais(b.head_income_median)}
+                  valor={reais(b.head_income_median_today ?? b.head_income_median)}
                   obs={fraseDaRenda(r)}
                   extra={regua}
-                  fonte="IBGE · Censo 2022 · valor de 2022, sem correção"
-                  pro={`renda do responsável por bairro · V06006 (mediana)${b.head_income_mean !== null ? ` · média: ${reais(b.head_income_mean)} (V06004)` : ''}`}
+                  fonte={fonteDaRendaDoBairro(r)}
+                  pro={`renda do responsável por bairro · V06006 (mediana): ${reais(b.head_income_median)} em 2022${b.head_income_mean !== null ? ` · média: ${reais(b.head_income_mean)} (V06004)` : ''}${r.ipca ? ` · IPCA de ${mesAno(r.ipca.from)} a ${mesAno(r.ipca.to)}: ×${r.ipca.factor.toLocaleString('pt-BR', { maximumFractionDigits: 4 })}` : ''}`}
+                  mostraPro={mostraPro}
+                />
+              )}
+              {c?.income_pc_rm && (
+                <Numero
+                  valor={reais(c.income_pc_rm.value)}
+                  obs="é a renda por pessoa na região metropolitana, a mais nova"
+                  fonte={`IBGE · PNAD Contínua, ${c.income_pc_rm.period}`}
+                  pro={`tabela 7395 · variável 4196 · RM ${c.rm_code}`}
+                  mostraPro={mostraPro}
+                />
+              )}
+              {c?.income_pc_uf && (
+                <Numero
+                  valor={reais(c.income_pc_uf.value)}
+                  obs={`é a renda por pessoa no estado (${c.state}), a mais nova`}
+                  fonte={`IBGE · PNAD Contínua, ${c.income_pc_uf.period}`}
+                  pro={`tabela 7531 · variável 10824 · UF ${c.code.slice(0, 2)}`}
+                  mostraPro={mostraPro}
+                />
+              )}
+              {c?.work_income_capital && (
+                <Numero
+                  valor={reais(c.work_income_capital.value)}
+                  obs={`é a renda do trabalho de quem trabalha na capital, na média de ${c.work_income_capital.quarters} ${c.work_income_capital.quarters === 1 ? 'trimestre' : 'trimestres'} até o ${trimestre(c.work_income_capital.period)}`}
+                  fonte={`IBGE · PNAD Contínua trimestral, ${trimestre(c.work_income_capital.period)}`}
+                  pro="tabela 6472 · variável 5933 (real, habitual, todos os trabalhos) · a média tira a oscilação da amostra da capital"
                   mostraPro={mostraPro}
                 />
               )}
@@ -329,6 +386,67 @@ export function SuaRegiao({ brandId, lojas }: { brandId: string; lojas: StoreLoc
             )}
           </section>
 
+          {c?.pix && (
+            <section className="rg-grupo" aria-labelledby={`${ids}-pulso`}>
+              <div className="rg-grupo-cab">
+                <h3 id={`${ids}-pulso`}>Pulso do consumo</h3>
+                <p>no município, todo mês</p>
+              </div>
+              {falhou('bcb_pix') && linhaDaFalha('O Pix do município')}
+              <div className="rg-nums">
+                <Numero
+                  valor={grande(c.pix.payers)}
+                  obs={`de pessoas pagaram com Pix no município em ${mesAno(c.pix.period)}${variacao(c.pix.payers, c.pix.payers_prev_year) ? ` (${variacao(c.pix.payers, c.pix.payers_prev_year)} sobre ${mesAno(`${Number(c.pix.period.slice(0, 4)) - 1}${c.pix.period.slice(4)}`)})` : ''}`}
+                  fonte={`Banco Central · Pix, ${mesAno(c.pix.period)}`}
+                  pro="TransacoesPixPorMunicipio · QT_PES_PagadorPF (pessoas físicas distintas que pagaram)"
+                  mostraPro={mostraPro}
+                />
+                <Numero
+                  valor={`R$ ${grande(c.pix.value)}`}
+                  obs={`pagos com Pix por pessoas físicas em ${mesAno(c.pix.period)}${variacao(c.pix.value, c.pix.value_prev_year) ? ` (${variacao(c.pix.value, c.pix.value_prev_year)} sobre o mesmo mês do ano anterior, sem descontar a inflação)` : ''}`}
+                  fonte={`Banco Central · Pix, ${mesAno(c.pix.period)}`}
+                  pro="TransacoesPixPorMunicipio · VL_PagadorPF"
+                  mostraPro={mostraPro}
+                />
+              </div>
+            </section>
+          )}
+
+          {c?.food_away_inflation && (
+            <section className="rg-grupo" aria-labelledby={`${ids}-preco`}>
+              <div className="rg-grupo-cab">
+                <h3 id={`${ids}-preco`}>Preço de comer fora</h3>
+                <p>inflação de 12 meses até {mesAno(c.food_away_inflation.period)}</p>
+              </div>
+              <ul className="rg-ainda">
+                {(
+                  [
+                    ['Alimentação fora de casa', c.food_away_inflation.away, c.food_away_inflation.brasil?.away],
+                    ['Refeição', c.food_away_inflation.meal, c.food_away_inflation.brasil?.meal],
+                    ['Lanche', c.food_away_inflation.snack, c.food_away_inflation.brasil?.snack],
+                  ] as Array<[string, number | null, number | null | undefined]>
+                )
+                  .filter(([, v]) => v !== null)
+                  .map(([rotulo, v, br]) => (
+                    <li key={rotulo}>
+                      <span className="st st--info">{pct(v!)}</span>
+                      <span>
+                        <b>{rotulo}</b>
+                        <small>
+                          {c.food_away_inflation!.scope === 'brasil' ? 'no Brasil' : c.food_away_inflation!.scope === 'rm' ? 'na região metropolitana' : 'no município'}
+                          {br !== null && br !== undefined ? ` · Brasil: ${pct(br)}` : ''}
+                        </small>
+                      </span>
+                    </li>
+                  ))}
+              </ul>
+              <p className="rg-num-f">
+                IBGE · IPCA, 12 meses até {mesAno(c.food_away_inflation.period)}
+                {c.food_away_inflation.scope === 'brasil' ? ' · o IPCA não tem a região desta loja' : ''}
+              </p>
+            </section>
+          )}
+
           <section className="rg-grupo" aria-labelledby={`${ids}-ainda`}>
             <div className="rg-grupo-cab">
               <h3 id={`${ids}-ainda`}>Ainda não</h3>
@@ -336,7 +454,8 @@ export function SuaRegiao({ brandId, lojas }: { brandId: string; lojas: StoreLoc
             </div>
             <ul className="rg-ainda">
               {[
-                ['Preço de comer fora e a semana que vem', 'A inflação do lanche e da refeição na região (IBGE, IPCA), a previsão do tempo, os feriados e as datas comerciais chegam na próxima entrega.'],
+                ['Restaurantes ativos por bairro e por CEP', 'Vêm do cadastro de CNPJ da Receita Federal, atualizado todo mês, na próxima entrega. Hoje, a conta é a do município (IBGE).'],
+                ['A semana que vem', 'A previsão do tempo, os feriados e as datas comerciais chegam numa próxima entrega.'],
                 ['Pedidos por hora e tíquete médio da loja', 'Aparecem com os pedidos do Regem (R3). Sem ele, a medida de pedido é o cupom exclusivo de cada campanha.'],
                 ['Pessoas no raio, na Meta', 'Aparece com a conta de anúncios: a Meta estima quantas pessoas há no raio, por faixa de idade, antes de gastar (R6).'],
                 ['Concorrentes no raio', 'Aparece com o servidor de mapas próprio (R8). Hoje, a conta é a do município.'],

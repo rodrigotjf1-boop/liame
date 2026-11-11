@@ -165,7 +165,7 @@ export class EventsLoopService implements OnApplicationBootstrap, OnApplicationS
       this.loop('search-console', 3, 300_000, async (n) => (await this.searchConsole.executarLote(n)).length),
       // Os números da região (plano da região, R2): os bairros do Censo uma vez e, para cada município com loja no mapa,
       // as tabelas do IBGE no prazo de cada uma; a fila é olhada a cada minuto (a loja posta no mapa agora é lida na volta seguinte).
-      this.loop('regiao-fontes', 8, 60_000, async (n) => (await this.regiaoFontes.executarLote(n)).length),
+      this.loop('regiao-fontes', 15, 60_000, async (n) => (await this.regiaoFontes.executarLote(n)).length),
       // Hub DMS (F2, A3): as leituras do RegemCast pelas duas credenciais, comparadas; cada conta uma vez por hora, só
       // com a função `comparacao_dms_id` ligada e o aplicativo do Liame no DMS ID configurado; a fila é olhada de 5 em 5 minutos.
       this.loop('comparacao-dms-id', 2, 300_000, async (n) => (await this.comparacao.executarLote(n)).length),

@@ -215,10 +215,15 @@ export const RegionOverviewResponse = z.strictObject({
       /** A renda do responsável pelo domicílio, em reais de 2022 (mediana e média). */
       head_income_median: z.number().nullable(),
       head_income_mean: z.number().nullable(),
+      /** A mesma renda corrigida pelo IPCA até o mês de `ipca.to` (nula sem o IPCA lido). */
+      head_income_median_today: z.number().nullable(),
+      head_income_mean_today: z.number().nullable(),
       /** Onde o bairro fica entre os bairros do município com renda: acima de quantos por cento, de quantos, e a mediana deles. */
       income_rank: z.strictObject({ above_pct: z.number().int(), districts: z.number().int(), typical_median: z.number() }).nullable(),
     })
     .nullable(),
+  /** A correção pelo IPCA (número-índice, Brasil): de julho de 2022 (o mês do Censo) até o mês mais novo ("2026-09"). */
+  ipca: z.strictObject({ from: z.string(), to: z.string(), factor: z.number() }).nullable(),
   /** As áreas de entrega que casaram com bairros do Censo do município, e a gente somada nelas. */
   delivery_area: z.strictObject({ matched: z.number().int(), total: z.number().int(), population: z.number().int().nullable() }),
   city: z
@@ -234,6 +239,28 @@ export const RegionOverviewResponse = z.strictObject({
       restaurants: RegionNumber.nullable(),
       /** Restaurantes por 10 mil habitantes (a estimativa mais nova, ou o Censo). */
       restaurants_per_10k: z.number().nullable(),
+      /** A região metropolitana da PNAD e do IPCA (código "UF01"), nula fora dela. */
+      rm_code: z.string().nullable(),
+      /** A renda domiciliar per capita recente (PNAD Contínua, anual): da UF e da RM. */
+      income_pc_uf: RegionNumber.nullable(),
+      income_pc_rm: RegionNumber.nullable(),
+      /** A renda do trabalho na capital (PNAD Contínua, trimestral): a média dos trimestres mais novos (até 4). */
+      work_income_capital: z.strictObject({ value: z.number(), period: z.string(), quarters: z.number().int(), source: Slug }).nullable(),
+      /** O Pix do município (Banco Central): pessoas que pagaram e o valor pago por pessoa física no mês mais novo e no mesmo mês do ano anterior. */
+      pix: z
+        .strictObject({ period: z.string(), payers: z.number(), value: z.number(), payers_prev_year: z.number().nullable(), value_prev_year: z.number().nullable() })
+        .nullable(),
+      /** A inflação de comer fora em 12 meses (IPCA): no lugar (RM ou município que o IPCA cobre) e no Brasil. */
+      food_away_inflation: z
+        .strictObject({
+          scope: Slug,
+          period: z.string(),
+          away: z.number().nullable(),
+          meal: z.number().nullable(),
+          snack: z.number().nullable(),
+          brasil: z.strictObject({ away: z.number().nullable(), meal: z.number().nullable(), snack: z.number().nullable() }).nullable(),
+        })
+        .nullable(),
     })
     .nullable(),
   sources: z.array(RegionSourceStatus),

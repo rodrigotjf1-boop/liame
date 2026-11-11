@@ -6,7 +6,7 @@ import { Icone } from '@/components/ui/icone';
 import { useDialogo } from '@/components/ui/use-dialogo';
 import { useDetalhes } from '@/lib/modo';
 import { Osm } from './aneis';
-import { FONTES_DA_REGIAO, situacaoEmPalavras } from './textos-da-regiao';
+import { FONTES_DA_REGIAO, mesAno, situacaoEmPalavras, trimestre } from './textos-da-regiao';
 
 // A gaveta "Ver as fontes" de Sua região (protótipo P40): cada número com a fonte, o recorte, o período, quando foi lido
 // e, no Pro (ou em "Ver detalhes"), a consulta e de quanto em quanto renova. Os números ficam numa tabela do sistema; a
@@ -19,9 +19,33 @@ export function GavetaFontes({ loja, r, reserva, aoFechar }: { loja: StoreLocati
   const { ref, fechar, devolverFoco } = useDialogo({ reserva });
   const { pro, aberto, mostraPro, alternar } = useDetalhes();
   const salvo = loja.set_at ? `${quando(loja.set_at)}, ao salvar a loja` : 'ao salvar a loja';
-  const periodo = (fonte: string) => {
-    const numeros = r.city ? [r.city.population, r.city.population_estimate, r.city.income_pc_median, r.city.restaurants].filter((n) => n?.source === fonte) : [];
-    return numeros[0]?.period ?? (fonte === 'ibge_censo_bairro' ? '2022' : '—');
+  const periodo = (fonte: string): string => {
+    const c = r.city;
+    switch (fonte) {
+      case 'ibge_censo_bairro':
+        return '2022';
+      case 'ibge_1737_censo':
+        return mesAno('2022-07');
+      case 'ibge_1737':
+        return r.ipca ? mesAno(r.ipca.to) : '—';
+      case 'ibge_7531':
+        return c?.income_pc_uf?.period ?? '—';
+      case 'ibge_7395':
+        return c?.income_pc_rm?.period ?? '—';
+      case 'ibge_6472':
+        return c?.work_income_capital ? `${c.work_income_capital.quarters} trimestres até o ${trimestre(c.work_income_capital.period)}` : '—';
+      case 'ibge_7060':
+      case 'ibge_7060_brasil':
+        return c?.food_away_inflation ? `12 meses até ${mesAno(c.food_away_inflation.period)}` : '—';
+      case 'bcb_pix':
+        return c?.pix ? mesAno(c.pix.period) : '—';
+      case 'ibge_rm':
+        return 'atual';
+      default: {
+        const numeros = c ? [c.population, c.population_estimate, c.income_pc_median, c.restaurants].filter((n) => n?.source === fonte) : [];
+        return numeros[0]?.period ?? '—';
+      }
+    }
   };
   const recorte = (fonte: string, base: string) => (fonte === 'ibge_censo_bairro' && loja.address?.district ? `bairro (${loja.address.district}) e os bairros de ${loja.address.city}` : r.city ? `${base} (${r.city.name})` : base);
 
@@ -120,7 +144,11 @@ export function GavetaFontes({ loja, r, reserva, aoFechar }: { loja: StoreLocati
                     </div>
                     <div>
                       <dt>Período</dt>
-                      <dd>{s.source === 'ibge_censo_bairro' || s.source === 'ibge_10295' ? `${periodo(s.source)} (valor de 2022, sem correção)` : periodo(s.source)}</dd>
+                      <dd>
+                        {s.source === 'ibge_censo_bairro' || s.source === 'ibge_10295'
+                          ? `${periodo(s.source)} (valor de 2022${s.source === 'ibge_censo_bairro' && r.ipca ? `; a renda do bairro aparece corrigida pelo IPCA até ${mesAno(r.ipca.to)}` : ', sem correção'})`
+                          : periodo(s.source)}
+                      </dd>
                     </div>
                     <div>
                       <dt>Lido em</dt>

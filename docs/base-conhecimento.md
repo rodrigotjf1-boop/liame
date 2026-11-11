@@ -1892,7 +1892,7 @@ Como isto se encaixa nas decisões que já existem:
 
 ### 19.3 Regras que viram código
 
-- **Todo número leva a fonte e o período** (já é regra no §7.3). O valor do Censo é nominal de 2022: para comparar com preço de hoje, corrigir pelo IPCA e dizer que foi corrigido (a série do número-índice do IPCA também está na API de agregados [S]: conferir a tabela antes do código).
+- **Todo número leva a fonte e o período** (já é regra no §7.3). O valor do Censo é nominal de 2022: para comparar com preço de hoje, corrigir pelo IPCA e dizer que foi corrigido (o número-índice é a tabela 1737, variável 2266, conferida em 11/11/2026: §19.5). A população do Censo não se "atualiza" pela estimativa do município (a série mudou de base, §19.5).
 - **Renovação por fonte:** Censo, fixo (até o próximo); estimativa de população, PIB e Cadastro Central de Empresas, uma vez por ano; IPCA, todo mês; clima, todo dia; OpenStreetMap, todo mês; notícias do setor (IFB, Abrasel, iFood), na revisão de 90 dias desta base.
 - **Onde guardar:** a tabela pública do sistema (sem empresa, só o sistema grava) guarda os números por código geográfico, indicador e período; por empresa fica só o recorte resolvido (códigos, coordenada, raio) e o retrato com a data. Os arquivos do Censo por bairro (menos de 1 MB cada, zipados) entram uma vez e não mudam.
 - **Uso justo das fontes abertas:** Nominatim com cache e uma consulta por loja; Overpass só num servidor próprio (a infraestrutura da DMS já roda o OSRM, §11) ou pago; Open-Meteo só com plano pago.
@@ -1904,3 +1904,24 @@ Como isto se encaixa nas decisões que já existem:
 - movimento de pessoas por hora (o "horários de pico" do Google Maps não tem API) [S];
 - feriados estaduais e municipais (a BrasilAPI dá só os nacionais) [S];
 - concorrentes com nota e avaliações (a API do Google Places é paga) [S].
+
+### 19.5 Fontes mais novas que o Censo 2022 (conferidas em 11/11/2026, pedido do dono)
+
+O dono apontou que o Censo de 2022 está desatualizado para 2026. Levantamento com chamada real em cada fonte (relatório completo fora do repositório, na pasta de rascunho da sessão). **Regra que vale para tudo abaixo:** abaixo do município, **só o Censo** tem população e renda (as pesquisas contínuas são amostrais e param em capital e região metropolitana; os registros administrativos medem empresas, empregos e pagamentos, não pessoas pelo endereço de moradia); o retrato fino só muda no próximo Censo, e o que se faz é **corrigir o valor** (IPCA) e **pôr ao lado** os números recentes do município, da capital, da RM e da UF.
+
+| Dado | Fonte e endereço | Recorte | Periodicidade e mais recente | Exemplo conferido | Confiança |
+| --- | --- | --- | --- | --- | --- |
+| População estimada (total) | IBGE, tabela 6579 v9324 (já usada) | município | anual; **2026** | Rio 2024/2025/2026 = 6.729.894 / 6.730.729 / 6.731.133 | [O] |
+| **Aviso da população** | 4714 (Censo) × 6579 (estimativas) | — | — | Rio: Censo 2022 = 6.211.223 → estimativa 2026 = 6.731.133 (**+8,4%**), mas 2024 → 2026 = **+0,02%**: é **mudança de base** da série, não gente nova. **Nunca mostrar "a população cresceu"** comparando Censo com estimativa | [O] (números); o motivo [NC] |
+| IPCA, número-índice (corrigir valor de 2022) | IBGE, tabela **1737 v2266** (só Brasil): `…/agregados/1737/periodos/{AAAAMM}/variaveis/2266?localidades=N1[all]`. Período fixo e `-1` juntos na mesma chamada dão **500**: duas chamadas | Brasil | mensal; set/2026 (out sai 12/11) | jul/2022 = 6.411,95; set/2026 = 7.695,82 → fator **1,2002** | [O] |
+| Renda domiciliar per capita (PNAD Contínua anual) | IBGE, tabela **7531 v10824**, classificação `1019[49243]` | Brasil, UF | anual; **2025** | RJ 2025 = R$ 2.732 (CV 3,6%); Brasil R$ 2.264 | [O] |
+| Renda domiciliar per capita com **RM** | IBGE, tabela **7395 v4196** | Brasil, UF, **20 RMs** (N7, código da UF + "01": RM do Rio = 3301) | anual; **2025** | RM do Rio 2025 = R$ 2.972 | [O] |
+| Renda do trabalho (habitual, real) | IBGE, PNAD trimestral, tabela **6472 v5933** (período "AAAA0T": 202602 = 2º tri/2026) | Brasil, UF, 20 RMs, **27 capitais** (únicos municípios) | trimestral; 2º tri/2026 (3º sai 18/11) | Rio capital 2º tri/2026 = R$ 5.227 (CV 3,5%; varia 3,5–8% → **média de 4 trimestres**) | [O] |
+| Inflação de comer fora (12 meses) | IBGE, tabela 7060 v2265, classificação 315: 7432 alimentação fora, 7434 refeição, 7435 lanche (sem número-índice) | Brasil, **10 RMs** (N7) e **6 municípios** (Rio Branco, São Luís, Aracaju, Campo Grande, Goiânia, Brasília) | mensal; set/2026 | RM do Rio: fora 4,31%, refeição 2,66%, lanche 7,75% | [O] |
+| A RM de um município | IBGE, `servicodados.ibge.gov.br/api/v1/localidades/regioes-metropolitanas` (as RMs legais com os municípios de cada uma) | município → RM | — | a RM legal que contém o município e a capital da UF ↔ a RM da PNAD/IPCA (UF + "01") | [O] (lista); a equivalência é aproximação nossa |
+| **Pix por município** (pulso de consumo) | Banco Central, Olinda: `olinda.bcb.gov.br/olinda/servico/Pix_DadosAbertos/versao/v1/odata/TransacoesPixPorMunicipio(DataBase=@DataBase)?@DataBase='AAAAMM'&$filter=Municipio_Ibge eq {código}&$format=json` (devolve do mês pedido até o corrente, parcial) | município (código IBGE) | mensal; o mês corrente vem parcial | Rio set/2026: 5.086.055 pessoas pagaram R$ 42,24 bi (`QT_PES_PagadorPF`, `VL_PagadorPF`) | [O], sem chave |
+| Salário médio do emprego formal | IBGE, CEMPRE, tabela 9509 v10143 | município | anual; 2024 | Rio 2024 = R$ 5.310,53 | [O] |
+| **Restaurantes ativos por município, bairro e CEP** | Receita Federal, CNPJ aberto, **endereço novo**: `arquivos.receitafederal.gov.br` (Nextcloud público; listagem por `PROPFIND …/public.php/dav/files/gn672Ad4CF8N6TK/Dados/Cadastros/CNPJ/AAAA-MM/`); `Estabelecimentos0..9.zip` | estabelecimento (CNAE, situação, data de início, bairro, CEP, município no **código da Receita**: Rio = 6001) | mensal; 2026-10 | ≈ 5,4 GB zipados por mês; **traz dado pessoal** (nome fantasia, endereço de MEI, telefone, e-mail): ler em fluxo e guardar **só contagens** | [O]; a licença e a equivalência Receita ↔ IBGE [NC] |
+| Emprego formal mensal por CNAE | MTE, Novo CAGED, microdados `ftp.mtps.gov.br/pdet/microdados/NOVO CAGED/` (`.7z`, ~50 MB/mês; sem CNPJ e sem nome) | município, subclasse CNAE | mensal; set/2026 | — (formato `.7z` pede descompactador) | [O]; o saldo do Rio [NC] |
+| Bolsa Família por município | CGU, API do Portal da Transparência (**exige chave**, cadastro por e-mail); MDS (VIS DATA) **fora do ar** desde 21/10/2026; arquivo mensal com CPF/NIS/nome (329 MB) | município | mensal; set/2026 | — | [O] (o acesso); o valor [NC] |
+| POF 2024–2025 (gasto com comer fora) | IBGE | UF, RM | primeiros resultados em **27/11/2026** | — | [O] (a data) |

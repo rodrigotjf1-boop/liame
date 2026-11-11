@@ -122851,6 +122851,18 @@
                             "null"
                           ]
                         },
+                        "head_income_median_today": {
+                          "type": [
+                            "number",
+                            "null"
+                          ]
+                        },
+                        "head_income_mean_today": {
+                          "type": [
+                            "number",
+                            "null"
+                          ]
+                        },
                         "income_rank": {
                           "type": [
                             "object",
@@ -122887,7 +122899,32 @@
                         "density",
                         "head_income_median",
                         "head_income_mean",
+                        "head_income_median_today",
+                        "head_income_mean_today",
                         "income_rank"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "ipca": {
+                      "type": [
+                        "object",
+                        "null"
+                      ],
+                      "properties": {
+                        "from": {
+                          "type": "string"
+                        },
+                        "to": {
+                          "type": "string"
+                        },
+                        "factor": {
+                          "type": "number"
+                        }
+                      },
+                      "required": [
+                        "from",
+                        "to",
+                        "factor"
                       ],
                       "additionalProperties": false
                     },
@@ -123090,6 +123127,205 @@
                             "number",
                             "null"
                           ]
+                        },
+                        "rm_code": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "income_pc_uf": {
+                          "type": [
+                            "object",
+                            "null"
+                          ],
+                          "properties": {
+                            "value": {
+                              "type": "number"
+                            },
+                            "period": {
+                              "type": "string"
+                            },
+                            "source": {
+                              "type": "string",
+                              "maxLength": 60,
+                              "pattern": "^[a-z0-9_]+$"
+                            }
+                          },
+                          "required": [
+                            "value",
+                            "period",
+                            "source"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "income_pc_rm": {
+                          "type": [
+                            "object",
+                            "null"
+                          ],
+                          "properties": {
+                            "value": {
+                              "type": "number"
+                            },
+                            "period": {
+                              "type": "string"
+                            },
+                            "source": {
+                              "type": "string",
+                              "maxLength": 60,
+                              "pattern": "^[a-z0-9_]+$"
+                            }
+                          },
+                          "required": [
+                            "value",
+                            "period",
+                            "source"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "work_income_capital": {
+                          "type": [
+                            "object",
+                            "null"
+                          ],
+                          "properties": {
+                            "value": {
+                              "type": "number"
+                            },
+                            "period": {
+                              "type": "string"
+                            },
+                            "quarters": {
+                              "type": "integer",
+                              "minimum": -9007199254740991,
+                              "maximum": 9007199254740991
+                            },
+                            "source": {
+                              "type": "string",
+                              "maxLength": 60,
+                              "pattern": "^[a-z0-9_]+$"
+                            }
+                          },
+                          "required": [
+                            "value",
+                            "period",
+                            "quarters",
+                            "source"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "pix": {
+                          "type": [
+                            "object",
+                            "null"
+                          ],
+                          "properties": {
+                            "period": {
+                              "type": "string"
+                            },
+                            "payers": {
+                              "type": "number"
+                            },
+                            "value": {
+                              "type": "number"
+                            },
+                            "payers_prev_year": {
+                              "type": [
+                                "number",
+                                "null"
+                              ]
+                            },
+                            "value_prev_year": {
+                              "type": [
+                                "number",
+                                "null"
+                              ]
+                            }
+                          },
+                          "required": [
+                            "period",
+                            "payers",
+                            "value",
+                            "payers_prev_year",
+                            "value_prev_year"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "food_away_inflation": {
+                          "type": [
+                            "object",
+                            "null"
+                          ],
+                          "properties": {
+                            "scope": {
+                              "type": "string",
+                              "maxLength": 60,
+                              "pattern": "^[a-z0-9_]+$"
+                            },
+                            "period": {
+                              "type": "string"
+                            },
+                            "away": {
+                              "type": [
+                                "number",
+                                "null"
+                              ]
+                            },
+                            "meal": {
+                              "type": [
+                                "number",
+                                "null"
+                              ]
+                            },
+                            "snack": {
+                              "type": [
+                                "number",
+                                "null"
+                              ]
+                            },
+                            "brasil": {
+                              "type": [
+                                "object",
+                                "null"
+                              ],
+                              "properties": {
+                                "away": {
+                                  "type": [
+                                    "number",
+                                    "null"
+                                  ]
+                                },
+                                "meal": {
+                                  "type": [
+                                    "number",
+                                    "null"
+                                  ]
+                                },
+                                "snack": {
+                                  "type": [
+                                    "number",
+                                    "null"
+                                  ]
+                                }
+                              },
+                              "required": [
+                                "away",
+                                "meal",
+                                "snack"
+                              ],
+                              "additionalProperties": false
+                            }
+                          },
+                          "required": [
+                            "scope",
+                            "period",
+                            "away",
+                            "meal",
+                            "snack",
+                            "brasil"
+                          ],
+                          "additionalProperties": false
                         }
                       },
                       "required": [
@@ -123102,7 +123338,13 @@
                         "income_pc_median",
                         "income_pc_mean",
                         "restaurants",
-                        "restaurants_per_10k"
+                        "restaurants_per_10k",
+                        "rm_code",
+                        "income_pc_uf",
+                        "income_pc_rm",
+                        "work_income_capital",
+                        "pix",
+                        "food_away_inflation"
                       ],
                       "additionalProperties": false
                     },
@@ -123160,6 +123402,7 @@
                     "status",
                     "district_status",
                     "district",
+                    "ipca",
                     "delivery_area",
                     "city",
                     "sources",
