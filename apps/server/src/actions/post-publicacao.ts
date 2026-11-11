@@ -43,6 +43,7 @@ import { type ArmazemDeImagens, FalhaDoArmazem } from '../imagens/armazem.js';
 import {
   type CanalDoPost,
   CANAIS_DO_POST,
+  canaisParaTirar,
   type EstadoDoPost,
   horaLocal,
   postDoRecurso,
@@ -185,6 +186,9 @@ const SEM_PERMISSAO_DE_APAGAR: Record<CanalDoPost, string> = {
 const NAO_DEIXOU = (c: CanalDoPost) => `${A_REDE[c]} não deixou apagar o post. ${CONTINUA[c]}`;
 const NAO_ACHOU = (c: CanalDoPost) => `${A_REDE[c]} não achou este post para apagar: ele pode já ter sido apagado direto na rede. Confira ${NO_CANAL[c]}.`;
 const SEM_O_POST = (c: CanalDoPost) => `O Liame não achou este post ${NO_CANAL[c]} para apagar. Confira ${NO_CANAL[c]} e apague por lá, se ele ainda estiver no ar.`;
+// O Story publicado sem o id guardado (a resposta da publicação não chegou): ele não aparece na lista dos posts e não tem
+// legenda para achar, então o Liame não procura (achar pela legenda vazia podia tirar outro post do ar).
+const STORY_SEM_O_ID = 'O Liame não guardou o endereço deste Story no Instagram para tirar do ar. Tire direto no Instagram, ou espere, que ele some sozinho depois de 24 horas.';
 const PAGINA_FORA_AO_APAGAR = `A autorização da Meta não alcança mais esta Página. Conecte a Meta de novo em Contas conectadas, ou apague direto na Página. ${CONTINUA.facebook}`;
 
 // O vídeo (A6, Z10, parte 3a; D-A6-69): o que não sai, e onde.
@@ -1091,7 +1095,8 @@ export class PostPublicacaoConnector implements Connector {
    */
   private async apagarDasRedes(tx: Tx, ref: ResourceRef, lido: PostLido, options: ApplyOptions): Promise<ApplyResult> {
     const estado = lido.estado as unknown as ResourceState;
-    const noAr = lido.estado.canais.filter((c) => c.situacao === 'publicado');
+    // No Story (A6, Z13, parte 2; D-A6-132), só o canal do Instagram sai do ar: o da Página some sozinho em 24 horas.
+    const noAr = canaisParaTirar(lido.estado);
     // Já saiu de todos (a tentativa anterior apagou): nada a fazer.
     if (noAr.length === 0) return { ok: true, state: estado, version: lido.versao };
     const motivo = recusaNaHoraDeApagar(lido.estado);
@@ -1168,6 +1173,7 @@ export class PostPublicacaoConnector implements Connector {
     try {
       const g: Graph = { deps, conta: canal.external_id, token: await this.token(tx, canal.credential_secret_id, deps), versoes: await this.versoes(deps, ['instagram_publish', 'instagram_media']) };
       let midia = canal.postagem;
+      if (!midia && post.story) throw new CanalNaoApagou(STORY_SEM_O_ID);
       if (!midia) {
         const recentes = await this.chamar<unknown>(g, 'GET', `${canal.external_id}/media`, 'instagram_media', { params: { fields: 'id,caption,timestamp,permalink', limit: String(RECENTES) } });
         // Sem os posts que outros canais já guardaram: apagar o post de outro dia com a mesma legenda não pode (ERR-206).

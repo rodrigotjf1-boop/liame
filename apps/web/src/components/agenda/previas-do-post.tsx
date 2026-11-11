@@ -5,6 +5,8 @@ import { useState } from 'react';
 import { Icone } from '@/components/ui/icone';
 import { PreviaDoCanal } from './previa-do-canal';
 import { PreviaDoReels } from './previa-do-reels';
+import { PreviaDoStory } from './previa-do-story';
+import { avisoDasFaixas, ehStory, emPeNoStory, NOTA_DO_STORY } from './story-do-post';
 import { formatoDaPrevia, NOME_DO_CANAL } from './textos';
 import { capaDoPost, ehPostComVideo, ehVideoPronto } from './video-do-post';
 
@@ -14,7 +16,7 @@ import { capaDoPost, ehPostComVideo, ehVideoPronto } from './video-do-post';
 // parte 4b) mostra o Reels, com a capa escolhida no pedido.
 
 type Props = {
-  post: Pick<PostResponse, 'channels' | 'crop_pos' | 'photo_id' | 'media' | 'cover_photo_id' | 'cover_offset_ms'> & { link?: string | null };
+  post: Pick<PostResponse, 'channels' | 'crop_pos' | 'photo_id' | 'media' | 'cover_photo_id' | 'cover_offset_ms' | 'format'> & { link?: string | null };
   /** A foto do post (das Fotos); nula quando ela saiu das Fotos, ou a lista não pôde ser lida, ou quem vê não vê as Fotos. No post com vídeo, o vídeo. */
   foto: BrandPhoto | null;
   /** No post com vídeo, a foto escolhida como capa, quando ela está na lista das Fotos. */
@@ -32,6 +34,40 @@ export function PreviasDoPost({ post, foto, capaFoto = null, semFoto, aoFalharIm
   const formato = foto && !comVideo ? formatoDaPrevia(canal?.channel ?? 'facebook', foto.width, foto.height) : 'inteira';
   const naoMostra = semFoto ?? (comVideo ? 'O vídeo deste post não pôde ser mostrado aqui.' : 'A foto deste post não pôde ser mostrada aqui.');
   const apagada = comVideo ? 'O vídeo deste post foi apagado nas Fotos: ele não sai.' : 'A foto deste post foi apagada nas Fotos: ele não sai.';
+  // O Story (P41; A6, Z13): a tela em pé, sem texto, e as notas dele.
+  if (ehStory(post)) {
+    return (
+      <>
+        {post.channels.length > 1 && (
+          <div className="seg po-canais-seg" role="group" aria-label="Ver como sai em">
+            {post.channels.map((c) => (
+              <button key={c.channel} type="button" aria-pressed={c.channel === canal?.channel} onClick={() => setAba(c.channel)}>
+                {NOME_DO_CANAL[c.channel] ?? c.channel}
+              </button>
+            ))}
+          </div>
+        )}
+        {canal && foto ? (
+          <PreviaDoStory canal={canal.channel} conta={canal.account_name} midia={foto} />
+        ) : (
+          <p className="po-nota">
+            <Icone nome={comVideo ? 'video' : 'image'} pequeno />
+            <span>{post.photo_id ? naoMostra.replace('deste post', 'deste Story') : apagada.replace('deste post', 'deste Story')}</span>
+          </p>
+        )}
+        {foto && !emPeNoStory(foto) && (
+          <p className="po-nota">
+            <Icone nome="info" pequeno />
+            <span>{avisoDasFaixas(foto)}</span>
+          </p>
+        )}
+        <p className="po-nota">
+          <Icone nome="info" pequeno />
+          <span>{NOTA_DO_STORY}</span>
+        </p>
+      </>
+    );
+  }
   return (
     <>
       {post.channels.length > 1 && (

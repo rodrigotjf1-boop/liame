@@ -256,4 +256,59 @@ describe.skipIf(!hasDb)('o Story (A6 · Z13, parte 1)', () => {
     expect(ig.stories.filter((s) => s.onde === pagina).map((s) => s.media_type)).toEqual(['video', 'photo']);
     expect(ig.defeitos).toEqual([]);
   }, 120_000);
+
+  /** "Tirar do ar" com o código do app de agora (o mesmo passo já aprovou a publicação). */
+  const tirar = async (e: EmpresaComCanais, post: string) => {
+    await ownerQuery(`update liame.app_user set totp_last_step = null where id = $1`, [e.userId]);
+    await ownerQuery(`delete from liame.rate_limit where key = $1`, [`segundo-fator:${e.userId}`]);
+    return api.call('POST', `/v1/posts/${post}/unpublish`, { cookie: e.cookie, body: { code: totpCode(e.secret, currentStep()) } });
+  };
+
+  it('tirar do ar (parte 2; D-A6-132): só do Instagram e nas 24 horas; a Página fica; o Story sem o id não é procurado pela legenda', async () => {
+    const e = await empresa('Brasa Story Tira');
+    const ig1 = e.instagram!.externo;
+    const pagina = e.pagina!.externo;
+    const foto = await fotoGuardada(e, armazem, { largura: 1080, altura: 1920 });
+    const { post } = await storyAprovado(e, foto.id, ['instagram', 'facebook']);
+    await executar(e);
+    expect([(await canalDe(post, 'instagram')).status, (await canalDe(post, 'facebook')).status]).toEqual(['publicado', 'publicado']);
+
+    // Sai do Instagram (`DELETE /<IG_MEDIA_ID>`); a Página não tem como (o Page Stories API), e o Story fica lá.
+    const r = await tirar(e, post);
+    expect(r.status, JSON.stringify(r.body)).toBe(200);
+    expect(r.body.removal).toMatchObject({ status: 'apagando' });
+    await executar(e);
+    expect((await pedidoDe(r.body.removal.action_id)).status).toBe('executada');
+    expect([(await canalDe(post, 'instagram')).status, (await canalDe(post, 'facebook')).status]).toEqual(['apagado', 'publicado']);
+    expect(ig.chamadas.filter((c) => c.metodo === 'DELETE')).toHaveLength(1);
+    expect(ig.stories.filter((s) => s.onde === ig1)).toEqual([]);
+    expect(ig.stories.filter((s) => s.onde === pagina)).toHaveLength(1);
+    // De novo: só a Página no ar, e a Meta não deixa tirar de lá.
+    expect(await tirar(e, post)).toMatchObject({ status: 409, body: { code: 'story-so-na-pagina' } });
+
+    // Passou das 24 horas (contadas do primeiro canal em que saiu): já saiu do ar.
+    const outro = await storyAprovado(e, foto.id, ['instagram']);
+    await executar(e);
+    await ownerQuery(`update liame.social_post_channel set published_at = now() - interval '25 hours' where post_id = $1`, [outro.post]);
+    expect(await tirar(e, outro.post)).toMatchObject({ status: 409, body: { code: 'story-fora-do-ar' } });
+
+    // A resposta da publicação que não chegou: o Story saiu, sem o id guardado. Tirar do ar não procura pela legenda
+    // (vazia, podia achar outro post): diz para tirar direto no Instagram.
+    ig.normalizar();
+    const semId = await storyAprovado(e, foto.id, ['instagram']);
+    ig.perderARespostaDaPublicacao = true;
+    await executar(e);
+    await passaAEspera(semId.pedido);
+    await executar(e);
+    expect(await canalDe(semId.post, 'instagram')).toMatchObject({ status: 'publicado', external_id: null });
+    const t = await tirar(e, semId.post);
+    expect(t.status, JSON.stringify(t.body)).toBe(200);
+    await executar(e);
+    const depois = await api.call('GET', `/v1/posts/${semId.post}`, { cookie: e.cookie });
+    expect(depois.body.removal).toMatchObject({ status: 'nao_apagou' });
+    expect(depois.body.removal.reason).toContain('Tire direto no Instagram');
+    expect(ig.chamadas.filter((c) => c.metodo === 'DELETE' || (c.metodo === 'GET' && c.caminho.endsWith(`/${ig1}/media`)))).toEqual([]);
+    expect((await canalDe(semId.post, 'instagram')).status).toBe('publicado');
+    expect(ig.defeitos).toEqual([]);
+  }, 120_000);
 });

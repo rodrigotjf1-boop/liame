@@ -23,6 +23,10 @@ type Props = {
   deOnde: string;
   temApp?: boolean;
   temChave?: boolean;
+  /** O Story (P41; A6, Z13, parte 2): "Tirar do ar", e o que fica na Página. */
+  story?: boolean;
+  /** A frase do Story que fica na Página (D-A6-132), ou nulo. */
+  naPagina?: string | null;
   aoApagar: (prova: Prova) => Promise<FeitoDoApagar>;
   aoManter: () => void;
 };
@@ -35,7 +39,7 @@ export function erroDoCodigo(codigo: string): string | null {
   return codigo.length === 6 && soDigitos(codigo) ? null : 'Digite os 6 números do app.';
 }
 
-export function ApagarDasRedes({ id, deOnde, temApp = true, temChave = false, aoApagar, aoManter }: Props) {
+export function ApagarDasRedes({ id, deOnde, temApp = true, temChave = false, story = false, naPagina = null, aoApagar, aoManter }: Props) {
   const ids = useId();
   const [codigo, setCodigo] = useState('');
   const [erro, setErro] = useState<string | null>(null);
@@ -78,13 +82,18 @@ export function ApagarDasRedes({ id, deOnde, temApp = true, temChave = false, ao
       className="po-apagar"
       id={id}
       noValidate
-      aria-label="Apagar o post das redes"
+      aria-label={story ? 'Tirar o Story do ar' : 'Apagar o post das redes'}
       onSubmit={(e: FormEvent) => {
         e.preventDefault();
         disparar(enviar());
       }}
     >
-      <p className="po-apagar-frase">Sai {deOnde}, onde o Liame publicou. Apagar não se desfaz, e quem já viu o post, viu.</p>
+      <p className="po-apagar-frase">
+        {story
+          ? `Sai ${deOnde} agora, antes das 24 horas. Não se desfaz, e quem já viu o Story, viu.`
+          : `Sai ${deOnde}, onde o Liame publicou. Apagar não se desfaz, e quem já viu o post, viu.`}
+      </p>
+      {naPagina && <p className="po-apagar-frase">{naPagina}</p>}
       {temApp && (
         <div className="campo">
           <label htmlFor={`${ids}-codigo`}>{temChave ? 'Ou o código do app' : 'Código do app'}</label>
@@ -113,7 +122,7 @@ export function ApagarDasRedes({ id, deOnde, temApp = true, temChave = false, ao
           <ConfirmarComChave
             perigo
             focoInicial={!temApp}
-            rotulo="Apagar com a chave"
+            rotulo={story ? 'Tirar com a chave' : 'Apagar com a chave'}
             impedido={enviando}
             alternativa={temApp ? 'use o código do app' : 'tente de novo'}
             aoErro={setErro}
@@ -123,7 +132,17 @@ export function ApagarDasRedes({ id, deOnde, temApp = true, temChave = false, ao
         {temApp && (
           <button className={`btn ${temChave ? 'btn--perigo' : 'btn--perigo-cheio'}`} type="submit" disabled={enviando} aria-busy={enviando} data-po-apagar-confirma>
             <Icone nome="undo" pequeno />
-            {enviando ? 'Apagando…' : temChave ? 'Apagar com o código' : 'Apagar das redes'}
+            {story
+              ? enviando
+                ? 'Tirando…'
+                : temChave
+                  ? 'Tirar com o código'
+                  : 'Tirar do ar'
+              : enviando
+                ? 'Apagando…'
+                : temChave
+                  ? 'Apagar com o código'
+                  : 'Apagar das redes'}
           </button>
         )}
         <button className="btn" type="button" onClick={aoManter} disabled={enviando}>

@@ -400,6 +400,7 @@ export function AgendaTela() {
           marca={marca}
           fotos={fotosLista}
           videosLigados={videosLigados}
+          storiesLigados={carga.dados.stories_enabled === true}
           canais={carga.dados.channels}
           postLink={carga.dados.post_link}
           fuso={carga.dados.timezone}
@@ -481,7 +482,11 @@ function Dia({
                   </span>
                   <span className="ag-post-txt">
                     <b>{p.hora}</b>
-                    <span className="ag-canais">{p.canais}</span>
+                    <span className="ag-canais">
+                      {/* P41: o Story leva a etiqueta. */}
+                      {p.story && <span className="ag-story">Story</span>}
+                      {p.canais}
+                    </span>
                   </span>
                   <span className={`ag-st${tom ? ` ag-st--${tom}` : ''}`}>
                     <Icone nome={p.situacao.icone} pequeno />

@@ -503,7 +503,7 @@ export function AprovacoesTela() {
       if (r.problema.status === 409) setTentativa((n) => n + 1);
       return { ok: false, texto: erroDaDecisao(r.problema).texto };
     }
-    avisar(`Apagando ${deOnde}: o Liame tira o post agora.`);
+    avisar(acao.post.format === 'story' ? `Tirando o Story ${deOnde}: o Liame tira agora.` : `Apagando ${deOnde}: o Liame tira o post agora.`);
     await carregar();
     if (r.data.removal) abrir(chaveDaAcao(r.data.removal.action_id), false);
     focarOTitulo();
