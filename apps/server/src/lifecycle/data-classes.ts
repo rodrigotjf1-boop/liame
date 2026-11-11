@@ -121,6 +121,10 @@ export const DATA_CLASSES: Record<string, TableClassification> = {
   ai_model_choice: { class: 'INTERNAL', retention: 'com a empresa' },
   // Câmbio de referência (A3, D-A3-14): a PTAX de venda do Banco Central, dado público, uma cotação por dia útil.
   exchange_rate: { class: 'PUBLIC', retention: 'do produto (cotação pública do Banco Central)' },
+  // Os números da região (plano da região, R2; migration 0137; padrão da PTAX): dado público do IBGE, sem empresa.
+  region_district: { class: 'PUBLIC', retention: 'do produto (bairros do Censo 2022 do IBGE, até o próximo Censo)' },
+  region_fact: { class: 'PUBLIC', retention: 'do produto (números públicos do IBGE por lugar e período)' },
+  region_source_read: { class: 'INTERNAL', retention: 'do produto (a última leitura de cada fonte pública)' },
   ai_usage: { class: 'PERSONAL', retention: 'com a empresa (registro técnico, sem conteúdo)' },
   ai_exchange: { class: 'CONFIDENTIAL', retention: '30 dias (o que foi enviado ao modelo e o que voltou)', purge: { job: 'conteudo_ia', days: 30 } },
   // O que a conferência recusou (A3, D-A3-15): o funcionário, o fluxo, o porquê e a regra; sem o texto e sem quem pediu.

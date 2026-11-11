@@ -122739,6 +122739,641 @@
         ]
       }
     },
+    "/v1/region/overview": {
+      "get": {
+        "description": "O retrato da região de uma loja, calculado pelo sistema com as fontes públicas, sem IA: o bairro da loja no Censo 2022 (pessoas, área, densidade e a renda do responsável pelo domicílio, mediana e média, em reais de 2022, com a posição entre os bairros do município), a gente das áreas de entrega e os números do município (população, estimativa, renda per capita e restaurantes da CNAE 56.11-2), cada um com a fonte e o período, e a situação de cada fonte (`em_dia`, `lendo`, `falhou`). Sem endereço, `status` é `sem_endereco`; com a função `regiao` desligada, `availability.status` é `desligado_pela_liame`.",
+        "operationId": "RegiaoController_raioX",
+        "parameters": [
+          {
+            "name": "brand_id",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+            }
+          },
+          {
+            "name": "unit_id",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "brand_id": {
+                      "type": "string",
+                      "format": "uuid",
+                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                    },
+                    "unit_id": {
+                      "type": "string",
+                      "format": "uuid",
+                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                    },
+                    "availability": {
+                      "type": "object",
+                      "properties": {
+                        "status": {
+                          "type": "string",
+                          "maxLength": 60,
+                          "pattern": "^[a-z0-9_]+$"
+                        }
+                      },
+                      "required": [
+                        "status"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "status": {
+                      "type": "string",
+                      "maxLength": 60,
+                      "pattern": "^[a-z0-9_]+$"
+                    },
+                    "district_status": {
+                      "type": "string",
+                      "maxLength": 60,
+                      "pattern": "^[a-z0-9_]+$"
+                    },
+                    "district": {
+                      "type": [
+                        "object",
+                        "null"
+                      ],
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "name": {
+                          "type": "string"
+                        },
+                        "population": {
+                          "type": [
+                            "integer",
+                            "null"
+                          ],
+                          "minimum": -9007199254740991,
+                          "maximum": 9007199254740991
+                        },
+                        "area_km2": {
+                          "type": [
+                            "number",
+                            "null"
+                          ]
+                        },
+                        "density": {
+                          "type": [
+                            "number",
+                            "null"
+                          ]
+                        },
+                        "head_income_median": {
+                          "type": [
+                            "number",
+                            "null"
+                          ]
+                        },
+                        "head_income_mean": {
+                          "type": [
+                            "number",
+                            "null"
+                          ]
+                        },
+                        "income_rank": {
+                          "type": [
+                            "object",
+                            "null"
+                          ],
+                          "properties": {
+                            "above_pct": {
+                              "type": "integer",
+                              "minimum": -9007199254740991,
+                              "maximum": 9007199254740991
+                            },
+                            "districts": {
+                              "type": "integer",
+                              "minimum": -9007199254740991,
+                              "maximum": 9007199254740991
+                            },
+                            "typical_median": {
+                              "type": "number"
+                            }
+                          },
+                          "required": [
+                            "above_pct",
+                            "districts",
+                            "typical_median"
+                          ],
+                          "additionalProperties": false
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "name",
+                        "population",
+                        "area_km2",
+                        "density",
+                        "head_income_median",
+                        "head_income_mean",
+                        "income_rank"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "delivery_area": {
+                      "type": "object",
+                      "properties": {
+                        "matched": {
+                          "type": "integer",
+                          "minimum": -9007199254740991,
+                          "maximum": 9007199254740991
+                        },
+                        "total": {
+                          "type": "integer",
+                          "minimum": -9007199254740991,
+                          "maximum": 9007199254740991
+                        },
+                        "population": {
+                          "type": [
+                            "integer",
+                            "null"
+                          ],
+                          "minimum": -9007199254740991,
+                          "maximum": 9007199254740991
+                        }
+                      },
+                      "required": [
+                        "matched",
+                        "total",
+                        "population"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "city": {
+                      "type": [
+                        "object",
+                        "null"
+                      ],
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "name": {
+                          "type": "string"
+                        },
+                        "state": {
+                          "type": "string"
+                        },
+                        "population": {
+                          "type": [
+                            "object",
+                            "null"
+                          ],
+                          "properties": {
+                            "value": {
+                              "type": "number"
+                            },
+                            "period": {
+                              "type": "string"
+                            },
+                            "source": {
+                              "type": "string",
+                              "maxLength": 60,
+                              "pattern": "^[a-z0-9_]+$"
+                            }
+                          },
+                          "required": [
+                            "value",
+                            "period",
+                            "source"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "density": {
+                          "type": [
+                            "object",
+                            "null"
+                          ],
+                          "properties": {
+                            "value": {
+                              "type": "number"
+                            },
+                            "period": {
+                              "type": "string"
+                            },
+                            "source": {
+                              "type": "string",
+                              "maxLength": 60,
+                              "pattern": "^[a-z0-9_]+$"
+                            }
+                          },
+                          "required": [
+                            "value",
+                            "period",
+                            "source"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "population_estimate": {
+                          "type": [
+                            "object",
+                            "null"
+                          ],
+                          "properties": {
+                            "value": {
+                              "type": "number"
+                            },
+                            "period": {
+                              "type": "string"
+                            },
+                            "source": {
+                              "type": "string",
+                              "maxLength": 60,
+                              "pattern": "^[a-z0-9_]+$"
+                            }
+                          },
+                          "required": [
+                            "value",
+                            "period",
+                            "source"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "income_pc_median": {
+                          "type": [
+                            "object",
+                            "null"
+                          ],
+                          "properties": {
+                            "value": {
+                              "type": "number"
+                            },
+                            "period": {
+                              "type": "string"
+                            },
+                            "source": {
+                              "type": "string",
+                              "maxLength": 60,
+                              "pattern": "^[a-z0-9_]+$"
+                            }
+                          },
+                          "required": [
+                            "value",
+                            "period",
+                            "source"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "income_pc_mean": {
+                          "type": [
+                            "object",
+                            "null"
+                          ],
+                          "properties": {
+                            "value": {
+                              "type": "number"
+                            },
+                            "period": {
+                              "type": "string"
+                            },
+                            "source": {
+                              "type": "string",
+                              "maxLength": 60,
+                              "pattern": "^[a-z0-9_]+$"
+                            }
+                          },
+                          "required": [
+                            "value",
+                            "period",
+                            "source"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "restaurants": {
+                          "type": [
+                            "object",
+                            "null"
+                          ],
+                          "properties": {
+                            "value": {
+                              "type": "number"
+                            },
+                            "period": {
+                              "type": "string"
+                            },
+                            "source": {
+                              "type": "string",
+                              "maxLength": 60,
+                              "pattern": "^[a-z0-9_]+$"
+                            }
+                          },
+                          "required": [
+                            "value",
+                            "period",
+                            "source"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "restaurants_per_10k": {
+                          "type": [
+                            "number",
+                            "null"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "name",
+                        "state",
+                        "population",
+                        "density",
+                        "population_estimate",
+                        "income_pc_median",
+                        "income_pc_mean",
+                        "restaurants",
+                        "restaurants_per_10k"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "sources": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "source": {
+                            "type": "string",
+                            "maxLength": 60,
+                            "pattern": "^[a-z0-9_]+$"
+                          },
+                          "status": {
+                            "type": "string",
+                            "maxLength": 60,
+                            "pattern": "^[a-z0-9_]+$"
+                          },
+                          "read_at": {
+                            "type": [
+                              "string",
+                              "null"
+                            ],
+                            "format": "date-time",
+                            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+                          },
+                          "next_try_at": {
+                            "type": [
+                              "string",
+                              "null"
+                            ],
+                            "format": "date-time",
+                            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+                          }
+                        },
+                        "required": [
+                          "source",
+                          "status",
+                          "read_at",
+                          "next_try_at"
+                        ],
+                        "additionalProperties": false
+                      }
+                    },
+                    "generated_at": {
+                      "type": "string",
+                      "format": "date-time",
+                      "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+                    }
+                  },
+                  "required": [
+                    "brand_id",
+                    "unit_id",
+                    "availability",
+                    "status",
+                    "district_status",
+                    "district",
+                    "delivery_area",
+                    "city",
+                    "sources",
+                    "generated_at"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string",
+                      "format": "uri"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "integer",
+                      "minimum": 400,
+                      "maximum": 599
+                    },
+                    "detail": {
+                      "type": "string"
+                    },
+                    "instance": {
+                      "type": "string"
+                    },
+                    "code": {
+                      "type": "string"
+                    },
+                    "trace_id": {
+                      "type": "string"
+                    },
+                    "errors": {
+                      "description": "Campos inválidos, quando o erro é de validação",
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "path": {
+                            "type": "string"
+                          },
+                          "message": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "path",
+                          "message"
+                        ],
+                        "additionalProperties": false
+                      }
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "title",
+                    "status",
+                    "code",
+                    "trace_id"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string",
+                      "format": "uri"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "integer",
+                      "minimum": 400,
+                      "maximum": 599
+                    },
+                    "detail": {
+                      "type": "string"
+                    },
+                    "instance": {
+                      "type": "string"
+                    },
+                    "code": {
+                      "type": "string"
+                    },
+                    "trace_id": {
+                      "type": "string"
+                    },
+                    "errors": {
+                      "description": "Campos inválidos, quando o erro é de validação",
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "path": {
+                            "type": "string"
+                          },
+                          "message": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "path",
+                          "message"
+                        ],
+                        "additionalProperties": false
+                      }
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "title",
+                    "status",
+                    "code",
+                    "trace_id"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string",
+                      "format": "uri"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "integer",
+                      "minimum": 400,
+                      "maximum": 599
+                    },
+                    "detail": {
+                      "type": "string"
+                    },
+                    "instance": {
+                      "type": "string"
+                    },
+                    "code": {
+                      "type": "string"
+                    },
+                    "trace_id": {
+                      "type": "string"
+                    },
+                    "errors": {
+                      "description": "Campos inválidos, quando o erro é de validação",
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "path": {
+                            "type": "string"
+                          },
+                          "message": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "path",
+                          "message"
+                        ],
+                        "additionalProperties": false
+                      }
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "title",
+                    "status",
+                    "code",
+                    "trace_id"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "liame_sessao": []
+          }
+        ],
+        "summary": "Sua região",
+        "tags": [
+          "regiao"
+        ]
+      }
+    },
     "/v1/region/address-lookup": {
       "post": {
         "description": "Completa o endereço pelo CEP (ViaCEP: rua, bairro, município, UF e o código IBGE do município) e procura a coordenada no OpenStreetMap, do endereço para o bairro e a cidade, só valendo a que cai no município do CEP. Não grava nada: a pessoa confere e salva. CEP fora do formato ou que não existe volta 422; o ViaCEP fora do ar, 503. O OpenStreetMap que não acha ou não responde volta `coordinates_status` `nao_achada`, e o endereço vale do mesmo jeito.",
