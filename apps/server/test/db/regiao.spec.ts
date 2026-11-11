@@ -144,4 +144,90 @@ describe.skipIf(!hasDb)('a loja no mapa (plano da região, R1)', () => {
     // E coordenada sem a precisão (a regra `unit_coordenada_inteira`).
     await expect(ownerQuery(`update liame.unit set location_precision = null where id = $1`, [unitId])).rejects.toThrow(/unit_coordenada_inteira/);
   });
+
+  it('parte 2 (P40): sem o número, o ponto fica no bairro; a marca sem Regem cria a loja; um perfil por loja; o complemento', async () => {
+    await ligarFlagDaEmpresa(api, 'regiao', tenantId, true);
+    await ligarFlagDaEmpresa(api, 'perfil_google', tenantId, true);
+
+    // "s/n": nada de procurar pela rua; o ponto é o do bairro (D-RG-14).
+    const semNumero = await api.call('POST', '/v1/region/address-lookup', { cookie, body: { brand_id: brandId, postal_code: '21615-000', number: 's/n' } });
+    expect(semNumero.status, JSON.stringify(semNumero.body)).toBe(200);
+    expect(semNumero.body.coordinates).toMatchObject({ precision: 'bairro' });
+    expect(pedidosDeFora.filter((u) => u.includes('nominatim')).some((u) => u.includes('street='))).toBe(false);
+
+    // A marca sem Regem pode criar loja; a Loja Centro (sem conta do Regem) conta como criada aqui.
+    const lista = await api.call('GET', `/v1/region/stores?brand_id=${brandId}`, { cookie });
+    expect(lista.body).toMatchObject({ has_regem: false, can_create_store: true });
+    expect(lista.body.stores[0]).toMatchObject({ unit_id: unitId, created_here: true, google_profile_account_id: null });
+
+    const corpo = {
+      brand_id: brandId,
+      name: '  Loja   Tijuca ',
+      address: { postal_code: '20520054', street: 'Rua Conde de Bonfim', number: '450', complement: 'Loja 2', district: 'Tijuca', city: 'Rio de Janeiro', state: 'RJ', ibge_city_code: '3304557' },
+      coordinates: { latitude: -22.9244, longitude: -43.2327, precision: 'endereco' },
+      source: 'cep',
+      delivery_radius_km: 3,
+      delivery_areas: ['Tijuca', 'Maracanã'],
+    };
+    const criada = await api.call('POST', '/v1/region/stores', { cookie, body: corpo });
+    expect(criada.status, JSON.stringify(criada.body)).toBe(201);
+    expect(criada.body.store).toMatchObject({
+      unit_name: 'Loja Tijuca',
+      created_here: true,
+      address: { complement: 'Loja 2', district: 'Tijuca' },
+      delivery_areas: ['Tijuca', 'Maracanã'],
+      google_profile_account_id: null,
+    });
+    const novaId = criada.body.store.unit_id as string;
+    const [nova] = await ownerQuery<{ tenant_id: string; timezone: string }>(`select tenant_id, timezone from liame.unit where id = $1`, [novaId]);
+    expect(nova).toEqual({ tenant_id: tenantId, timezone: 'America/Sao_Paulo' });
+    const [criacao] = await ownerQuery<{ action: string; before: unknown; after: { unit_name: string } }>(
+      `select action, "before", "after" from liame.audit_event where resource_id = $1 order by chain_seq desc limit 1`,
+      [novaId],
+    );
+    expect(criacao).toMatchObject({ action: 'loja.criar', before: null, after: { unit_name: 'Loja Tijuca' } });
+    // O mesmo nome, sem diferença de caixa, não nasce de novo (o Regem se liga pelo nome).
+    const repetida = await api.call('POST', '/v1/region/stores', { cookie, body: { ...corpo, name: 'loja tijuca' } });
+    expect([repetida.status, repetida.body.code]).toEqual([409, 'loja-com-este-nome']);
+
+    // Um Perfil do Google por loja (D-RG-16): o da Loja Centro não serve à Loja Tijuca.
+    const perfilId = randomUUID();
+    await ownerQuery(
+      `insert into liame.connected_account (id, tenant_id, brand_id, provider, external_id, name) values ($1, $2, $3, 'google_business', $4, 'Perfil Centro')`,
+      [perfilId, tenantId, brandId, `locations/${perfilId}`],
+    );
+    const doPerfil = await salvar({ source: 'perfil_google', google_profile_account_id: perfilId });
+    expect(doPerfil.status, JSON.stringify(doPerfil.body)).toBe(200);
+    expect(doPerfil.body.store).toMatchObject({ source: 'perfil_google', google_profile_account_id: perfilId });
+    const comPerfil = await api.call('GET', `/v1/region/stores?brand_id=${brandId}`, { cookie });
+    expect(comPerfil.body.google_profiles).toEqual([{ account_id: perfilId, name: 'Perfil Centro', unit_id: unitId }]);
+    const deOutra = await api.call('PUT', `/v1/units/${novaId}/location`, {
+      cookie,
+      body: { ...corpo, brand_id: undefined, name: undefined, source: 'perfil_google', google_profile_account_id: perfilId },
+    });
+    expect([deOutra.status, deOutra.body.code], JSON.stringify(deOutra.body)).toEqual([409, 'perfil-de-outra-loja']);
+    // O 409 desfaz tudo: a Loja Tijuca continua pelo CEP.
+    const [tijuca] = await ownerQuery<{ location_source: string }>(`select location_source from liame.unit where id = $1`, [novaId]);
+    expect(tijuca!.location_source).toBe('cep');
+
+    // O complemento só existe com o endereço (a regra `unit_complemento_com_endereco`).
+    const semEndereco = randomUUID();
+    await ownerQuery(`insert into liame.unit (id, tenant_id, brand_id, name) values ($1, $2, $3, 'Loja Sem Endereço')`, [semEndereco, tenantId, brandId]);
+    await expect(ownerQuery(`update liame.unit set address_complement = 'Fundos' where id = $1`, [semEndereco])).rejects.toThrow(/unit_complemento_com_endereco/);
+
+    // Com o Regem conectado, as lojas vêm dele: criar aqui volta 409.
+    const regemId = randomUUID();
+    await ownerQuery(`insert into liame.connected_account (id, tenant_id, brand_id, provider, external_id, name) values ($1, $2, $3, 'regem', $4, 'Regem')`, [
+      regemId,
+      tenantId,
+      brandId,
+      `loja-${regemId}`,
+    ]);
+    const comRegem = await api.call('GET', `/v1/region/stores?brand_id=${brandId}`, { cookie });
+    expect(comRegem.body).toMatchObject({ has_regem: true, can_create_store: false });
+    const recusada = await api.call('POST', '/v1/region/stores', { cookie, body: { ...corpo, name: 'Loja Penha' } });
+    expect([recusada.status, recusada.body.code]).toEqual([409, 'marca-com-regem']);
+    await ownerQuery(`update liame.connected_account set disconnected_at = now() where id = $1`, [regemId]);
+    await ligarFlagDaEmpresa(api, 'perfil_google', tenantId, false);
+  });
 });

@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { enderecoDoPerfil } from '../src/connectors/google-business/conector-perfil-google.js';
 import { cepNormalizado, lerRespostaDoCep } from '../src/regiao/cep.js';
-import { coordenadaDaResposta, consultasDoEndereco, ProcuraDeCoordenada } from '../src/regiao/coordenada.js';
-import { areasDeEntrega, type LinhaDaLoja, lojaNoMapa, ruaENumero } from '../src/regiao/regiao.js';
+import { coordenadaDaResposta, consultasDoEndereco, numeroDoEndereco, ProcuraDeCoordenada } from '../src/regiao/coordenada.js';
+import { areasDeEntrega, fusoDaUf, type LinhaDaLoja, lojaNoMapa, ruaENumero } from '../src/regiao/regiao.js';
 
 // Plano da região, R1 (a loja no mapa): as regras puras, sem banco e sem rede. O caminho pela API, com o banco, está em
 // `test/db/regiao.spec.ts`.
@@ -36,12 +36,28 @@ describe('o CEP', () => {
 });
 
 describe('a coordenada', () => {
-  it('tenta do mais preciso para o menos: endereço (só com a rua), bairro e cidade', () => {
+  it('tenta do mais preciso para o menos: endereço (só com a rua e o número), bairro e cidade', () => {
     const completo = consultasDoEndereco({ rua: 'Rua X', numero: '12', bairro: 'Penha', cidade: 'Rio de Janeiro', uf: 'RJ' });
     expect(completo.map((c) => c.precisao)).toEqual(['endereco', 'bairro', 'cidade']);
     expect(completo[0]!.params).toMatchObject({ street: '12 Rua X', city: 'Rio de Janeiro', state: 'Rio de Janeiro', country: 'Brasil' });
     expect(consultasDoEndereco({ rua: null, numero: '12', bairro: 'Penha', cidade: 'Rio de Janeiro', uf: 'RJ' }).map((c) => c.precisao)).toEqual(['bairro', 'cidade']);
     expect(consultasDoEndereco({ rua: null, numero: null, bairro: null, cidade: 'Rio de Janeiro', uf: 'RJ' }).map((c) => c.precisao)).toEqual(['cidade']);
+    // Sem o número (ou "s/n"), o ponto fica no centro do bairro: a rua comprida jogaria o ponto longe da loja (D-RG-14).
+    for (const numero of [null, 's/n', 'S/N', 'sem número', '']) {
+      expect(consultasDoEndereco({ rua: 'Rua X', numero, bairro: 'Penha', cidade: 'Rio de Janeiro', uf: 'RJ' }).map((c) => c.precisao), String(numero)).toEqual(['bairro', 'cidade']);
+    }
+    expect(consultasDoEndereco({ rua: 'Rua X', numero: '450A', bairro: null, cidade: 'Rio de Janeiro', uf: 'RJ' })[0]!.params.street).toBe('450 Rua X');
+    expect([numeroDoEndereco('450'), numeroDoEndereco(' 12-B '), numeroDoEndereco('s/n'), numeroDoEndereco(null)]).toEqual(['450', '12', null, null]);
+  });
+
+  it('a loja criada no Liame ganha o fuso pela UF (D-RG-17)', () => {
+    expect([fusoDaUf('RJ'), fusoDaUf('AM'), fusoDaUf('MT'), fusoDaUf('AC'), fusoDaUf('PA')]).toEqual([
+      'America/Sao_Paulo',
+      'America/Manaus',
+      'America/Cuiaba',
+      'America/Rio_Branco',
+      'America/Sao_Paulo',
+    ]);
   });
 
   it('só vale a resposta no Brasil e no município do CEP (sem acento e sem caixa na comparação)', () => {
@@ -114,6 +130,7 @@ describe('a loja na resposta', () => {
       address_postal_code: '21615000',
       address_street: 'Av. Brasil',
       address_number: '123',
+      address_complement: 'Loja 2',
       address_district: 'Vila Militar',
       address_city: 'Rio de Janeiro',
       address_state: 'RJ',
@@ -127,9 +144,13 @@ describe('a loja na resposta', () => {
       location_set_at: new Date('2026-11-11T12:00:00Z'),
       user_id: '0190d2b0-0000-7000-8000-000000000002',
       user_name: 'Ana',
+      created_here: true,
+      google_profile_account_id: null,
     };
     expect(lojaNoMapa(linha)).toMatchObject({
-      address: { postal_code: '21615000', ibge_city_code: '3304557' },
+      address: { postal_code: '21615000', complement: 'Loja 2', ibge_city_code: '3304557' },
+      created_here: true,
+      google_profile_account_id: null,
       coordinates: { latitude: -22.8612, longitude: -43.4031, precision: 'endereco' },
       delivery_radius_km: 3.5,
       delivery_areas: ['Penha'],

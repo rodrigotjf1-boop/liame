@@ -46,6 +46,7 @@ export type LinhaDaLoja = {
   address_postal_code: string | null;
   address_street: string | null;
   address_number: string | null;
+  address_complement: string | null;
   address_district: string | null;
   address_city: string | null;
   address_state: string | null;
@@ -59,7 +60,27 @@ export type LinhaDaLoja = {
   location_set_at: Date | string | null;
   user_id: string | null;
   user_name: string | null;
+  /** Nenhuma conta do Regem apontou para a loja: ela nasceu no Liame (D-RG-17). */
+  created_here: boolean;
+  /** O Perfil do Google desta loja (`connected_account.unit_id`), conectado. */
+  google_profile_account_id: string | null;
 };
+
+/**
+ * O fuso da loja criada no Liame, pela UF (o Brasil não tem horário de verão desde 2019). As lojas do Regem vêm com o
+ * fuso dele; aqui só os estados fora do horário de Brasília mudam (no Amazonas, o oeste do estado fica com Manaus).
+ */
+export function fusoDaUf(uf: string): string {
+  const fusos: Record<string, string> = {
+    AC: 'America/Rio_Branco',
+    AM: 'America/Manaus',
+    RR: 'America/Boa_Vista',
+    RO: 'America/Porto_Velho',
+    MT: 'America/Cuiaba',
+    MS: 'America/Campo_Grande',
+  };
+  return fusos[uf] ?? 'America/Sao_Paulo';
+}
 
 const numero = (v: string | number | null): number | null => (v === null ? null : Number(v));
 
@@ -76,6 +97,7 @@ export function lojaNoMapa(l: LinhaDaLoja): StoreLocation {
           postal_code: l.address_postal_code!,
           street: l.address_street,
           number: l.address_number,
+          complement: l.address_complement,
           district: l.address_district,
           city: l.address_city!,
           state: l.address_state!,
@@ -88,5 +110,7 @@ export function lojaNoMapa(l: LinhaDaLoja): StoreLocation {
     delivery_areas: Array.isArray(l.delivery_areas) ? l.delivery_areas.filter((a): a is string => typeof a === 'string') : [],
     set_by: l.user_id ? { id: l.user_id, name: l.user_name ?? '' } : null,
     set_at: l.location_set_at ? (l.location_set_at instanceof Date ? l.location_set_at : new Date(l.location_set_at)).toISOString() : null,
+    created_here: l.created_here === true,
+    google_profile_account_id: l.google_profile_account_id,
   };
 }

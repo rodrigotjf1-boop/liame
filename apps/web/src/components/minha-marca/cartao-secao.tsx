@@ -13,10 +13,12 @@ type Props = {
   situacao: 'confirmada' | 'vazia' | 'sugestao';
   nomeDaMarca: string;
   acoes: ReactNode;
+  /** O que a parte ganha abaixo do resumo (a Região: as lojas no mapa, P40). */
+  extra?: ReactNode;
   tituloRef?: Ref<HTMLHeadingElement>;
 };
 
-export function CartaoSecao({ secao, conteudo, provas, situacao, nomeDaMarca, acoes, tituloRef }: Props) {
+export function CartaoSecao({ secao, conteudo, provas, situacao, nomeDaMarca, acoes, extra, tituloRef }: Props) {
   const s = SECAO[secao];
   const classes = ['card', 'mk-secao', secao === 'proibido' ? 'mk-secao--largo' : '', situacao === 'sugestao' ? 'mk-secao--sugestao' : '', situacao === 'vazia' ? 'mk-secao--vazia' : ''].filter(Boolean).join(' ');
   return (
@@ -45,6 +47,7 @@ export function CartaoSecao({ secao, conteudo, provas, situacao, nomeDaMarca, ac
       <div className="mk-resumo">
         <ResumoDaParte secao={secao} conteudo={conteudo} provas={provas} nomeDaMarca={nomeDaMarca} />
       </div>
+      {extra && <div className="mk-secao-acoes">{extra}</div>}
       {acoes && <div className="mk-secao-acoes">{acoes}</div>}
     </article>
   );

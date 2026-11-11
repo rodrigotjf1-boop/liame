@@ -1,0 +1,103 @@
+/* Minha marca › Região (protótipo P40, aprovado em 11/11/2026): a loja no mapa e a gaveta de pôr a loja no mapa. As
+   classes começam por `rg-` (a folha vale para o app inteiro). Sem barra de rolagem lateral: o arranjo de cada loja
+   muda pela largura do cartão. */
+
+.rg { display: grid; gap: var(--sp-4); min-width: 0; }
+.rg > * { min-width: 0; }
+.rg > .faixa { margin-bottom: 0; }
+.rg span.num, .rg-gaveta span.num { white-space: nowrap; }
+.rg-volta { display: inline-flex; align-items: center; gap: 4px; margin-bottom: var(--sp-2); }
+.rg-cab-acoes { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-2); }
+.rg .vazio-acoes .btn, .rg-cab-acoes .btn { white-space: normal; text-align: center; }
+
+.rg-card { container: rgcard / inline-size; display: grid; gap: var(--sp-4); }
+.rg-card-cab { display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: var(--sp-2) var(--sp-3); }
+.rg-card-cab > div { min-width: 0; flex: 1 1 280px; }
+.rg-card-cab h2 { font-size: var(--text-lg); display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-2); }
+.rg-card-cab .card-sub { max-width: 72ch; }
+.rg-nota { display: flex; gap: var(--sp-2); font-size: var(--text-sm); color: var(--text-muted); min-width: 0; }
+.rg-nota .ic { flex: none; width: 16px; height: 16px; margin-top: 2px; }
+.rg-nota b { color: var(--text); font-weight: 600; }
+.rg-nota span { min-width: 0; overflow-wrap: anywhere; }
+.rg-aviso { display: flex; gap: var(--sp-2); padding: var(--sp-3); border-radius: var(--radius); background: var(--primary-soft); font-size: var(--text-sm); }
+.rg-aviso .ic { flex: none; margin-top: 2px; color: var(--link); }
+.rg-aviso span { min-width: 0; overflow-wrap: anywhere; }
+
+/* as lojas no mapa */
+.rg-lojas { display: grid; gap: var(--sp-3); margin: 0; padding: 0; list-style: none; }
+.rg-loja { display: grid; grid-template-columns: minmax(0, 1fr) minmax(220px, 290px); gap: var(--sp-4) var(--sp-5); padding: var(--sp-4); border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--surface-2); }
+.rg-loja--vazia { grid-template-columns: minmax(0, 1fr); }
+.rg-loja > * { min-width: 0; }
+.rg-loja-info { display: grid; align-content: start; gap: var(--sp-3); }
+.rg-loja-cab { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-2); }
+.rg-loja-cab h3 { font-size: var(--text-md); overflow-wrap: anywhere; }
+.rg-end { display: grid; gap: 2px; font-size: var(--text-sm); }
+.rg-end b { font-size: var(--text-base); font-weight: 600; overflow-wrap: anywhere; }
+.rg-end span { color: var(--text-muted); overflow-wrap: anywhere; }
+.rg-dl { display: grid; gap: var(--sp-2); margin: 0; font-size: var(--text-sm); }
+.rg-dl > div { display: grid; grid-template-columns: minmax(0, 9.5rem) minmax(0, 1fr); gap: 2px var(--sp-3); align-items: baseline; }
+.rg-dl dt { color: var(--text-muted); }
+.rg-dl dd { margin: 0; min-width: 0; overflow-wrap: anywhere; }
+.rg-dl dd .link-bt { font-size: var(--text-sm); }
+.rg-precisao { display: inline-flex; align-items: center; gap: 6px; margin-right: var(--sp-2); }
+.rg-tags { display: flex; flex-wrap: wrap; gap: 6px; margin: 0; padding: 0; list-style: none; }
+.rg-tags li { display: inline-flex; align-items: center; min-height: 26px; padding: 2px 10px; border-radius: var(--radius-full); background: var(--bg-subtle); font-size: var(--text-xs); font-weight: 500; overflow-wrap: anywhere; }
+.rg-loja-acoes { display: flex; flex-wrap: wrap; gap: var(--sp-2); }
+.rg-loja-acoes .btn { white-space: normal; }
+.rg-loja .faixa { margin-bottom: 0; padding: var(--sp-3); }
+
+/* a prévia dos anéis (desenho em escala, sem mapa de fundo) */
+.rg-mapa { display: grid; gap: var(--sp-2); align-content: start; justify-items: center; margin: 0; }
+.rg-aneis { display: block; width: 100%; max-width: 260px; height: auto; aspect-ratio: 1; }
+.rg-aneis .rg-anel-exp { fill: color-mix(in srgb, var(--chart-cinza-1) 45%, transparent); stroke: var(--chart-cinza-2); stroke-width: 1.5; stroke-dasharray: 5 4; vector-effect: non-scaling-stroke; }
+.rg-aneis .rg-anel-nucleo { fill: color-mix(in srgb, var(--chart-foco) 26%, transparent); stroke: var(--chart-foco); stroke-width: 2; vector-effect: non-scaling-stroke; }
+.rg-aneis .rg-anel-centro { fill: var(--text); }
+.rg-aneis .rg-anel-centro--bairro { fill: var(--surface); stroke: var(--text); stroke-width: 2; vector-effect: non-scaling-stroke; }
+.rg-aneis .rg-anel-escala { stroke: var(--text); stroke-width: 2; vector-effect: non-scaling-stroke; }
+.rg-aneis text { fill: var(--text-muted); font-family: var(--font-mono); }
+.rg-legenda { display: grid; gap: 4px; width: 100%; max-width: 290px; margin: 0; padding: 0; list-style: none; font-size: var(--text-xs); }
+.rg-legenda li { display: grid; grid-template-columns: 14px minmax(0, 1fr); gap: var(--sp-2); align-items: start; }
+.rg-legenda i { width: 14px; height: 14px; margin-top: 1px; border-radius: 50%; }
+.rg-legenda .rg-lg-nucleo { background: color-mix(in srgb, var(--chart-foco) 26%, transparent); border: 2px solid var(--chart-foco); }
+.rg-legenda .rg-lg-exp { background: color-mix(in srgb, var(--chart-cinza-1) 45%, transparent); border: 1.5px dashed var(--chart-cinza-2); }
+.rg-osm { font-size: 11px; color: var(--text-subtle); text-align: center; }
+.rg-osm a { color: var(--link); }
+
+@container rgcard (max-width: 640px) {
+  .rg-loja { grid-template-columns: minmax(0, 1fr); }
+  .rg-dl > div { grid-template-columns: minmax(0, 1fr); }
+}
+
+/* a parte Região em Minha marca: a linha das lojas no mapa */
+.rg-mk-linha { flex: 1 1 100%; display: flex; gap: var(--sp-2); margin: 0; padding: var(--sp-2) var(--sp-3); border-radius: var(--radius-sm); background: var(--primary-soft); font-size: var(--text-sm); }
+.rg-mk-linha .ic { flex: none; width: 15px; height: 15px; margin-top: 3px; color: var(--link); }
+.rg-mk-linha span { min-width: 0; overflow-wrap: anywhere; }
+
+/* a gaveta: pôr a loja no mapa */
+.rg-g-bloco { display: grid; gap: var(--sp-3); min-width: 0; margin: 0; padding: 0; border: 0; }
+.rg-g-bloco > legend { padding: 0; margin-bottom: var(--sp-3); font-size: var(--text-sm); font-weight: 600; }
+.rg-opcoes { display: grid; gap: var(--sp-2); }
+.rg-opcoes .opcao[aria-disabled="true"] { opacity: .7; cursor: not-allowed; }
+.rg-cep { display: grid; grid-template-columns: minmax(0, 11rem) auto; gap: var(--sp-2); align-items: end; }
+.rg-cep .campo { min-width: 0; }
+.rg-num-compl { display: grid; grid-template-columns: minmax(0, 8rem) minmax(0, 1fr); gap: var(--sp-3); }
+.rg-achado { display: grid; gap: var(--sp-2); padding: var(--sp-3); border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface-2); font-size: var(--text-sm); }
+.rg-achado .rg-dl > div { grid-template-columns: minmax(0, 6.5rem) minmax(0, 1fr); }
+.rg-raio { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: var(--sp-2); align-items: center; }
+.rg-raio input[type="range"] { width: 100%; min-width: 0; accent-color: var(--link); }
+.rg-raio-valor { font-size: var(--text-lg); font-weight: 600; font-variant-numeric: tabular-nums; margin-right: var(--sp-2); }
+.rg-g-mapa { display: grid; grid-template-columns: minmax(0, 150px) minmax(0, 1fr); gap: var(--sp-3); align-items: center; }
+.rg-g-mapa .rg-aneis { max-width: 150px; }
+.rg-areas { display: flex; flex-wrap: wrap; gap: 6px; margin: 0; padding: 0; list-style: none; }
+.rg-areas li { display: inline-flex; align-items: center; gap: 2px; min-height: 30px; padding: 0 2px 0 10px; border: 1px solid var(--border); border-radius: var(--radius-full); background: var(--surface); font-size: var(--text-sm); overflow-wrap: anywhere; }
+.rg-areas li .btn { min-height: 26px; width: 26px; border: 0; border-radius: 50%; }
+.rg-add { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: var(--sp-2); }
+
+@media (max-width: 480px) {
+  .rg-loja { padding: var(--sp-3); }
+}
+@media (max-width: 420px) {
+  .rg-num-compl { grid-template-columns: minmax(0, 1fr); }
+  .rg-cep { grid-template-columns: minmax(0, 1fr) auto; }
+  .rg-g-mapa { grid-template-columns: minmax(0, 1fr); justify-items: center; }
+}
