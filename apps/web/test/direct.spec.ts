@@ -54,11 +54,26 @@ const ajuste = (o: Partial<DirectSettingsResponse> = {}): DirectSettingsResponse
   read_at: daqui(-1),
   updated_at: null,
   updated_by: null,
+  // O Messenger da Página (Z14, parte 1): desligado; a tela dele chega na parte 3.
+  messenger: {
+    available: false,
+    enabled: false,
+    no_other_app: false,
+    page: null,
+    regem: 'pendente',
+    regem_checked_at: null,
+    reading: 'desligada',
+    read_at: null,
+    updated_at: null,
+    updated_by: null,
+  },
   ...o,
 });
 const conversa = (o: Partial<DirectConversation> = {}): DirectConversation => ({
   id: 'aWdfAbc',
   username: 'ana.paula_rj',
+  channel: 'instagram',
+  name: null,
   status: 'espera',
   closing: false,
   window_until: daqui(23 * 60 + 53),

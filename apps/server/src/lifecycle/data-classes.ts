@@ -252,6 +252,9 @@ export const DATA_CLASSES: Record<string, TableClassification> = {
   // O atendimento automático do Direct de cada marca (A6, Z12, parte 5a; migration 0133; D-A6-115): ligado, os tipos e
   // quem mudou por último; cada mudança fica também na auditoria. Nada da conversa nem de quem escreveu.
   direct_auto_reply: { class: 'INTERNAL', retention: 'enquanto a marca existir (sai com ela)' },
+  // O Messenger da Página de cada marca na caixa do Direct (A6, Z14, parte 1; migration 0134; D-A6-121): ligado e a
+  // confirmação de que nenhum outro programa responde aquele Messenger. As conversas ficam em `direct_conversation`.
+  messenger_setting: { class: 'INTERNAL', retention: 'enquanto a marca existir (sai com ela)' },
   direct_message: { class: 'PERSONAL', retention: '90 dias depois de enviada; antes, se a conta for desligada ou o Regem passar a atender o Direct dela', purge: { job: 'direct_mensagem', days: 90 } },
   // Os posts da marca (A6, Z5b, migration 0086): a foto (pela referência e o resumo), a hora e cada canal com o texto
   // que a empresa escreveu em nome dela e o que aconteceu na rede. Conteúdo da empresa, sem dado de pessoa. Fica com a

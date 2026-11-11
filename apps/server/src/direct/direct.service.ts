@@ -16,6 +16,7 @@ import {
   type DirectConversationsQuery,
   type DirectConversationsResponse,
   type DirectCounts,
+  type DirectMessengerSettings,
   type DirectSettingsQuery,
   type DirectSettingsRequest,
   type DirectSettingsResponse,
@@ -27,12 +28,12 @@ import { ActionService } from '../actions/action.service.js';
 import { recursoDaConversa } from '../actions/direct-plano.js';
 import { ConfirmacaoService } from '../auth/confirmacao.service.js';
 import { contaConectada } from '../connections/conectada.js';
-import { PROVEDOR_INSTAGRAM } from '../connectors/meta/publicacao.js';
+import { PROVEDOR_INSTAGRAM, PROVEDOR_PAGINA } from '../connectors/meta/publicacao.js';
 import { type AuthContext, auditDetail, currentTx } from '../context/request-context.js';
 import { AppProblem } from '../errors/problems.js';
 import { FlagService } from '../flags/flag.service.js';
 import { marcaDaEmpresa, quemPede } from '../fotos/fotos.service.js';
-import { DATASET_DO_DIRECT, type DirecaoDoDirect, FLAG_DO_DIRECT, JANELA_DO_DIRECT_HORAS, situacaoDaConversa } from './direct.js';
+import { type CanalDoDirect, DATASET_DO_DIRECT, type DirecaoDoDirect, FLAG_DO_DIRECT, FLAG_DO_MESSENGER, JANELA_DO_DIRECT_HORAS, situacaoDaConversa } from './direct.js';
 import type { CursorDoDirect } from './sincronizador-do-direct.js';
 import {
   automaticoDoDirect,
@@ -72,10 +73,16 @@ function previaDaMensagem(c: DirectConversation): string {
   return '';
 }
 
-type LinhaDaConta = { id: string; usuario: string | null; last_success_at: Date | string | null; last_error: string | null; cursor: CursorDoDirect | null };
+type LinhaDaConta = { id: string; usuario: string | null; nome: string | null; last_success_at: Date | string | null; last_error: string | null; cursor: CursorDoDirect | null };
+/** Uma conta da marca que o Liame lê agora, com o canal (A6, Z14): o Instagram (o Direct) ou a Página (o Messenger). */
+type ContaLida = LinhaDaConta & { canal: CanalDoDirect };
+type AjusteDoCanal = { enabled: boolean; sem_outro_programa: boolean; updated_at: Date | string | null; updated_by: string | null };
 type LinhaDaConversa = {
+  connected_account_id: string;
   conversation_id: string;
   username: string | null;
+  channel: string;
+  display_name: string | null;
   last_message_at: Date | string;
   last_inbound_at: Date | string | null;
   last_direction: DirecaoDoDirect;
@@ -165,22 +172,26 @@ export class DirectService {
     const quem = quemPede(auth);
     const brandId = body.brand_id;
     await marcaDaEmpresa(brandId);
-    const conta = await this.contaDaMarca(brandId);
-    if (!conta || !(await this.lendo(quem.tenantId, quem.userId, brandId, conta))) {
+    const lidas = await this.contasLidas(quem.tenantId, quem.userId, brandId);
+    if (!lidas.length) {
       throw new AppProblem(409, 'direct-desligado', 'O Direct não está ligado', 'O Direct desta marca não está ligado no Liame, ou o Regem atende o Direct desta conta.');
     }
     if (!(await this.atendimentoDe(quem.tenantId, quem.userId)).open) {
       throw new AppProblem(409, 'atendimento-fechado', 'Abra o atendimento', 'Para responder no Direct, abra o atendimento com o código do app: vale por 8 horas.');
     }
     const tx = currentTx();
-    const existe = await tx.execute<{ conversation_id: string }>(sql`
-      select conversation_id from liame.direct_conversation where connected_account_id = ${conta.id} and conversation_id = ${conversationId}`);
-    if (!existe.rows[0]) throw new AppProblem(404, 'nao-encontrado', 'Não encontramos', 'Conversa não encontrada nesta marca.');
+    const existe = (
+      await tx.execute<{ connected_account_id: string; channel: string }>(sql`
+        select connected_account_id, channel from liame.direct_conversation
+         where connected_account_id in ${lidas.map((c) => c.id)} and conversation_id = ${conversationId}`)
+    ).rows[0];
+    if (!existe) throw new AppProblem(404, 'nao-encontrado', 'Não encontramos', 'Conversa não encontrada nesta marca.');
     const id = await this.acoes.pedirPelaRota(auth, {
       tool: 'direct_responder',
       brand_id: brandId,
-      provider: PROVEDOR_INSTAGRAM,
-      account_id: conta.id,
+      // O Messenger sai pela conta da Página (Z14, parte 2); o Direct, pela do Instagram.
+      provider: existe.channel === 'messenger' ? PROVEDOR_PAGINA : PROVEDOR_INSTAGRAM,
+      account_id: existe.connected_account_id,
       resource_id: recursoDaConversa(conversationId),
       params: { texto: body.text },
     });
@@ -211,17 +222,28 @@ export class DirectService {
   private async conversaDaMarca(auth: AuthContext, brandId: string, conversationId: string): Promise<string> {
     const quem = quemPede(auth);
     await marcaDaEmpresa(brandId);
-    const conta = await this.contaDaMarca(brandId);
+    const lidas = await this.contasLidas(quem.tenantId, quem.userId, brandId);
     const naoAchou = new AppProblem(404, 'nao-encontrado', 'Não encontramos', 'Conversa não encontrada nesta marca.');
-    if (!conta || !(await this.lendo(quem.tenantId, quem.userId, brandId, conta))) throw naoAchou;
-    const r = await currentTx().execute<{ conversation_id: string }>(sql`
-      select conversation_id from liame.direct_conversation where connected_account_id = ${conta.id} and conversation_id = ${conversationId}`);
+    if (!lidas.length) throw naoAchou;
+    const r = await currentTx().execute<{ connected_account_id: string }>(sql`
+      select connected_account_id from liame.direct_conversation
+       where connected_account_id in ${lidas.map((c) => c.id)} and conversation_id = ${conversationId}`);
     if (!r.rows[0]) throw naoAchou;
-    return conta.id;
+    return r.rows[0].connected_account_id;
   }
 
-  private disponivel(tenantId: string, userId: string, brandId: string): Promise<boolean> {
-    return this.flags.isEnabled(FLAG_DO_DIRECT, this.flags.context({ tenantId, userId, brandId }));
+  private disponivel(tenantId: string, userId: string, brandId: string, canal: CanalDoDirect = 'instagram'): Promise<boolean> {
+    return this.flags.isEnabled(canal === 'messenger' ? FLAG_DO_MESSENGER : FLAG_DO_DIRECT, this.flags.context({ tenantId, userId, brandId }));
+  }
+
+  /** As contas da marca que o Liame lê agora (A6, Z14): o Instagram do Direct e a Página do Messenger, cada uma pelo canal. */
+  private async contasLidas(tenantId: string, userId: string, brandId: string): Promise<ContaLida[]> {
+    const lidas: ContaLida[] = [];
+    for (const canal of ['instagram', 'messenger'] as const) {
+      const conta = await this.contaDaMarca(brandId, canal);
+      if (conta && (await this.lendo(tenantId, userId, brandId, conta, canal))) lidas.push({ ...conta, canal });
+    }
+    return lidas;
   }
 
   /**
@@ -233,10 +255,7 @@ export class DirectService {
     const quem = quemPede(auth);
     const marcas = (await currentTx().execute<{ id: string }>(sql`select id from liame.brand where archived_at is null`)).rows;
     const contas: string[] = [];
-    for (const m of marcas) {
-      const conta = await this.contaDaMarca(m.id);
-      if (conta && (await this.lendo(quem.tenantId, quem.userId, m.id, conta))) contas.push(conta.id);
-    }
+    for (const m of marcas) for (const c of await this.contasLidas(quem.tenantId, quem.userId, m.id)) contas.push(c.id);
     if (!contas.length) return { waiting: 0 };
     const r = await currentTx().execute<{ n: string | number }>(sql`
       select count(*) as n from liame.direct_conversation c
@@ -246,21 +265,27 @@ export class DirectService {
     return { waiting: Number(r.rows[0]?.n ?? 0) };
   }
 
-  /** A conta do Instagram da marca (a primeira conectada) e o estado da leitura do Direct dela. */
-  private async contaDaMarca(brandId: string): Promise<LinhaDaConta | null> {
+  /**
+   * A conta da marca no canal (a primeira conectada): o Instagram do Direct ou a Página do Messenger (A6, Z14), e o
+   * estado da leitura dela.
+   */
+  private async contaDaMarca(brandId: string, canal: CanalDoDirect = 'instagram'): Promise<LinhaDaConta | null> {
     const r = await currentTx().execute<LinhaDaConta>(sql`
-      select a.id, a.provider_attributes->>'usuario' as usuario, s.last_success_at, s.last_error, s.cursor
+      select a.id, a.provider_attributes->>'usuario' as usuario, a.name as nome, s.last_success_at, s.last_error, s.cursor
         from liame.connected_account a
         left join liame.sync_state s on s.connected_account_id = a.id and s.dataset = ${DATASET_DO_DIRECT}
-       where a.brand_id = ${brandId} and a.provider = ${PROVEDOR_INSTAGRAM} and ${contaConectada('a')}
+       where a.brand_id = ${brandId} and a.provider = ${canal === 'messenger' ? PROVEDOR_PAGINA : PROVEDOR_INSTAGRAM} and ${contaConectada('a')}
        order by a.id
        limit 1`);
     return r.rows[0] ?? null;
   }
 
-  private async ajusteDaMarca(brandId: string): Promise<{ enabled: boolean; sem_outro_programa: boolean; updated_at: Date | string | null; updated_by: string | null }> {
-    const r = await currentTx().execute<{ enabled: boolean; sem_outro_programa: boolean; updated_at: Date | string; updated_by: string | null }>(sql`
-      select enabled, sem_outro_programa, updated_at, updated_by from liame.direct_setting where brand_id = ${brandId}`);
+  /** O ajuste do canal na marca: o do Direct (`direct_setting`) ou o do Messenger (`messenger_setting`). */
+  private async ajusteDaMarca(brandId: string, canal: CanalDoDirect = 'instagram'): Promise<AjusteDoCanal> {
+    const r =
+      canal === 'messenger'
+        ? await currentTx().execute<AjusteDoCanal>(sql`select enabled, sem_outro_programa, updated_at, updated_by from liame.messenger_setting where brand_id = ${brandId}`)
+        : await currentTx().execute<AjusteDoCanal>(sql`select enabled, sem_outro_programa, updated_at, updated_by from liame.direct_setting where brand_id = ${brandId}`);
     return r.rows[0] ?? { enabled: false, sem_outro_programa: false, updated_at: null, updated_by: null };
   }
 
@@ -289,6 +314,28 @@ export class DirectService {
       read_at: conta?.last_success_at ? iso(conta.last_success_at) : null,
       updated_at: ajuste.updated_at ? iso(ajuste.updated_at) : null,
       updated_by: quemMudou ? { id: quemMudou.id, name: quemMudou.name } : null,
+      messenger: await this.ajusteDoMessenger(quem.tenantId, quem.userId, brandId),
+    };
+  }
+
+  /** O Messenger da Página na marca (A6, Z14; D-A6-121): liberado, ligado, a Página, a conferência com o Regem e a leitura. */
+  private async ajusteDoMessenger(tenantId: string, userId: string, brandId: string): Promise<DirectMessengerSettings> {
+    const available = await this.disponivel(tenantId, userId, brandId, 'messenger');
+    const ajuste = await this.ajusteDaMarca(brandId, 'messenger');
+    const pagina = await this.contaDaMarca(brandId, 'messenger');
+    const quemMudou = ajuste.updated_by ? (await currentTx().execute<{ id: string; name: string }>(sql`select id, name from liame.app_user where id = ${ajuste.updated_by}`)).rows[0] : undefined;
+    const cursor = pagina?.cursor ?? {};
+    return {
+      available,
+      enabled: ajuste.enabled,
+      no_other_app: ajuste.sem_outro_programa,
+      page: pagina ? { id: pagina.id, name: (pagina.nome ?? 'Página').slice(0, 200) } : null,
+      regem: cursor.regem ?? 'pendente',
+      regem_checked_at: cursor.regem_em ?? null,
+      reading: leitura(available && ajuste.enabled, pagina),
+      read_at: pagina?.last_success_at ? iso(pagina.last_success_at) : null,
+      updated_at: ajuste.updated_at ? iso(ajuste.updated_at) : null,
+      updated_by: quemMudou ? { id: quemMudou.id, name: quemMudou.name } : null,
     };
   }
 
@@ -299,32 +346,65 @@ export class DirectService {
    * sem código. A mudança vai para a auditoria, com o antes e o depois.
    */
   async mudarAjuste(auth: AuthContext, body: DirectSettingsRequest): Promise<DirectSettingsResponse> {
+    return this.mudarCanal(auth, body, 'instagram');
+  }
+
+  /**
+   * Liga ou desliga o Messenger da Página na marca (A6, Z14; D-A6-121), separado do Direct: as mesmas regras (o Dono ou um
+   * Administrador, a função `messenger`, a Página conectada, a confirmação de que nenhum outro programa responde aquele
+   * Messenger e o código do app para ligar; desligar, quem aprova, sem código).
+   */
+  async mudarMessenger(auth: AuthContext, body: DirectSettingsRequest): Promise<DirectSettingsResponse> {
+    return this.mudarCanal(auth, body, 'messenger');
+  }
+
+  private async mudarCanal(auth: AuthContext, body: DirectSettingsRequest, canal: CanalDoDirect): Promise<DirectSettingsResponse> {
     const quem = quemPede(auth);
     const brandId = body.brand_id;
     await marcaDaEmpresa(brandId);
     const tx = currentTx();
-    const antes = await this.ajusteDaMarca(brandId);
+    const doMessenger = canal === 'messenger';
+    const antes = await this.ajusteDaMarca(brandId, canal);
     const liga = body.enabled && !antes.enabled;
     if (body.enabled && !body.no_other_app) {
-      throw new AppProblem(422, 'confirme-outro-programa', 'Confirme o Direct', 'Para ligar, confirme que nenhum outro programa responde o Direct desta conta (um robô ou outro atendimento).');
+      throw new AppProblem(
+        422,
+        'confirme-outro-programa',
+        doMessenger ? 'Confirme o Messenger' : 'Confirme o Direct',
+        doMessenger
+          ? 'Para ligar, confirme que nenhum outro programa responde o Messenger desta Página (um robô ou outro atendimento).'
+          : 'Para ligar, confirme que nenhum outro programa responde o Direct desta conta (um robô ou outro atendimento).',
+      );
     }
-    const conta = liga ? await this.contaDaMarca(brandId) : null;
+    const conta = liga ? await this.contaDaMarca(brandId, canal) : null;
     if (liga) {
       if (!auth.permissions.has(PERMISSAO_DE_LIGAR)) {
-        throw new AppProblem(403, 'so-dono-ou-administrador', 'Só o Dono ou um Administrador', 'Só o Dono ou um Administrador liga o Direct. Você pode desligar.');
+        throw new AppProblem(403, 'so-dono-ou-administrador', 'Só o Dono ou um Administrador', `Só o Dono ou um Administrador liga ${doMessenger ? 'o Messenger' : 'o Direct'}. Você pode desligar.`);
       }
-      if (!(await this.disponivel(quem.tenantId, quem.userId, brandId))) {
-        throw new AppProblem(409, 'funcao-desligada', 'Ainda não está liberado', 'O Direct ainda não está liberado para esta empresa.');
+      if (!(await this.disponivel(quem.tenantId, quem.userId, brandId, canal))) {
+        throw new AppProblem(409, 'funcao-desligada', 'Ainda não está liberado', `${doMessenger ? 'O Messenger' : 'O Direct'} ainda não está liberado para esta empresa.`);
       }
-      if (!conta) throw new AppProblem(409, 'sem-instagram', 'Conecte o Instagram', 'A marca ainda não tem um Instagram conectado. Conecte em Contas conectadas e volte aqui.');
+      if (!conta) {
+        throw doMessenger
+          ? new AppProblem(409, 'sem-pagina', 'Conecte a Página', 'A marca ainda não tem uma Página do Facebook conectada. Conecte em Contas conectadas e volte aqui.')
+          : new AppProblem(409, 'sem-instagram', 'Conecte o Instagram', 'A marca ainda não tem um Instagram conectado. Conecte em Contas conectadas e volte aqui.');
+      }
       await this.confirmacao.confirmar(tx, quem.userId, body);
     }
     const sem = body.enabled ? true : body.no_other_app;
-    await tx.execute(sql`
-      insert into liame.direct_setting (brand_id, tenant_id, enabled, sem_outro_programa, updated_by, created_at, updated_at)
-      values (${brandId}, ${quem.tenantId}, ${body.enabled}, ${sem}, ${quem.userId}, now(), now())
-      on conflict (brand_id) do update
-        set enabled = excluded.enabled, sem_outro_programa = excluded.sem_outro_programa, updated_by = excluded.updated_by, updated_at = excluded.updated_at`);
+    if (doMessenger) {
+      await tx.execute(sql`
+        insert into liame.messenger_setting (brand_id, tenant_id, enabled, sem_outro_programa, updated_by, created_at, updated_at)
+        values (${brandId}, ${quem.tenantId}, ${body.enabled}, ${sem}, ${quem.userId}, now(), now())
+        on conflict (brand_id) do update
+          set enabled = excluded.enabled, sem_outro_programa = excluded.sem_outro_programa, updated_by = excluded.updated_by, updated_at = excluded.updated_at`);
+    } else {
+      await tx.execute(sql`
+        insert into liame.direct_setting (brand_id, tenant_id, enabled, sem_outro_programa, updated_by, created_at, updated_at)
+        values (${brandId}, ${quem.tenantId}, ${body.enabled}, ${sem}, ${quem.userId}, now(), now())
+        on conflict (brand_id) do update
+          set enabled = excluded.enabled, sem_outro_programa = excluded.sem_outro_programa, updated_by = excluded.updated_by, updated_at = excluded.updated_at`);
+    }
     // Ligar traz a vez da conta para agora: desligada, ela esperava um dia (V106, ERR-143).
     if (liga && conta) {
       await tx.execute(sql`
@@ -334,7 +414,7 @@ export class DirectService {
     auditDetail({
       resourceId: brandId,
       before: { enabled: antes.enabled, no_other_app: antes.sem_outro_programa },
-      after: { enabled: body.enabled, no_other_app: sem, confirmed: liga },
+      after: { enabled: body.enabled, no_other_app: sem, confirmed: liga, channel: canal },
     });
     return this.verAjuste(auth, { brand_id: brandId });
   }
@@ -413,26 +493,28 @@ export class DirectService {
     const quem = quemPede(auth);
     const brandId = query.brand_id;
     await marcaDaEmpresa(brandId);
-    const conta = await this.contaDaMarca(brandId);
-    if (!conta || !(await this.lendo(quem.tenantId, quem.userId, brandId, conta))) return { items: [] };
+    // As contas lidas agora: o Direct e o Messenger (Z14, parte 2), com o mesmo automático.
+    const lidas = await this.contasLidas(quem.tenantId, quem.userId, brandId);
+    if (!lidas.length) return { items: [] };
+    const usuarioDoInstagram = lidas.find((c) => c.canal === 'instagram')?.usuario ?? null;
     const linhas = (
       await currentTx().execute<LinhaDaConversa>(sql`
-        select c.conversation_id, c.username, c.last_message_at, c.last_inbound_at, c.last_direction, c.concluded_at, c.unread,
-               m.direction as m_direction, m.kind as m_kind, m.body as m_body, p.p_pendentes
+        select c.connected_account_id, c.conversation_id, c.username, c.channel, c.display_name, c.last_message_at, c.last_inbound_at,
+               c.last_direction, c.concluded_at, c.unread, m.direction as m_direction, m.kind as m_kind, m.body as m_body, p.p_pendentes
           from liame.direct_conversation c
           left join lateral (
             select x.direction, x.kind, x.body from liame.direct_message x
              where x.connected_account_id = c.connected_account_id and x.conversation_id = c.conversation_id
              order by x.sent_at desc, x.message_id desc limit 1) m on true
           ${PENDENTES}
-         where c.connected_account_id = ${conta.id} and c.last_direction = 'entrada'
+         where c.connected_account_id in ${lidas.map((c) => c.id)} and c.last_direction = 'entrada'
            and c.last_inbound_at > ${agora.toISOString()}::timestamptz - make_interval(hours => ${JANELA_DO_DIRECT_HORAS})
          order by c.last_inbound_at desc
          limit ${PREVIA_OLHADAS}`)
     ).rows;
     const items: DirectAutoReplyPreviewResponse['items'] = [];
     for (const l of linhas) {
-      const c = conversaDaLinha(l, agora, conta.usuario);
+      const c = conversaDaLinha(l, agora, l.channel === 'messenger' ? null : usuarioDoInstagram);
       const ultima = l.p_pendentes?.at(-1);
       if (c.status !== 'espera' || !ultima || !c.kind || !tipoDoAutomatico(c.kind as TipoNoDirect)) continue;
       if (pedeUmaPessoa((l.p_pendentes ?? []).map((p) => p.body).join(' '))) continue;
@@ -456,25 +538,28 @@ export class DirectService {
     const conta = await this.contaDaMarca(brandId);
     const account: DirectAccount | null = conta ? { id: conta.id, username: conta.usuario } : null;
     const base: DirectConversationsResponse = { brand_id: brandId, account, counts: ZERO, items: [] };
-    if (!conta || !(await this.lendo(quem.tenantId, quem.userId, brandId, conta))) return base;
+    // As contas lidas agora (o Direct e o Messenger, A6, Z14), só as do canal pedido; as contagens seguem o canal.
+    const lidas = (await this.contasLidas(quem.tenantId, quem.userId, brandId)).filter((c) => !query.channel || c.canal === query.channel);
+    if (!lidas.length) return base;
+    const usuarioDoInstagram = lidas.find((c) => c.canal === 'instagram')?.usuario ?? null;
 
     const busca = query.q ? `%${query.q.replace(/[\\%_]/g, (c) => `\\${c}`)}%` : null;
     const linhas = (
       await currentTx().execute<LinhaDaConversa>(sql`
-        select c.conversation_id, c.username, c.last_message_at, c.last_inbound_at, c.last_direction, c.concluded_at, c.unread,
-               m.direction as m_direction, m.kind as m_kind, m.body as m_body, p.p_pendentes
+        select c.connected_account_id, c.conversation_id, c.username, c.channel, c.display_name, c.last_message_at, c.last_inbound_at,
+               c.last_direction, c.concluded_at, c.unread, m.direction as m_direction, m.kind as m_kind, m.body as m_body, p.p_pendentes
           from liame.direct_conversation c
           left join lateral (
             select x.direction, x.kind, x.body from liame.direct_message x
              where x.connected_account_id = c.connected_account_id and x.conversation_id = c.conversation_id
              order by x.sent_at desc, x.message_id desc limit 1) m on true
           ${PENDENTES}
-         where c.connected_account_id = ${conta.id}
-           ${busca ? sql`and (c.username ilike ${busca} or exists (select 1 from liame.direct_message y where y.connected_account_id = c.connected_account_id and y.conversation_id = c.conversation_id and y.body ilike ${busca}))` : sql``}
+         where c.connected_account_id in ${lidas.map((c) => c.id)}
+           ${busca ? sql`and (c.username ilike ${busca} or c.display_name ilike ${busca} or exists (select 1 from liame.direct_message y where y.connected_account_id = c.connected_account_id and y.conversation_id = c.conversation_id and y.body ilike ${busca}))` : sql``}
          order by c.last_message_at desc, c.conversation_id
          limit ${CONVERSAS_OLHADAS}`)
     ).rows;
-    const todas = linhas.map((l) => conversaDaLinha(l, agora, conta.usuario));
+    const todas = linhas.map((l) => conversaDaLinha(l, agora, l.channel === 'messenger' ? null : usuarioDoInstagram));
     const counts: DirectCounts = {
       espera: todas.filter((c) => c.status === 'espera').length,
       fechando: todas.filter((c) => c.status === 'espera' && c.closing).length,
@@ -499,23 +584,25 @@ export class DirectService {
   async conversa(auth: AuthContext, brandId: string, conversationId: string, agora = new Date()): Promise<DirectConversationResponse> {
     const quem = quemPede(auth);
     await marcaDaEmpresa(brandId);
-    const conta = await this.contaDaMarca(brandId);
+    const lidas = await this.contasLidas(quem.tenantId, quem.userId, brandId);
     const naoAchou = new AppProblem(404, 'nao-encontrado', 'Não encontramos', 'Conversa não encontrada nesta marca.');
-    if (!conta || !(await this.lendo(quem.tenantId, quem.userId, brandId, conta))) throw naoAchou;
+    if (!lidas.length) throw naoAchou;
     const tx = currentTx();
     const linha = (
       await tx.execute<LinhaDaConversa>(sql`
-        select c.conversation_id, c.username, c.last_message_at, c.last_inbound_at, c.last_direction, c.concluded_at, c.unread,
-               m.direction as m_direction, m.kind as m_kind, m.body as m_body, p.p_pendentes
+        select c.connected_account_id, c.conversation_id, c.username, c.channel, c.display_name, c.last_message_at, c.last_inbound_at,
+               c.last_direction, c.concluded_at, c.unread, m.direction as m_direction, m.kind as m_kind, m.body as m_body, p.p_pendentes
           from liame.direct_conversation c
           left join lateral (
             select x.direction, x.kind, x.body from liame.direct_message x
              where x.connected_account_id = c.connected_account_id and x.conversation_id = c.conversation_id
              order by x.sent_at desc, x.message_id desc limit 1) m on true
           ${PENDENTES}
-         where c.connected_account_id = ${conta.id} and c.conversation_id = ${conversationId}`)
+         where c.connected_account_id in ${lidas.map((c) => c.id)} and c.conversation_id = ${conversationId}`)
     ).rows[0];
     if (!linha) throw naoAchou;
+    const conta = lidas.find((c) => c.id === linha.connected_account_id)!;
+    const usuarioDaMarca = conta.canal === 'messenger' ? null : conta.usuario;
     const mensagens = (
       await tx.execute<{ message_id: string; direction: string; kind: string; body: string; sent_at: Date | string }>(sql`
         select * from (
@@ -525,10 +612,10 @@ export class DirectService {
            limit ${DIRECT_MESSAGES_LIMIT}) z
          order by sent_at, message_id`)
     ).rows;
-    const conversation = conversaDaLinha(linha, agora, conta.usuario);
+    const conversation = conversaDaLinha(linha, agora, usuarioDaMarca);
     // A sugestão sem IA só para o que espera resposta (P39), variando pela última mensagem da pessoa.
     const ultima = linha.p_pendentes?.at(-1);
-    const suggestion = conversation.status === 'espera' && ultima ? sugestaoNoDirect(tipoNoDirect(linha.p_pendentes ?? [], conta.usuario), ultima.id) : null;
+    const suggestion = conversation.status === 'espera' && ultima ? sugestaoNoDirect(tipoNoDirect(linha.p_pendentes ?? [], usuarioDaMarca), ultima.id) : null;
     return {
       brand_id: brandId,
       conversation,
@@ -537,11 +624,14 @@ export class DirectService {
     };
   }
 
-  /** O Liame mostra o Direct desta conta: a função liberada, o Direct ligado na marca e o Regem sem atender a conta. */
-  private async lendo(tenantId: string, userId: string, brandId: string, conta: LinhaDaConta): Promise<boolean> {
+  /**
+   * O Liame mostra o canal desta conta: a função do canal liberada, o canal ligado na marca e o Regem sem atender a conta
+   * (no Messenger, a Página).
+   */
+  private async lendo(tenantId: string, userId: string, brandId: string, conta: LinhaDaConta, canal: CanalDoDirect = 'instagram'): Promise<boolean> {
     if (conta.cursor?.regem === 'atende') return false;
-    const ajuste = await this.ajusteDaMarca(brandId);
-    return ajuste.enabled && (await this.disponivel(tenantId, userId, brandId));
+    const ajuste = await this.ajusteDaMarca(brandId, canal);
+    return ajuste.enabled && (await this.disponivel(tenantId, userId, brandId, canal));
   }
 }
 
@@ -558,6 +648,8 @@ function conversaDaLinha(l: LinhaDaConversa, agora: Date, usuarioDaMarca: string
   return {
     id: l.conversation_id,
     username: l.username,
+    channel: l.channel,
+    name: l.display_name,
     status: s.situacao,
     closing: s.fechando,
     window_until: s.janelaAte,

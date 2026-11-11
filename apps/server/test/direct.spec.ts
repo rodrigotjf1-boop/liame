@@ -26,9 +26,27 @@ describe('o que a leitura entende da Meta', () => {
       CONTA,
     );
     expect(r).toEqual([
-      { conversation_id: 'c1', meta_updated_at: '2026-11-11T13:58:00.000Z', participant_id: '991', username: 'ana.paula_rj' },
-      { conversation_id: 'c2', meta_updated_at: '2026-11-11T12:00:00.000Z', participant_id: '992', username: null },
+      { conversation_id: 'c1', meta_updated_at: '2026-11-11T13:58:00.000Z', participant_id: '991', username: 'ana.paula_rj', display_name: null },
+      { conversation_id: 'c2', meta_updated_at: '2026-11-11T12:00:00.000Z', participant_id: '992', username: null, display_name: null },
     ]);
+  });
+
+  it('no Messenger (Z14): a marca é a Página (pelo id); a pessoa vem com o nome do Facebook, sem @, e o nome longo é cortado', () => {
+    const PAGINA = { id: '104000000000001', usuario: null };
+    const r = conversasDoDirect(
+      {
+        data: [
+          { id: 't_1', updated_time: '2026-11-11T13:58:00+0000', participants: { data: [{ id: PAGINA.id, name: 'Casa Brasa' }, { id: '7001', name: 'Joana Lima' }] } },
+          { id: 't_2', updated_time: '2026-11-11T13:00:00+0000', participants: { data: [{ id: '7002', name: 'J'.repeat(250) }, { id: PAGINA.id, name: 'Casa Brasa' }] } },
+        ],
+      },
+      PAGINA,
+    );
+    expect(r.map((c) => [c.conversation_id, c.participant_id, c.username, c.display_name?.length ?? null])).toEqual([
+      ['t_1', '7001', null, 'Joana Lima'.length],
+      ['t_2', '7002', null, 200],
+    ]);
+    expect(r[0]!.display_name).toBe('Joana Lima');
   });
 
   it('as mensagens: de quem é, o tipo e o texto, da mais velha para a mais nova; sem id ou sem data, fica de fora', () => {
@@ -96,6 +114,14 @@ describe('o Regem atende o Direct desta conta? (D-A6-107)', () => {
     expect(regemAtende({ instagram: [{ ig_user_id: 'outro-id', usuario: '@CasaBrasa' }], messenger: [] }, CONTA)).toBe(true);
     expect(regemAtende({ instagram: [{ ig_user_id: 'outro-id', usuario: 'outra.loja' }], messenger: [{ pagina_id: '1' }] }, CONTA)).toBe(false);
     expect(regemAtende({ instagram: [], messenger: [] }, CONTA)).toBe(false);
+  });
+
+  it('no Messenger (Z14; D-A6-121): pelo id da Página; o Instagram atendido não conta para a Página', () => {
+    const PAGINA = { id: '104000000000001', usuario: null };
+    expect(regemAtende({ instagram: [], messenger: [{ pagina_id: PAGINA.id }] }, PAGINA, 'messenger')).toBe(true);
+    expect(regemAtende({ instagram: [{ ig_user_id: PAGINA.id, usuario: null }], messenger: [{ pagina_id: 'outra' }] }, PAGINA, 'messenger')).toBe(false);
+    // E a Página atendida não conta para o Direct do Instagram.
+    expect(regemAtende({ instagram: [], messenger: [{ pagina_id: CONTA.id }] }, CONTA)).toBe(false);
   });
 });
 

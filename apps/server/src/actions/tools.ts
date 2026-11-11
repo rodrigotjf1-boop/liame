@@ -655,13 +655,14 @@ export const TOOLS: Record<string, ToolDefinition> = {
   // A mensagem particular não volta pela API: sem volta pelo Liame.
   direct_responder: {
     name: 'direct_responder',
-    version: 1,
+    // 2: também no Messenger da Página (A6, Z14, parte 2).
+    version: 2,
     owner: 'social',
     description:
-      'Manda a resposta da marca numa conversa do Direct do Instagram, com o texto que uma pessoa da equipe escreveu ou escolheu. A mensagem é particular, para quem escreveu, e só sai até 24 horas depois da última mensagem da pessoa.',
+      'Manda a resposta da marca numa conversa do Direct do Instagram ou do Messenger da Página, com o texto que uma pessoa da equipe escreveu ou escolheu. A mensagem é particular, para quem escreveu, e só sai até 24 horas depois da última mensagem da pessoa.',
     // Fala com uma pessoa em nome da marca, em particular: quem manda é uma pessoa da equipe, com o atendimento aberto.
     risk: 'R2',
-    providers: ['instagram'],
+    providers: ['instagram', 'facebook_page'],
     compensation: 'sem_volta_pelo_liame',
     directByPerson: true,
     onlyByRoute: true,
@@ -689,13 +690,14 @@ export const TOOLS: Record<string, ToolDefinition> = {
   // termina com o aviso de resposta automática e o caminho para uma pessoa (Termos 5.5 e 6.3). Sem volta pelo Liame.
   [FERRAMENTA_DO_DIRECT_AUTOMATICO]: {
     name: FERRAMENTA_DO_DIRECT_AUTOMATICO,
-    version: 1,
+    // 2: também no Messenger da Página (A6, Z14, parte 2).
+    version: 2,
     owner: 'social',
     description:
-      'Manda sozinho, pelo atendimento automático que a marca ligou, a resposta pronta da marca numa conversa do Direct do Instagram (o agradecimento ao elogio, à resposta ao story ou à menção), com o aviso de resposta automática e o caminho para uma pessoa no fim. A mensagem é particular e só sai até 24 horas depois da última mensagem da pessoa.',
+      'Manda sozinho, pelo atendimento automático que a marca ligou, a resposta pronta da marca numa conversa do Direct do Instagram ou do Messenger da Página (o agradecimento ao elogio, à resposta ao story ou à menção), com o aviso de resposta automática e o caminho para uma pessoa no fim. A mensagem é particular e só sai até 24 horas depois da última mensagem da pessoa.',
     // Fala com uma pessoa em nome da marca sem uma pessoa ver antes: só pelo atendimento automático, com o portão dele.
     risk: 'R2',
-    providers: ['instagram'],
+    providers: ['instagram', 'facebook_page'],
     compensation: 'sem_volta_pelo_liame',
     atendimentoAutomatico: true,
     flag: FLAG_DE_RESPONDER_NO_DIRECT,

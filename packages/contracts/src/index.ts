@@ -643,6 +643,7 @@ export {
   DirectConversationsResponse,
   DirectCounts,
   DirectMessage,
+  DirectMessengerSettings,
   DirectReplyRequest,
   DirectReplyResponse,
   DirectSettingsQuery,

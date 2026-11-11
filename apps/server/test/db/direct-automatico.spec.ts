@@ -4,7 +4,7 @@ import { type Database, runMigrations } from '@liame/database';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { ActionService } from '../../src/actions/action.service.js';
 import { BudgetService } from '../../src/actions/budget.service.js';
-import { directNoInstagramConnector } from '../../src/actions/direct-na-rede.js';
+import { type DependenciasDoDirect, directNoInstagramConnector, directNoMessengerConnector } from '../../src/actions/direct-na-rede.js';
 import { RESPOSTAS_PRONTAS } from '../../src/ai/social/comentario.js';
 import { currentStep, totpCode } from '../../src/auth/totp.js';
 import { ClienteConector } from '../../src/connectors/cliente-http.js';
@@ -32,7 +32,9 @@ import { hasDb, OWNER_URL } from './env.js';
 //     pessoa ficam com a equipe; a mesma mensagem não é decidida duas vezes, e a seguinte da pessoa é;
 //   - a terceira automática seguida na mesma conversa vai para a equipe;
 //   - desligar depois do pedido segura o que estava na fila (o executor confere o portão de novo); sem a função, nada sai;
-//   - a prévia mostra o que sairia, sem mandar nada.
+//   - a prévia mostra o que sairia, sem mandar nada;
+//   - o Messenger da Página (A6, Z14, parte 2; D-A6-122): o mesmo automático; com o Messenger desligado na marca, a
+//     conversa fica com a equipe; ligado, o elogio sai pela Página.
 
 describe.skipIf(!hasDb)('o atendimento automático do Direct (A6 · Z12, parte 5a)', () => {
   let api: TestApi;
@@ -51,7 +53,7 @@ describe.skipIf(!hasDb)('o atendimento automático do Direct (A6 · Z12, parte 5
     const flags = api.app.get(FlagService);
     executor = new ActionExecutor(database, api.app.get(BudgetService), api.app.get(KillSwitchService), flags);
     loop = new DirectAutomaticoLoop(database, flags, api.app.get(ActionService));
-    directNoInstagramConnector.ligar({
+    const doDirect: DependenciasDoDirect = {
       lerSegredo: (tx, id) => vault.readSecret(tx, id),
       cliente: (tempoLimiteMs) =>
         new ClienteConector(database.db, { enderecos: { meta_ads: [meta.base] }, tentativas: 1, balde: { capacidade: 10_000, porSegundo: 1_000 }, ...(tempoLimiteMs ? { tempoLimiteMs } : {}) }),
@@ -59,7 +61,9 @@ describe.skipIf(!hasDb)('o atendimento automático do Direct (A6 · Z12, parte 5
       appSecret: SEGREDO_DO_APP,
       appId: APP_DA_META,
       versao: (capacidade) => versaoRegistrada(database.db, 'meta_ads', capacidade),
-    });
+    };
+    directNoInstagramConnector.ligar(doDirect);
+    directNoMessengerConnector.ligar(doDirect);
   }, 120_000);
   beforeEach(async () => {
     await resetIpRateLimits();
@@ -107,6 +111,24 @@ describe.skipIf(!hasDb)('o atendimento automático do Direct (A6 · Z12, parte 5
       );
     }
     return { id, ultima: ultimaDaPessoa.id };
+  }
+  /** A conversa do Messenger como a leitura a deixaria (Z14): a conta é a Página; sem @, com o nome. */
+  async function conversaNoMessenger(e: EmpresaComCanais, nome: string, texto: string, minutos: number): Promise<string> {
+    const id = meta.escreveuNoMessenger(e.pagina!.externo, { nome, texto, minutos });
+    const naMeta = meta.conversasDoDirect.find((c) => c.id === id)!;
+    const m = naMeta.mensagens[0]!;
+    await ownerQuery(
+      `insert into liame.direct_conversation (connected_account_id, tenant_id, brand_id, conversation_id, participant_id, display_name, channel,
+                                              last_message_at, last_inbound_at, last_direction, unread, meta_updated_at)
+       values ($1, $2, $3, $4, $5, $6, 'messenger', $7, $7, 'entrada', true, $7)`,
+      [e.pagina!.id, e.tenantId, e.brandId, id, naMeta.pessoa.id, nome, m.created_time],
+    );
+    await ownerQuery(
+      `insert into liame.direct_message (connected_account_id, tenant_id, brand_id, conversation_id, message_id, direction, kind, body, sent_at)
+       values ($1, $2, $3, $4, $5, 'entrada', 'texto', $6, $7)`,
+      [e.pagina!.id, e.tenantId, e.brandId, id, m.id, texto, m.created_time],
+    );
+    return id;
   }
   async function codigo(e: EmpresaComCanais): Promise<string> {
     await ownerQuery(`update liame.app_user set totp_last_step = null where id = $1`, [e.userId]);
@@ -223,6 +245,34 @@ describe.skipIf(!hasDb)('o atendimento automático do Direct (A6 · Z12, parte 5
     const bia = await conversa(sem, 'bia.costa', [{ texto: 'Amei!', minutos: 2 }]);
     expect(await rodar(sem)).toEqual([{ conversa: bia.id, status: 'com_a_pessoa', motivo: 'automatico_desligado' }]);
     expect(await pedidos(sem)).toEqual([]);
+    expect(meta.defeitos).toEqual([]);
+  }, 120_000);
+  it('Z14, parte 2 (D-A6-122): no Messenger, o mesmo automático: desligado na marca, a conversa fica com a equipe; ligado, o elogio sai pela Página com o aviso', async () => {
+    const e = await empresa('Casa Brasa Messenger Automático');
+    await ligado(e);
+    const carla = await conversaNoMessenger(e, 'Carla Mendes', 'Que delícia esse smash!', 6);
+    // Sem a função `messenger`, e depois sem o Messenger ligado na marca: fica com a equipe.
+    expect(await rodar(e)).toMatchObject([{ conversa: carla, status: 'com_a_pessoa', motivo: 'automatico_desligado' }]);
+    await ligarFlagDaEmpresa(api, 'messenger', e.tenantId, true);
+    const bia = await conversaNoMessenger(e, 'Bia Costa', 'Amei o atendimento de vocês!', 5);
+    expect(await rodar(e)).toMatchObject([{ conversa: bia, status: 'com_a_pessoa', motivo: 'direct_desligado' }]);
+
+    // Ligado na marca: o elogio sai pela Página, com a resposta pronta e o aviso no fim.
+    await ownerQuery(`insert into liame.messenger_setting (brand_id, tenant_id, enabled, sem_outro_programa) values ($1, $2, true, true)`, [e.brandId, e.tenantId]);
+    const joana = await conversaNoMessenger(e, 'Joana Lima', 'Que delícia esse burger!', 4);
+    expect(await rodar(e)).toMatchObject([{ conversa: joana, status: 'respondida' }]);
+    const [doPedido] = await ownerQuery<{ provider: string; account_id: string }>(
+      `select provider, account_id from liame.action_request where tenant_id = $1 and tool = 'direct_responder_auto'`,
+      [e.tenantId],
+    );
+    expect(doPedido).toEqual({ provider: 'facebook_page', account_id: e.pagina!.id });
+    await ciclo(e);
+    expect((await pedidos(e)).map((p) => p.status)).toEqual(['executada']);
+    const saiu = daMarca(joana);
+    expect(saiu).toHaveLength(1);
+    expect(RESPOSTAS_PRONTAS.elogio.map((t) => comAvisoDoDirect(t))).toContain(saiu[0]);
+    expect(meta.chamadas.some((c) => c.metodo === 'POST' && c.caminho.endsWith(`${e.pagina!.externo}/messages`))).toBe(true);
+    expect(daMarca(carla)).toEqual([]);
     expect(meta.defeitos).toEqual([]);
   }, 120_000);
 });

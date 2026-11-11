@@ -69,12 +69,12 @@
       "hash": "94b85d7d2058b93314856dac8f27046694b323e5c93a3fc4ea578218ec6f46d6"
     },
     "direct_responder": {
-      "version": 1,
-      "hash": "b451dfa75ded2fefd6690a136baf84d551c4b84233d980cae1561cb081e38f90"
+      "version": 2,
+      "hash": "41bc2ea2f2e1513ee2aa463ad130947602552de8f8e186f02e5c03b372696dfd"
     },
     "direct_responder_auto": {
-      "version": 1,
-      "hash": "7a5e0c4817a3f870a67cf044198317e6f7c73768e19b294d23e110cfa4de19b7"
+      "version": 2,
+      "hash": "f204967c75a88119f9abcfad196bcdc744a2e86d88481969775f7f89761f117c"
     },
     "equipe_trabalho": {
       "version": 5,

@@ -28,6 +28,29 @@ export const DirectAccount = z.strictObject({
 });
 export type DirectAccount = z.infer<typeof DirectAccount>;
 
+/**
+ * O Messenger da Página na caixa do Direct (A6, Z14, parte 1; D-A6-120 e D-A6-121): liga separado do Direct, com a
+ * função `messenger`, a Página conectada e a confirmação de que nenhum outro programa responde aquele Messenger.
+ */
+export const DirectMessengerSettings = z.strictObject({
+  /** A função `messenger` liberada para a empresa. */
+  available: z.boolean(),
+  /** Ligado na marca (nasce desligado). */
+  enabled: z.boolean(),
+  no_other_app: z.boolean(),
+  /** A Página da marca que o Messenger lê (nula: a marca sem Página conectada). */
+  page: z.strictObject({ id: z.uuid(), name: z.string().max(200) }).nullable(),
+  /** A conferência com o Regem pela Página (como a do Direct; a lista pode crescer, V23). */
+  regem: Codigo,
+  regem_checked_at: z.iso.datetime().nullable(),
+  /** A leitura (como a do Direct; a lista pode crescer, V23). */
+  reading: Codigo,
+  read_at: z.iso.datetime().nullable(),
+  updated_at: z.iso.datetime().nullable(),
+  updated_by: z.strictObject({ id: z.uuid(), name: z.string() }).nullable(),
+});
+export type DirectMessengerSettings = z.infer<typeof DirectMessengerSettings>;
+
 export const DirectSettingsResponse = z.strictObject({
   brand_id: z.uuid(),
   /** A função `direct` liberada para a empresa. Sem ela, nada é lido, e a tela só explica. */
@@ -56,6 +79,8 @@ export const DirectSettingsResponse = z.strictObject({
   read_at: z.iso.datetime().nullable(),
   updated_at: z.iso.datetime().nullable(),
   updated_by: z.strictObject({ id: z.uuid(), name: z.string() }).nullable(),
+  /** O Messenger da Página (A6, Z14): o ajuste dele, separado do Direct. */
+  messenger: DirectMessengerSettings,
 });
 export type DirectSettingsResponse = z.infer<typeof DirectSettingsResponse>;
 
@@ -80,6 +105,8 @@ export const DirectConversationsQuery = z.strictObject({
   status: z.enum(DIRECT_STATUSES).default('espera'),
   /** Busca pelo @ ou pelo texto das mensagens. */
   q: z.string().trim().max(100).optional(),
+  /** Só um canal (A6, Z14): `instagram` ou `messenger`; sem ele, os dois. As contagens seguem o canal. */
+  channel: z.enum(['instagram', 'messenger']).optional(),
 });
 export type DirectConversationsQuery = z.infer<typeof DirectConversationsQuery>;
 
@@ -88,8 +115,12 @@ export const DirectConversationId = z.string().min(1).max(200).regex(/^[A-Za-z0-
 
 export const DirectConversation = z.strictObject({
   id: z.string().min(1).max(200),
-  /** O @ de quem escreveu, sem o "@"; nulo quando a Meta não mandou. */
+  /** O @ de quem escreveu, sem o "@"; nulo quando a Meta não mandou (e no Messenger, que não tem @). */
   username: z.string().max(100).nullable(),
+  /** O canal (A6, Z14): `instagram` (o Direct) ou `messenger` (a Página). A lista pode crescer (V23). */
+  channel: Codigo,
+  /** O nome que a Meta manda de quem escreveu (no Messenger, o nome do Facebook); nulo quando não mandou. */
+  name: z.string().max(200).nullable(),
   /** `espera`, `respondida` ou `fora` (a janela da Meta fechou). A lista pode crescer (V23). */
   status: Codigo,
   /** Faltam menos de 2 horas para a janela fechar. */

@@ -5,8 +5,8 @@ import { sql } from 'drizzle-orm';
 import { contaConectada } from '../connections/conectada.js';
 import type { CredencialGuardada } from '../connections/oauth.js';
 import { type ClienteConector, ErroConector } from '../connectors/cliente-http.js';
-import { FLAG_DOS_POSTS, PROVEDOR_INSTAGRAM, tokenDaPagina } from '../connectors/meta/publicacao.js';
-import { mensagensDaConversa } from '../direct/direct.js';
+import { FLAG_DOS_POSTS, PROVEDOR_INSTAGRAM, PROVEDOR_PAGINA, tokenDaPagina } from '../connectors/meta/publicacao.js';
+import { type CanalDoDirect, type ContaDoDirect, mensagensDaConversa } from '../direct/direct.js';
 import type { ApplyOptions, ApplyResult, Connector, ReadResult, ResourceRef } from './connectors.js';
 import {
   conversaDoRecurso,
@@ -19,7 +19,8 @@ import {
 } from './direct-plano.js';
 import type { ResourceState } from './tools.js';
 
-// A resposta numa conversa do Direct, pelo Action Service (A6, Z12, parte 2; P39, D-A6-107, D-A6-109 e D-A6-111). Só
+// A resposta numa conversa do Direct, pelo Action Service (A6, Z12, parte 2; P39, D-A6-107, D-A6-109 e D-A6-111), e no
+// Messenger da Página (A6, Z14, parte 2; D-A6-122): o mesmo conector, com o canal (a conta do Instagram ou a da Página). Só
 // com a flag de escrita dos posts (`social_write`, a do conector da conta do Instagram) e a da ferramenta
 // (`direct_responder`) ligadas.
 //
@@ -45,8 +46,8 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 /** A leitura da hora do pedido não espera a Meta mais que isto: passou, a pessoa recebe "tente de novo". */
 const TEMPO_DA_LEITURA_DO_PEDIDO_MS = 10_000;
 
-/** As capacidades da Meta que a resposta usa, no registro (migrations 0130 e 0131). */
-export type CapacidadeDoDirect = 'pages' | 'instagram_conversas' | 'instagram_mensagem';
+/** As capacidades da Meta que a resposta usa, no registro (migrations 0130, 0131 e 0134). */
+export type CapacidadeDoDirect = 'pages' | 'instagram_conversas' | 'instagram_mensagem' | 'messenger_conversas' | 'messenger_mensagem';
 
 /** O que a resposta precisa do resto do app; ligado na subida (API e worker). */
 export type DependenciasDoDirect = {
@@ -68,7 +69,7 @@ const recusado = (mensagem: string): ApplyResult => ({ ok: false, reason: 'recus
 const NADA = 'Nada foi enviado.';
 const SEM_ACESSO = `A Meta recusou a autorização desta conta. Conecte a Meta de novo em Contas conectadas. ${NADA}`;
 const SEM_PERMISSAO = `A Meta não deixou o Liame mandar a mensagem: a autorização não tem a permissão de mensagens, ou quem autorizou não tem a tarefa de mensagens na Página. Conecte a Meta de novo em Contas conectadas. ${NADA}`;
-const OUTRO_APP = `Esta conversa está com outro app na Meta (outro programa atende o Direct desta conta), e a Meta não deixa o Liame responder. ${NADA}`;
+const OUTRO_APP = `Esta conversa está com outro app na Meta (outro programa atende as mensagens desta conta), e a Meta não deixa o Liame responder. ${NADA}`;
 const NAO_ACEITA = `A pessoa não aceita mensagens da marca agora (bloqueou, ou não recebe mensagens). ${NADA}`;
 const SUMIU = `Esta conversa não está mais no Liame. ${NADA}`;
 const FORA_DO_AMBIENTE = 'Responder no Direct não está disponível neste ambiente.';
@@ -90,13 +91,28 @@ export function recusaDoDirect(err: unknown): string | null {
 }
 
 export class DirectNaRedeConnector implements Connector {
-  readonly provider = PROVEDOR_INSTAGRAM;
+  readonly provider: string;
   // A flag do conector registrado (o composto com o do post, `connectors.ts`); a da ferramenta é `direct_responder`.
   readonly writeFlag = FLAG_DOS_POSTS;
   // Mandar mensagem não gasta verba de mídia.
   readonly requiresSpendLimits = false;
   private readonly logger = new Logger('direct-na-rede');
   private deps: DependenciasDoDirect | null = null;
+  /** As capacidades do canal: as conversas (ler e o dono da conversa) e a mensagem. */
+  private readonly conversas: CapacidadeDoDirect;
+  private readonly mensagem: CapacidadeDoDirect;
+
+  /** `instagram`: o Direct, na conta do Instagram; `messenger`: o Messenger, na conta da Página (Z14). */
+  constructor(private readonly canal: CanalDoDirect = 'instagram') {
+    this.provider = canal === 'messenger' ? PROVEDOR_PAGINA : PROVEDOR_INSTAGRAM;
+    this.conversas = canal === 'messenger' ? 'messenger_conversas' : 'instagram_conversas';
+    this.mensagem = canal === 'messenger' ? 'messenger_mensagem' : 'instagram_mensagem';
+  }
+
+  /** A marca na conversa: a Página (pelo id) no Messenger; a conta profissional (o id e o @) no Instagram. */
+  private daConta(conta: Conta): ContaDoDirect {
+    return this.canal === 'messenger' ? { id: conta.pagina_id!, usuario: null } : { id: conta.external_id, usuario: conta.usuario };
+  }
 
   ligar(deps: DependenciasDoDirect): void {
     this.deps = deps;
@@ -107,10 +123,11 @@ export class DirectNaRedeConnector implements Connector {
     const conversa = conversaDoRecurso(ref.resourceId);
     if (!conversa || !UUID.test(ref.accountId)) return null;
     const c = await tx.execute<Conta>(sql`
-      select a.id, a.tenant_id, a.brand_id, a.external_id, a.provider_attributes ->> 'usuario' as usuario, a.provider_attributes ->> 'pagina_id' as pagina_id,
+      select a.id, a.tenant_id, a.brand_id, a.external_id, a.provider_attributes ->> 'usuario' as usuario,
+             case when a.provider = ${PROVEDOR_PAGINA} then a.external_id else a.provider_attributes ->> 'pagina_id' end as pagina_id,
              a.credential_secret_id
         from liame.connected_account a
-       where a.id = ${ref.accountId} and a.tenant_id = ${ref.tenantId} and a.provider = ${PROVEDOR_INSTAGRAM} and ${contaConectada('a')}`);
+       where a.id = ${ref.accountId} and a.tenant_id = ${ref.tenantId} and a.provider = ${this.provider} and ${contaConectada('a')}`);
     const conta = c.rows[0];
     if (!conta || !conta.pagina_id) return null;
     const g = await tx.execute<{ participant_id: string }>(sql`
@@ -165,13 +182,13 @@ export class DirectNaRedeConnector implements Connector {
     const sumiu: EstadoDaConversaNoDirect = { tipo: 'direct', id: p.conversa, existe: false, ultima_da_pessoa: null, respostas_resumo: [] };
     let corpo: unknown;
     try {
-      corpo = await this.chamar<unknown>(deps, g, 'GET', p.conversa, 'instagram_conversas', { params: { fields: 'messages{id,created_time,from,to,message}' } });
+      corpo = await this.chamar<unknown>(deps, g, 'GET', p.conversa, this.conversas, { params: { fields: 'messages{id,created_time,from,to,message}' } });
     } catch (err) {
       if (err instanceof ErroConector && err.tipo === 'definitivo' && (err.status === 404 || (err.codigoProvider === '100' && err.subcodigo === '33'))) return sumiu;
       throw err;
     }
     if (objeto(corpo).id !== p.conversa) return sumiu;
-    const mensagens = mensagensDaConversa(corpo, { id: p.conta.external_id, usuario: p.conta.usuario });
+    const mensagens = mensagensDaConversa(corpo, this.daConta(p.conta));
     const daPessoa = mensagens.filter((m) => m.direction === 'entrada');
     const ultima = daPessoa.length ? daPessoa[daPessoa.length - 1]!.sent_at : null;
     const respostas = mensagens.filter((m) => m.direction === 'saida' && (ultima === null || m.sent_at >= ultima) && m.body).map((m) => resumoDaResposta(m.body));
@@ -197,7 +214,7 @@ export class DirectNaRedeConnector implements Connector {
   private async comOutroApp(deps: DependenciasDoDirect, p: Preparado, g: Graph): Promise<boolean> {
     if (!deps.appId) return false;
     try {
-      const corpo = objeto(await this.chamar<unknown>(deps, g, 'GET', `${p.conta.pagina_id}/thread_owner`, 'instagram_conversas', { params: { recipient: p.pessoa } }));
+      const corpo = objeto(await this.chamar<unknown>(deps, g, 'GET', `${p.conta.pagina_id}/thread_owner`, this.conversas, { params: { recipient: p.pessoa } }));
       const dados = Array.isArray(corpo.data) ? (corpo.data as unknown[]) : [];
       const dono = objeto(objeto(dados[0]).thread_owner).app_id;
       const app = typeof dono === 'string' || typeof dono === 'number' ? String(dono) : null;
@@ -245,7 +262,7 @@ export class DirectNaRedeConnector implements Connector {
 
     try {
       const enviada = objeto(
-        await this.chamar<unknown>(deps, g, 'POST', `${p.conta.pagina_id}/messages`, 'instagram_mensagem', {
+        await this.chamar<unknown>(deps, g, 'POST', `${p.conta.pagina_id}/messages`, this.mensagem, {
           corpo: { recipient: { id: p.pessoa }, message: { text: texto }, messaging_type: 'RESPONSE' },
         }),
       );
@@ -280,4 +297,6 @@ export class DirectNaRedeConnector implements Connector {
   }
 }
 
-export const directNoInstagramConnector = new DirectNaRedeConnector();
+export const directNoInstagramConnector = new DirectNaRedeConnector('instagram');
+/** O Messenger da Página (A6, Z14, parte 2): o mesmo conector, na conta da Página. */
+export const directNoMessengerConnector = new DirectNaRedeConnector('messenger');

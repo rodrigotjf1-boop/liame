@@ -5,7 +5,7 @@ import { ActionService } from '../actions/action.service.js';
 import { recursoDaConversa } from '../actions/direct-plano.js';
 import { naTransacaoDaEmpresa } from '../ai/na-empresa.js';
 import { SOCIAL } from '../ai/social/prompt.js';
-import { PROVEDOR_INSTAGRAM } from '../connectors/meta/publicacao.js';
+import { PROVEDOR_INSTAGRAM, PROVEDOR_PAGINA } from '../connectors/meta/publicacao.js';
 import { currentTx } from '../context/request-context.js';
 import { DATABASE } from '../database/database.module.js';
 import { FERRAMENTA_DO_DIRECT_AUTOMATICO, oQueSeguraODirectAutomatico, RESPOSTAS_AUTOMATICAS_DO_DIRECT_POR_HORA } from '../direct/automatico.js';
@@ -17,7 +17,7 @@ import { type JobScope, tenantFilter } from './outbox-publisher.js';
 /** As situações do pedido automático que contam no teto da hora (as mesmas do portão). */
 const NO_TETO = ['aprovada', 'executando', 'executada'] as const;
 
-type Candidata = { tenant_id: string; brand_id: string; connected_account_id: string; conversation_id: string; ultima: string };
+type Candidata = { tenant_id: string; brand_id: string; connected_account_id: string; conversation_id: string; channel: string; ultima: string };
 
 /** O que a rotina fez com a conversa: respondeu sozinha (o pedido), deixou com uma pessoa (o porquê) ou nada. */
 export type VezDoDirectAutomatico = { conversa: string } & ({ status: 'respondida'; pedido: string } | { status: 'com_a_pessoa'; motivo: string } | { status: 'fora' });
@@ -47,7 +47,7 @@ export class DirectAutomaticoLoop {
     const candidatas = await withSystem(this.database.db, async (tx) =>
       (
         await tx.execute<Candidata>(sql`
-          select c.tenant_id, c.brand_id, c.connected_account_id, c.conversation_id, p.message_id as ultima
+          select c.tenant_id, c.brand_id, c.connected_account_id, c.conversation_id, c.channel, p.message_id as ultima
             from liame.direct_conversation c
             join liame.direct_auto_reply r on r.brand_id = c.brand_id and r.enabled
             join lateral (
@@ -105,7 +105,8 @@ export class DirectAutomaticoLoop {
           {
             tool: FERRAMENTA_DO_DIRECT_AUTOMATICO,
             brand_id: c.brand_id,
-            provider: PROVEDOR_INSTAGRAM,
+            // O Messenger sai pela conta da Página (Z14, parte 2); o Direct, pela do Instagram.
+            provider: c.channel === 'messenger' ? PROVEDOR_PAGINA : PROVEDOR_INSTAGRAM,
             account_id: c.connected_account_id,
             resource_id: recursoDaConversa(conversa),
             params: { texto: portao.resposta.texto },

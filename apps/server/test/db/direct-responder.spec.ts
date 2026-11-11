@@ -2,7 +2,7 @@ import { resolve } from 'node:path';
 import { type Database, runMigrations } from '@liame/database';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { BudgetService } from '../../src/actions/budget.service.js';
-import { directNoInstagramConnector } from '../../src/actions/direct-na-rede.js';
+import { type DependenciasDoDirect, directNoInstagramConnector, directNoMessengerConnector } from '../../src/actions/direct-na-rede.js';
 import { currentStep, totpCode } from '../../src/auth/totp.js';
 import { ClienteConector } from '../../src/connectors/cliente-http.js';
 import { versaoRegistrada } from '../../src/connectors/tipos.js';
@@ -23,7 +23,9 @@ import { hasDb, OWNER_URL } from './env.js';
 //   - com ele aberto, o pedido nasce aprovado (sem Aprovações), o executor manda pela Meta com o IGSID e o texto, e a
 //     conversa do Liame fica respondida, com a mensagem; o pedido direto pela rota das ações é recusado (422);
 //   - a resposta que saiu sem a volta da Meta não sai duas vezes na tentativa seguinte;
-//   - fora da janela de 24 horas, o plano recusa (422); com outro app dono da conversa, nada sai, com a frase certa.
+//   - fora da janela de 24 horas, o plano recusa (422); com outro app dono da conversa, nada sai, com a frase certa;
+//   - no Messenger da Página (A6, Z14, parte 2; D-A6-122): o mesmo atendimento aberto, o pedido pela conta da Página e o
+//     envio pela Página com o PSID; sem o Messenger ligado na marca, a resposta não sai (409).
 
 const RESPOSTA = 'Oi! Entregamos na Penha, sim. O Combo duplo sai por R$ 39,90.';
 
@@ -42,7 +44,7 @@ describe.skipIf(!hasDb)('responder no Direct (A6 · Z12, parte 2)', () => {
     const vault = api.app.get(VaultService);
     const flags = api.app.get(FlagService);
     executor = new ActionExecutor(database, api.app.get(BudgetService), api.app.get(KillSwitchService), flags);
-    directNoInstagramConnector.ligar({
+    const doDirect: DependenciasDoDirect = {
       lerSegredo: (tx, id) => vault.readSecret(tx, id),
       cliente: (tempoLimiteMs) =>
         new ClienteConector(database.db, { enderecos: { meta_ads: [meta.base] }, tentativas: 1, balde: { capacidade: 10_000, porSegundo: 1_000 }, ...(tempoLimiteMs ? { tempoLimiteMs } : {}) }),
@@ -50,7 +52,9 @@ describe.skipIf(!hasDb)('responder no Direct (A6 · Z12, parte 2)', () => {
       appSecret: SEGREDO_DO_APP,
       appId: APP_DA_META,
       versao: (capacidade) => versaoRegistrada(database.db, 'meta_ads', capacidade),
-    });
+    };
+    directNoInstagramConnector.ligar(doDirect);
+    directNoMessengerConnector.ligar(doDirect);
   }, 120_000);
   beforeEach(async () => {
     await resetIpRateLimits();
@@ -165,5 +169,43 @@ describe.skipIf(!hasDb)('responder no Direct (A6 · Z12, parte 2)', () => {
     const { e: e2, conversa: velha } = await empresa('Casa Brasa Direct Janela', { minutos: 25 * 60 });
     expect((await abrir(e2, { code: await codigo(e2) })).status).toBe(200);
     expect(problema(await responder(e2, velha))).toEqual([422, 'plano-recusado']);
+  }, 120_000);
+  it('Z14, parte 2 (D-A6-122): no Messenger, o mesmo atendimento aberto; o pedido vai pela conta da Página e sai pela Página com o PSID; sem o Messenger ligado, não sai', async () => {
+    const { e } = await empresa('Casa Brasa Messenger Responde');
+    // A conversa do Messenger como a leitura a deixaria (a conta é a Página; sem @, com o nome).
+    const joana = meta.escreveuNoMessenger(e.pagina!.externo, { nome: 'Joana Lima', texto: 'Vocês abrem no feriado?', minutos: 5 });
+    const naMeta = meta.conversasDoDirect.find((c) => c.id === joana)!;
+    const daJoana = naMeta.mensagens[0]!;
+    await ownerQuery(
+      `insert into liame.direct_conversation (connected_account_id, tenant_id, brand_id, conversation_id, participant_id, display_name, channel,
+                                              last_message_at, last_inbound_at, last_direction, unread, meta_updated_at)
+       values ($1, $2, $3, $4, $5, 'Joana Lima', 'messenger', $6, $6, 'entrada', true, $6)`,
+      [e.pagina!.id, e.tenantId, e.brandId, joana, naMeta.pessoa.id, daJoana.created_time],
+    );
+    await ownerQuery(
+      `insert into liame.direct_message (connected_account_id, tenant_id, brand_id, conversation_id, message_id, direction, kind, body, sent_at)
+       values ($1, $2, $3, $4, $5, 'entrada', 'texto', $6, $7)`,
+      [e.pagina!.id, e.tenantId, e.brandId, joana, daJoana.id, daJoana.texto, daJoana.created_time],
+    );
+    expect((await abrir(e, { code: await codigo(e) })).status).toBe(200);
+    // O Messenger desligado na marca: a conversa nem está na caixa.
+    expect(problema(await responder(e, joana, 'Abrimos sim, das 18h às 23h.'))).toEqual([404, 'nao-encontrado']);
+
+    await ligarFlagDaEmpresa(api, 'messenger', e.tenantId, true);
+    await ownerQuery(`insert into liame.messenger_setting (brand_id, tenant_id, enabled, sem_outro_programa) values ($1, $2, true, true)`, [e.brandId, e.tenantId]);
+    const r = await responder(e, joana, 'Abrimos sim, das 18h às 23h.');
+    expect(r.status, JSON.stringify(r.body)).toBe(202);
+    const id = (r.body as { action_id: string }).action_id;
+    const [doPedido] = await ownerQuery<{ provider: string; account_id: string }>(`select provider, account_id from liame.action_request where id = $1`, [id]);
+    expect(doPedido).toEqual({ provider: 'facebook_page', account_id: e.pagina!.id });
+
+    await ciclo(e);
+    expect(await pedido(id)).toMatchObject({ status: 'executada' });
+    expect(daMarca(joana)).toEqual(['Abrimos sim, das 18h às 23h.']);
+    const envio = meta.chamadas.find((c) => c.metodo === 'POST' && c.caminho.endsWith(`${e.pagina!.externo}/messages`))!;
+    expect(envio.corpo).toMatchObject({ recipient: { id: naMeta.pessoa.id }, message: { text: 'Abrimos sim, das 18h às 23h.' }, messaging_type: 'RESPONSE' });
+    const tela = await api.call('GET', `/v1/direct/conversations/${joana}?brand_id=${e.brandId}`, { cookie: e.cookie });
+    expect(tela.body).toMatchObject({ conversation: { channel: 'messenger', name: 'Joana Lima', status: 'respondida', unread: false } });
+    expect(meta.defeitos).toEqual([]);
   }, 120_000);
 });
