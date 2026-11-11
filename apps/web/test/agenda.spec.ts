@@ -128,7 +128,8 @@ describe('a Agenda: o menu e a semana', () => {
     const agencia = NAVEGACAO.find((g) => g.id === 'agencia')!;
     const hrefs = agencia.itens.map((i) => i.href);
     // Desde a Z11 (P38, D-A6-84), Comentários fica logo depois de Avaliações, e a Agenda logo depois de Comentários.
-    expect(hrefs.indexOf('/agenda')).toBe(hrefs.indexOf('/comentarios') + 1);
+    expect(hrefs.indexOf('/agenda')).toBe(hrefs.indexOf('/direct') + 1);
+    expect(hrefs.indexOf('/direct')).toBe(hrefs.indexOf('/comentarios') + 1);
     expect(hrefs.indexOf('/comentarios')).toBe(hrefs.indexOf('/avaliacoes') + 1);
     expect(agencia.itens.find((i) => i.href === '/agenda')).toMatchObject({ rotulo: 'Agenda', icone: 'calendar', permissao: 'campanhas.ver' });
     expect(tituloDa('/agenda')).toBe('Agenda');

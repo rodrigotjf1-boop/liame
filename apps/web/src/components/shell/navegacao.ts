@@ -53,6 +53,8 @@ export const NAVEGACAO: GrupoNav[] = [
       { href: '/avaliacoes', rotulo: 'Avaliações', icone: 'message', permissao: 'campanhas.ver' },
       // Os comentários dos posts (P38, D-A6-84): logo depois de Avaliações, uma tela só nos dois modos.
       { href: '/comentarios', rotulo: 'Comentários', icone: 'reply', permissao: 'campanhas.ver', contador: 'comentarios' },
+      // O Direct do Instagram (P39, A6 · Z12): logo depois de Comentários, uma tela só nos dois modos.
+      { href: '/direct', rotulo: 'Direct', icone: 'instagram', permissao: 'campanhas.ver' },
       // A Agenda dos posts (P19, D-A6-24): logo abaixo de Avaliações, uma tela só nos dois modos.
       { href: '/agenda', rotulo: 'Agenda', icone: 'calendar', permissao: 'campanhas.ver' },
       { href: '/criativos', rotulo: 'Criativos', icone: 'image', permissao: 'campanhas.ver', contador: 'criativos', modos: true },

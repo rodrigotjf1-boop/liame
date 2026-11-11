@@ -5,7 +5,8 @@ import { ChaveNoLugarDoCodigo } from './passkeys.js';
 // Direct lê: as conversas do Direct da conta do Instagram ligada à marca, que a rotina `direct` do worker guardou a cada
 // minuto (D-A6-108), e o ajuste da marca (ligar o Direct, com o código do app). O Liame guarda o texto das mensagens, o
 // @ de quem escreveu e a hora, por 90 dias; foto, vídeo, áudio e story ficam só na Meta (D-A6-112). Quando a Central do
-// Regem atende o Direct da conta, o do Liame fica desligado nela (D-A6-107). Responder vem à parte (Z12, parte 3).
+// Regem atende o Direct da conta, o do Liame fica desligado nela (D-A6-107). Responder, com o atendimento aberto, é a
+// parte 2 (D-A6-117); a tela, a parte 3.
 
 const Codigo = z.string().regex(/^[a-z_]{2,40}$/);
 
