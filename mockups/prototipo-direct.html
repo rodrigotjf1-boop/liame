@@ -5,7 +5,14 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Direct P39</title>
 <!--
-@prototipo Liame · A6 · P39 · Direct do Instagram (Z12) (APROVADO PELO DONO EM 11/11/2026; VERSÃO 2 COM O MODO AUTOMÁTICO)
+@prototipo Liame · A6 · P39 · Direct do Instagram (Z12) e Messenger (Z14) (VERSÃO 2 APROVADA EM 11/11/2026; VERSÃO 3,
+      O MESSENGER, ESPERA O DONO)
+versão 3 (11/11/2026, proposta): o Messenger da Página na mesma caixa, como a D-A6-106 previa. Entram os estados da
+      versão 3 no seletor do topo: os dois canais na caixa (o filtro de canal, o ícone do canal em cada conversa, o nome
+      que o Messenger mostra no lugar do @, "Abrir no Messenger"), uma reclamação pelo Messenger, o Regem atendendo só o
+      Messenger da Página (o Direct segue), ligar o Messenger (o passo a passo) e a Página sem a permissão de mensagens. O
+      menu, o título e a trilha dizem "Direct e Messenger" quando o Messenger está ligado. As decisões propostas são as
+      D-A6-120 a D-A6-124, com uma pergunta (o automático vale também no Messenger?); o resto da versão 2 não muda.
 versão 2 (11/11/2026): o dono aprovou ("prototipo aprovado") e pediu "direct tambem ter modo automatico". Entra o
       atendimento automático do Direct (D-A6-115), no molde do P38 versão 2: a linha "Atendimento automático" na tela, a
       gaveta para ligar (o interruptor, os tipos, o que sempre espera uma pessoa, como a resposta sai, a prévia e o código
@@ -614,6 +621,11 @@ select.input { padding-right: var(--sp-2); }
 .p39-linha-corpo { display: grid; gap: 4px; min-width: 0; }
 .p39-linha-cab { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px var(--sp-2); min-width: 0; }
 .p39-nome { font-weight: 600; overflow-wrap: anywhere; }
+/* versão 3: o canal ao lado do nome (Instagram ou Messenger), quando os dois estão na caixa */
+.p39-canal { display: inline-flex; align-self: center; color: var(--text-muted); }
+.p39-canal .ic { width: 14px; height: 14px; }
+.p39-filtros .chip .ic { width: 14px; height: 14px; margin-right: 4px; vertical-align: -2px; }
+.p39-dec-proposta { display: inline-block; padding: 1px 8px; border-radius: var(--radius-full); background: var(--warning-soft); color: var(--text); font-size: var(--text-xs); font-weight: 600; }
 .p39-hora { margin-left: auto; font-family: var(--font-mono); font-size: var(--text-xs); color: var(--text-subtle); white-space: nowrap; }
 .p39-previa { font-size: var(--text-sm); color: var(--text-muted); overflow-wrap: anywhere; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 .p39-linha.nao-lida .p39-previa { color: var(--text); font-weight: 500; }
@@ -816,7 +828,7 @@ select.input { padding-right: var(--sp-2); }
 <p class="sr-only" id="anuncio" role="status" aria-live="polite"></p>
 
 <div class="revisao" role="region" aria-label="Controles do protótipo">
-  <p class="revisao-marca"><b>Protótipo aprovado · A6 · P39 (versão 2)</b><span>Direct do Instagram (Z12), para quem usa o Liame sem o Regem, com o modo automático pedido em 11/11/2026 · dados de exemplo · código do app: qualquer um de 6 números, menos 000000</span></p>
+  <p class="revisao-marca"><b>Protótipo · A6 · P39 (versão 3: o Messenger, espera o dono)</b><span>Direct do Instagram (Z12, versão 2 aprovada) e, na versão 3, o Messenger da Página (Z14) na mesma caixa · os estados da versão 3 estão no fim do seletor · dados de exemplo · código do app: qualquer um de 6 números, menos 000000</span></p>
   <label>Direct <select id="rev-p39"></select></label>
   <button class="btn btn--sm btn--ghost" type="button" id="rev-tema" aria-pressed="false">Tema escuro</button>
 </div>
@@ -1052,8 +1064,8 @@ function confirmarNaLinha(bt, { texto = '', rotulo, voltar = 'Cancelar', aoConfi
 window.uiuxCenarios = {};
 definirModo(params.get('modo') === 'pro' ? 'pro' : 'lite', { silencioso: true });
 /* ---------- A6 · P39: as decisões propostas (esperam o dono) e as perguntas (de p39_decisoes.json) ---------- */
-window.P39_DECISOES = [{"id": "D-A6-106", "titulo": "Onde o Direct mora", "texto": "Uma tela própria, \"Direct\", logo depois de Comentários: a lista das conversas e a conversa lado a lado (no celular, uma de cada vez, com \"Voltar\"). Os comentários ficam na tela deles, porque são públicos e seguem outras regras. O Messenger (Z14) entra nesta mesma tela como outro canal, e o item do menu passa a \"Direct e Messenger\". A conversa que espera resposta aparece no contador do menu, em Atenção e no Resumo (a que fecha a janela em menos de 2 horas, primeiro).", "rec": "a tela própria agora; juntar com os comentários numa caixa só fica fora, como a D-A6-84 deixou para decidir aqui.", "porque": "As regras do público e do particular são outras (janela da Meta, nada de aprovação por mensagem), e o Messenger tem as mesmas regras do Direct."}, {"id": "D-A6-107", "titulo": "Um respondedor por conta, e o Regem primeiro (o seu pedido de 11/11/2026)", "texto": "Ao ligar e a cada leitura, o Liame pergunta ao Regem, pela ligação da loja, se a Central de atendimento dele atende o Direct da conta. Se atende, o Direct do Liame desliga sozinho naquela conta: não lê, não guarda e não responde, e a tela explica por quê; para atender pelo Liame, a loja desliga o Direct no Regem. Sem a ligação do Regem, quem liga confirma que nenhum outro programa responde aquele Direct. E, antes de mandar cada resposta, o Liame confere na Meta quem é o dono da conversa: a conversa que está com outro app fica só para ler. Isto troca o caminho da D-A6-80 (o robô do Regem respondendo pela porta do Liame), que ficou para trás quando o Direct do piloto passou a ser atendido pelo Regem, com o app dele.", "rec": "assim. Pede no Regem uma leitura nova na porta de integração (as contas do Instagram e as páginas que a Central atende), com um escopo de leitura próprio; é uma mudança pequena no Regem, que eu faço junto.", "porque": "Sem a escolha do app padrão na Meta, os dois apps recebem tudo e podem responder a mesma mensagem; a Meta diz quem é o dono da conversa (thread_owner) e recusa a resposta de quem não é (erros 2534037 e 2018300).", "fonte": "Meta, Conversation Routing (developers.facebook.com/documentation/business-messaging/instagram-messaging/features/conversation-routing e …/conversation-routing/apis), lido em 11/11/2026."}, {"id": "D-A6-108", "titulo": "Como as mensagens chegam", "texto": "Enquanto o app do Liame estiver em desenvolvimento na Meta (o piloto), o worker lê as conversas por consulta, a cada minuto, só as que mudaram desde a última leitura, e guarda o histórico no Liame: a Meta só entrega o texto das 20 mensagens mais novas de cada conversa. Com o app publicado e a análise da Meta, o aviso de mensagem (webhook) vira o caminho principal, e a consulta fica como reparo, a cada 15 minutos. A consulta das conversas pede o app de um negócio verificado na Meta: confiro no primeiro teste.", "rec": "a consulta a cada minuto no piloto; o aviso só com o app publicado.", "porque": "A Meta só manda o aviso de mensagem a app publicado, e, sem a análise, só das pessoas com papel no app; a consulta tem limite de 2 chamadas por segundo por conta e não pagina por data.", "fonte": "Meta, Instagram Messaging: Webhooks (\"Your app must be published, regardless of app review status, to receive webhooks\"), Conversations API e Rate limiting, lidos em 11/11/2026."}, {"id": "D-A6-109", "titulo": "Quem responde, e como a resposta sai", "texto": "A resposta é escrita (ou escolhida da sugestão) por uma pessoa da equipe e sai quando ela clica em \"Mandar\", sem pedido em Aprovações: numa conversa, esperar a aprovação de outra pessoa atrasa demais. Mandar pede o atendimento aberto: o código do app uma vez, e por 8 horas (ou até a pessoa fechar) as respostas dela saem sem código. Responde quem tem a permissão nova \"Responder no Direct\": o Dono, os Administradores e quem aprova; quem só vê lê as conversas. Cada mensagem fica na auditoria com o nome de quem mandou. Só texto, até 1.000 bytes (a letra com acento conta 2). Nesta parte, nada sai sozinho.", "rec": "assim, com as 8 horas (veja as perguntas abaixo).", "porque": "É a pessoa quem fala com o cliente, como no próprio Instagram; o código por turno mantém a confirmação sem travar a conversa."}, {"id": "D-A6-110", "titulo": "A sugestão do Social media", "texto": "As mesmas regras dos comentários: na pergunta, só o que está em Minha marca, como está escrito, e \"precisa de você\" quando ele não sabe responder com certeza; na reclamação, o passo a passo e os três caminhos, sem prometer reembolso, troca ou brinde; no elogio, na resposta ao story e na menção, a resposta pronta, sem IA; no golpe, nenhuma. Ele lê as últimas mensagens da conversa (até 10), sem o nome nem o @ de ninguém, e o Liame tira telefone, e-mail e endereço antes de mandar à IA. \"Pedir outra\" uma vez por mensagem. Uma tarefa própria, com o eval antes de ligar.", "rec": "assim; a rodada paga do eval fica com você, como nas outras tarefas.", "porque": "As regras já aprovadas nos comentários (D-A6-88, D-A6-94, D-A6-105) servem ao particular; a conversa dá o contexto que o comentário não tinha."}, {"id": "D-A6-111", "titulo": "A janela da Meta", "texto": "A resposta só sai até 24 horas depois da última mensagem da pessoa (até 7 dias quando a conversa veio de um anúncio de clique para o Direct). A tela mostra o prazo em cada conversa, a lista põe primeiro o que fecha antes, e Atenção avisa 2 horas antes de fechar. Fora da janela, a caixa de resposta trava e diz por quê; a conversa volta sozinha quando a pessoa escreve de novo. Responder como atendimento humano até 7 dias (a etiqueta HUMAN_AGENT) pede a permissão própria da Meta, com a análise e a verificação do negócio: fica para depois.", "rec": "assim.", "porque": "Fora da janela a Meta recusa a mensagem (erro 10/2534022); mostrar o prazo evita a resposta perdida.", "fonte": "Meta, Instagram Messaging: Overview (\"How it works\"), Graph API page/messages (HUMAN_AGENT, 7 dias) e Features Reference: Human Agent, lidos em 11/11/2026."}, {"id": "D-A6-112", "titulo": "O que se guarda, e o que fica só no Instagram", "texto": "O texto das mensagens, quem mandou (o @ e o nome que a Meta devolve depois da primeira mensagem), a hora e a situação, por 90 dias, como os comentários. A mensagem que a pessoa apaga some do Liame também (regra da Meta). Foto, vídeo, áudio e story ficam só na Meta: a tela mostra o tipo e leva ao Instagram (a mídia do story não pode ser guardada). Figurinha e GIF não chegam pela API. O texto da Política de Privacidade (seção 7) entra antes de ligar para clientes.", "rec": "os 90 dias, como nos comentários.", "porque": "O mínimo para atender e para a sugestão; a Meta obriga a apagar a mensagem apagada e proíbe guardar a mídia do story.", "fonte": "Meta, Instagram Messaging: Webhooks (\"Limitations\") e Story mention, lidos em 11/11/2026."}, {"id": "D-A6-113", "titulo": "Chamar no Direct a partir de um comentário", "texto": "Na reclamação, em Comentários, \"Chamar no Direct\" manda uma mensagem particular a quem comentou: uma só por pessoa, até 7 dias depois do comentário, e a Meta junta o link do post. A conversa aparece aqui com a origem. Cai em Pedidos se a pessoa não segue a marca. Pede a análise da Meta (acesso avançado e a permissão de atendimento humano): entra depois da análise.", "rec": "assim, só na reclamação; nos outros tipos, a resposta pública basta.", "porque": "Leva para o particular o caso que não se resolve em público, como o passo a passo da reclamação já pede (D-A6-94).", "fonte": "Meta, Instagram Messaging: Private replies, lido em 11/11/2026."}, {"id": "D-A6-114", "titulo": "Como liga, e o que fica para depois", "texto": "Uma função própria, desligada, e a permissão de mensagens na autorização da Meta (conectar de novo, como nos comentários). No Instagram da marca, a opção que libera as mensagens para ferramentas conectadas precisa estar ligada; sem ela, a tela diz onde ligar. Até a análise da Meta (D-A6-81), só chegam as mensagens de quem tem papel no app, e a tela avisa. O atendimento automático do Direct entra na Z12, numa parte própria, depois da conversa com uma pessoa (D-A6-115).", "rec": "assim.", "porque": "O mesmo caminho das outras funções novas: nasce desligada, liga no piloto, e a análise vem quando estiver pronto.", "fonte": "Meta, Instagram Messaging: Get started (as permissões e a opção do Instagram), Error codes (2534041) e a política da Messenger Platform (aviso de experiência automática), lidos em 11/11/2026."}, {"id": "D-A6-115", "titulo": "O atendimento automático do Direct (pedido do dono, 11/11/2026)", "texto": "Como nos comentários (D-A6-92): ligado na marca pelo Dono ou por um Administrador, com o código do app, e desligado na hora, sem código, por quem aprova; tudo na auditoria. O Liame responde sozinho no Direct o elogio, a resposta ao story e a menção (a resposta pronta) e a pergunta que ele sabe responder com certeza (o \"sim\" do Social media, a conferência sem aviso e nada barrado, como na D-A6-105). Toda resposta automática termina com o aviso, escrito pelo código: \"Resposta automática · para falar com alguém da equipe, é só pedir aqui\". Sempre espera uma pessoa: a reclamação, a pergunta sem certeza, o golpe e quem pede para falar com alguém. Limites: uma resposta automática por mensagem da pessoa; no máximo duas seguidas na mesma conversa (a seguinte vai para uma pessoa); no máximo 30 por hora na marca; nunca fora da janela da Meta; só onde o Liame atende o Direct (não onde o Regem atende). Antes de ligar, a gaveta mostra como ele teria respondido as conversas recentes.", "rec": "assim. No piloto, com a consulta a cada minuto, ele só responde a quem tem papel no app; para os clientes, ele espera o aviso da Meta (o app publicado e a análise), porque a Meta pede que a resposta automática saia em até 30 segundos.", "porque": "O dono quer o Liame atendendo no Direct como nos comentários; os limites seguram o erro e a conversa que vira um robô falando sozinho, e a Meta pede o aviso de automação e o caminho para uma pessoa.", "fonte": "Meta, política da Messenger Platform (aviso de experiência automática; resposta em até 30 segundos) e Instagram Messaging: Overview (\"Human agent escalation\"), lidos em 11/11/2026."}];
-window.P39_PERGUNTAS = [];
+window.P39_DECISOES = [{"id": "D-A6-106", "titulo": "Onde o Direct mora", "texto": "Uma tela própria, \"Direct\", logo depois de Comentários: a lista das conversas e a conversa lado a lado (no celular, uma de cada vez, com \"Voltar\"). Os comentários ficam na tela deles, porque são públicos e seguem outras regras. O Messenger (Z14) entra nesta mesma tela como outro canal, e o item do menu passa a \"Direct e Messenger\". A conversa que espera resposta aparece no contador do menu, em Atenção e no Resumo (a que fecha a janela em menos de 2 horas, primeiro).", "rec": "a tela própria agora; juntar com os comentários numa caixa só fica fora, como a D-A6-84 deixou para decidir aqui.", "porque": "As regras do público e do particular são outras (janela da Meta, nada de aprovação por mensagem), e o Messenger tem as mesmas regras do Direct."}, {"id": "D-A6-107", "titulo": "Um respondedor por conta, e o Regem primeiro (o seu pedido de 11/11/2026)", "texto": "Ao ligar e a cada leitura, o Liame pergunta ao Regem, pela ligação da loja, se a Central de atendimento dele atende o Direct da conta. Se atende, o Direct do Liame desliga sozinho naquela conta: não lê, não guarda e não responde, e a tela explica por quê; para atender pelo Liame, a loja desliga o Direct no Regem. Sem a ligação do Regem, quem liga confirma que nenhum outro programa responde aquele Direct. E, antes de mandar cada resposta, o Liame confere na Meta quem é o dono da conversa: a conversa que está com outro app fica só para ler. Isto troca o caminho da D-A6-80 (o robô do Regem respondendo pela porta do Liame), que ficou para trás quando o Direct do piloto passou a ser atendido pelo Regem, com o app dele.", "rec": "assim. Pede no Regem uma leitura nova na porta de integração (as contas do Instagram e as páginas que a Central atende), com um escopo de leitura próprio; é uma mudança pequena no Regem, que eu faço junto.", "porque": "Sem a escolha do app padrão na Meta, os dois apps recebem tudo e podem responder a mesma mensagem; a Meta diz quem é o dono da conversa (thread_owner) e recusa a resposta de quem não é (erros 2534037 e 2018300).", "fonte": "Meta, Conversation Routing (developers.facebook.com/documentation/business-messaging/instagram-messaging/features/conversation-routing e …/conversation-routing/apis), lido em 11/11/2026."}, {"id": "D-A6-108", "titulo": "Como as mensagens chegam", "texto": "Enquanto o app do Liame estiver em desenvolvimento na Meta (o piloto), o worker lê as conversas por consulta, a cada minuto, só as que mudaram desde a última leitura, e guarda o histórico no Liame: a Meta só entrega o texto das 20 mensagens mais novas de cada conversa. Com o app publicado e a análise da Meta, o aviso de mensagem (webhook) vira o caminho principal, e a consulta fica como reparo, a cada 15 minutos. A consulta das conversas pede o app de um negócio verificado na Meta: confiro no primeiro teste.", "rec": "a consulta a cada minuto no piloto; o aviso só com o app publicado.", "porque": "A Meta só manda o aviso de mensagem a app publicado, e, sem a análise, só das pessoas com papel no app; a consulta tem limite de 2 chamadas por segundo por conta e não pagina por data.", "fonte": "Meta, Instagram Messaging: Webhooks (\"Your app must be published, regardless of app review status, to receive webhooks\"), Conversations API e Rate limiting, lidos em 11/11/2026."}, {"id": "D-A6-109", "titulo": "Quem responde, e como a resposta sai", "texto": "A resposta é escrita (ou escolhida da sugestão) por uma pessoa da equipe e sai quando ela clica em \"Mandar\", sem pedido em Aprovações: numa conversa, esperar a aprovação de outra pessoa atrasa demais. Mandar pede o atendimento aberto: o código do app uma vez, e por 8 horas (ou até a pessoa fechar) as respostas dela saem sem código. Responde quem tem a permissão nova \"Responder no Direct\": o Dono, os Administradores e quem aprova; quem só vê lê as conversas. Cada mensagem fica na auditoria com o nome de quem mandou. Só texto, até 1.000 bytes (a letra com acento conta 2). Nesta parte, nada sai sozinho.", "rec": "assim, com as 8 horas (veja as perguntas abaixo).", "porque": "É a pessoa quem fala com o cliente, como no próprio Instagram; o código por turno mantém a confirmação sem travar a conversa."}, {"id": "D-A6-110", "titulo": "A sugestão do Social media", "texto": "As mesmas regras dos comentários: na pergunta, só o que está em Minha marca, como está escrito, e \"precisa de você\" quando ele não sabe responder com certeza; na reclamação, o passo a passo e os três caminhos, sem prometer reembolso, troca ou brinde; no elogio, na resposta ao story e na menção, a resposta pronta, sem IA; no golpe, nenhuma. Ele lê as últimas mensagens da conversa (até 10), sem o nome nem o @ de ninguém, e o Liame tira telefone, e-mail e endereço antes de mandar à IA. \"Pedir outra\" uma vez por mensagem. Uma tarefa própria, com o eval antes de ligar.", "rec": "assim; a rodada paga do eval fica com você, como nas outras tarefas.", "porque": "As regras já aprovadas nos comentários (D-A6-88, D-A6-94, D-A6-105) servem ao particular; a conversa dá o contexto que o comentário não tinha."}, {"id": "D-A6-111", "titulo": "A janela da Meta", "texto": "A resposta só sai até 24 horas depois da última mensagem da pessoa (até 7 dias quando a conversa veio de um anúncio de clique para o Direct). A tela mostra o prazo em cada conversa, a lista põe primeiro o que fecha antes, e Atenção avisa 2 horas antes de fechar. Fora da janela, a caixa de resposta trava e diz por quê; a conversa volta sozinha quando a pessoa escreve de novo. Responder como atendimento humano até 7 dias (a etiqueta HUMAN_AGENT) pede a permissão própria da Meta, com a análise e a verificação do negócio: fica para depois.", "rec": "assim.", "porque": "Fora da janela a Meta recusa a mensagem (erro 10/2534022); mostrar o prazo evita a resposta perdida.", "fonte": "Meta, Instagram Messaging: Overview (\"How it works\"), Graph API page/messages (HUMAN_AGENT, 7 dias) e Features Reference: Human Agent, lidos em 11/11/2026."}, {"id": "D-A6-112", "titulo": "O que se guarda, e o que fica só no Instagram", "texto": "O texto das mensagens, quem mandou (o @ e o nome que a Meta devolve depois da primeira mensagem), a hora e a situação, por 90 dias, como os comentários. A mensagem que a pessoa apaga some do Liame também (regra da Meta). Foto, vídeo, áudio e story ficam só na Meta: a tela mostra o tipo e leva ao Instagram (a mídia do story não pode ser guardada). Figurinha e GIF não chegam pela API. O texto da Política de Privacidade (seção 7) entra antes de ligar para clientes.", "rec": "os 90 dias, como nos comentários.", "porque": "O mínimo para atender e para a sugestão; a Meta obriga a apagar a mensagem apagada e proíbe guardar a mídia do story.", "fonte": "Meta, Instagram Messaging: Webhooks (\"Limitations\") e Story mention, lidos em 11/11/2026."}, {"id": "D-A6-113", "titulo": "Chamar no Direct a partir de um comentário", "texto": "Na reclamação, em Comentários, \"Chamar no Direct\" manda uma mensagem particular a quem comentou: uma só por pessoa, até 7 dias depois do comentário, e a Meta junta o link do post. A conversa aparece aqui com a origem. Cai em Pedidos se a pessoa não segue a marca. Pede a análise da Meta (acesso avançado e a permissão de atendimento humano): entra depois da análise.", "rec": "assim, só na reclamação; nos outros tipos, a resposta pública basta.", "porque": "Leva para o particular o caso que não se resolve em público, como o passo a passo da reclamação já pede (D-A6-94).", "fonte": "Meta, Instagram Messaging: Private replies, lido em 11/11/2026."}, {"id": "D-A6-114", "titulo": "Como liga, e o que fica para depois", "texto": "Uma função própria, desligada, e a permissão de mensagens na autorização da Meta (conectar de novo, como nos comentários). No Instagram da marca, a opção que libera as mensagens para ferramentas conectadas precisa estar ligada; sem ela, a tela diz onde ligar. Até a análise da Meta (D-A6-81), só chegam as mensagens de quem tem papel no app, e a tela avisa. O atendimento automático do Direct entra na Z12, numa parte própria, depois da conversa com uma pessoa (D-A6-115).", "rec": "assim.", "porque": "O mesmo caminho das outras funções novas: nasce desligada, liga no piloto, e a análise vem quando estiver pronto.", "fonte": "Meta, Instagram Messaging: Get started (as permissões e a opção do Instagram), Error codes (2534041) e a política da Messenger Platform (aviso de experiência automática), lidos em 11/11/2026."}, {"id": "D-A6-115", "titulo": "O atendimento automático do Direct (pedido do dono, 11/11/2026)", "texto": "Como nos comentários (D-A6-92): ligado na marca pelo Dono ou por um Administrador, com o código do app, e desligado na hora, sem código, por quem aprova; tudo na auditoria. O Liame responde sozinho no Direct o elogio, a resposta ao story e a menção (a resposta pronta) e a pergunta que ele sabe responder com certeza (o \"sim\" do Social media, a conferência sem aviso e nada barrado, como na D-A6-105). Toda resposta automática termina com o aviso, escrito pelo código: \"Resposta automática · para falar com alguém da equipe, é só pedir aqui\". Sempre espera uma pessoa: a reclamação, a pergunta sem certeza, o golpe e quem pede para falar com alguém. Limites: uma resposta automática por mensagem da pessoa; no máximo duas seguidas na mesma conversa (a seguinte vai para uma pessoa); no máximo 30 por hora na marca; nunca fora da janela da Meta; só onde o Liame atende o Direct (não onde o Regem atende). Antes de ligar, a gaveta mostra como ele teria respondido as conversas recentes.", "rec": "assim. No piloto, com a consulta a cada minuto, ele só responde a quem tem papel no app; para os clientes, ele espera o aviso da Meta (o app publicado e a análise), porque a Meta pede que a resposta automática saia em até 30 segundos.", "porque": "O dono quer o Liame atendendo no Direct como nos comentários; os limites seguram o erro e a conversa que vira um robô falando sozinho, e a Meta pede o aviso de automação e o caminho para uma pessoa.", "fonte": "Meta, política da Messenger Platform (aviso de experiência automática; resposta em até 30 segundos) e Instagram Messaging: Overview (\"Human agent escalation\"), lidos em 11/11/2026."}, {"id": "D-A6-120", "proposta": true, "titulo": "O Messenger na mesma tela do Direct", "texto": "Como a D-A6-106 já previa: o Messenger da Página entra na tela do Direct como outro canal, e o item do menu passa a \"Direct e Messenger\" quando o Messenger está ligado na marca (com só o Direct, segue \"Direct\"). A lista junta os dois canais, com o ícone do canal ao lado do nome, e ganha o filtro de canal (Instagram e Messenger, Instagram, Messenger). As situações, a busca, a janela, a sugestão do Social media, o contador do menu e o \"Concluir\" são os mesmos.", "rec": "assim.", "porque": "Quem responde é a mesma equipe, com as mesmas regras (janela de 24 horas, nada de aprovação por mensagem); uma caixa só evita duas filas.", "fonte": "Meta, Messenger Platform: Send Messages e a referência `GET /{page-id}/conversations` (platform `MESSENGER`), lidas em 11/11/2026; a base de conhecimento §2.2 (o Direct pela API)."}, {"id": "D-A6-121", "proposta": true, "titulo": "Cada canal liga separado, e o Regem é conferido por canal", "texto": "O Direct (o Instagram) e o Messenger (a Página) ligam e desligam separados na marca, cada um com a confirmação de que nenhum outro programa responde aquele canal e o código do app. O Regem é conferido por canal: se a Central atende o Messenger da Página (pela página na resposta dela), o Messenger do Liame desliga sozinho, e o Direct segue (e o contrário). A mesma porta do Regem já diz as duas coisas (`atendimento.canais.ler`).", "rec": "assim.", "porque": "Uma marca pode atender o Messenger por outro caminho (ou pelo Regem) e o Direct pelo Liame; desligar um não pode derrubar o outro.", "fonte": "A porta do Regem `GET /integracao/atendimento/canais` (instagram e messenger), no ar desde 11/11/2026 (Regem #907)."}, {"id": "D-A6-122", "proposta": true, "titulo": "O mesmo atendimento aberto e o mesmo automático", "texto": "O atendimento aberto (8 horas, com o código do app) vale para os dois canais: quem abriu responde no Direct e no Messenger. O atendimento automático, se ligado, também: os mesmos tipos, o mesmo aviso no fim, o teto de 30 por hora somando os dois canais e as duas seguidas por conversa; ele só responde no canal que está ligado e lido pelo Liame.", "rec": "assim.", "porque": "Um controle a menos para a equipe; o que muda entre os canais é só onde a mensagem chega."}, {"id": "D-A6-123", "proposta": true, "titulo": "O que fica guardado do Messenger", "texto": "O texto das mensagens e o nome que a pessoa usa no Facebook (no Messenger não há @), com o id da pessoa na Página, por 90 dias, como no Direct; foto, vídeo, áudio e arquivo só como o tipo, com o caminho para o Messenger. Nada de e-mail nem telefone de quem escreve. Ler pelo Liame não marca a mensagem como vista no Messenger (a conferir no primeiro teste).", "rec": "assim; a Política (seção 7) ganha o Messenger junto do Direct, antes de ligar para os clientes.", "porque": "A mesma régua do Direct (D-A6-112): o mínimo para responder, pelo menor tempo."}, {"id": "D-A6-124", "proposta": true, "titulo": "As permissões do Messenger e o que espera a Meta", "texto": "O Messenger pede `pages_messaging`, `pages_manage_metadata` e `pages_read_engagement`, com a tarefa de mensagens na Página (MESSAGING). Vêm na mesma configuração de escrita da Meta (conectar de novo, como nos comentários e no Direct). Com o app em desenvolvimento, só chegam as mensagens de quem tem papel no app; para os clientes, a análise da Meta (D-A6-81). A resposta fora da janela (a etiqueta de atendimento humano, até 7 dias) fica para depois da análise. Junto, a leitura do Direct passa a aceitar a tarefa MESSAGING (hoje ela pede a de moderar), como a referência da Meta diz.", "rec": "assim.", "porque": "O mesmo caminho das outras funções novas: nasce desligado, liga no piloto, e a análise vem quando estiver pronto.", "fonte": "Meta, Messenger Platform: Send Messages e a referência `GET /{page-id}/conversations` (platform `MESSENGER`), lidas em 11/11/2026; a base de conhecimento §2.2 (o Direct pela API)."}];
+window.P39_PERGUNTAS = ["Versão 3: o atendimento automático, quando ligado, vale também para o Messenger (D-A6-122)? Recomendo sim; se preferir, ele fica só no Direct."];
 
 
 /* ===================== A6 · P39 · Direct do Instagram (Z12) ===================== */
@@ -1082,9 +1094,19 @@ const P39_ESTADOS = {
   'sem-permissao': 'Falta a permissão de mensagens',
   'sem-instagram': 'A marca sem Instagram',
   desligada: 'Sem a função liberada',
+  messenger: 'Versão 3 · Direct e Messenger na mesma caixa (o filtro de canal)',
+  'messenger-reclamacao': 'Versão 3 · Uma reclamação pelo Messenger',
+  'regem-messenger': 'Versão 3 · O Regem atende só o Messenger desta Página',
+  'ligar-messenger': 'Versão 3 · Ligar o Messenger da Página',
+  'sem-permissao-messenger': 'Versão 3 · Falta a permissão de mensagens da Página',
 };
 // Que conversa cada estado abre (null = a lista sozinha no estreito, a primeira no largo).
-const P39_ABRE = { caixa: 'ana', reclamacao: 'rui', 'sem-certeza': 'joao', story: 'beatriz', 'do-comentario': 'rafa', golpe: 'promo', 'fora-janela': 'marina', 'outro-app': 'rui', auto: 'ana', aberto: 'ana', 'somente-leitura': 'ana', 'teste-meta': 'ana' };
+const P39_ABRE = { caixa: 'ana', reclamacao: 'rui', 'sem-certeza': 'joao', story: 'beatriz', 'do-comentario': 'rafa', golpe: 'promo', 'fora-janela': 'marina', 'outro-app': 'rui', auto: 'ana', aberto: 'ana', 'somente-leitura': 'ana', 'teste-meta': 'ana', messenger: 'fernanda', 'messenger-reclamacao': 'carlos' };
+/* Os estados da versão 3: o Messenger ligado na marca (o menu vira "Direct e Messenger"). */
+const P39_V3 = ['messenger', 'messenger-reclamacao', 'regem-messenger', 'ligar-messenger', 'sem-permissao-messenger'];
+/* Nestes, o Messenger está ligado, mas fora da caixa (o Regem atende, ou falta a permissão): só o Direct aparece. */
+const P39_SO_DIRECT = ['regem-messenger', 'ligar-messenger', 'sem-permissao-messenger'];
+const P39_PAGINA = 'Página Mister Burgers';
 
 const P39_PRONTA = 'Resposta pronta, sem IA: a mesma regra do elogio nos comentários';
 function p39Dados() {
@@ -1176,10 +1198,55 @@ function p39Dados() {
       msgs: [{ de: 'deles', texto: 'Tem opção vegetariana?', hora: 'dom., 11:00' }],
       sug: null,
     },
+  ].map((c) => ({ canal: 'instagram', ...c }));
+}
+
+/* versão 3 (proposta, espera o dono): o Messenger da Página na mesma caixa (D-A6-106; D-A6-120 a D-A6-124). No
+   Messenger não há @: a Meta manda o nome que a pessoa usa no Facebook. */
+function p39DadosMessenger() {
+  return [
+    {
+      id: 'fernanda', canal: 'messenger', nome: 'Fernanda Lima', user: 'Messenger', ini: 'FL', tipo: 'Pergunta', situacao: 'espera', hora: '13:40', naoLida: true, segue: 'pela Página Mister Burgers',
+      janela: { nivel: 'ok', texto: 'Dá para responder até amanhã, às 13:40 (faltam 23 h 35 min).' },
+      msgs: [{ de: 'deles', texto: 'Boa tarde! Vocês fazem reserva para aniversário? Seríamos 15 pessoas no sábado.', hora: '13:40' }],
+      sug: { tipo: 'pergunta', texto: 'Boa tarde! Vou confirmar com a loja a reserva para 15 pessoas no sábado e te respondo aqui ainda hoje.', falta: 'Minha marca não diz se a loja faz reserva para grupos: o Social media não sabe responder com certeza. Confira com a loja, ou escreva a resposta.' },
+    },
+    {
+      id: 'carlos', canal: 'messenger', nome: 'Carlos Eduardo', user: 'Messenger', ini: 'CE', tipo: 'Reclamação', situacao: 'espera', hora: '12:55', naoLida: true, segue: 'pela Página Mister Burgers',
+      janela: { nivel: 'ok', texto: 'Dá para responder até amanhã, às 12:55 (faltam 22 h 50 min).' },
+      msgs: [{ de: 'deles', texto: 'O entregador deixou meu pedido na portaria errada e ninguém me avisou. Pedido 4817.', hora: '12:55' }],
+      sug: {
+        tipo: 'reclamacao',
+        passos: [
+          'Peça desculpas, sem discutir o que houve.',
+          'O número do pedido já veio (4817): confira com a loja e com a entrega o que aconteceu antes de prometer qualquer coisa.',
+          'Combine a solução com a loja. O Liame não promete reembolso, troca nem brinde: isso é decisão sua, escrita por você.',
+        ],
+        opcoes: [
+          { enfoque: 'Pedir desculpas e confirmar o pedido', texto: 'Desculpa pelo transtorno. Já passei o pedido 4817 para a loja conferir a entrega e te respondo aqui ainda hoje.' },
+          { enfoque: 'Explicar o que houve', texto: 'Desculpa! A loja está conferindo com a entrega onde o pedido 4817 foi deixado. Te conto aqui o que encontrarmos.' },
+          { enfoque: 'Agradecer o aviso e dizer o que muda', texto: 'Obrigado pelo aviso, e desculpa. Vamos reforçar com a entrega a confirmação do endereço. Sobre o pedido 4817, te respondo aqui ainda hoje.' },
+        ],
+      },
+    },
+    {
+      id: 'helena', canal: 'messenger', nome: 'Helena Prado', user: 'Messenger', ini: 'HP', tipo: 'Elogio', situacao: 'respondida', hora: '09:20', naoLida: false, segue: 'pela Página Mister Burgers',
+      janela: { nivel: 'ok', texto: 'Respondida. Se ela escrever de novo, a janela abre outra vez.' },
+      msgs: [
+        { de: 'deles', texto: 'Melhor hambúrguer da Penha, parabéns!', hora: '09:10' },
+        { de: 'nossa', texto: 'Obrigado! Esperamos você de novo.', hora: '09:20', quem: 'Rodrigo' },
+      ],
+      sug: null,
+    },
   ];
 }
 
-const p39 = { estado: 'caixa', filtro: 'esperam', busca: '', aberta: 'ana', turno: null, convs: p39Dados(), outra: new Set(), pendente: null, ligado: true, auto: { ligado: false, tipos: [] } };
+
+const p39 = { estado: 'caixa', filtro: 'esperam', busca: '', aberta: 'ana', turno: null, convs: p39Dados(), outra: new Set(), pendente: null, ligado: true, auto: { ligado: false, tipos: [] }, canal: 'todos', messenger: false };
+/* As conversas do canal escolhido (versão 3): todas, só as do Instagram ou só as do Messenger. */
+function p39NoCanal() { return p39.convs.filter((c) => p39.canal === 'todos' || c.canal === p39.canal); }
+/* Os dois canais na caixa: o filtro de canal aparece e o menu diz "Direct e Messenger". */
+function p39DoisCanais() { return p39.messenger && !P39_SO_DIRECT.includes(p39.estado); }
 // O aviso que o código põe no fim de toda resposta automática do Direct (D-A6-115; Termos 5.5 e 6.3).
 const P39_AVISO = 'Resposta automática · para falar com alguém da equipe, é só pedir aqui';
 const P39_TIPOS_AUTO = [
@@ -1204,7 +1271,7 @@ function p39Visiveis() {
   const f = P39_FILTROS.find(([id]) => id === p39.filtro)[2];
   const q = p39.busca.trim().toLowerCase();
   const ordem = (c) => (c.janela.nivel === 'atencao' ? 0 : c.situacao === 'espera' ? 1 : 2);
-  return p39.convs.filter(f).filter((c) => !q || `${c.nome} ${c.user} ${c.msgs.map((m) => m.texto).join(' ')}`.toLowerCase().includes(q)).sort((a, b) => ordem(a) - ordem(b));
+  return p39NoCanal().filter(f).filter((c) => !q || `${c.nome} ${c.user} ${c.msgs.map((m) => m.texto).join(' ')}`.toLowerCase().includes(q)).sort((a, b) => ordem(a) - ordem(b));
 }
 
 function p39Nota(icone, texto, forte = '') {
@@ -1221,7 +1288,7 @@ function p39ContaHtml() {
   const turno = p39.turno
     ? `<span class="p39-turno">${ic('i-check', 'ic')}Atendimento aberto até ${esc(p39.turno.ate)}, por ${esc(p39.turno.quem)}</span><button class="btn btn--sm btn--ghost" type="button" data-p39-fechar-turno>Fechar o atendimento</button>`
     : `<span class="p39-turno p39-turno--fechado">${ic('i-lock', 'ic')}Atendimento fechado: mandar pede o código uma vez</span>`;
-  return `<div class="p39-conta"><p class="p39-conta-txt"><span class="p39-conta-item">${ic('i-instagram')}<b>${P39_CONTA}</b></span><span class="p39-conta-item">${ic('i-clock')}Lido há 1 min: o Liame lê a cada minuto</span></p><div class="p39-conta-acoes">${p39.estado === 'somente-leitura' ? '' : turno}</div></div>`;
+  return `<div class="p39-conta"><p class="p39-conta-txt"><span class="p39-conta-item">${ic('i-instagram')}<b>${P39_CONTA}</b></span>${!p39.messenger ? '' : `<span class="p39-conta-item">${ic('i-facebook')}<b>${P39_PAGINA}</b>${p39.estado === 'regem-messenger' ? ' · Messenger com o Regem' : p39.estado === 'sem-permissao-messenger' ? ' · Messenger sem a permissão' : p39.estado === 'ligar-messenger' ? ' · Messenger desligado' : ''}</span>`}<span class="p39-conta-item">${ic('i-clock')}Lido há 1 min: o Liame lê a cada minuto</span></p><div class="p39-conta-acoes">${p39.estado === 'somente-leitura' ? '' : turno}</div></div>`;
 }
 
 /* versão 2 (pedido do dono, 11/11/2026): o atendimento automático do Direct (D-A6-115), no molde do P38 versão 2 */
@@ -1256,10 +1323,12 @@ function p39GavetaAuto() {
 
 function p39BarraHtml() {
   const chips = P39_FILTROS.map(([id, rot, f]) => {
-    const n = p39.convs.filter(f).length;
+    const n = p39NoCanal().filter(f).length;
     return `<button class="chip" type="button" data-p39-filtro="${id}" aria-pressed="${p39.filtro === id}">${esc(rot)} <span class="num">${n}</span></button>`;
   }).join('');
-  return `<div class="p39-barra"><div class="p39-filtros" role="group" aria-label="Situação das conversas">${chips}</div><div class="p39-busca">${ic('i-search')}<label class="sr-only" for="p39-busca">Buscar nas conversas</label><input class="input" id="p39-busca" type="search" placeholder="Buscar por nome, @ ou mensagem" value="${esc(p39.busca)}" autocomplete="off"></div></div>`;
+  const canais = !p39DoisCanais() ? '' : `<div class="p39-filtros" role="group" aria-label="Canal">${[['todos', 'Instagram e Messenger'], ['instagram', 'Instagram'], ['messenger', 'Messenger']]
+    .map(([id, rot]) => `<button class="chip" type="button" data-p39-canal="${id}" aria-pressed="${p39.canal === id}">${id === 'todos' ? '' : ic(id === 'messenger' ? 'i-facebook' : 'i-instagram', 'ic ic-sm')}${esc(rot)}</button>`).join('')}</div>`;
+  return `<div class="p39-barra"><div class="p39-filtros" role="group" aria-label="Situação das conversas">${chips}</div>${canais}<div class="p39-busca">${ic('i-search')}<label class="sr-only" for="p39-busca">Buscar nas conversas</label><input class="input" id="p39-busca" type="search" placeholder="Buscar por nome, @ ou mensagem" value="${esc(p39.busca)}" autocomplete="off"></div></div>`;
 }
 
 function p39ListaHtml() {
@@ -1277,7 +1346,7 @@ function p39ListaHtml() {
     const prazo = c.situacao === 'espera' && c.janela.nivel === 'atencao' ? '<span class="st st--perigo">Janela fecha em 40 min</span>' : c.situacao === 'fora' ? '<span class="st st--espera">Fora da janela</span>' : c.situacao === 'respondida' && !sozinho ? '<span class="st st--espera">Respondida</span>' : '';
     const selo = !c.selo ? '' : sozinho ? `<span class="st st--concluido">${ic('i-zap', 'ic ic-sm')}Respondida sozinho</span>` : `<span class="st st--espera">${esc(c.selo)}</span>`;
     const sug = c.sug && c.situacao === 'espera' ? (c.sug.falta ? '<span class="st st--aguardando">Precisa de você</span>' : `<span class="st st--espera">${ic('i-sparkles', 'ic ic-sm')}Sugestão pronta</span>`) : '';
-    return `<li><button class="p39-linha${c.naoLida ? ' nao-lida' : ''}" type="button" data-p39-abrir="${c.id}" aria-current="${p39.aberta === c.id}">${c.naoLida ? '<span class="p39-nao-lida" aria-hidden="true"></span>' : ''}<span class="p39-av" aria-hidden="true">${esc(c.ini)}</span><span class="p39-linha-corpo"><span class="p39-linha-cab"><span class="p39-nome">${esc(c.nome)}</span><span class="p39-hora">${esc(c.hora)}</span></span><span class="p39-previa">${esc(previa)}</span><span class="p39-selos"><span class="st ${P39_SELO[c.tipo] || 'st--espera'}">${esc(c.tipo)}</span>${selo}${prazo}${sug}</span>${c.naoLida ? '<span class="sr-only">, não lida</span>' : ''}</span></button></li>`;
+    return `<li><button class="p39-linha${c.naoLida ? ' nao-lida' : ''}" type="button" data-p39-abrir="${c.id}" aria-current="${p39.aberta === c.id}">${c.naoLida ? '<span class="p39-nao-lida" aria-hidden="true"></span>' : ''}<span class="p39-av" aria-hidden="true">${esc(c.ini)}</span><span class="p39-linha-corpo"><span class="p39-linha-cab">${p39DoisCanais() ? `<span class="p39-canal" aria-hidden="true">${ic(c.canal === 'messenger' ? 'i-facebook' : 'i-instagram', 'ic')}</span>` : ''}<span class="p39-nome">${esc(c.nome)}</span><span class="p39-hora">${esc(c.hora)}</span></span><span class="p39-previa">${esc(previa)}</span><span class="p39-selos"><span class="st ${P39_SELO[c.tipo] || 'st--espera'}">${esc(c.tipo)}</span>${selo}${prazo}${sug}</span>${p39DoisCanais() ? `<span class="sr-only">, pelo ${c.canal === 'messenger' ? 'Messenger' : 'Instagram'}</span>` : ''}${c.naoLida ? '<span class="sr-only">, não lida</span>' : ''}</span></button></li>`;
   }).join('')}</ul>`;
 }
 
@@ -1329,7 +1398,7 @@ function p39ConversaHtml(c) {
   const leitura = p39.estado === 'somente-leitura';
   const jan = c.janela.nivel === 'atencao' ? 'p39-janela--atencao' : c.janela.nivel === 'fechada' ? 'p39-janela--fechada' : '';
   const janIc = c.janela.nivel === 'fechada' ? 'i-lock' : c.janela.nivel === 'atencao' ? 'i-alert' : 'i-clock';
-  return `<div class="p39-conv-cab"><button class="btn btn--sm btn--ghost p39-voltar" type="button" data-p39-voltar>${ic('i-chevron-left')}Voltar</button><div class="p39-conv-quem"><b id="p39-conv-t" tabindex="-1">${esc(c.nome)}</b><span>${esc(c.user)} · ${esc(c.segue)}</span></div><div class="p39-conv-acoes"><a class="btn btn--sm btn--ghost" href="https://www.instagram.com/direct/inbox/" target="_blank" rel="noopener">${ic('i-external')}Abrir no Instagram</a></div></div>
+  return `<div class="p39-conv-cab"><button class="btn btn--sm btn--ghost p39-voltar" type="button" data-p39-voltar>${ic('i-chevron-left')}Voltar</button><div class="p39-conv-quem"><b id="p39-conv-t" tabindex="-1">${esc(c.nome)}</b><span>${esc(c.user)} · ${esc(c.segue)}</span></div><div class="p39-conv-acoes">${c.canal === 'messenger' ? `<a class="btn btn--sm btn--ghost" href="https://business.facebook.com/latest/inbox" target="_blank" rel="noopener">${ic('i-external')}Abrir no Messenger</a>` : `<a class="btn btn--sm btn--ghost" href="https://www.instagram.com/direct/inbox/" target="_blank" rel="noopener">${ic('i-external')}Abrir no Instagram</a>`}</div></div>
     <p class="p39-janela ${jan}">${ic(janIc)}<span>${esc(c.janela.texto)}</span></p>
     <div class="p39-fio" role="log" aria-label="Mensagens com ${esc(c.nome)}">${c.origem ? `<p class="p39-origem">${ic('i-comentario')}<span>${esc(c.origem)}</span></p>` : ''}${c.msgs.map(p39MsgHtml).join('')}</div>
     ${p39SugHtml(c, leitura)}${p39RespHtml(c, leitura)}`;
@@ -1352,14 +1421,23 @@ function p39LigarHtml() {
 }
 
 function p39DecisoesHtml() {
-  const lista = (window.P39_DECISOES || []).map((d) => `<li class="p39-dec"><p class="p39-dec-cab"><code>${esc(d.id)}</code><b>${esc(d.titulo)}</b></p><p>${esc(d.texto)}</p>${d.porque ? `<p>Por quê: ${esc(d.porque)}</p>` : ''}${d.rec ? `<p class="rec">Recomendo: ${esc(d.rec)}</p>` : ''}${d.fonte ? `<p class="p39-fato">Fonte: ${esc(d.fonte)}</p>` : ''}</li>`).join('');
+  const lista = (window.P39_DECISOES || []).map((d) => `<li class="p39-dec"><p class="p39-dec-cab"><code>${esc(d.id)}</code><b>${esc(d.titulo)}</b>${d.proposta ? '<span class="p39-dec-proposta">Proposta: espera você</span>' : ''}</p><p>${esc(d.texto)}</p>${d.porque ? `<p>Por quê: ${esc(d.porque)}</p>` : ''}${d.rec ? `<p class="rec">Recomendo: ${esc(d.rec)}</p>` : ''}${d.fonte ? `<p class="p39-fato">Fonte: ${esc(d.fonte)}</p>` : ''}</li>`).join('');
   const perguntas = (window.P39_PERGUNTAS || []).map((p) => `<li>${esc(p)}</li>`).join('');
-  return `<section class="card p39-proto p39-decisoes" aria-labelledby="p39-dec-t"><h2 id="p39-dec-t">Decisões (aprovadas em 11/11/2026)</h2><p class="lite-frase">Aprovadas por você em 11/11/2026, com as recomendações. As três perguntas ficaram com a recomendada: 8 horas de atendimento aberto; responde o Dono, os Administradores e quem aprova; as mensagens ficam 90 dias. A D-A6-115, o modo automático, veio do seu pedido no mesmo dia. Nada disto está no app ainda.</p><ul class="p39-decisoes p39-dec-lista">${lista}</ul>${perguntas ? `<div class="p39-dec"><p class="p39-dec-cab"><b>Perguntas para você</b></p><ul>${perguntas}</ul></div>` : ''}</section>`;
+  return `<section class="card p39-proto p39-decisoes" aria-labelledby="p39-dec-t"><h2 id="p39-dec-t">Decisões</h2><p class="lite-frase">As D-A6-106 a D-A6-115 foram aprovadas por você em 11/11/2026, com as recomendações (8 horas de atendimento aberto; responde o Dono, os Administradores e quem aprova; as mensagens ficam 90 dias; o modo automático, a seu pedido). No mesmo dia, o Direct entrou no app (a leitura, responder, a tela, o tipo de cada conversa e o automático sem IA, tudo desligado). A versão 3 propõe o Messenger da Página na mesma caixa: as D-A6-120 a D-A6-124 esperam você.</p><ul class="p39-decisoes p39-dec-lista">${lista}</ul>${perguntas ? `<div class="p39-dec"><p class="p39-dec-cab"><b>Perguntas para você</b></p><ul>${perguntas}</ul></div>` : ''}</section>`;
 }
 
 function p39Render({ focar = false } = {}) {
   const e = p39.estado;
   let corpo = '';
+  // O nome da tela segue os canais ligados (D-A6-120): com o Messenger ligado na marca, "Direct e Messenger".
+  const nome = p39.messenger ? 'Direct e Messenger' : 'Direct';
+  const rot = $('[data-tela="direct"] .rot'); if (rot) rot.textContent = nome;
+  const h = $('#h-direct'); if (h) h.textContent = nome;
+  const tr = $('.trilha strong'); if (tr) tr.textContent = nome;
+  const sub = $('#tela-direct .view-cab p');
+  if (sub) sub.textContent = p39.messenger
+    ? 'As mensagens que as pessoas mandam para o Instagram e para a Página da marca no Facebook. A resposta é particular e sai em nome da marca: o Social media sugere, e alguém da equipe escreve ou escolhe e manda.'
+    : 'As mensagens que as pessoas mandam para o Instagram da marca. A resposta é particular e sai em nome da marca: o Social media sugere, e alguém da equipe escreve ou escolhe e manda.';
   if (e === 'desligada') {
     corpo = p39Vazio('i-lock', 'O Direct ainda não está liberado para a sua empresa', 'Quando a distribuição do Liame liberar, esta tela mostra as mensagens que as pessoas mandam para o Instagram da marca, com as sugestões de resposta do Social media.');
   } else if (e === 'sem-instagram') {
@@ -1371,6 +1449,18 @@ function p39Render({ focar = false } = {}) {
   } else if (e === 'regem') {
     corpo = p39Faixa('acao', 'i-plug', 'O Direct desta conta é atendido no Regem', `A Central de atendimento do Regem responde o Direct do ${P39_CONTA}, com o robô dela. Para ninguém receber duas respostas, o Liame não lê, não guarda e não responde o Direct desta conta.`, '<button class="btn btn--sm" type="button" data-p39-conferir>Conferir de novo</button>')
       + `<div class="card">${p39Nota('i-check', 'Conferido com o Regem pela ligação da loja hoje, às 14:02. O Liame confere de novo a cada leitura.')}${p39Nota('i-info', 'Para atender o Direct por aqui, desligue o Direct do Instagram no Regem. Na conferência seguinte, esta tela oferece ligar o Direct no Liame.')}${p39Nota('i-comentario', 'Os comentários continuam em Comentários, pelo Liame: o Regem atende só as mensagens.')}</div>`;
+  } else if (e === 'ligar-messenger') {
+    // versão 3: o Direct já ligado, e o cartão de ligar o Messenger da Página em cima da caixa (D-A6-121).
+    corpo = `<div class="card"><div class="card-cab"><div><h2>Ligar o Messenger no Liame</h2><p class="card-sub">As mensagens do Messenger da ${P39_PAGINA} chegam aqui, junto do Direct, e a mesma equipe responde.</p></div></div>
+      <ol class="p39-ligar">
+        <li class="p39-passo p39-passo--ok"><span class="p39-passo-n">1</span><div class="p39-passo-corpo"><b>A permissão de mensagens da Página</b><p>A autorização da Meta já tem a permissão de ler e responder o Messenger da ${P39_PAGINA} (a de mensagens da Página), e quem autorizou pode mandar mensagens por ela.</p></div></li>
+        <li class="p39-passo p39-passo--ok"><span class="p39-passo-n">2</span><div class="p39-passo-corpo"><b>Ninguém mais responde este Messenger</b><p>Conferido com o Regem agora: a Central de atendimento do Regem não atende o Messenger desta Página. Se o Regem passar a atender, o Messenger do Liame desliga sozinho, e o Direct segue como está.</p><label class="check"><input type="checkbox" id="p39-ninguem-msg"> Nenhum outro programa responde o Messenger da ${P39_PAGINA} (um robô ou outro atendimento ligado à Página).</label></div></li>
+        <li class="p39-passo"><span class="p39-passo-n">3</span><div class="p39-passo-corpo"><b>Quem responde, e o atendimento automático</b><p>As mesmas pessoas do Direct, com o mesmo atendimento aberto (8 horas). O atendimento automático, se estiver ligado, vale também para o Messenger, com os mesmos tipos e limites.</p></div></li>
+        <li class="p39-passo"><span class="p39-passo-n">4</span><div class="p39-passo-corpo"><b>O que fica guardado</b><p>O texto das mensagens e o nome que a pessoa usa no Facebook, por 90 dias; fotos, vídeos e áudios ficam só no Messenger. A janela é a mesma do Direct: 24 horas depois da última mensagem da pessoa.</p></div></li>
+      </ol>
+      <p class="campo-erro" id="p39-ligar-erro" hidden></p>
+      <div class="seg-acoes"><button class="btn btn--primary" type="button" data-p39-ligar-messenger aria-haspopup="dialog">Ligar o Messenger no Liame</button></div></div>`
+      + p39ContaHtml() + p39AutoLinhaHtml() + p39BarraHtml() + p39CaixaHtml();
   } else if (e === 'ligar') {
     corpo = `<div class="card"><div class="card-cab"><div><h2>Ligar o Direct no Liame</h2><p class="card-sub">As mensagens do ${P39_CONTA} chegam aqui, com a sugestão do Social media, e alguém da equipe responde.</p></div></div>${p39LigarHtml()}</div>`;
   } else if (e === 'primeira') {
@@ -1382,7 +1472,11 @@ function p39Render({ focar = false } = {}) {
   } else {
     const faixa = e === 'teste-meta'
       ? p39Faixa('atencao', 'i-info', 'O Liame ainda está em teste na Meta', 'Até a Meta aprovar o Liame para mensagens, só chegam aqui as mensagens de quem tem papel no app do Liame. As outras pessoas continuam falando com a marca pelo Instagram, e a equipe responde por lá.')
-      : '';
+      : e === 'regem-messenger'
+        ? p39Faixa('acao', 'i-plug', 'O Messenger desta Página é atendido no Regem', `A Central de atendimento do Regem responde o Messenger da ${P39_PAGINA}. Para ninguém receber duas respostas, o Liame não lê nem responde o Messenger dela; o Direct do ${P39_CONTA} segue aqui.`, '<button class="btn btn--sm" type="button" data-p39-conferir>Conferir de novo</button>')
+        : e === 'sem-permissao-messenger'
+          ? p39Faixa('atencao', 'i-alert', 'Falta a permissão de mensagens da Página', `A autorização da Meta não deixa o Liame ler nem responder o Messenger da ${P39_PAGINA}. Conecte a Meta de novo e confirme a Página em "Escolher contas"; a permissão nova vem junto. O Direct segue aqui.`, '<a class="btn btn--sm" href="#" data-p39-contas>Conectar a Meta de novo</a>')
+          : '';
     corpo = faixa + p39ContaHtml() + p39AutoLinhaHtml() + p39BarraHtml() + p39CaixaHtml();
   }
   $('#direct').innerHTML = `<div class="p39">${corpo}${p39DecisoesHtml()}</div>`;
@@ -1405,7 +1499,9 @@ function p39Contador() {
 
 function p39Aplicar(estado, { focar = false } = {}) {
   p39.estado = estado;
-  p39.convs = p39Dados();
+  p39.messenger = P39_V3.includes(estado);
+  p39.canal = 'todos';
+  p39.convs = p39.messenger && !P39_SO_DIRECT.includes(estado) ? [...p39Dados(), ...p39DadosMessenger()] : p39Dados();
   p39.outra = new Set();
   p39.busca = '';
   p39.filtro = estado === 'fora-janela' ? 'fora' : 'esperam';
@@ -1448,11 +1544,12 @@ function p39Mandar(texto) {
 /* o diálogo do código: abrir o atendimento (antes de mandar) ou ligar o Direct */
 function p39Codigo(modo, origem) {
   const dlg = $('#dlg-p39');
-  const ligar = modo === 'ligar';
-  $('#p39d-form').innerHTML = `<div class="dialogo-cab"><h2 id="dlg-p39-t">${ligar ? 'Ligar o Direct no Liame' : 'Abrir o atendimento'}</h2><button class="btn btn--icon btn--ghost" type="button" data-fechar aria-label="Fechar">${ic('i-x')}</button></div>
-    <div class="dialogo-corpo"><p>${ligar ? `As mensagens do ${P39_CONTA} passam a chegar aqui. Ligar fica na auditoria, com o seu nome.` : 'Com o atendimento aberto, as suas respostas no Direct saem sem pedir o código de novo por 8 horas, até as 22:05, ou até você fechar. Cada mensagem fica na auditoria com o seu nome.'}</p>
+  const ligar = modo === 'ligar' || modo === 'ligar-messenger';
+  const doMessenger = modo === 'ligar-messenger';
+  $('#p39d-form').innerHTML = `<div class="dialogo-cab"><h2 id="dlg-p39-t">${doMessenger ? 'Ligar o Messenger no Liame' : ligar ? 'Ligar o Direct no Liame' : 'Abrir o atendimento'}</h2><button class="btn btn--icon btn--ghost" type="button" data-fechar aria-label="Fechar">${ic('i-x')}</button></div>
+    <div class="dialogo-corpo"><p>${doMessenger ? `As mensagens do Messenger da ${P39_PAGINA} passam a chegar aqui, junto do Direct. Ligar fica na auditoria, com o seu nome.` : ligar ? `As mensagens do ${P39_CONTA} passam a chegar aqui. Ligar fica na auditoria, com o seu nome.` : 'Com o atendimento aberto, as suas respostas no Direct saem sem pedir o código de novo por 8 horas, até as 22:05, ou até você fechar. Cada mensagem fica na auditoria com o seu nome.'}</p>
     <div class="p39-codigo"><label for="p39-cod">Código do app autenticador</label><input class="input num" id="p39-cod" inputmode="numeric" autocomplete="one-time-code" maxlength="6" aria-describedby="p39-cod-erro"></div><p class="campo-erro" id="p39-cod-erro" hidden></p></div>
-    <div class="dialogo-acoes"><button class="btn" type="button" data-fechar>Cancelar</button><button class="btn btn--primary" type="submit">${ligar ? 'Ligar o Direct' : 'Abrir e mandar'}</button></div>`;
+    <div class="dialogo-acoes"><button class="btn" type="button" data-fechar>Cancelar</button><button class="btn btn--primary" type="submit">${doMessenger ? 'Ligar o Messenger' : ligar ? 'Ligar o Direct' : 'Abrir e mandar'}</button></div>`;
   dlg.dataset.modo = modo;
   abrirDialogo(dlg, origem);
   setTimeout(() => $('#p39-cod').focus(), 0);
@@ -1471,6 +1568,11 @@ function p39Iniciar() {
     if (msg) { erro.textContent = msg; erro.hidden = false; cod.setAttribute('aria-invalid', 'true'); cod.focus(); return; }
     const modo = dlg.dataset.modo;
     dlg.close('ok');
+    if (modo === 'ligar-messenger') {
+      toast('Messenger ligado. A primeira leitura começa em até 1 minuto.');
+      p39Aplicar('messenger', { focar: true });
+      return;
+    }
     if (modo === 'ligar') {
       toast('Direct ligado. A primeira leitura começa em até 1 minuto.');
       p39.estado = 'primeira'; p39Render({ focar: true });
@@ -1535,6 +1637,17 @@ function p39Iniciar() {
     }
     const auto = alvo.closest('[data-p39-auto]');
     if (auto) { p39GavetaAuto(); abrirDialogo($('#dlg-p39a'), auto); return; }
+    const cn = alvo.closest('[data-p39-canal]');
+    if (cn) { p39.canal = cn.dataset.p39Canal; p39Render(); const b = $(`[data-p39-canal="${p39.canal}"]`); if (b) b.focus(); return; }
+    if (alvo.closest('[data-p39-contas]')) { ev.preventDefault(); toast('Contas conectadas: fora deste protótipo.'); return; }
+    const lm = alvo.closest('[data-p39-ligar-messenger]');
+    if (lm) {
+      const marcado = $('#p39-ninguem-msg').checked, erro = $('#p39-ligar-erro');
+      if (!marcado) { erro.textContent = 'Confirme que nenhum outro programa responde o Messenger desta Página.'; erro.hidden = false; $('#p39-ninguem-msg').focus(); return; }
+      erro.hidden = true;
+      p39Codigo('ligar-messenger', lm);
+      return;
+    }
     const f = alvo.closest('[data-p39-filtro]');
     if (f) { p39.filtro = f.dataset.p39Filtro; p39Render(); const b = $(`[data-p39-filtro="${p39.filtro}"]`); if (b) b.focus(); return; }
     if (alvo.closest('[data-p39-limpar]')) { p39.busca = ''; p39Render(); $('#p39-busca').focus(); return; }
