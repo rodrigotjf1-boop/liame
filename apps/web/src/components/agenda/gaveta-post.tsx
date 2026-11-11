@@ -16,7 +16,8 @@ import { oQueOPostTrouxe } from './post-trouxe';
 import { PostTrouxe } from './post-trouxe-secao';
 import { PreviasDoPost } from './previas-do-post';
 import { SituacaoDosCanais } from './situacao-dos-canais';
-import { avisoDoApagar, deOndeSai, fraseDaSituacao, linkCurto, NO_CANAL, noFuso, podeApagar, podeTentarDeNovo, quando, situacaoDoCartao } from './textos';
+import { ehStory } from './story-do-post';
+import { avisoDoApagar, deOndeSai, fraseDaSituacao, linkCurto, NO_CANAL, noFuso, podeApagar, podeTentarDeNovo, quando, situacaoDoCartao, storyFicaNaPagina } from './textos';
 import { ehPostComVideo, ehVideoPronto, fatoDoVideo, SEM_PREPARO, videoSemPreparo } from './video-do-post';
 
 // Um post da Agenda (P19, gaveta à direita): a situação, a prévia de cada canal (a foto, com o recorte do Instagram, e
@@ -100,11 +101,13 @@ export function GavetaPost({
   const ocupado = enviando || tentando !== null;
   const agora = new Date();
   const { dia, hora } = noFuso(new Date(post.publish_at), fuso);
-  const situacao = situacaoDoCartao(post);
+  const situacao = situacaoDoCartao(post, agora, fuso);
+  const story = ehStory(post);
   const naoApagou = avisoDoApagar(post);
   const pedidoEm = noFuso(new Date(post.created_at), fuso);
-  // P33: o que o post que já saiu trouxe (os pedidos pelo link e os números de cada rede); nulo antes de sair.
-  const trouxe = oQueOPostTrouxe(post, agora, fuso);
+  // P33: o que o post que já saiu trouxe (os pedidos pelo link e os números de cada rede); nulo antes de sair. O Story
+  // não leva link nem tem leitura dos números (D-A6-127 e D-A6-130): fica sem a seção.
+  const trouxe = story ? null : oQueOPostTrouxe(post, agora, fuso);
   // O post com vídeo (P37, parte B): o vídeo da lista das Fotos e o vídeo que a Meta não terminou de preparar.
   const comVideo = ehPostComVideo(post);
   const video = comVideo && foto && ehVideoPronto(foto) ? foto : null;
@@ -174,7 +177,7 @@ export function GavetaPost({
     }
     aoMudar(r.data);
     setApagando(false);
-    setAviso(`Apagando ${deOnde}: o Liame tira o post agora. A Agenda mostra quando ele sair.`);
+    setAviso(ehStory(post) ? `Tirando o Story ${deOnde}: o Liame tira agora.` : `Apagando ${deOnde}: o Liame tira o post agora. A Agenda mostra quando ele sair.`);
     setFocarAviso((n) => n + 1);
     return { ok: true };
   }
@@ -202,9 +205,9 @@ export function GavetaPost({
       <div className="dialogo-form">
         <div className="dialogo-cab">
           <div className="dlg-titulo">
-            <p className="rotulo-marca">Post</p>
+            <p className="rotulo-marca">{story ? 'Story' : 'Post'}</p>
             <h2 id={`${ids}-t`}>
-              {comVideo ? 'Post com vídeo' : 'Post'} de {quando(dia, hora, hoje)}
+              {story ? 'Story' : comVideo ? 'Post com vídeo' : 'Post'} de {quando(dia, hora, hoje)}
             </h2>
           </div>
           <button className="btn btn--icon btn--ghost" type="button" ref={fecharBt} onClick={fechar} aria-label="Fechar" disabled={ocupado}>
@@ -220,7 +223,7 @@ export function GavetaPost({
           )}
           <p className={`ag-st${situacao.tom ? ` ag-st--${situacao.tom}` : ''}`}>
             <Icone nome={situacao.icone} pequeno />
-            {fraseDaSituacao(post, fuso, hoje)}
+            {fraseDaSituacao(post, fuso, hoje, agora)}
           </p>
           {naoApagou && (
             <p className="dialogo-erro" role="status" data-po-nao-apagou>
@@ -255,7 +258,13 @@ export function GavetaPost({
             )}
           </section>
           <dl className="po-fatos">
-            {video && (
+            {story && (
+              <div>
+                <dt>Story</dt>
+                <dd>{comVideo ? 'vídeo' : 'foto'}, sem texto e sem link; 24 horas no ar</dd>
+              </div>
+            )}
+            {video && !story && (
               <div>
                 <dt>Vídeo</dt>
                 <dd>{fatoDoVideo(post, video, capaFoto)}</dd>
@@ -335,6 +344,8 @@ export function GavetaPost({
                 deOnde={deOndeSai(post)}
                 temApp={temApp}
                 temChave={temChave}
+                story={ehStory(post)}
+                naPagina={storyFicaNaPagina(post)}
                 aoApagar={apagarDasRedes}
                 aoManter={() => {
                   setApagando(false);
@@ -344,7 +355,7 @@ export function GavetaPost({
             ) : (
               <button className="btn btn--perigo" type="button" ref={apagarBt} data-po-apagar onClick={() => setApagando(true)} disabled={ocupado}>
                 <Icone nome="undo" />
-                Apagar das redes
+                {ehStory(post) ? 'Tirar do ar' : 'Apagar das redes'}
               </button>
             ))}
           {!apagando && <span className="spacer" />}

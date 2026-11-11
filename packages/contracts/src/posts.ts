@@ -278,6 +278,8 @@ export const PostListResponse = z.strictObject({
    * Estrategista usa. `kind`: `feriado_nacional` ou `varejo` (a lista pode crescer). Vazia com a função desligada.
    */
   dates: z.array(z.strictObject({ day: z.iso.date(), name: z.string(), kind: z.string().regex(/^[a-z_]{2,30}$/) })),
+  /** A função `stories` ligada para a empresa (A6, Z13): o novo post oferece o formato Story. Ausente: desligada. */
+  stories_enabled: z.boolean().optional(),
 });
 export type PostListResponse = z.infer<typeof PostListResponse>;
 

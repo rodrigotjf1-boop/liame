@@ -286,16 +286,30 @@ export function planoDeApagarOPost(before: unknown): PlanoDoPost {
   const e = lido.data;
   const motivo = recusaNaHoraDeApagar(e);
   if (motivo) return { ok: false, motivo };
-  return { ok: true, desejado: { ...e, canais: e.canais.map((c) => (c.situacao === 'publicado' ? { ...c, situacao: 'apagado' as const } : c)) }, texto: '' };
+  const sai = new Set(canaisParaTirar(e).map((c) => c.canal));
+  return { ok: true, desejado: { ...e, canais: e.canais.map((c) => (sai.has(c.canal) ? { ...c, situacao: 'apagado' as const } : c)) }, texto: '' };
+}
+
+/** O Story publicado só na Página não sai pelo Liame (D-A6-132): a Meta não tem como tirar o Story da Página pela API. */
+export const STORY_SO_NA_PAGINA =
+  'A Meta não deixa tirar o Story da Página do Facebook pela API: tire direto na Página, ou espere, que ele some sozinho depois de 24 horas.';
+
+/**
+ * Os canais que "Apagar das redes" tira do ar: os publicados. No Story (A6, Z13, parte 2; D-A6-129 e D-A6-132), só o do
+ * Instagram (`DELETE /<IG_MEDIA_ID>` aceita o Story; o Page Stories API não tem como apagar): o da Página fica, e some
+ * sozinho depois de 24 horas. Função pura.
+ */
+export function canaisParaTirar(e: EstadoDoPost): EstadoDoPost['canais'] {
+  return e.canais.filter((c) => c.situacao === 'publicado' && (e.formato !== 'story' || c.canal === 'instagram'));
 }
 
 /**
  * Na hora de apagar (a do pedido e a da execução), o post ainda pode sair das redes? Algum canal está no ar, e cada um
- * deles tem a conta conectada à marca. Nulo: pode. Função pura.
+ * deles tem a conta conectada à marca. No Story, o canal é o do Instagram. Nulo: pode. Função pura.
  */
 export function recusaNaHoraDeApagar(e: EstadoDoPost): string | null {
-  const noAr = e.canais.filter((c) => c.situacao === 'publicado');
-  if (noAr.length === 0) return NADA_NO_AR;
+  const noAr = canaisParaTirar(e);
+  if (noAr.length === 0) return e.formato === 'story' && e.canais.some((c) => c.situacao === 'publicado') ? STORY_SO_NA_PAGINA : NADA_NO_AR;
   for (const c of noAr) if (!c.conta) return contaForaParaApagar(c.canal);
   return null;
 }

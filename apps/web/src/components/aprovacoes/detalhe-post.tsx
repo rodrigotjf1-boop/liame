@@ -7,7 +7,8 @@ import type { Prova } from '@/lib/chave-de-acesso';
 import { ApagarDasRedes, type FeitoDoApagar } from '@/components/agenda/apagar-das-redes';
 import { PreviasDoPost } from '@/components/agenda/previas-do-post';
 import { SituacaoDosCanais } from '@/components/agenda/situacao-dos-canais';
-import { avisoDoApagar, deOndeSai, noFuso, podeApagar, podeTentarDeNovo } from '@/components/agenda/textos';
+import { ehStory, NOTA_DO_STORY } from '@/components/agenda/story-do-post';
+import { avisoDoApagar, deOndeSai, noFuso, podeApagar, podeTentarDeNovo, storyFicaNaPagina } from '@/components/agenda/textos';
 import { CABE_NO_REELS, conferidoDoVideo, duracaoDoVideo, ehPostComVideo, ehVideoPronto, PREPARO_ANTES, SEM_PREPARO, videoSemPreparo } from '@/components/agenda/video-do-post';
 import { ConfirmaNaLinha } from '@/components/ui/confirma-na-linha';
 import { Icone } from '@/components/ui/icone';
@@ -93,7 +94,7 @@ export function DetalhePost({
   // O post com vídeo (P37, parte B): o vídeo da lista das Fotos e o que muda nas frases ("o texto, o vídeo, a capa").
   const comVideo = ehPostComVideo(post);
   const video = comVideo && foto && ehVideoPronto(foto) ? foto : null;
-  const oQueMuda = comVideo ? 'o texto, o vídeo, a capa ou os canais' : 'o texto, a foto ou os canais';
+  const oQueMuda = ehStory(post) ? `${comVideo ? 'o vídeo' : 'a foto'} ou os canais` : comVideo ? 'o texto, o vídeo, a capa ou os canais' : 'o texto, a foto ou os canais';
   const cancelarBt = useRef<HTMLButtonElement>(null);
   const [cancelando, setCancelando] = useState<'nao' | 'confirmando' | 'enviando'>('nao');
   const [erroAoCancelar, setErroAoCancelar] = useState<string | null>(null);
@@ -175,7 +176,8 @@ export function DetalhePost({
     const podeMudar = podeDecidir && post.status === 'agendado' && acao.status === 'aprovada' && acao.id === post.action_id;
     // Apagar das redes (A6, Z5d, parte 7; D-A6-57): quem pode aprovar, no pedido que é o do post (o de publicar, ou o
     // último de apagar), com o post no ar em algum canal.
-    const podeApagarAqui = podeDecidir && podeApagar(post) && (acao.id === post.action_id || acao.id === post.removal?.action_id);
+    const podeApagarAqui = podeDecidir && podeApagar(post, agora) && (acao.id === post.action_id || acao.id === post.removal?.action_id);
+    const story = ehStory(post);
     // O pedido de apagar que deixou o post no ar num canal já diz o porquê no resultado; o de publicar, logo abaixo.
     const naoApagou = acao.tool === 'post_apagar' ? null : avisoDoApagar(post);
     return (
@@ -214,7 +216,9 @@ export function DetalhePost({
           {naoApagou && (
             <p className="alerta-versao" role="status" data-po-nao-apagou>
               <Icone nome="alert" pequeno />
-              <span>Apagar das redes: {naoApagou}</span>
+              <span>
+                {story ? 'Tirar do ar' : 'Apagar das redes'}: {naoApagou}
+              </span>
             </p>
           )}
           {podeApagarAqui && (
@@ -225,6 +229,8 @@ export function DetalhePost({
                   deOnde={deOndeSai(post)}
                   temApp={temApp}
                   temChave={temChave}
+                  story={story}
+                  naPagina={storyFicaNaPagina(post)}
                   aoApagar={(prova) => aoApagar(acao, prova)}
                   aoManter={() => {
                     setApagando(false);
@@ -235,11 +241,15 @@ export function DetalhePost({
                 <>
                   <button ref={apagarBt} className="btn btn--perigo" type="button" data-po-apagar onClick={() => setApagando(true)}>
                     <Icone nome="undo" pequeno />
-                    Apagar das redes
+                    {story ? 'Tirar do ar' : 'Apagar das redes'}
                   </button>
                   <p className="nota">
                     <Icone nome="info" />
-                    <span>Apagar tira o post de cada canal em que ele está no ar e pede o código do app. Não desfaz quem já viu.</span>
+                    <span>
+                      {story
+                        ? 'Tirar do ar tira o Story do Instagram antes das 24 horas e pede o código do app. Não desfaz quem já viu.'
+                        : 'Apagar tira o post de cada canal em que ele está no ar e pede o código do app. Não desfaz quem já viu.'}
+                    </span>
                   </p>
                 </>
               )}
@@ -326,8 +336,9 @@ export function DetalhePost({
         <div className="secao secao--lite">
           <p className="lite-frase lite-frase--grande">{p.resumo}</p>
           <div className="lite-chips">
-            {video && <span className="lite-chip">Vídeo · {duracaoDoVideo(video)}</span>}
-            <span className="risco risco--medio">Post público</span>
+            {ehStory(post) && <span className="lite-chip">{video ? `Vídeo · ${duracaoDoVideo(video)}` : 'Foto'} · 24 h no ar</span>}
+            {video && !ehStory(post) && <span className="lite-chip">Vídeo · {duracaoDoVideo(video)}</span>}
+            <span className="risco risco--medio">{ehStory(post) ? 'Story público' : 'Post público'}</span>
             <span className="lite-chip">{prazo}</span>
           </div>
         </div>
@@ -344,11 +355,18 @@ export function DetalhePost({
       {previas}
       <div className="secao">
         <p className="rotulo-marca">O que foi conferido</p>
-        <p className="nota">
-          <Icone nome="check-circle" />
-          <span>A política conferiu os textos: nenhuma palavra que a empresa ou a marca não usam.</span>
-        </p>
-        {video ? (
+        {ehStory(post) ? (
+          <p className="nota">
+            <Icone nome="info" />
+            <span>{NOTA_DO_STORY}</span>
+          </p>
+        ) : (
+          <p className="nota">
+            <Icone nome="check-circle" />
+            <span>A política conferiu os textos: nenhuma palavra que a empresa ou a marca não usam.</span>
+          </p>
+        )}
+        {video && !ehStory(post) ? (
           <>
             <p className="nota">
               <Icone nome="video" />
@@ -371,7 +389,10 @@ export function DetalhePost({
         )}
         <p className="nota">
           <Icone nome="clock" />
-          <span>Na hora marcada, o Liame consulta o limite de posts do dia do Instagram e publica uma vez só em cada canal.</span>
+          <span>
+            Na hora marcada, o Liame consulta o limite de posts do dia do Instagram{ehStory(post) ? ' (os Stories contam junto dos posts)' : ''} e publica uma vez só em cada canal.
+            {ehStory(post) ? ' O Story fica no ar por 24 horas e some sozinho.' : ''}
+          </span>
         </p>
         {comVideo && (
           <p className="nota">

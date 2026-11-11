@@ -11,6 +11,8 @@ import { CampoDoVideo } from './campo-do-video';
 import { PreviaDoCanal } from './previa-do-canal';
 import { PreviaDoPacote } from './previa-do-pacote';
 import { PreviaDoReels } from './previa-do-reels';
+import { PreviaDoStory } from './previa-do-story';
+import { avisoDasFaixas, canalNoStory, dicaDaMidiaDoStory, emPeNoStory, type FormatoDoNovo, foraDoStory, NOTA_DO_STORY } from './story-do-post';
 import {
   CANAIS_DO_LIAME,
   CANAIS_DO_PACOTE,
@@ -28,6 +30,7 @@ import {
   NOME_DO_CANAL,
   type NovoPost,
   quadroDoRecorte,
+  quando,
   somaDias,
   textoDoBotao,
 } from './textos';
@@ -62,6 +65,8 @@ type Props = {
   fotos: BrandPhoto[] | null;
   /** A função `videos` ligada para a empresa: o novo post oferece o vídeo (A6, Z10). */
   videosLigados?: boolean;
+  /** A função `stories` ligada para a empresa: o novo post oferece o formato Story (A6, Z13; P41). */
+  storiesLigados?: boolean;
   canais: PostChannelAccounts[];
   /** Se o post novo ganha o link do post (D-A6-46); ausente (servidor antigo), como o P19. */
   postLink?: { ok: boolean; reason: string | null };
@@ -83,11 +88,14 @@ type Props = {
 /** A ordem dos canais na tela e no pedido: os do Liame, depois os do pacote. */
 const ORDEM: readonly string[] = [...CANAIS_DO_LIAME, ...CANAIS_DO_PACOTE];
 
-export function GavetaNovoPost({ marca, fotos: midias, videosLigados = false, canais, postLink, fuso, hoje, podeVerContas, podeVerFotos, reserva, pauta = null, aoMandar, aoFechar }: Props) {
+export function GavetaNovoPost({ marca, fotos: midias, videosLigados = false, storiesLigados = false, canais, postLink, fuso, hoje, podeVerContas, podeVerFotos, reserva, pauta = null, aoMandar, aoFechar }: Props) {
   // As fotos e os vídeos chegam juntos das Fotos: a lista das fotos fica só com as fotos (o vídeo não é foto de post).
   const fotos = midias === null ? null : midias.filter((f) => f.kind !== 'video');
   const videos = (midias ?? []).filter(ehVideoPronto);
   const [midia, setMidia] = useState<MidiaDoPost>('foto');
+  // O formato (P41; A6, Z13): o post de sempre ou o Story (sem texto, 24 horas no ar).
+  const [formatoDoPost, setFormatoDoPost] = useState<FormatoDoNovo>('post');
+  const story = formatoDoPost === 'story';
   const [capa, setCapa] = useState<CapaDoNovo>({ modo: 'quadro', quadro: QUADRO_DO_MEIO });
   const ids = useId();
   const primeiroCampo = useRef<HTMLButtonElement>(null);
@@ -110,7 +118,9 @@ export function GavetaNovoPost({ marca, fotos: midias, videosLigados = false, ca
   const foto = midia === 'foto' ? (fotos?.find((f) => f.id === novo.foto) ?? null) : null;
   const video = midia === 'video' ? (videos.find((v) => v.id === novo.foto) ?? null) : null;
   const abaAtual = novo.canais.includes(aba) ? aba : (novo.canais[0] ?? aba);
-  const quadro = foto && novo.canais.includes('instagram') ? quadroDoRecorte(foto.width, foto.height, novo.recorte) : null;
+  // A mídia escolhida (a foto ou o vídeo), para os canais e a prévia do Story.
+  const escolhida = foto ?? video;
+  const quadro = foto && !story && novo.canais.includes('instagram') ? quadroDoRecorte(foto.width, foto.height, novo.recorte) : null;
   const formato = foto ? formatoDaPrevia('instagram', foto.width, foto.height) : 'inteira';
   // A capa é a do Reels (A6, Z10, parte 4c): só com o pacote marcado, ela não vale (e não vai no pedido).
   const soPacote = novo.canais.length > 0 && novo.canais.every(ehDoPacote);
@@ -118,6 +128,24 @@ export function GavetaNovoPost({ marca, fotos: midias, videosLigados = false, ca
 
   const mudar = (parcial: Partial<NovoPost>) => setNovo((n) => ({ ...n, ...parcial }));
   const tirarErro = (campo: string) => setErros((e) => (e[campo] ? Object.fromEntries(Object.entries(e).filter(([k]) => k !== campo)) : e));
+
+  /** Post ou Story (P41): a escolha recomeça; no Story, só os canais do Liame que estão conectados. */
+  function mudarFormato(f: FormatoDoNovo) {
+    if (f === formatoDoPost) return;
+    setFormatoDoPost(f);
+    setMidia('foto');
+    setCapa({ modo: 'quadro', quadro: QUADRO_DO_MEIO });
+    const doLiame: string[] = CANAIS_DO_LIAME.filter((c) => contas[c]?.conta);
+    const ficam = novo.canais.filter((c) => doLiame.includes(c));
+    mudar({ foto: null, recorte: 50, canais: f === 'story' ? (ficam.length ? ficam : doLiame) : novo.canais });
+    setErros({});
+  }
+
+  /** A mídia do Story escolhida: o canal em que ela não cabe sai dos canais (P41: o vídeo de mais de 60 s vai só à Página). */
+  function escolherNoStory(id: string, m: BrandPhoto | undefined) {
+    mudar({ foto: id, recorte: 50, canais: m && foraDoStory('instagram', m) ? novo.canais.filter((c) => c !== 'instagram') : novo.canais });
+    tirarErro('foto');
+  }
 
   /** Foto ou Vídeo: a escolha recomeça (os canais ficam: o pacote leva o vídeo também). */
   function mudarMidia(m: MidiaDoPost) {
@@ -132,6 +160,7 @@ export function GavetaNovoPost({ marca, fotos: midias, videosLigados = false, ca
   /** O vídeo escolhido: o Instagram sai dos canais quando o vídeo passa do que o Reels aceita como está. */
   function escolherVideo(id: string) {
     const v = videos.find((x) => x.id === id);
+    if (story) return escolherNoStory(id, v);
     mudar({ foto: id, canais: v && !cabeNoInstagram(v) ? novo.canais.filter((c) => c !== 'instagram') : novo.canais });
     setCapa({ modo: 'quadro', quadro: QUADRO_DO_MEIO });
     tirarErro('foto');
@@ -170,8 +199,13 @@ export function GavetaNovoPost({ marca, fotos: midias, videosLigados = false, ca
     ev.preventDefault();
     setErroGeral(null);
     const e = conferirNovo(novo, new Date(), fuso);
+    // O Story (P41): sem texto; o erro da mídia fala do Story.
+    if (story) {
+      for (const k of Object.keys(e)) if (k.startsWith('texto-')) delete e[k];
+      if (e.foto) e.foto = midia === 'video' ? 'Escolha o vídeo do Story.' : 'Escolha a foto do Story.';
+    }
     // O vídeo (A6, Z10): o erro fala do vídeo, e a capa por uma das Fotos pede a foto (o servidor confere de novo).
-    if (midia === 'video') {
+    if (midia === 'video' && !story) {
       if (e.foto) e.foto = 'Escolha o vídeo do post.';
       if (video && !soPacote && capa.modo === 'foto' && !capa.foto) e.capa = 'Escolha a foto da capa, ou use um quadro do vídeo.';
     }
@@ -181,14 +215,22 @@ export function GavetaNovoPost({ marca, fotos: midias, videosLigados = false, ca
     const canaisNaOrdem = ORDEM.filter((c) => novo.canais.includes(c));
     const r = await chamar(() =>
       api.POST('/v1/posts', {
-        body: {
+        body: story
+          ? {
+              brand_id: marca,
+              format: 'story',
+              photo_id: novo.foto!,
+              publish_at: instanteNoFuso(novo.dia, novo.hora, fuso).toISOString(),
+              channels: canaisNaOrdem.map((c) => ({ channel: c as 'instagram' | 'facebook' })),
+            }
+          : {
           brand_id: marca,
           photo_id: novo.foto!,
           publish_at: instanteNoFuso(novo.dia, novo.hora, fuso).toISOString(),
           ...(quadro ? { crop_pos: novo.recorte } : {}),
           ...(video && !soPacote ? capaNoPedido(capa, video) : {}),
           channels: canaisNaOrdem.map((c) => ({ channel: c as 'instagram' | 'facebook' | 'tiktok' | 'youtube', text: (novo.textos[c] ?? '').trim() })),
-        },
+            },
       }),
     );
     setEnviando(false);
@@ -227,8 +269,9 @@ export function GavetaNovoPost({ marca, fotos: midias, videosLigados = false, ca
     const { conta, fora } = contas[c] ?? { conta: null, fora: null };
     // O vídeo (A6, Z10): o canal diz o formato (Reels; na Página, o vídeo comum; no YouTube, o deitado não é Shorts), e o
     // Instagram não leva o vídeo maior que o Reels aceita como está.
-    const noVideo = midia === 'video' ? canalNoVideo(c, video) : null;
-    const semVideo = midia === 'video' && c === 'instagram' && video !== null && !cabeNoInstagram(video);
+    const noStory = story ? canalNoStory(c, escolhida) : null;
+    const noVideo = midia === 'video' && !story ? canalNoVideo(c, video) : null;
+    const semVideo = noStory ? Boolean(noStory.fora) : midia === 'video' && c === 'instagram' && video !== null && !cabeNoInstagram(video);
     return (
       <div key={c} className={`po-canal${fora || semVideo ? ' po-canal--fora' : ''}`}>
         <label>
@@ -242,11 +285,12 @@ export function GavetaNovoPost({ marca, fotos: midias, videosLigados = false, ca
               tirarErro('canais');
             }}
           />
-          {noVideo?.nome ?? NOME_DO_CANAL[c]}
+          {noStory?.nome ?? noVideo?.nome ?? NOME_DO_CANAL[c]}
         </label>
         {conta && <span className="campo-dica">{conta.name}</span>}
         {fora && <span className="campo-dica">{fora}</span>}
         {!fora && noVideo && <span className="campo-dica">{noVideo.dica}</span>}
+        {!fora && noStory && <span className="campo-dica">{noStory.fora ?? noStory.dica}</span>}
       </div>
     );
   };
@@ -268,7 +312,7 @@ export function GavetaNovoPost({ marca, fotos: midias, videosLigados = false, ca
         <div className="dialogo-cab">
           <div className="dlg-titulo">
             <p className="rotulo-marca">Agenda</p>
-            <h2 id={`${ids}-t`}>Novo post</h2>
+            <h2 id={`${ids}-t`}>{story ? 'Novo Story' : 'Novo post'}</h2>
           </div>
           <button className="btn btn--icon btn--ghost" type="button" ref={fecharBt} onClick={fechar} aria-label="Fechar" disabled={enviando}>
             <Icone nome="x" />
@@ -289,10 +333,30 @@ export function GavetaNovoPost({ marca, fotos: midias, videosLigados = false, ca
               <span>{erroGeral}</span>
             </p>
           )}
+          {storiesLigados && (
+            <div className="campo">
+              <span className="rotulo" id={`${ids}-formato-t`}>
+                Formato
+              </span>
+              <div className="seg po-formato" role="group" aria-labelledby={`${ids}-formato-t`}>
+                <button type="button" aria-pressed={!story} onClick={() => mudarFormato('post')} disabled={enviando}>
+                  <Icone nome="image" pequeno />
+                  Post
+                </button>
+                <button type="button" aria-pressed={story} onClick={() => mudarFormato('story')} disabled={enviando}>
+                  <Icone nome="clock" pequeno />
+                  Story
+                </button>
+              </div>
+              <span className="campo-dica">
+                {story ? 'O Story fica 24 horas no ar, no Instagram e na Página, e some sozinho.' : 'O post fica no feed. Para algo que some em 24 horas, use o Story.'}
+              </span>
+            </div>
+          )}
           {videosLigados && (
             <div className="campo">
               <span className="rotulo" id={`${ids}-midia-t`}>
-                O post leva
+                {story ? 'O Story leva' : 'O post leva'}
               </span>
               <div className="seg po-midia" role="group" aria-labelledby={`${ids}-midia-t`}>
                 <button type="button" aria-pressed={midia === 'foto'} onClick={() => mudarMidia('foto')} disabled={enviando}>
@@ -325,6 +389,7 @@ export function GavetaNovoPost({ marca, fotos: midias, videosLigados = false, ca
               primeiro={primeiroCampo}
               soPacote={soPacote}
               comPacote={comPacote}
+              story={story}
             />
           ) : (
           <div className="campo" role="group" aria-labelledby={`${ids}-fotos-t`} aria-describedby={erros.foto ? `${ids}-foto-erro` : `${ids}-fotos-d`}>
@@ -332,7 +397,7 @@ export function GavetaNovoPost({ marca, fotos: midias, videosLigados = false, ca
               A foto
             </span>
             <span className="campo-dica" id={`${ids}-fotos-d`}>
-              As fotos de verdade dos produtos, da tela Fotos.
+              {story ? dicaDaMidiaDoStory(false) : 'As fotos de verdade dos produtos, da tela Fotos.'}
             </span>
             {fotos?.length ? (
               <ul className="po-fotos" aria-label="Fotos da marca">
@@ -345,6 +410,7 @@ export function GavetaNovoPost({ marca, fotos: midias, videosLigados = false, ca
                       aria-pressed={novo.foto === f.id}
                       aria-label={`${f.product ?? 'Sem produto'}${f.description ? `: ${f.description}` : ''}`}
                       onClick={() => {
+                        if (story) return escolherNoStory(f.id, f);
                         mudar({ foto: f.id, recorte: 50 });
                         tirarErro('foto');
                       }}
@@ -362,6 +428,12 @@ export function GavetaNovoPost({ marca, fotos: midias, videosLigados = false, ca
                   {fotos === null ? 'As Fotos não estão ligadas para esta empresa, ou não abriram agora: o post precisa de uma foto de lá.' : 'Nenhuma foto pronta nas Fotos desta marca: o post precisa de uma foto de lá.'}
                   {podeVerFotos && fotos !== null ? ' Envie uma em Fotos.' : ''}
                 </span>
+              </p>
+            )}
+            {story && foto && !emPeNoStory(foto) && (
+              <p className="po-aviso">
+                <Icone nome="info" pequeno />
+                <span>{avisoDasFaixas(foto)}</span>
               </p>
             )}
             {erros.foto && (
@@ -386,16 +458,22 @@ export function GavetaNovoPost({ marca, fotos: midias, videosLigados = false, ca
                 Abrir Contas conectadas
               </Link>
             )}
-            <p className="po-grupo-t" id={`${ids}-pacote-t`}>
-              Você publica: o Liame monta o pacote
-            </p>
-            <div className="po-canais" role="group" aria-labelledby={`${ids}-pacote-t`}>
-              {CANAIS_DO_PACOTE.map(caixaDoCanal)}
-            </div>
+            {!story && (
+              <>
+                <p className="po-grupo-t" id={`${ids}-pacote-t`}>
+                  Você publica: o Liame monta o pacote
+                </p>
+                <div className="po-canais" role="group" aria-labelledby={`${ids}-pacote-t`}>
+                  {CANAIS_DO_PACOTE.map(caixaDoCanal)}
+                </div>
+              </>
+            )}
             <span className="campo-dica" id={`${ids}-pacote-d`}>
-              {midia === 'video'
-                ? PACOTE_COM_VIDEO
-                : 'No TikTok e no YouTube, o Liame não publica: ele monta o texto, a foto e a hora, e o pacote aparece na Agenda para você publicar.'}
+              {story
+                ? 'O TikTok e o YouTube não têm Story pela API: ficam no post.'
+                : midia === 'video'
+                  ? PACOTE_COM_VIDEO
+                  : 'No TikTok e no YouTube, o Liame não publica: ele monta o texto, a foto e a hora, e o pacote aparece na Agenda para você publicar.'}
             </span>
             {erros.canais && (
               <span className="campo-erro" id={`${ids}-canais-erro`}>
@@ -404,7 +482,13 @@ export function GavetaNovoPost({ marca, fotos: midias, videosLigados = false, ca
             )}
           </fieldset>
 
-          {novo.canais.length > 0 && (
+          {story && (
+            <p className="po-nota">
+              <Icone nome="info" pequeno />
+              <span>{NOTA_DO_STORY}</span>
+            </p>
+          )}
+          {novo.canais.length > 0 && !story && (
             <div className="campo">
               {novo.canais.length > 1 && (
                 <div className="seg po-canais-seg" role="group" aria-label="O texto de cada canal">
@@ -528,11 +612,29 @@ export function GavetaNovoPost({ marca, fotos: midias, videosLigados = false, ca
             </span>
           ) : (
             <span className="campo-dica" id={`${ids}-hora-d`}>
-              {dicaDaHora(novo.canais)}
+              {story ? `Entre 8h e 22h, só depois de aprovado. Fica no ar até ${quando(somaDias(novo.dia, 1), novo.hora, hoje)}.` : dicaDaHora(novo.canais)}
             </span>
           )}
 
-          {video && novo.canais.length > 0 && (
+          {story && escolhida && novo.canais.length > 0 && (
+            <section aria-labelledby={`${ids}-previa-t`} className="po-como-sai">
+              <h3 className="rotulo-marca" id={`${ids}-previa-t`}>
+                Como sai
+              </h3>
+              {novo.canais.length > 1 && (
+                <div className="seg po-canais-seg" role="group" aria-label="Ver como sai em">
+                  {ORDEM.filter((c) => novo.canais.includes(c)).map((c) => (
+                    <button key={c} type="button" aria-pressed={c === abaAtual} onClick={() => setAba(c)}>
+                      {NOME_DO_CANAL[c]}
+                    </button>
+                  ))}
+                </div>
+              )}
+              <PreviaDoStory canal={abaAtual} conta={contas[abaAtual]?.conta?.name ?? null} midia={escolhida} />
+            </section>
+          )}
+
+          {video && !story && novo.canais.length > 0 && (
             <section aria-labelledby={`${ids}-previa-t`} className="po-como-sai">
               <h3 className="rotulo-marca" id={`${ids}-previa-t`}>
                 Como sai
@@ -552,7 +654,7 @@ export function GavetaNovoPost({ marca, fotos: midias, videosLigados = false, ca
             </section>
           )}
 
-          {foto && novo.canais.length > 0 && (
+          {foto && !story && novo.canais.length > 0 && (
             <section aria-labelledby={`${ids}-previa-t`} className="po-como-sai">
               <h3 className="rotulo-marca" id={`${ids}-previa-t`}>
                 Como sai
@@ -577,7 +679,7 @@ export function GavetaNovoPost({ marca, fotos: midias, videosLigados = false, ca
             Cancelar
           </button>
           <button className="btn btn--primary" type="submit" disabled={enviando}>
-            {enviando ? 'Mandando…' : textoDoBotao(novo.canais)}
+            {enviando ? 'Mandando…' : story ? 'Mandar para aprovação' : textoDoBotao(novo.canais)}
           </button>
         </div>
       </form>

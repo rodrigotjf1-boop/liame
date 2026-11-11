@@ -4,6 +4,7 @@ import type { BrandPhoto } from '@liame/contracts';
 import type { RefObject } from 'react';
 import { duracaoCurta } from '@/components/fotos/textos';
 import { Icone } from '@/components/ui/icone';
+import { avisoDasFaixas, dicaDaMidiaDoStory } from './story-do-post';
 import {
   AVISO_DO_DEITADO,
   CAPA_NO_PACOTE,
@@ -25,6 +26,8 @@ import {
 // é a do Reels (A6, Z10, parte 4c; D-A6-79): só com o pacote marcado, ela sai da tela, e a nota diz quem escolhe.
 
 type Props = {
+  /** O Story (A6, Z13): sem capa, com a dica e o aviso dele. */
+  story?: boolean;
   /** Só o pacote (o TikTok e o YouTube) está marcado: a capa não vale. */
   soPacote?: boolean;
   /** O pacote está marcado junto com o Instagram ou a Página: a dica da capa diz o que vale no pacote. */
@@ -59,6 +62,7 @@ export function CampoDoVideo({
   primeiro,
   soPacote = false,
   comPacote = false,
+  story = false,
 }: Props) {
   const video = videos.find((v) => v.id === escolhido) ?? null;
   return (
@@ -68,7 +72,7 @@ export function CampoDoVideo({
           O vídeo
         </span>
         <span className="campo-dica" id={`${ids}-videos-d`}>
-          Os vídeos de verdade da tela Fotos, como a loja gravou: MP4 ou MOV, de 3 a 90 segundos.
+          {story ? dicaDaMidiaDoStory(true) : 'Os vídeos de verdade da tela Fotos, como a loja gravou: MP4 ou MOV, de 3 a 90 segundos.'}
         </span>
         {videos.length ? (
           <ul className="po-fotos" aria-label="Vídeos da marca">
@@ -107,7 +111,7 @@ export function CampoDoVideo({
         {video && videoDeitado(video) && (
           <p className="po-aviso">
             <Icone nome="alert" pequeno />
-            <span>{AVISO_DO_DEITADO}</span>
+            <span>{story ? avisoDasFaixas(video) : AVISO_DO_DEITADO}</span>
           </p>
         )}
         {erroVideo && (
@@ -117,13 +121,13 @@ export function CampoDoVideo({
         )}
       </div>
 
-      {video && soPacote && (
+      {video && soPacote && !story && (
         <p className="po-nota" data-po-capa-pacote="">
           <Icone nome="image" pequeno />
           <span>{CAPA_NO_PACOTE}</span>
         </p>
       )}
-      {video && !soPacote && (
+      {video && !soPacote && !story && (
         <fieldset className="campo po-capa" aria-describedby={erroCapa ? `${ids}-capa-erro` : `${ids}-capa-d`}>
           <legend>A capa</legend>
           <div className="seg" role="group" aria-label="De onde vem a capa">

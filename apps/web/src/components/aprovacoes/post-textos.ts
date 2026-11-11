@@ -1,5 +1,6 @@
 import type { ActionResponse } from '@liame/contracts';
 import { ANTECEDENCIA_MINIMA_MIN, DIAS_DE_ANTECEDENCIA, ehDia, instanteNoFuso, NO_CANAL, noFuso, podeTentarDeNovo, quando, situacaoDoPost, situacaoNaTela } from '@/components/agenda/textos';
+import { ehStory } from '@/components/agenda/story-do-post';
 import { ehPostComVideo, PREPARANDO, SEM_PREPARO, videoSemPreparo } from '@/components/agenda/video-do-post';
 import { type PedidoApresentado, recusaDe } from './textos';
 
@@ -133,6 +134,17 @@ export function postApresentado(a: AcaoDePost, agora: Date): PedidoApresentado {
       depoisDeAprovar: '',
     };
   }
+  // O Story (P41; A6, Z13): sem texto, 24 horas no ar.
+  if (ehStory(post)) {
+    return {
+      titulo: `Story de ${quando}`,
+      resumo: `Você vai publicar um Story ${ondeSai(post)}, ${quando}. Ele é público e sai em nome da empresa. Se você aprovar, o Liame publica na hora marcada, e ele fica no ar por 24 horas.`,
+      impacto: null,
+      mudancas: [],
+      desfazer: 'Depois de publicado, dá para tirar do ar antes das 24 horas, com o código do app. Quem já viu, viu.',
+      depoisDeAprovar: `O Story sai ${quandoSaiAprovado(post, agora)} e fica no ar por 24 horas.`,
+    };
+  }
   // O post com vídeo (P37, parte B): o título e a frase dizem que é um vídeo.
   const video = ehPostComVideo(post);
   return {
@@ -208,7 +220,9 @@ export function resultadoDoPost(a: AcaoDePost, agora: Date): ResultadoDoPost {
         tom: 'ok',
         icone: 'check',
         titulo: 'Publicado.',
-        texto: `Saiu exatamente ${ehPostComVideo(post) ? 'o texto, o vídeo e a capa aprovados' : 'o texto e a foto aprovados'}. Veja abaixo em cada canal.`,
+        texto: ehStory(post)
+          ? `Saiu exatamente ${ehPostComVideo(post) ? 'o vídeo aprovado' : 'a foto aprovada'}, e fica no ar por 24 horas. Veja abaixo em cada canal.`
+          : `Saiu exatamente ${ehPostComVideo(post) ? 'o texto, o vídeo e a capa aprovados' : 'o texto e a foto aprovados'}. Veja abaixo em cada canal.`,
       };
     case 'em_parte':
       return { tom: 'falha', icone: 'alert', titulo: 'Saiu em parte.', texto: 'Um canal não saiu; no outro, o post está no ar. Veja abaixo o motivo.' };

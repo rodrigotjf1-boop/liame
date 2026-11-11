@@ -1,6 +1,7 @@
 import { type BrandPhoto, PACKAGE_CHANNELS, POST_TEXT_LIMITS, type PostChannelResponse, type PostListResponse, type PostResponse } from '@liame/contracts';
 import { duracaoCurta, duracaoPorExtenso } from '@/components/fotos/textos';
 import type { NomeIcone } from '@/components/ui/icone';
+import { ehStory, fimDoStory, storyNoAr } from './story-do-post';
 import { ehPostComVideo, ehVideoPronto, PREPARANDO } from './video-do-post';
 
 // A Agenda (mockups/prototipo-post.html, P19 aprovado em 21/10/2026; Z5c da A6): os posts da marca na semana, dia a
@@ -90,14 +91,22 @@ export function situacaoDoPost(status: string): SituacaoNaTela {
 /** O post com vídeo saindo: a Meta prepara o vídeo antes de publicar (P37, parte B; A6, Z10, parte 4b). */
 const PREPARANDO_O_VIDEO: SituacaoNaTela = { rotulo: 'Preparando o vídeo', icone: 'clock', tom: 'espera' };
 
-/** A situação do post na tela: a do servidor, e o vídeo que está saindo como "Preparando o vídeo" (P37). */
-export function situacaoNaTela(post: Pick<PostResponse, 'status' | 'media'>): SituacaoNaTela {
+/**
+ * A situação do post na tela: a do servidor, e o vídeo que está saindo como "Preparando o vídeo" (P37). O Story publicado
+ * (P41; A6, Z13) diz até quando fica no ar e, depois das 24 horas, que saiu do ar.
+ */
+export function situacaoNaTela(post: Pick<PostResponse, 'status' | 'media'> & Partial<Pick<PostResponse, 'format' | 'channels'>>, agora: Date = new Date(), fuso?: string): SituacaoNaTela {
+  if (post.channels && ehStory(post) && post.status === 'publicado') {
+    const fim = fimDoStory({ channels: post.channels });
+    if (fim && storyNoAr({ channels: post.channels }, agora)) return { rotulo: `No ar até ${fuso ? noFuso(fim, fuso).hora : fim.toISOString().slice(11, 16)}`, icone: 'check-circle', tom: 'ok' };
+    return { rotulo: 'Saiu do ar', icone: 'clock', tom: '' };
+  }
   return ehPostComVideo(post) && post.status === 'publicando' ? PREPARANDO_O_VIDEO : situacaoDoPost(post.status);
 }
 
 /** A situação no cartão do dia: a do post, ou "Apagando" enquanto o pedido de apagar das redes executa (A6, Z5d, parte 7). */
-export function situacaoDoCartao(post: Pick<PostResponse, 'status' | 'removal' | 'media'>): SituacaoNaTela {
-  return post.removal?.status === 'apagando' ? { rotulo: 'Apagando das redes', icone: 'clock', tom: '' } : situacaoNaTela(post);
+export function situacaoDoCartao(post: Pick<PostResponse, 'status' | 'removal' | 'media'> & Partial<Pick<PostResponse, 'format' | 'channels'>>, agora: Date = new Date(), fuso?: string): SituacaoNaTela {
+  return post.removal?.status === 'apagando' ? { rotulo: 'Apagando das redes', icone: 'clock', tom: '' } : situacaoNaTela(post, agora, fuso);
 }
 
 /** O que sai da semana: o cancelado, o recusado e o que expirou sem aprovação não vão ao ar (o P19 também os tira). */
@@ -107,7 +116,18 @@ const FORA_DA_SEMANA = new Set(['cancelado', 'recusado', 'expirado']);
  * `pedidos`: o post que já saiu e trouxe pedido pelo link ("3 pedidos", P33); nulo nos outros. `duracao`: a do vídeo do
  * post ("0:18", na miniatura; P37), nula no post de foto ou sem o vídeo na lista das Fotos.
  */
-export type PostNoDia = { post: PostResponse; dia: string; hora: string; canais: string; situacao: SituacaoNaTela; rotulo: string; pedidos: string | null; duracao: string | null };
+export type PostNoDia = {
+  post: PostResponse;
+  dia: string;
+  hora: string;
+  canais: string;
+  situacao: SituacaoNaTela;
+  rotulo: string;
+  pedidos: string | null;
+  duracao: string | null;
+  /** O Story (P41; A6, Z13): o cartão leva a etiqueta. */
+  story: boolean;
+};
 
 /** O que já saiu e pode ter trazido pedido pelo link: o post publicado (ou em parte) e o pacote que a pessoa publicou. */
 const SAIU = new Set(['publicado', 'em_parte', 'pacote_publicado']);
@@ -137,19 +157,19 @@ export const ehPacote = (p: Pick<PostResponse, 'kind'>): boolean => p.kind === '
 
 /** Os nomes dos canais do post, no cartão: "Instagram · Facebook"; no post com vídeo, "Reels no Instagram · Facebook" (P37). */
 const canaisDoPost = (p: PostResponse) =>
-  p.channels.map((c) => (c.channel === 'instagram' && ehPostComVideo(p) ? 'Reels no Instagram' : (NOME_CURTO[c.channel] ?? c.channel))).join(' · ');
+  p.channels.map((c) => (c.channel === 'instagram' && ehPostComVideo(p) && !ehStory(p) ? 'Reels no Instagram' : (NOME_CURTO[c.channel] ?? c.channel))).join(' · ');
 
 /**
  * A semana da Agenda: os sete dias de `inicio` (segunda), cada um com os posts dele, na hora do fuso da empresa. `fotos`:
  * as Fotos e vídeos da marca, para a duração do vídeo no cartão (P37); sem elas, o cartão sai sem a duração.
  */
-export function telaDaAgenda(dados: PostListResponse, inicio: string, hoje: string, fotos?: ReadonlyMap<string, BrandPhoto>): TelaDaAgenda {
+export function telaDaAgenda(dados: PostListResponse, inicio: string, hoje: string, fotos?: ReadonlyMap<string, BrandPhoto>, agora: Date = new Date()): TelaDaAgenda {
   if (!dados.enabled) return { tipo: 'desligada' };
   const porDia = new Map<string, PostNoDia[]>();
   for (const post of dados.items) {
     if (FORA_DA_SEMANA.has(post.status)) continue;
     const { dia, hora } = noFuso(new Date(post.publish_at), dados.timezone);
-    const situacao = situacaoDoCartao(post);
+    const situacao = situacaoDoCartao(post, agora, dados.timezone);
     const canais = canaisDoPost(post);
     const nomes = post.channels.map((c) => NOME_DO_CANAL[c.channel] ?? c.channel).join(' e ');
     const pedidos = pedidosDoCartao(post);
@@ -157,7 +177,13 @@ export function telaDaAgenda(dados: PostListResponse, inicio: string, hoje: stri
     const video = midia && ehVideoPronto(midia) ? midia : null;
     // O pacote com vídeo (A6, Z10, parte 4c) também diz a duração, como o post.
     const duracao = video ? ` (${duracaoPorExtenso(video.video.duration_ms)})` : '';
-    const nome = ehPostComVideo(post) ? `${ehPacote(post) ? 'Pacote' : 'Post'} com vídeo${duracao}` : ehPacote(post) ? 'Pacote' : 'Post';
+    const nome = ehStory(post)
+      ? `Story${ehPostComVideo(post) ? ` com vídeo${duracao}` : ''}`
+      : ehPostComVideo(post)
+        ? `${ehPacote(post) ? 'Pacote' : 'Post'} com vídeo${duracao}`
+        : ehPacote(post)
+          ? 'Pacote'
+          : 'Post';
     const item: PostNoDia = {
       post,
       dia,
@@ -166,6 +192,7 @@ export function telaDaAgenda(dados: PostListResponse, inicio: string, hoje: stri
       situacao,
       pedidos,
       duracao: video ? duracaoCurta(video.video.duration_ms) : null,
+      story: ehStory(post),
       rotulo: `${nome} de ${quando(dia, hora, hoje)}, ${nomes}: ${situacao.rotulo.toLowerCase()}${pedidos ? `, ${pedidos} pelo link` : ''}`,
     };
     porDia.set(dia, [...(porDia.get(dia) ?? []), item]);
@@ -239,29 +266,54 @@ export function enderecoSeguro(v: string | null): string | null {
  * saindo (publicando) e sem outro pedido de apagar executando. Quem pode (quem aprova, com o código) a tela confere à
  * parte; o servidor confere tudo de novo.
  */
-export function podeApagar(post: PostResponse): boolean {
-  return !ehPacote(post) && post.status !== 'publicando' && post.removal?.status !== 'apagando' && post.channels.some((c) => c.status === 'publicado');
+export function podeApagar(post: PostResponse, agora: Date = new Date()): boolean {
+  if (ehPacote(post) || post.status === 'publicando' || post.removal?.status === 'apagando') return false;
+  // O Story (A6, Z13, parte 2; D-A6-129 e D-A6-132): "Tirar do ar" nas 24 horas, e só do Instagram.
+  if (ehStory(post)) return storyNoAr(post, agora) && post.channels.some((c) => c.channel === 'instagram' && c.status === 'publicado');
+  return post.channels.some((c) => c.status === 'publicado');
 }
 
+/** Os canais que "Apagar das redes" tira do ar: os publicados; no Story, só o do Instagram (D-A6-132). */
+const canaisQueSaem = (post: Pick<PostResponse, 'channels'> & Partial<Pick<PostResponse, 'format'>>) =>
+  post.channels.filter((c) => c.status === 'publicado' && (!ehStory(post) || c.channel === 'instagram'));
+
 /** "do Instagram e da Página do Facebook": os canais em que o post está no ar, de onde "Apagar das redes" o tira. */
-export function deOndeSai(post: Pick<PostResponse, 'channels'>): string {
-  return emFrase(post.channels.filter((c) => c.status === 'publicado').map((c) => DO_CANAL[c.channel] ?? c.channel));
+export function deOndeSai(post: Pick<PostResponse, 'channels'> & Partial<Pick<PostResponse, 'format'>>): string {
+  return emFrase(canaisQueSaem(post).map((c) => DO_CANAL[c.channel] ?? c.channel));
+}
+
+/** O Story que também está na Página (D-A6-132): a Meta não deixa o Liame tirar de lá. Nulo quando não há o que dizer. */
+export function storyFicaNaPagina(post: Pick<PostResponse, 'channels'> & Partial<Pick<PostResponse, 'format'>>): string | null {
+  if (!ehStory(post) || !post.channels.some((c) => c.channel === 'facebook' && c.status === 'publicado')) return null;
+  return 'Na Página do Facebook, a Meta não deixa tirar o Story pela API: tire direto na Página, ou espere, que ele some sozinho depois de 24 horas.';
 }
 
 /**
  * O pedido de apagar que terminou com o post ainda no ar em algum canal (A6, Z5d, parte 7): o porquê, como o servidor
- * escreveu ("O post saiu da Página do Facebook. A Meta não deixou…"). Nulo quando não há o que dizer.
+ * escreveu ("O post saiu da Página do Facebook. A Meta não deixou…"). Nulo quando não há o que dizer. O Story que saiu
+ * do Instagram e continua na Página diz por quê (D-A6-132).
  */
-export function avisoDoApagar(post: Pick<PostResponse, 'removal'>): string | null {
+export function avisoDoApagar(post: Pick<PostResponse, 'removal'> & Partial<Pick<PostResponse, 'format'>>): string | null {
   const r = post.removal;
   if (!r || (r.status !== 'em_parte' && r.status !== 'nao_apagou')) return null;
+  if (ehStory(post) && r.status === 'em_parte' && !r.reason) {
+    return 'O Story saiu do Instagram. Na Página do Facebook, a Meta não deixa tirar pela API: tire direto na Página, ou espere, que ele some sozinho depois de 24 horas.';
+  }
   return r.reason ?? (r.status === 'em_parte' ? 'O post saiu de um canal e continua no outro.' : 'O post continua no ar.');
 }
 
 /** A frase do topo da gaveta: a situação, com o que ela quer dizer. */
-export function fraseDaSituacao(post: PostResponse, fuso: string, hoje: string): string {
+export function fraseDaSituacao(post: PostResponse, fuso: string, hoje: string, agora: Date = new Date()): string {
   const s = situacaoDoPost(post.status);
   const { dia, hora } = noFuso(new Date(post.publish_at), fuso);
+  // O Story publicado (P41; A6, Z13; D-A6-129): até quando fica no ar, ou quando saiu.
+  if (ehStory(post) && post.status === 'publicado') {
+    const fim = fimDoStory(post);
+    const ate = fim ? noFuso(fim, fuso) : null;
+    if (fim && storyNoAr(post, agora)) return `No ar até ${ate ? quando(ate.dia, ate.hora, hoje) : 'amanhã'}: some sozinho depois de 24 horas.`;
+    return `Saiu do ar${ate ? ` ${quando(ate.dia, ate.hora, hoje)}` : ''}, depois das 24 horas.`;
+  }
+  if (ehStory(post) && post.status === 'esperando_aprovacao') return `${s.rotulo}: o Story só sai depois de aprovado, com o código do app.`;
   if (post.removal?.status === 'apagando') return 'Apagando das redes: o Liame tira o post de cada canal em que ele está no ar.';
   if (post.status === 'apagado') {
     // A hora em que saiu do último canal, no fuso da empresa.
@@ -440,6 +492,9 @@ export function campoDaRecusa(code: string): 'foto' | 'capa' | 'canais' | 'hora'
   if (code.startsWith('capa-') || code.startsWith('quadro-')) return 'capa';
   if (code.startsWith('canal-')) return 'canais';
   if (code.startsWith('texto-')) return 'texto';
+  // O Story (A6, Z13): a mídia fora do limite fica no campo dela; o pacote, nos canais.
+  if (code === 'story-fora-do-limite') return 'foto';
+  if (code === 'story-sem-pacote') return 'canais';
   return null;
 }
 

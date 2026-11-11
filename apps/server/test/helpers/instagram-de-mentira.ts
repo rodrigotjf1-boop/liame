@@ -877,6 +877,13 @@ export class InstagramDeMentira {
       }
       if (this.semPermissaoDeApagar) return erro(403, 10, '(#10) Application does not have permission for this action');
       const i = this.posts.findIndex((p) => p.id === id);
+      // O Story do Instagram também sai pelo `DELETE /<IG_MEDIA_ID>` (a referência, lida em 11/11/2026: "Non-ad posts,
+      // Stories, Reels and entire carousel albums are supported"). O da Página não tem como apagar (o Page Stories API).
+      const s = i < 0 ? this.stories.findIndex((x) => x.id === id && !x.id.includes('_')) : -1;
+      if (s >= 0) {
+        this.stories.splice(s, 1);
+        return { status: 200, corpo: { success: true, deleted_id: id } };
+      }
       if (i < 0) return naoExiste;
       this.posts.splice(i, 1);
       return { status: 200, corpo: { success: true, deleted_id: id } };

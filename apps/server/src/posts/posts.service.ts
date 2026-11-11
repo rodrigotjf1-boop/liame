@@ -38,6 +38,7 @@ import {
   PEDIDO_AINDA_SAI,
   PROVEDOR_DO_CANAL,
   recursoDoPost,
+  STORY_SO_NA_PAGINA,
 } from './post-plano.js';
 import { fusoDaEmpresa, lerPosts } from './ler-posts.js';
 import { itensDaPauta } from './pauta.js';
@@ -700,8 +701,8 @@ export class PostsService {
     const tx = currentTx();
     const quem = this.quem(auth);
     const p = (
-      await tx.execute<{ brand_id: string; kind: string; action_id: string | null; version: number; pedido: string | null }>(sql`
-        select p.brand_id, p.kind, p.action_id, p.version, r.status as pedido
+      await tx.execute<{ brand_id: string; kind: string; format: string; action_id: string | null; version: number; pedido: string | null }>(sql`
+        select p.brand_id, p.kind, p.format, p.action_id, p.version, r.status as pedido
           from liame.social_post p
           left join liame.action_request r on r.id = p.action_id and r.tenant_id = p.tenant_id
          where p.id = ${id} and p.tenant_id = ${quem.tenantId}
@@ -711,13 +712,21 @@ export class PostsService {
     if (p.kind !== 'post') throw new AppProblem(409, 'e-pacote', 'É um pacote', 'O pacote o Liame não publicou: quem publicou apaga direto na rede.');
     if (!(await this.ligada(quem, p.brand_id))) throw desligada();
     const canais = (
-      await tx.execute<{ channel: string; connected_account_id: string | null; status: string }>(sql`
-        select channel, connected_account_id, status from liame.social_post_channel
+      await tx.execute<{ channel: string; connected_account_id: string | null; status: string; no_ar_ha_um_dia: boolean }>(sql`
+        select channel, connected_account_id, status, published_at <= now() - interval '24 hours' as no_ar_ha_um_dia from liame.social_post_channel
          where post_id = ${id} and tenant_id = ${quem.tenantId}
          order by case channel when 'instagram' then 0 else 1 end
            for update`)
     ).rows;
-    const noAr = canais.filter((c) => c.status === 'publicado');
+    const story = p.format === 'story';
+    const publicados = canais.filter((c) => c.status === 'publicado');
+    // O Story (A6, Z13, parte 2; D-A6-129 e D-A6-132): "Tirar do ar" vale nas 24 horas e só no Instagram (a Meta não tem
+    // como tirar o Story da Página pela API). As 24 horas contam do primeiro canal em que saiu, no relógio do banco.
+    if (story && publicados.some((c) => c.no_ar_ha_um_dia)) {
+      throw new AppProblem(409, 'story-fora-do-ar', 'O Story já saiu do ar', 'O Story some sozinho depois de 24 horas: este já saiu do ar.');
+    }
+    const noAr = story ? publicados.filter((c) => c.channel === 'instagram') : publicados;
+    if (story && p.action_id && noAr.length === 0 && publicados.length > 0) throw new AppProblem(409, 'story-so-na-pagina', 'O Story está só na Página', STORY_SO_NA_PAGINA);
     if (!p.action_id || noAr.length === 0) {
       throw new AppProblem(409, 'post-fora-do-ar', 'O post não está no ar', 'Apagar das redes vale para o post que o Liame publicou: este post não está no ar em nenhum canal.');
     }
@@ -859,6 +868,8 @@ export class PostsService {
       // A pauta e as datas comerciais em cada dia (A6, Z5d, parte 5; D-A6-20 e D-A6-56).
       pauta: auth.permissions.has('planos.ver') ? await this.pautaDoPeriodo(quem.tenantId, q) : [],
       dates: await this.datasDoPeriodo(q),
+      // O novo post oferece o Story com a função ligada (A6, Z13).
+      stories_enabled: await this.storiesLigados(quem, q.brand_id),
     };
   }
 
