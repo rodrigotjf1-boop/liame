@@ -584,6 +584,8 @@ export {
   COMMENT_AUTO_REPLY_NOTICE,
   COMMENTS_LIST_LIMIT,
   COMMENTS_REFRESH_WINDOW_S,
+  COMMENT_AUTO_REPLY_PREVIEW_LIMIT,
+  CommentAutoReplyPreviewResponse,
   CommentAutoReplyQuery,
   CommentAutoReplyRequest,
   CommentAutoReplyResponse,

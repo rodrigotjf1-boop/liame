@@ -1,14 +1,15 @@
 'use client';
 
-import type { CommentAutoReplyResponse, PasskeyAssertion } from '@liame/contracts';
-import { type FormEvent, type RefObject, useId, useRef, useState } from 'react';
+import type { CommentAutoReplyPreviewResponse, CommentAutoReplyResponse, PasskeyAssertion } from '@liame/contracts';
+import { type FormEvent, type RefObject, useEffect, useId, useRef, useState } from 'react';
+import { ROTULO_DO_TIPO } from '@/components/aprovacoes/comentario-textos';
 import { ConfirmarComChave } from '@/components/seguranca/confirmar-com-chave';
 import { Icone } from '@/components/ui/icone';
 import { useDialogo } from '@/components/ui/use-dialogo';
 import { api, chamar, mensagemDe, novaChave } from '@/lib/api';
 import { disparar } from '@/lib/disparar';
 import { type FormasDeConfirmar, useFormasDeConfirmar } from '@/lib/sessao';
-import { botaoDoAutomatico, erroDoAutomatico, estadoDoAutomatico, pedeConfirmacao, resumoDoAutomatico, TIPOS_DO_AUTOMATICO } from './textos';
+import { autorDoComentario, botaoDoAutomatico, erroDoAutomatico, estadoDoAutomatico, pedeConfirmacao, resumoDoAutomatico, TIPOS_DO_AUTOMATICO } from './textos';
 
 // O atendimento automático na tela Comentários (mockups/prototipo-comentarios.html, P38 versão 2; A6 · Z11, parte 2e-2;
 // D-A6-92 e D-A6-104): a linha no topo, com o que está valendo, e a gaveta para ligar, desligar e marcar os tipos. Ligar
@@ -63,6 +64,20 @@ export function GavetaDoAutomatico({ r, reserva, aoSalvar, aoFechar, confirmar }
   const [erroGeral, setErroGeral] = useState('');
   const [enviando, setEnviando] = useState(false);
   const { temApp, temChave } = useFormasDeConfirmar(confirmar);
+  // A prévia (parte 2e-4): como ele teria respondido os elogios e as marcações das últimas 24 horas.
+  const [previa, setPrevia] = useState<CommentAutoReplyPreviewResponse['items'] | 'carregando' | 'erro'>('carregando');
+
+  useEffect(() => {
+    let vivo = true;
+    disparar(
+      chamar(() => api.GET('/v1/comments/auto-reply/preview', { params: { query: { brand_id: r.brand_id } } })).then((res) => {
+        if (vivo) setPrevia(res.ok ? res.data.items : 'erro');
+      }),
+    );
+    return () => {
+      vivo = false;
+    };
+  }, [r.brand_id]);
   const depois = { enabled: ligado, kinds: TIPOS_DO_AUTOMATICO.map((t) => t.id).filter((k) => tipos.includes(k)) };
   const mudou = depois.enabled !== r.enabled || depois.kinds.join() !== TIPOS_DO_AUTOMATICO.map((t) => t.id).filter((k) => r.kinds.includes(k)).join();
   const comConfirmacao = pedeConfirmacao(r, depois);
@@ -227,6 +242,37 @@ export function GavetaDoAutomatico({ r, reserva, aoSalvar, aoFechar, confirmar }
             {nota('clock', `No máximo ${r.hourly_limit} respostas sozinho por hora; o que passar espera a hora seguinte.`)}
             {nota('undo', 'Cada uma aparece na lista como “Respondido sozinho”, e quem aprova pode apagá-la em Aprovações, sem código.')}
           </section>
+          <details className="com-auto-previa" id="com-auto-previa" open={!r.enabled}>
+            <summary>Veja como ele teria respondido</summary>
+            {previa === 'carregando' ? (
+              <p className="campo-dica" aria-busy="true">
+                Montando a prévia…
+              </p>
+            ) : previa === 'erro' ? (
+              <p className="campo-dica">Não deu para montar a prévia agora. Isso não muda nada no atendimento.</p>
+            ) : previa.length === 0 ? (
+              <p className="campo-dica">Nenhum elogio ou marcação de amigo nas últimas 24 horas esperando resposta.</p>
+            ) : (
+              <>
+                <p className="campo-dica">Com os comentários das últimas 24 horas. Nada disto foi publicado.</p>
+                <ul className="com-auto-ex">
+                  {previa.map((p) => (
+                    <li key={p.id}>
+                      <span className="com-auto-ex-cab">
+                        <b>{autorDoComentario({ author: p.author, channel: p.channel }) ?? 'Quem comentou'}</b>
+                        <span>{ROTULO_DO_TIPO[p.kind] ?? p.kind}</span>
+                      </span>
+                      <span className="com-auto-ex-fala">{p.message}</span>
+                      <span className="com-auto-ex-resposta">
+                        <span className="sr-only">Resposta que sairia: </span>
+                        {p.reply}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              </>
+            )}
+          </details>
           {comConfirmacao && temChave && (
             <ConfirmarComChave
               rotulo="Salvar com a chave"

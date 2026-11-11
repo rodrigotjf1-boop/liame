@@ -1,6 +1,8 @@
 import {
+  COMMENT_AUTO_REPLY_PREVIEW_LIMIT,
   COMMENTS_LIST_LIMIT,
   COMMENTS_REFRESH_WINDOW_S,
+  type CommentAutoReplyPreviewResponse,
   type CommentAutoReplyQuery,
   type CommentAutoReplyRequest,
   type CommentAutoReplyResponse,
@@ -27,7 +29,8 @@ import { AppProblem } from '../errors/problems.js';
 import { FlagService } from '../flags/flag.service.js';
 import { situacaoDaLeitura } from '../fotos/do-seu-instagram.service.js';
 import { marcaDaEmpresa, quemPede } from '../fotos/fotos.service.js';
-import { automaticoDaMarca, FLAG_DO_AUTOMATICO, RESPOSTAS_AUTOMATICAS_POR_HORA, respostasAutomaticasNaHora, TIPOS_DO_AUTOMATICO } from './automatico.js';
+import { respostaPronta } from '../ai/social/comentario.js';
+import { automaticoDaMarca, comAviso, FLAG_DO_AUTOMATICO, RESPOSTAS_AUTOMATICAS_POR_HORA, respostasAutomaticasNaHora, TIPOS_DO_AUTOMATICO } from './automatico.js';
 import { DATASET_DOS_COMENTARIOS, FLAG_DOS_COMENTARIOS } from './comentarios.js';
 
 /** Ligar e somar um tipo ao atendimento automático: o Dono ou um Administrador (D-A6-92). */
@@ -233,6 +236,35 @@ export class ComentariosService {
       comment_count: p.comment_count,
     }));
     return { brand_id: brandId, state: 'pronta', accounts, counts, items, posts, refresh };
+  }
+
+  /**
+   * A prévia do atendimento automático (A6, Z11, parte 2e-4; P38 versão 2: "antes de ligar, a gaveta mostra como ele
+   * teria respondido"): os elogios e as marcações das últimas 24 horas da marca, de outras pessoas, à vista e ainda sem
+   * resposta da marca, os mais novos primeiro, cada um com a resposta pronta que sairia (a mesma da rotina, com o aviso).
+   * Só leitura; com a leitura dos comentários desligada, vazia.
+   */
+  async previaDoAutomatico(auth: AuthContext, query: CommentAutoReplyQuery, agora = new Date()): Promise<CommentAutoReplyPreviewResponse> {
+    const quem = quemPede(auth);
+    const brandId = query.brand_id;
+    await marcaDaEmpresa(brandId);
+    if (!(await this.ligada(quem.tenantId, quem.userId, brandId))) return { items: [] };
+    const linhas = (
+      await currentTx().execute<{ comment_id: string; channel: string; author_name: string | null; message: string; kind: 'elogio' | 'marcacao' }>(sql`
+        select c.comment_id, c.channel, c.author_name, c.message, c.kind
+          from liame.social_comment c
+          join liame.connected_account a on a.id = c.connected_account_id
+         where a.brand_id = ${brandId} and a.provider in (${PROVEDOR_INSTAGRAM}, ${PROVEDOR_PAGINA}) and ${contaConectada('a')}
+           and c.parent_comment_id is null and not c.by_brand and not c.hidden and c.kind in ('elogio', 'marcacao')
+           and c.published_at >= ${agora.toISOString()}::timestamptz - interval '24 hours'
+           and not exists (select 1 from liame.social_comment r
+                            where r.connected_account_id = c.connected_account_id and r.parent_comment_id = c.comment_id and r.by_brand)
+         order by c.published_at desc, c.comment_id
+         limit ${COMMENT_AUTO_REPLY_PREVIEW_LIMIT}`)
+    ).rows;
+    return {
+      items: linhas.map((l) => ({ id: l.comment_id, channel: l.channel, author: l.author_name, message: l.message, kind: l.kind, reply: comAviso(respostaPronta(l.kind, l.comment_id)) })),
+    };
   }
 
   /**

@@ -1,4 +1,5 @@
 import {
+  CommentAutoReplyPreviewResponse,
   CommentAutoReplyQuery,
   CommentAutoReplyRequest,
   CommentAutoReplyResponse,
@@ -78,6 +79,21 @@ export class ComentariosController {
   @ApiNotFoundResponse({ standardSchema: ProblemDetails })
   verAutomatico(@Auth() auth: AuthContext, @Query({ schema: CommentAutoReplyQuery }) query: CommentAutoReplyQuery): Promise<CommentAutoReplyResponse> {
     return this.comentarios.verAutomatico(auth, query);
+  }
+
+  @Get('auto-reply/preview')
+  @Permissao('campanhas.ver')
+  @ApiOperation({
+    summary: 'Como o atendimento automático teria respondido',
+    description:
+      'A prévia antes de ligar (A6, Z11, parte 2e-4; P38 versão 2): até 3 elogios e marcações das últimas 24 horas da marca, de outras pessoas, à vista e ainda sem resposta da marca, os mais novos primeiro, cada um com a resposta pronta que sairia (com o aviso " · resposta automática"). Nada disto é publicado. Com a leitura dos comentários desligada, vazia. Só leitura.',
+  })
+  @ApiOkResponse({ standardSchema: CommentAutoReplyPreviewResponse })
+  @ApiBadRequestResponse({ standardSchema: ProblemDetails })
+  @ApiForbiddenResponse({ standardSchema: ProblemDetails })
+  @ApiNotFoundResponse({ standardSchema: ProblemDetails })
+  previaDoAutomatico(@Auth() auth: AuthContext, @Query({ schema: CommentAutoReplyQuery }) query: CommentAutoReplyQuery): Promise<CommentAutoReplyPreviewResponse> {
+    return this.comentarios.previaDoAutomatico(auth, query);
   }
 
   @Put('auto-reply')
