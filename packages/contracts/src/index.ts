@@ -660,3 +660,11 @@ export {
   DirectSuggestion,
   DirectWaitingResponse,
 } from './direct.js';
+export {
+  CreateNewCampaignRequest,
+  NEW_CAMPAIGN_OBJECTIVES,
+  NEW_CAMPAIGN_STATUSES,
+  NewCampaignObjective,
+  NewCampaignResponse,
+  NewCampaignStatus,
+} from './campanhas-novas.js';

@@ -47,6 +47,8 @@ describe('ferramentas de anúncio (A4 · X2)', () => {
       anuncio_retomar: ['R2', 'meta_ads', 'pausar_se_inalterado'],
       conjunto_retomar: ['R2', 'meta_ads', 'pausar_se_inalterado'],
       campanha_retomar: ['R2', 'meta_ads+google_ads', 'pausar_se_inalterado'],
+      // A campanha nova (A4, X5): nasce pausada e não gasta; o que foi criado fica pausado na Meta (D-A4-31).
+      campanha_criar: ['R1', 'meta_ads', 'fica_pausada_na_meta'],
     });
     for (const t of Object.values(TOOLS)) expect(t.params.safeParse({ qualquer: 1 }).success, t.name).toBe(false);
   });
@@ -178,6 +180,9 @@ describe('ferramentas de anúncio (A4 · X2)', () => {
     // A mensagem enviada não volta: a volta do envio é pausar o que ainda não saiu, e a pausa não tem volta pelo Liame.
     // A resposta automática a um comentário (A6, Z11, parte 2e-1) tem a mesma volta da resposta: apagar a resposta.
     const comVolta = ['mensagem_disparar', 'avaliacao_responder', 'comentario_responder', 'comentario_responder_auto', 'comentario_ocultar'];
-    for (const t of Object.values(TOOLS)) expect(Boolean(t.undo), t.name).toBe(t.providers.includes('meta_ads') || comVolta.includes(t.name));
+    // A campanha nova (A4, X5; D-A4-31) é a exceção na Meta: a compensação é ela ficar pausada (não aparece e não gasta),
+    // e apagar sempre escala para uma pessoa; o teste de banco (`campanha-nova.spec.ts`) prova que fica pausada.
+    const semVoltaNaMeta = ['campanha_criar'];
+    for (const t of Object.values(TOOLS)) expect(Boolean(t.undo), t.name).toBe((t.providers.includes('meta_ads') && !semVoltaNaMeta.includes(t.name)) || comVolta.includes(t.name));
   });
 });
