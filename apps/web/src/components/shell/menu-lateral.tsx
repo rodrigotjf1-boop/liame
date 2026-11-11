@@ -80,6 +80,8 @@ export function MenuLateral({ id, aoFechar, modos, inerte = false }: { id: strin
         <ul className="nav-lista" aria-labelledby={`g-${grupo.id}`}>
           {itens.map((item, posicao) => {
             const atual = itemAtual(caminho, item.href);
+            // Com o Messenger lido em alguma marca, o item do Direct diz "Direct e Messenger" (A6, Z14; D-A6-120).
+            const rotulo = item.contador === 'direct' && direct.messenger ? 'Direct e Messenger' : item.rotulo;
             const n =
               item.contador === 'atencao'
                 ? (contador.total ?? 0)
@@ -113,12 +115,12 @@ export function MenuLateral({ id, aoFechar, modos, inerte = false }: { id: strin
                   className="nav-item"
                   href={item.href}
                   aria-current={atual ? 'page' : undefined}
-                  title={`${item.rotulo}${falado}`}
+                  title={`${rotulo}${falado}`}
                   onClick={aoFechar}
                 >
                   {atual && <span className="nav-no" aria-hidden="true" />}
                   <Icone nome={item.icone} />
-                  <span className="rot">{item.rotulo}</span>
+                  <span className="rot">{rotulo}</span>
                   {n > 0 && (
                     <>
                       <span className="sr-only">{falado}</span>

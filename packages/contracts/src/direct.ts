@@ -179,6 +179,8 @@ export const DirectWaitingResponse = z.strictObject({
    * de "Esperam resposta" na tela (a última mensagem é da pessoa, dentro da janela de 24 horas, sem "concluir" depois).
    */
   waiting: z.int().min(0),
+  /** Alguma marca da empresa com o Messenger da Página lido pelo Liame (A6, Z14): o menu diz "Direct e Messenger". */
+  messenger: z.boolean(),
 });
 export type DirectWaitingResponse = z.infer<typeof DirectWaitingResponse>;
 

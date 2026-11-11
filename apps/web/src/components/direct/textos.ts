@@ -1,4 +1,12 @@
-import { DIRECT_AUTO_REPLY_NOTICE, type DIRECT_AUTO_REPLY_KINDS, type DirectAutoReplyResponse, type DirectConversation, type DirectMessage, type DirectSettingsResponse } from '@liame/contracts';
+import {
+  DIRECT_AUTO_REPLY_NOTICE,
+  type DIRECT_AUTO_REPLY_KINDS,
+  type DirectAutoReplyResponse,
+  type DirectConversation,
+  type DirectMessage,
+  type DirectMessengerSettings,
+  type DirectSettingsResponse,
+} from '@liame/contracts';
 import { mensagemDe, type Problema } from '@/lib/api';
 import { dataCompleta, diasAte, horaDe, quandoComHora } from '@/lib/formato';
 
@@ -91,9 +99,10 @@ export function recusaDaResposta(texto: string): string | null {
   return null;
 }
 
-/** O @ com a arroba, ou "Quem escreveu" quando a Meta não mandou. */
-export function quemEscreveu(username: string | null): string {
-  return username ? `@${username}` : 'Quem escreveu';
+/** O @ com a arroba; no Messenger (sem @), o nome que a Meta manda; ou "Quem escreveu" quando a Meta não mandou. */
+export function quemEscreveu(username: string | null, nome: string | null = null): string {
+  if (username) return `@${username}`;
+  return nome?.trim() || 'Quem escreveu';
 }
 
 /** As iniciais do @ para o círculo da lista ("ana.paula_rj" → "AP"). */
@@ -101,6 +110,13 @@ export function iniciaisDoArroba(username: string | null): string {
   if (!username) return '?';
   const partes = username.split(/[._\-\d]+/).filter(Boolean);
   return (partes.length > 1 ? `${partes[0]![0]}${partes[1]![0]}` : username.slice(0, 2)).toUpperCase();
+}
+
+/** As iniciais de quem escreveu: pelo @ ("ana.paula_rj" → "AP") ou, no Messenger, pelo nome ("Joana Lima" → "JL"). */
+export function iniciaisDe(username: string | null, nome: string | null): string {
+  if (username || !nome?.trim()) return iniciaisDoArroba(username);
+  const partes = nome.trim().split(/\s+/).filter(Boolean);
+  return (partes.length > 1 ? `${partes[0]![0]}${partes[partes.length - 1]![0]}` : partes[0]!.slice(0, 2)).toUpperCase();
 }
 
 /** "faltam 23 h 53 min", "faltam 40 min". */
@@ -126,7 +142,7 @@ export type Janela = { nivel: 'ok' | 'atencao' | 'fechada'; texto: string };
 /** A linha da janela da Meta, no alto da conversa. */
 export function janelaDaConversa(c: Pick<DirectConversation, 'status' | 'closing' | 'window_until'>, agora: Date): Janela {
   if (c.status === 'respondida') return { nivel: 'ok', texto: 'Respondida. Se a pessoa escrever de novo, a janela abre outra vez.' };
-  if (!c.window_until) return { nivel: 'ok', texto: 'A pessoa ainda não escreveu nesta conversa: o Instagram só deixa a marca responder depois.' };
+  if (!c.window_until) return { nivel: 'ok', texto: 'A pessoa ainda não escreveu nesta conversa: a Meta só deixa a marca responder depois.' };
   if (c.status === 'fora') return { nivel: 'fechada', texto: `A janela fechou ${diaEHora(c.window_until, agora)}: 24 horas depois da última mensagem da pessoa.` };
   if (c.closing) {
     return { nivel: 'atencao', texto: `A janela fecha ${diaEHora(c.window_until, agora)} (${falta(c.window_until, agora)}). Depois, só quando a pessoa escrever de novo.` };
@@ -277,4 +293,72 @@ export function situacaoDoEnvio(status: string, motivo: string | null): { fim: b
     return { fim: true, ok: false, texto: motivo ? `Não saiu: ${motivo}` : 'Não saiu. Tente de novo.' };
   }
   return { fim: false, ok: false, texto: 'enviando…' };
+}
+
+// ------------------------------------------------------------------ o Messenger da Página (A6, Z14, parte 3; P39 versão 3)
+
+export type CanalDoDirect = 'todos' | 'instagram' | 'messenger';
+
+/** O filtro de canal, na ordem do protótipo (só com os dois canais na caixa). */
+export const CANAIS_DO_DIRECT: [CanalDoDirect, string][] = [
+  ['todos', 'Instagram e Messenger'],
+  ['instagram', 'Instagram'],
+  ['messenger', 'Messenger'],
+];
+
+/**
+ * O nome da tela, como o do menu: com o Messenger liberado e ligado na marca, "Direct e Messenger" (D-A6-120), mesmo com
+ * o Regem atendendo a Página ou sem a permissão (a faixa diz o porquê).
+ */
+export function nomeDaCaixa(m: Pick<DirectMessengerSettings, 'available' | 'enabled'> | null): string {
+  return m?.available && m.enabled ? 'Direct e Messenger' : 'Direct';
+}
+
+/** Os dois canais na caixa (o filtro de canal e o ícone em cada conversa): o Messenger ligado, liberado e lido pelo Liame. */
+export function doisCanais(m: Pick<DirectMessengerSettings, 'available' | 'enabled' | 'regem' | 'reading'> | null): boolean {
+  return Boolean(m?.available && m.enabled && m.regem !== 'atende' && m.reading !== 'sem_permissao');
+}
+
+/** Oferecer ligar o Messenger (D-A6-121): a função liberada, a Página conectada e o Messenger ainda desligado na marca. */
+export function ofereceMessenger(m: Pick<DirectMessengerSettings, 'available' | 'enabled' | 'page'> | null): boolean {
+  return Boolean(m?.available && !m.enabled && m.page);
+}
+
+/** A Página na linha da conta, com o que segura o Messenger (o Regem ou a permissão). */
+export function situacaoDaPagina(m: Pick<DirectMessengerSettings, 'regem' | 'reading'>): string {
+  if (m.regem === 'atende') return ' · Messenger com o Regem';
+  if (m.reading === 'sem_permissao') return ' · Messenger sem permissão';
+  return '';
+}
+
+/** A faixa do Messenger (P39 versão 3): a Central do Regem atende a Página, ou falta a permissão de mensagens dela. */
+export function avisoDoMessenger(
+  m: Pick<DirectMessengerSettings, 'enabled' | 'regem' | 'reading'>,
+  pagina: string,
+): { tipo: 'acao' | 'atencao'; titulo: string; texto: string; contas: boolean } | null {
+  if (!m.enabled) return null;
+  if (m.regem === 'atende') {
+    return {
+      tipo: 'acao',
+      titulo: 'O Messenger desta Página é atendido no Regem',
+      texto: `A Central de atendimento do Regem responde o Messenger da ${pagina}. Para ninguém receber duas respostas, o Liame não lê nem responde o Messenger dela; o Direct segue aqui.`,
+      contas: false,
+    };
+  }
+  if (m.reading === 'sem_permissao') {
+    return {
+      tipo: 'atencao',
+      titulo: 'Falta a permissão de mensagens da Página',
+      texto: `A autorização da Meta não deixa o Liame ler nem responder o Messenger da ${pagina}. Conecte a Meta de novo e confirme a Página em "Escolher contas"; a permissão nova vem junto. O Direct segue aqui.`,
+      contas: true,
+    };
+  }
+  return null;
+}
+
+/** O app onde a conversa mora (para abrir e para as frases do que não muda lá). */
+export function appDaConversa(canal: string): { nome: 'Instagram' | 'Messenger'; endereco: string } {
+  return canal === 'messenger'
+    ? { nome: 'Messenger', endereco: 'https://business.facebook.com/latest/inbox' }
+    : { nome: 'Instagram', endereco: 'https://www.instagram.com/direct/inbox/' };
 }

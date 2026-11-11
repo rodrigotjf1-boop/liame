@@ -254,15 +254,22 @@ export class DirectService {
   async esperando(auth: AuthContext, agora = new Date()): Promise<DirectWaitingResponse> {
     const quem = quemPede(auth);
     const marcas = (await currentTx().execute<{ id: string }>(sql`select id from liame.brand where archived_at is null`)).rows;
-    const contas: string[] = [];
-    for (const m of marcas) for (const c of await this.contasLidas(quem.tenantId, quem.userId, m.id)) contas.push(c.id);
-    if (!contas.length) return { waiting: 0 };
+    const lidas: ContaLida[] = [];
+    // Com o Messenger ligado e liberado em alguma marca, o menu diz "Direct e Messenger" (D-A6-120), como o título da
+    // tela: mesmo com o Regem atendendo a Página ou sem a permissão (a tela diz o porquê).
+    let messenger = false;
+    for (const m of marcas) {
+      lidas.push(...(await this.contasLidas(quem.tenantId, quem.userId, m.id)));
+      if (!messenger && (await this.ajusteDaMarca(m.id, 'messenger')).enabled) messenger = await this.disponivel(quem.tenantId, quem.userId, m.id, 'messenger');
+    }
+    const contas = lidas.map((c) => c.id);
+    if (!contas.length) return { waiting: 0, messenger };
     const r = await currentTx().execute<{ n: string | number }>(sql`
       select count(*) as n from liame.direct_conversation c
        where c.connected_account_id in ${contas} and c.last_direction = 'entrada' and c.last_inbound_at is not null
          and c.last_inbound_at > ${agora.toISOString()}::timestamptz - make_interval(hours => ${JANELA_DO_DIRECT_HORAS})
          and (c.concluded_at is null or c.concluded_at < c.last_inbound_at)`);
-    return { waiting: Number(r.rows[0]?.n ?? 0) };
+    return { waiting: Number(r.rows[0]?.n ?? 0), messenger };
   }
 
   /**

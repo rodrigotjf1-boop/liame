@@ -7,14 +7,24 @@ import { Icone } from '@/components/ui/icone';
 import { api, chamar, mensagemDe, type Problema } from '@/lib/api';
 import { disparar } from '@/lib/disparar';
 import { quandoComHora } from '@/lib/formato';
-import { anexoDaMensagem, bytesDoTexto, ESPACO_DA_RESPOSTA, erroDaResposta, janelaDaConversa, quemEscreveu, recusaDaResposta, saiuSozinha, situacaoDoEnvio } from './textos';
+import {
+  anexoDaMensagem,
+  appDaConversa,
+  bytesDoTexto,
+  ESPACO_DA_RESPOSTA,
+  erroDaResposta,
+  janelaDaConversa,
+  quemEscreveu,
+  recusaDaResposta,
+  saiuSozinha,
+  situacaoDoEnvio,
+} from './textos';
 
 // A conversa aberta (P39): quem escreveu, a janela da Meta, as mensagens guardadas e a resposta. Mandar passa pelo
 // atendimento aberto (a tela pede a confirmação uma vez e abre por 8 horas); o pedido nasce aprovado e sai na volta
 // seguinte do executor, e a conversa mostra "enviando…" até a mensagem chegar à conversa do Liame (ou o porquê de não
 // ter saído).
 
-const INSTAGRAM_DIRECT = 'https://www.instagram.com/direct/inbox/';
 /** De quanto em quanto a tela olha se a resposta saiu, e até quantas vezes (o executor anda a cada poucos segundos). */
 const OLHAR_MS = 2_000;
 const OLHAR_VEZES = 30;
@@ -188,14 +198,16 @@ export function ConversaDoDirect({ marca, marcaNome, id, leitura, focar, agora, 
           </div>
         }
       >
-        {carga.problema.status === 404 ? 'Ela pode ter passado dos 90 dias ou saído do Instagram.' : mensagemDe(carga.problema)}
+        {carga.problema.status === 404 ? 'Ela pode ter passado dos 90 dias ou saído da Meta.' : mensagemDe(carga.problema)}
       </Estado>
     );
   }
 
   const { conversation: c, messages, suggestion: sugestao } = carga.dados;
   const janela = janelaDaConversa(c, agora);
-  const quem = quemEscreveu(c.username);
+  const quem = quemEscreveu(c.username, c.name);
+  // O Direct abre no Instagram; o Messenger, na caixa de entrada da Página (A6, Z14).
+  const app = appDaConversa(c.channel);
   const usados = bytesDoTexto(texto.trim());
   const naJanela = c.status !== 'fora' && c.window_until !== null;
 
@@ -212,9 +224,9 @@ export function ConversaDoDirect({ marca, marcaNome, id, leitura, focar, agora, 
           </b>
           <span>Última mensagem {quandoComHora(c.last_message_at, agora)}</span>
         </div>
-        <a className="btn btn--sm btn--ghost" href={INSTAGRAM_DIRECT} target="_blank" rel="noopener noreferrer">
+        <a className="btn btn--sm btn--ghost" href={app.endereco} target="_blank" rel="noopener noreferrer">
           <Icone nome="external" pequeno />
-          Abrir no Instagram
+          Abrir no {app.nome}
         </a>
       </div>
       <p className={`dir-janela${janela.nivel === 'atencao' ? ' dir-janela--atencao' : janela.nivel === 'fechada' ? ' dir-janela--fechada' : ''}`}>
@@ -224,7 +236,7 @@ export function ConversaDoDirect({ marca, marcaNome, id, leitura, focar, agora, 
       <div className="dir-fio" role="log" aria-label={`Mensagens com ${quem}`}>
         {messages.length === 0 && <p className="campo-dica">Nenhuma mensagem guardada nesta conversa.</p>}
         {messages.map((m) => (
-          <Mensagem key={m.id} m={m} marcaNome={marcaNome} agora={agora} />
+          <Mensagem key={m.id} m={m} marcaNome={marcaNome} agora={agora} app={app} />
         ))}
         {envio && !(envio.situacao === 'enviando' && messages.some((m) => m.direction === 'saida' && m.text === envio.texto)) && (
           <div className="dir-msg dir-msg--nossa">
@@ -238,6 +250,7 @@ export function ConversaDoDirect({ marca, marcaNome, id, leitura, focar, agora, 
       {sugestao && (
         <SugestaoDoDirect
           s={sugestao}
+          app={app.nome}
           aoUsar={
             podeResponder && naJanela
               ? (t) => {
@@ -273,7 +286,7 @@ export function ConversaDoDirect({ marca, marcaNome, id, leitura, focar, agora, 
             </p>
           )}
           <div className="dir-resp-pe">
-            <span className="dir-resp-dica">Nada sai para esta conversa. Concluir tira da lista do Liame; o Instagram não muda.</span>
+            <span className="dir-resp-dica">Nada sai para esta conversa. Concluir tira da lista do Liame; o {app.nome} não muda.</span>
             <button className="btn" type="button" disabled={ocupado} onClick={() => disparar(concluir())}>
               <Icone nome="check" pequeno />
               Concluir a conversa
@@ -301,7 +314,7 @@ export function ConversaDoDirect({ marca, marcaNome, id, leitura, focar, agora, 
           )}
           <div className="dir-resp-pe">
             <span className="dir-resp-dica" id={`${ids}-dica`}>
-              Sai em nome da {marcaNome}, no Direct da marca, e fica na auditoria com o seu nome. Espaço: <span className="num">{usados.toLocaleString('pt-BR')}</span> de 1.000 (letra com
+              Sai em nome da {marcaNome}, {c.channel === 'messenger' ? 'no Messenger da Página' : 'no Direct da marca'}, e fica na auditoria com o seu nome. Espaço: <span className="num">{usados.toLocaleString('pt-BR')}</span> de 1.000 (letra com
               acento conta 2).
             </span>
             {c.status === 'espera' && (
@@ -324,7 +337,7 @@ export function ConversaDoDirect({ marca, marcaNome, id, leitura, focar, agora, 
  * A sugestão sem IA (parte 4a; P39): a resposta pronta do elogio e da menção no story (com "Usar esta"), o "como
  * proceder" da reclamação e o aviso do golpe. Um tipo que esta versão da tela não conhece não aparece (V23).
  */
-function SugestaoDoDirect({ s, aoUsar }: { s: DirectSuggestion; aoUsar: ((texto: string) => void) | null }) {
+function SugestaoDoDirect({ s, app, aoUsar }: { s: DirectSuggestion; app: string; aoUsar: ((texto: string) => void) | null }) {
   if (s.kind === 'golpe') {
     return (
       <div className="dir-sug dir-sug--golpe">
@@ -332,7 +345,7 @@ function SugestaoDoDirect({ s, aoUsar }: { s: DirectSuggestion; aoUsar: ((texto:
           <Icone nome="alert" />
           <b>Parece golpe</b>
         </p>
-        <p className="dir-sug-texto">O Liame não sugere resposta a golpe. Concluir tira a conversa da lista do Liame; denunciar e bloquear ficam no Instagram.</p>
+        <p className="dir-sug-texto">O Liame não sugere resposta a golpe. Concluir tira a conversa da lista do Liame; denunciar e bloquear ficam no {app}.</p>
       </div>
     );
   }
@@ -375,8 +388,8 @@ function SugestaoDoDirect({ s, aoUsar }: { s: DirectSuggestion; aoUsar: ((texto:
   return null;
 }
 
-/** Uma mensagem: o texto em balão, ou a frase do que só o Instagram guarda (foto, vídeo, story). */
-function Mensagem({ m, marcaNome, agora }: { m: DirectMessage; marcaNome: string; agora: Date }) {
+/** Uma mensagem: o texto em balão, ou a frase do que só a Meta guarda (foto, vídeo, story), com o caminho para o app. */
+function Mensagem({ m, marcaNome, agora, app }: { m: DirectMessage; marcaNome: string; agora: Date; app: { nome: string; endereco: string } }) {
   const nossa = m.direction === 'saida';
   const anexo = anexoDaMensagem(m);
   // A resposta que saiu pelo atendimento automático (parte 5b; P39 versão 2): "Liame, sozinho".
@@ -395,8 +408,8 @@ function Mensagem({ m, marcaNome, agora }: { m: DirectMessage; marcaNome: string
           <span>
             {anexo.texto}
             {m.text ? `: ${m.text}` : ''}. O Liame não guarda fotos, vídeos, áudios nem stories:{' '}
-            <a href={INSTAGRAM_DIRECT} target="_blank" rel="noopener noreferrer">
-              ver no Instagram
+            <a href={app.endereco} target="_blank" rel="noopener noreferrer">
+              ver no {app.nome}
             </a>
             .
           </span>

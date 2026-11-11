@@ -129,3 +129,11 @@
   .dir-msg { max-width: 92%; }
   .dir-resp-pe .btn { flex: 1 1 100%; justify-content: center; }
 }
+
+/* O canal da conversa (A6, Z14): o ícone do Instagram ou do Messenger ao lado do nome, com os dois canais na caixa. */
+.dir-canal {
+  display: inline-flex;
+  margin-right: 4px;
+  vertical-align: -2px;
+  color: var(--text-muted);
+}
