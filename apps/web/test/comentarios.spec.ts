@@ -1,6 +1,6 @@
 import type { CommentsResponse } from '@liame/contracts';
 import { describe, expect, it } from 'vitest';
-import { autorDoComentario, avisosDasContas, FILTROS, legendaDoPost, lerAgora, lidoHa, pedidoDoComentario, ROTULO_DA_SITUACAO, vazioDoFiltro } from '@/components/comentarios/textos';
+import { autorDoComentario, avisosDasContas, erroDoPedido, FILTROS, legendaDoPost, lerAgora, lidoHa, pedidoDoComentario, ROTULO_DA_SITUACAO, vazioDoFiltro } from '@/components/comentarios/textos';
 import { NAVEGACAO } from '@/components/shell/navegacao';
 
 // A tela Comentários (A6 · Z11, parte 3b; mockups/prototipo-comentarios.html, P38): o item do menu, as situações que
@@ -49,6 +49,13 @@ describe('a tela Comentários (A6 · Z11, parte 3b)', () => {
       ['aviso', false],
     ]);
     expect(avisos[0]!.texto).toContain('Conecte a Meta de novo em Contas conectadas');
+  });
+
+  it('a recusa do pedido de uma pessoa (parte 3c): o pedido repetido, a escrita desligada e a permissão da Meta nas palavras da tela', () => {
+    expect(erroDoPedido({ code: 'acao-duplicada', title: 'x' })).toContain('Já há um pedido em aberto para este comentário');
+    expect(erroDoPedido({ code: 'escrita-desligada', title: 'x' })).toBe('Responder e ocultar comentários pelo Liame ainda não estão ligados para esta empresa.');
+    expect(erroDoPedido({ code: 'sem-permissao-na-plataforma', title: 'x' })).toContain('Conecte a Meta de novo');
+    expect(erroDoPedido({ code: 'outro', title: 'Título', detail: 'O detalhe.' })).toBe('O detalhe.');
   });
 
   it('a lista vazia diz o que aparece em cada filtro; com a busca, a frase é a da busca', () => {

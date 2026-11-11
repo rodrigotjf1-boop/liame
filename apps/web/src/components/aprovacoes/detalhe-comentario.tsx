@@ -34,7 +34,7 @@ import { type Grupo, identidadeDoPlano, prazoDe, riscoDe } from './textos';
 // aprovação com o código do app. Decidido: o resultado (saindo, respondido, oculto, retirado pelo Social media com o
 // porquê, recusado) e o que foi pedido. A resposta é pública e sai em nome da marca.
 
-const DICA_DO_COMENTARIO = 'A resposta é pública. Sem desconto, brinde ou reembolso prometido, e sem o nome de quem comentou: o Compliance confere de novo quando você salvar.';
+export const DICA_DO_COMENTARIO = 'A resposta é pública. Sem desconto, brinde ou reembolso prometido, e sem o nome de quem comentou: o Compliance confere de novo quando você salvar.';
 const motivosDe = (lista: string[]) => lista.map((m) => ({ valor: m, rotulo: m }));
 
 /** O canal do comentário, com o ícone da rede (P38). Também na tela Comentários. */
