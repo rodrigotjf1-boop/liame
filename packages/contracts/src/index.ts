@@ -664,7 +664,11 @@ export {
   CreateNewCampaignRequest,
   NEW_CAMPAIGN_OBJECTIVES,
   NEW_CAMPAIGN_STATUSES,
+  NewCampaignBlock,
   NewCampaignObjective,
+  NewCampaignOptionsQuery,
+  NewCampaignOptionsResponse,
   NewCampaignResponse,
   NewCampaignStatus,
+  NewCampaignUnitOption,
 } from './campanhas-novas.js';

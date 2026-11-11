@@ -22,7 +22,9 @@ import { useSessao } from '@/lib/sessao';
 import { type AcaoDeAnuncio, anuncioApresentado, ehPedidoDeAnuncio, erroAoDesfazer, etiquetaDoAnuncio, mesDoPedido, quemPediu, textosDoAnuncio } from './anuncio-textos';
 import type { Decisao } from './barra-da-decisao';
 import { marcasAtivas, planosDasMarcas } from './buscar-planos';
+import { FERRAMENTAS_DA_CAMPANHA_NOVA } from '@/components/criativos/campanha-nova-textos';
 import { DetalheAnuncio, type Volta } from './detalhe-anuncio';
+import { DetalheCampanhaNova } from './detalhe-campanha-nova';
 import { DetalheMensagem, type Feito } from './detalhe-mensagem';
 import { type AcaoDeMensagem, ehPedidoDeMensagem, etiquetaDaMensagem, mensagemApresentada } from './mensagem-textos';
 import { type AcaoDeComentario, canalETipoDaLista, comentarioApresentado, ehPedidoDeComentario, etiquetaDoComentario, operacaoDo } from './comentario-textos';
@@ -56,6 +58,8 @@ type PlanoAberto = { id: string; estado: 'carregando' } | { id: string; estado: 
 type PedidoDeRascunho = { avaliacaoId: string; brandId: string; textoInicial: string };
 type CargaDoRascunho = { tipo: 'carregando' } | { tipo: 'ok'; rascunho: Rascunho } | { tipo: 'nao-achou' } | { tipo: 'erro'; problema: Problema };
 const chaveDoRascunho = (avaliacaoId: string) => `r:${avaliacaoId}`;
+/** O pedido da campanha nova na Meta (A4, X5; P42): criar pausada, ativar e a volta, pausar. */
+const ehPedidoDeCampanhaNova = (a: { tool: string }) => (FERRAMENTAS_DA_CAMPANHA_NOVA as readonly string[]).includes(a.tool);
 
 const GRUPOS: Grupo[] = ['pendente', 'auto', 'feito'];
 /** A fila anda sozinha: outra pessoa pode decidir, o worker executa, o Estrategista manda a versão nova, o prazo vence. */
@@ -219,7 +223,12 @@ export function AprovacoesTela() {
   const [fotos, setFotos] = useState<Map<string, BrandPhoto>>(() => new Map());
   const [releFotos, setReleFotos] = useState(0);
   const releuFotosEm = useRef(0);
-  const marcasDosPosts = [...new Set([...acoes, ...(avulso ? [avulso] : [])].flatMap((a) => (ehPedidoDePost(a) && a.brand_id ? [a.brand_id] : [])))].sort().join(',');
+  // E a mídia da campanha nova (P42): a foto ou o vídeo de Fotos da marca do pedido.
+  const marcasDosPosts = [
+    ...new Set([...acoes, ...(avulso ? [avulso] : [])].flatMap((a) => ((ehPedidoDePost(a) || ehPedidoDeCampanhaNova(a)) && a.brand_id ? [a.brand_id] : []))),
+  ]
+    .sort()
+    .join(',');
   useEffect(() => {
     if (!podeVerFotos || !marcasDosPosts) return;
     let vivo = true;
@@ -416,6 +425,17 @@ export function AprovacoesTela() {
   }
 
   // Desfazer um pedido de anúncio executado: nasce um pedido novo (a volta), que também espera a aprovação. A tela abre nele.
+  // ---- a campanha nova (P42): pedir para ativar a criada e pausada; o pedido novo abre na lista.
+  async function pedirAtivarCampanha(campanha: string): Promise<Problema | null> {
+    const r = await chamar(() => api.POST('/v1/new-campaigns/{id}/activate', { params: { path: { id: campanha } } }));
+    if (!r.ok) return r.problema;
+    avisar('Pedido de ativação criado. Ele espera a aprovação com o código do app.');
+    await carregar();
+    if (r.data.pending_action_id) setSel(chaveDaAcao(r.data.pending_action_id));
+    focarOTitulo();
+    return null;
+  }
+
   async function desfazer(acao: AcaoDeAnuncio): Promise<Volta> {
     const r = await chamar(() => api.POST('/v1/actions/{id}/undo', { params: { path: { id: acao.id } } }));
     if (!r.ok) return { ok: false, ...erroAoDesfazer(r.problema, acao) };
@@ -900,6 +920,25 @@ export function AprovacoesTela() {
         aoSalvarTexto={salvarTextoDaResposta}
         aoApagar={apagarResposta}
         aoEscreverOutra={escreverOutra}
+      />
+    );
+  } else if (aberta?.tipo === 'acao' && ehPedidoDeCampanhaNova(aberta.acao)) {
+    detalhe = (
+      <DetalheCampanhaNova
+        acao={aberta.acao}
+        grupo={grupoDe(aberta.acao, agora)}
+        agora={agora}
+        podeDecidir={podeDecidir}
+        podeOperar={pode('campanhas.operar')}
+        temApp={temApp}
+        temChave={temChave}
+        fotos={fotos}
+        titulo={tituloDoDetalhe}
+        campoCodigo={campoCodigo}
+        aoVoltar={voltarParaALista}
+        aoAprovar={aprovar}
+        aoRecusar={recusar}
+        aoPedirAtivar={pedirAtivarCampanha}
       />
     );
   } else if (aberta?.tipo === 'acao' && ehPedidoDeAnuncio(aberta.acao)) {

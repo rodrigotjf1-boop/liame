@@ -1,6 +1,7 @@
 'use client';
 
-import type { AdPieceOptionsResponse, AdPieceRequestResponse, AdPieceResponse, AdPieceVersion } from '@liame/contracts';
+import type { AdPieceOptionsResponse, AdPieceRequestResponse, AdPieceResponse, AdPieceVersion, NewCampaignOptionsResponse } from '@liame/contracts';
+import Link from 'next/link';
 import { type FormEvent, useEffect, useId, useRef, useState } from 'react';
 import { ListaDeFontes, TextoComNumeros, useFontes } from '@/components/resumo/numeros';
 import { Fontes } from '@/components/resumo/textos';
@@ -9,6 +10,7 @@ import { Icone } from '@/components/ui/icone';
 import { mensagemDe, type Problema } from '@/lib/api';
 import { disparar } from '@/lib/disparar';
 import { quandoComHora } from '@/lib/formato';
+import { situacaoDaCampanha } from './campanha-nova-textos';
 import {
   BOTOES,
   botaoEscrito,
@@ -59,6 +61,12 @@ interface Props {
   aoPedirOutra: (p: AdPieceResponse, instrucao: string) => Promise<Problema | null>;
   aoContestar: (p: AdPieceResponse, comentario: string) => Promise<Problema | null>;
   aoAvisar: (texto: string, tipo?: 'ok' | 'perigo') => void;
+  /** A campanha nova (P42), quando a função está ligada: a campanha mais recente da peça e o botão da gaveta. */
+  campanha?: {
+    atual: NewCampaignOptionsResponse['by_piece'][number] | null;
+    podePedir: boolean;
+    aoUsar: (p: AdPieceResponse) => void;
+  } | null;
 }
 
 const iniciais = (nome: string) =>
@@ -177,7 +185,44 @@ export function PecaAberta(props: Props) {
   );
 }
 
-function Corpo({ p, pedido, opcoes, nomeDaMarca, pro, pode, agora, ocupado, aoAprovar, aoRecusar, aoSalvar, aoPedirOutra, aoContestar, aoAvisar }: Props & { p: AdPieceResponse }) {
+/** A campanha nova a partir da peça aprovada (A4, X5; P42): o botão da gaveta, ou em que pé está a campanha desta peça. */
+function BlocoDaCampanha({ p, campanha }: { p: AdPieceResponse; campanha: NonNullable<Props['campanha']> }) {
+  const atual = campanha.atual;
+  const andando = atual && (atual.status === 'pedida' || atual.status === 'criando');
+  const situacao = atual ? situacaoDaCampanha(atual) : null;
+  return (
+    <div className="secao cn-na-peca">
+      <div className="card-cab">
+        <p className="rotulo-marca">Campanha nova na Meta</p>
+        {situacao && <span className={`st st--${situacao.tom}`}>{situacao.rotulo}</span>}
+      </div>
+      <p className="campo-dica">
+        {atual
+          ? andando
+            ? 'Esta peça já tem um pedido de campanha: decida em Aprovações antes de pedir outro.'
+            : atual.status === 'nao_criada'
+              ? 'A última campanha com esta peça não foi criada: o motivo está em Aprovações. Dá para pedir de novo.'
+              : 'A campanha com esta peça já existe na Meta. Ativar e pausar ficam em Aprovações.'
+          : 'A peça vira uma campanha na Meta com a foto ou o vídeo da loja, criada pausada: não aparece para ninguém e não gasta até você ativar.'}
+      </p>
+      <div className="vazio-acoes">
+        {campanha.podePedir && !andando && (
+          <button className="btn btn--primary btn--sm" type="button" aria-haspopup="dialog" onClick={() => campanha.aoUsar(p)}>
+            <Icone nome="megaphone" pequeno />
+            Usar numa campanha nova
+          </button>
+        )}
+        {atual?.action_id && (
+          <Link className="btn btn--sm" href={`/aprovacoes?pedido=${atual.action_id}`}>
+            Ver em Aprovações
+          </Link>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function Corpo({ p, pedido, opcoes, nomeDaMarca, pro, pode, agora, ocupado, campanha, aoAprovar, aoRecusar, aoSalvar, aoPedirOutra, aoContestar, aoAvisar }: Props & { p: AdPieceResponse }) {
   const ids = useId();
   const versoes = p.versions ?? [p.current];
   const [vista, setVista] = useState<number | null>(null);
@@ -349,6 +394,8 @@ function Corpo({ p, pedido, opcoes, nomeDaMarca, pro, pode, agora, ocupado, aoAp
             </div>
           </div>
         )}
+
+        {campanha && p.status === 'aprovada' && atual && <BlocoDaCampanha p={p} campanha={campanha} />}
 
         <div className="secao">
           <div className="card-cab">
