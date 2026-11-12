@@ -1194,6 +1194,8 @@ A W3, parte 4 (o fim da assinatura), foi aprovada pelo dono em 03/11/2026, como 
 
 ## Plano da região (`plano-regiao.md`, aprovado em 11/11/2026)
 
+**A hora dos anúncios no plano de mídia (a R4 na R5; 12/11/2026; sem migration).** O bloco "Plano de mídia por região", que vai ao Estrategista no plano de 90 dias, ganha a hora dos anúncios da marca: o bloco de até 4 horas com mais cliques nas 4 semanas completas até ontem, Meta e Google somados, pelo que a rotina `regiao-midia` leu (`RegiaoService.blocoDosAnuncios`). A linha vem com os números permitidos na conferência e com a fonte ("Meta e Google · cliques por hora…"), para o plano comparar com a hora dos pedidos de cada loja (os anúncios no almoço, os pedidos à noite). Sem clique lido, a linha não vai. Teste: `test/estrategista-midia.spec.ts`.
+
 **R3, parte 2: os bairros para atacar e para defender (12/11/2026; migration 0148; revisão R3-2 do P40 aprovada antecipadamente pela autorização da noite de 12/11/2026, D-RG-36 a D-RG-39 como recomendadas). A R3 está completa.** Pela trilha C (D-RG-8), o Regem ganhou `GET /pedidos/bairros` (Regem #946, aditiva, sob o `pedidos.ler` que o Liame já tem; só para os produtos da DMS; contrato §2.5): os pedidos de entrega confirmados somados por bairro, com o mínimo de 5 (o resto em "outros", sem o nome), sem cliente, rua, número nem CEP, e sem a 99. No Liame:
 - **A leitura:** a rotina das vendas lê os bairros como extra (`conferirBairros`):
   - uma vez por dia por loja; depois de uma falha, 6 horas;

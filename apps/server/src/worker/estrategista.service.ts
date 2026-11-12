@@ -263,6 +263,10 @@ export class EstrategistaService {
          where day between ${hoje}::date and ${menosDias(hoje, -JANELA_DO_TIPO.noventa_dias)}::date
          order by day, name`)
     ).rows;
+    // O plano de mídia por região (R5): só no plano de 90 dias, com a função `regiao` ligada na marca; com as lojas no
+    // mapa, a hora dos anúncios da marca (R4) vai junto.
+    const regiao = item.kind === 'noventa_dias' ? await this.regiao.lojasParaOPlano(item.tenantId, marca.id, agora) : null;
+    const anuncios = regiao?.length ? await this.regiao.blocoDosAnuncios(marca.id, agora) : null;
     return {
       dados: {
         kind: item.kind,
@@ -274,8 +278,8 @@ export class EstrategistaService {
         semana,
         pedido,
         anterior,
-        // O plano de mídia por região (R5): só no plano de 90 dias, com a função `regiao` ligada na marca.
-        regiao: item.kind === 'noventa_dias' ? await this.regiao.lojasParaOPlano(item.tenantId, marca.id, agora) : null,
+        regiao,
+        anuncios,
       },
       pediu,
       ativo: await funcionarioAtivo(tx, { tenantId: item.tenantId, brandId: marca.id, agentKey: ESTRATEGISTA.key, ativoPorPadrao: ESTRATEGISTA.ativoPorPadrao }),
