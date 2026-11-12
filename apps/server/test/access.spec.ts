@@ -115,6 +115,7 @@ describe('A1-4: toda rota declara o acesso e nega sem sessão', () => {
     // `PUT /v1/brand-photos/:id/cover`: o caminho do logo, para a capa do vídeo (a miniatura, com a auditoria manual).
     // As duas da loja no mapa (plano da região, R1): conferem a marca e a função numa transação curta e depois chamam o
     // ViaCEP, o OpenStreetMap (uma consulta por segundo) e, numa delas, o Google, sem transação aberta; não gravam nada.
+    // `PUT /v1/brands/:id/logo` (A6 · Z15, parte 1): o caminho do logo da agência, para a logo do restaurante.
     expect(semTransacao).toEqual([
       'GET /v1/actions/options',
       'GET /v1/agency-logos/:arquivo',
@@ -136,6 +137,7 @@ describe('A1-4: toda rota declara o acesso e nega sem sessão', () => {
       'POST /v1/region/google-profile-address',
       'PUT /v1/agency/brand/logo',
       'PUT /v1/brand-photos/:id/cover',
+      'PUT /v1/brands/:id/logo',
       'PUT /v1/conversions/google/destination',
     ]);
   });

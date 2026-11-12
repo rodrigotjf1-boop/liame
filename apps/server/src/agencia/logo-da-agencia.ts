@@ -40,8 +40,15 @@ export function conferirMedidasDoLogo(largura: number, altura: number): MotivoDo
   return null;
 }
 
-/** Confere e regrava o logo. Recusa com `RecusaDoLogo` (422); sem o sharp, `SemSharp` (503). */
-export async function processarLogo(entrada: Buffer, carregar: () => Promise<Sharp> = carregarSharp): Promise<LogoProcessado> {
+/** A caixa em que a cópia guardada cabe: a da agência é 384 × 96; a da logo do restaurante (A6 · Z15), 512 × 512. */
+export type CaixaDoLogo = { largura: number; altura: number };
+const CAIXA_DA_AGENCIA: CaixaDoLogo = { largura: L.storedMaxWidth, altura: L.storedMaxHeight };
+
+/**
+ * Confere e regrava o logo. Recusa com `RecusaDoLogo` (422); sem o sharp, `SemSharp` (503). As medidas aceitas do
+ * arquivo enviado são as mesmas para a agência e para o restaurante; muda só a caixa da cópia.
+ */
+export async function processarLogo(entrada: Buffer, carregar: () => Promise<Sharp> = carregarSharp, caixa: CaixaDoLogo = CAIXA_DA_AGENCIA): Promise<LogoProcessado> {
   const tipo = tipoPeloConteudo(entrada);
   if (tipo !== 'png' && tipo !== 'jpeg') throw new RecusaDoLogo('formato');
   const sharp = await carregar();
@@ -61,7 +68,7 @@ export async function processarLogo(entrada: Buffer, carregar: () => Promise<Sha
   try {
     copia = await abrir()
       .rotate()
-      .resize({ width: L.storedMaxWidth, height: L.storedMaxHeight, fit: 'inside', withoutEnlargement: true })
+      .resize({ width: caixa.largura, height: caixa.altura, fit: 'inside', withoutEnlargement: true })
       .flatten({ background: '#ffffff' })
       .jpeg({ quality: 90, mozjpeg: true })
       .toBuffer({ resolveWithObject: true });

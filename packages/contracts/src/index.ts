@@ -273,6 +273,8 @@ export {
   BrandDossierVersionListResponse,
   BrandDossierVersionMeta,
   BrandDossierVersionResponse,
+  BRAND_LOGO_LIMITS,
+  BrandLogoResponse,
   BrandPhraseHit,
   CheckBrandPhraseRequest,
   CheckBrandPhraseResponse,
