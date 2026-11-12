@@ -3,8 +3,12 @@ import { resolve } from 'node:path';
 import { createDatabase, type Database, runMigrations, withContext } from '@liame/database';
 import { sql } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { naTransacaoDaEmpresa } from '../../src/ai/na-empresa.js';
+import type { AuthContext } from '../../src/context/request-context.js';
 import { ARQUIVO_BASICO, ARQUIVO_RENDA } from '../../src/regiao/censo.js';
 import { ENDERECO_DOS_MUNICIPIOS_DO_IBGE, HOST_DA_RECEITA, PASTA_DO_CNPJ } from '../../src/regiao/cnpj.js';
+import { diasAntes } from '../../src/regiao/demanda.js';
+import { RegiaoService } from '../../src/regiao/regiao.service.js';
 import { diaEmBrasilia, diasDepois } from '../../src/regiao/semana.js';
 import { RegiaoCnpjService } from '../../src/worker/regiao-cnpj.service.js';
 import { RegiaoFontesService } from '../../src/worker/regiao-fontes.service.js';
@@ -276,6 +280,8 @@ describe.skipIf(!hasDb)('Sua região: a rotina das fontes públicas e o retrato 
     expect(datas.map((d) => d.day)).toEqual([...datas.map((d) => d.day)].sort());
     expect(datas.filter((d) => d.kind === 'salario').length).toBeLessThanOrEqual(1);
     expect(r.body.sector_references.length).toBeGreaterThan(0);
+    // A demanda da loja (R3, parte 1): a marca ainda não tem o Regem ligado.
+    expect(r.body).toMatchObject({ store_demand_status: 'sem_regem', store_demand: null });
     // Os números mais novos que o Censo (parte 3): a renda do bairro corrigida pelo IPCA (7.695,82 ÷ 6.411,95 = 1,2002),
     // a renda da PNAD na UF e na RM, a média dos 4 trimestres da capital, o Pix (out/2026 × out/2025; o mês corrente,
     // parcial, fica de fora) e a inflação de comer fora na RM e no Brasil.
@@ -399,6 +405,60 @@ describe.skipIf(!hasDb)('Sua região: a rotina das fontes públicas e o retrato 
     } finally {
       await ligarFlagDaEmpresa(api, 'ia', tenantId, false);
     }
+  });
+
+  it('a demanda da loja (R3, parte 1): os pedidos do Regem por dia e hora, o tíquete e o cliente novo; sem vendas.ver, nada', async () => {
+    const conta = randomUUID();
+    await ownerQuery(
+      `insert into liame.connected_account (id, tenant_id, brand_id, provider, external_id, name, currency, timezone) values ($1, $2, $3, 'regem', $4, 'Loja Tijuca', 'BRL', 'America/Sao_Paulo')`,
+      [conta, tenantId, brandId, `loja-${randomUUID().slice(0, 8)}`],
+    );
+    // A hora é a do pedido do cliente, no fuso da loja (São Paulo, -03:00); a confirmação vem 3 minutos depois.
+    const pedido = (dia: string, hora: string, o: { reais?: number; estorno?: number; status?: string; novo?: boolean | null; unidade?: string | null } = {}) =>
+      ownerQuery(
+        `insert into liame.order_fact (id, tenant_id, brand_id, unit_id, connected_account_id, provider, external_id, channel, channel_group, status, currency, timezone,
+                                       revenue_micros, refunded_micros, is_new_customer, placed_at, confirmed_at, cancelled_at, source_version, source_updated_at)
+         values (gen_random_uuid(), $1, $2, $3, $4, 'regem', $5, 'cardapio', 'cardapio', $6::text, 'BRL', 'America/Sao_Paulo', $7, $8, $9,
+                 $10::timestamptz, $10::timestamptz + interval '3 minutes', case when $6::text = 'cancelado' then $10::timestamptz + interval '10 minutes' end, 1, now())`,
+        [tenantId, brandId, o.unidade === undefined ? tijuca : o.unidade, conta, `p-${randomUUID().slice(0, 12)}`, o.status ?? 'confirmado', (o.reais ?? 50) * 1_000_000, (o.estorno ?? 0) * 1_000_000, o.novo ?? null, `${dia}T${hora}:00-03:00`],
+      );
+    const noite = diasAntes(HOJE, 3);
+    for (let i = 0; i < 12; i++) await pedido(noite, '20:15', { novo: i < 4 ? true : i < 10 ? false : null });
+    for (let i = 0; i < 10; i++) await pedido(diasAntes(HOJE, 10), '12:30', { reais: 40, novo: false });
+    await pedido(diasAntes(HOJE, 5), '19:00', { reais: 60, estorno: 10 });
+    // Não contam: o cancelado, o de hoje (a janela termina ontem) e o de outra loja.
+    await pedido(noite, '20:20', { status: 'cancelado' });
+    await pedido(HOJE, '11:00');
+    await pedido(noite, '20:30', { unidade: null });
+    // A janela anterior (as 4 semanas antes).
+    for (let i = 0; i < 3; i++) await pedido(diasAntes(HOJE, 40), '20:00', { reais: 45 });
+
+    const r = await retrato(tijuca);
+    expect(r.status, JSON.stringify(r.body)).toBe(200);
+    expect(r.body.store_demand_status).toBe('disponivel');
+    const d = r.body.store_demand;
+    expect(d).toMatchObject({
+      status: 'pronto',
+      from: diasAntes(HOJE, 28),
+      to: diasAntes(HOJE, 1),
+      orders: 23,
+      // 12 × 50 + 10 × 40 + (60 − 10) = 1.050 reais; 1.050 ÷ 23 = 45,652173…
+      revenue_micros: '1050000000',
+      ticket_micros: '45652173',
+      previous: { orders: 3, revenue_micros: '135000000', ticket_micros: '45000000' },
+      customers: { new: 4, returning: 16, unknown: 3 },
+    });
+    expect(d.by_hour[20]).toEqual({ hour: 20, orders: 12 });
+    expect(d.by_hour[12]).toEqual({ hour: 12, orders: 10 });
+    expect(d.by_hour[19]).toEqual({ hour: 19, orders: 1 });
+    const diaDaSemana = (dia: string) => new Date(`${dia}T12:00:00Z`).getUTCDay();
+    expect(d.peak).toEqual({ weekday: diaDaSemana(noite), hour: 20, orders: 12 });
+
+    // Quem não vê Resultados (sem `vendas.ver`) não recebe os números de venda.
+    const regiao = api.app.get(RegiaoService);
+    const semVendas = { userId, sessionId: 'teste', email: 'teste@liame.dev', name: 'Teste', tenantId, roleKey: 'dono', permissions: new Set(['dossie.ver']), tenantStatus: 'ativa' } as unknown as AuthContext;
+    const semPermissao = await naTransacaoDaEmpresa(database, { tenantId, userId }, () => regiao.raioX(semVendas, brandId, tijuca));
+    expect(semPermissao).toMatchObject({ store_demand_status: 'sem_permissao', store_demand: null });
   });
 
   it('a fonte que falha aparece como "falhou", com a próxima tentativa em 1 hora; o resto vale', async () => {

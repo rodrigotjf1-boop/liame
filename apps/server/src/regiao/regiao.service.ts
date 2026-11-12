@@ -33,6 +33,8 @@ import { buscarCep, cepNormalizado, type EnderecoDoCep } from './cep.js';
 import { FONTE_CENSO_BAIRRO } from './censo.js';
 import { type Coordenada, nomeComparavel, ProcuraDeCoordenada } from './coordenada.js';
 import { MUNICIPIOS_DO_IPCA, RMS_DO_IPCA } from './ibge.js';
+import { diaNoFuso } from '../results/fora-do-normal.js';
+import { type DemandaDaLoja, demandaDaLoja, janelas, type LinhaDaDemanda } from './demanda.js';
 import { type DataGuardada, datasDaSemana, diaEmBrasilia, REFERENCIAS_DO_SETOR } from './semana.js';
 import { DIAS_DA_PREVISAO } from './tempo.js';
 import {
@@ -383,6 +385,8 @@ export class RegiaoService {
       food_places: null,
       week_ahead: null,
       sector_references: [],
+      store_demand_status: 'sem_endereco',
+      store_demand: null,
       generated_at: agora.toISOString(),
     };
     if (!(await this.ligada(auth, brandId))) {
@@ -503,6 +507,9 @@ export class RegiaoService {
          where day between date_trunc('month', ${hoje}::date)::date and ${hoje}::date + 60 order by day, name`)
     ).rows;
 
+    // A demanda da loja (R3, parte 1): os pedidos do Regem, só para quem vê Resultados.
+    const demanda = await this.demandaDaLoja(auth, brandId, unitId, agora);
+
     const noMunicipio = (indicador: string) => numeroMaisNovo(numeros, indicador, 'municipio', cidade);
     const populacao = noMunicipio('populacao');
     const estimada = noMunicipio('populacao_estimada');
@@ -565,9 +572,45 @@ export class RegiaoService {
       }),
       week_ahead: { weather: previsao.length ? { read_at: new Date(previsao[0]!.fetched_at).toISOString(), days: previsao.map((d) => ({ day: d.day, condition: d.condition, description: d.condition_desc, min: d.min_c, max: d.max_c })) } : null, dates: datasDaSemana(datas, hoje) },
       sector_references: REFERENCIAS_DO_SETOR.map((r) => ({ ...r })),
+      store_demand_status: demanda.status,
+      store_demand: demanda.demanda,
       sources: fontes,
       generated_at: agora.toISOString(),
     };
+  }
+
+  /**
+   * A demanda da loja (R3, parte 1): os pedidos confirmados das duas janelas de 4 semanas (a atual termina ontem, no
+   * fuso da loja), agrupados por dia da semana e hora em que o cliente pediu. Os números de venda vão só para quem vê
+   * Resultados (`vendas.ver`), como lá; sem o Regem ligado na marca, o Liame não tem os pedidos.
+   */
+  private async demandaDaLoja(auth: AuthContext, brandId: string, unitId: string, agora: Date): Promise<{ status: string; demanda: DemandaDaLoja | null }> {
+    if (!auth.permissions.has('vendas.ver')) return { status: 'sem_permissao', demanda: null };
+    if (!(await this.temRegem(brandId))) return { status: 'sem_regem', demanda: null };
+    const tx = currentTx();
+    const fuso = (await tx.execute<{ timezone: string }>(sql`select timezone from liame.unit where id = ${unitId}`)).rows[0]?.timezone ?? 'America/Sao_Paulo';
+    const hoje = diaNoFuso(agora, fuso);
+    const j = janelas(hoje);
+    // O índice (tenant_id, brand_id, confirmed_at) recorta pela confirmação, com folga; o dia exato é o do pedido no fuso.
+    const linhas = (
+      await tx.execute<LinhaDaDemanda>(sql`
+        with p as (
+          select (coalesce(o.placed_at, o.confirmed_at) at time zone ${fuso}) as local, o.revenue_micros - o.refunded_micros as liquido, o.is_new_customer
+            from liame.order_fact o
+           where o.brand_id = ${brandId} and o.unit_id = ${unitId} and o.status = 'confirmado'
+             and o.confirmed_at >= (${j.deAnterior}::date - 2)::timestamp at time zone ${fuso}
+             and o.confirmed_at < (${j.ate}::date + 3)::timestamp at time zone ${fuso}
+        )
+        select case when local::date >= ${j.de}::date then 'atual' else 'anterior' end as janela,
+               extract(dow from local)::int as dow, extract(hour from local)::int as hora,
+               count(*)::int as pedidos, coalesce(sum(liquido), 0)::text as receita,
+               count(*) filter (where is_new_customer)::int as novos,
+               count(*) filter (where is_new_customer = false)::int as de_volta
+          from p
+         where local::date between ${j.deAnterior}::date and ${j.ate}::date
+         group by 1, 2, 3`)
+    ).rows;
+    return { status: 'disponivel', demanda: demandaDaLoja(linhas, hoje) };
   }
 
   private async lojaSalva(unitId: string): Promise<StoreLocation> {
