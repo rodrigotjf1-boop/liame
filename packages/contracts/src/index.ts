@@ -344,6 +344,12 @@ export {
 export {
   ApprovePlanRequest,
   EditPlanRequest,
+  MEDIA_STAGES,
+  MediaHours,
+  MediaPlan,
+  MediaRing,
+  MediaStage,
+  MediaStageKind,
   NinetyDaysPlanContent,
   OfferPlanContent,
   PLAN_KINDS,
@@ -359,6 +365,7 @@ export {
   PlanSummary,
   ReanalyzePlanRequest,
   RejectPlanRequest,
+  StoreMediaPlan,
   WeekPlanContent,
 } from './planos.js';
 export {

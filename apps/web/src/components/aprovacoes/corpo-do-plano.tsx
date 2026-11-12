@@ -4,6 +4,7 @@ import type { ExplanationNumber, PlanContent, PlanMarkedText } from '@liame/cont
 import type { ReactNode } from 'react';
 import { TextoDaExplicacao } from '@/components/explicar/bloco-explicacao';
 import { Icone } from '@/components/ui/icone';
+import { MidiaDoPlano } from './midia-do-plano';
 import { diaDaPauta, diaDoCalendario, quandoDaOferta, tabelaDaVerba, trechosDo } from './planos-textos';
 
 // O que o plano do Estrategista propõe, pelo tipo (protótipo P8): o plano de 90 dias (objetivos, mês a mês, verba
@@ -146,6 +147,7 @@ export function CorpoDoPlano({ content, marked, numbers, aoTocar }: { content: P
           </p>
         </div>
       )}
+      {content.media_plan && <MidiaDoPlano midia={content.media_plan} texto={texto} />}
     </>
   );
 }

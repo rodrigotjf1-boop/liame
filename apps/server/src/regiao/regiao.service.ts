@@ -16,6 +16,7 @@ import {
 import { type Database, uuidv7 } from '@liame/database';
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import { sql } from 'drizzle-orm';
+import { LOJAS_NO_PLANO, type LojaDaMidia, RAIO_PADRAO_KM } from '../ai/estrategista/midia.js';
 import { naTransacaoDaEmpresa } from '../ai/na-empresa.js';
 import { APP_CONFIG, type AppConfig } from '../config.js';
 import { contaConectada } from '../connections/conectada.js';
@@ -508,7 +509,7 @@ export class RegiaoService {
     ).rows;
 
     // A demanda da loja (R3, parte 1): os pedidos do Regem, só para quem vê Resultados.
-    const demanda = await this.demandaDaLoja(auth, brandId, unitId, agora);
+    const demanda = await this.demandaDaLoja(auth.permissions.has('vendas.ver'), brandId, unitId, agora);
 
     const noMunicipio = (indicador: string) => numeroMaisNovo(numeros, indicador, 'municipio', cidade);
     const populacao = noMunicipio('populacao');
@@ -584,8 +585,8 @@ export class RegiaoService {
    * fuso da loja), agrupados por dia da semana e hora em que o cliente pediu. Os números de venda vão só para quem vê
    * Resultados (`vendas.ver`), como lá; sem o Regem ligado na marca, o Liame não tem os pedidos.
    */
-  private async demandaDaLoja(auth: AuthContext, brandId: string, unitId: string, agora: Date): Promise<{ status: string; demanda: DemandaDaLoja | null }> {
-    if (!auth.permissions.has('vendas.ver')) return { status: 'sem_permissao', demanda: null };
+  private async demandaDaLoja(podeVerVendas: boolean, brandId: string, unitId: string, agora: Date): Promise<{ status: string; demanda: DemandaDaLoja | null }> {
+    if (!podeVerVendas) return { status: 'sem_permissao', demanda: null };
     if (!(await this.temRegem(brandId))) return { status: 'sem_regem', demanda: null };
     const tx = currentTx();
     const fuso = (await tx.execute<{ timezone: string }>(sql`select timezone from liame.unit where id = ${unitId}`)).rows[0]?.timezone ?? 'America/Sao_Paulo';
@@ -611,6 +612,38 @@ export class RegiaoService {
          group by 1, 2, 3`)
     ).rows;
     return { status: 'disponivel', demanda: demandaDaLoja(linhas, hoje) };
+  }
+
+  /**
+   * As lojas no mapa para o plano de mídia do Estrategista (R5): rotina do sistema, sem sessão de pessoa, dentro da
+   * transação da empresa que a rotina já abriu. Nulo com a função `regiao` desligada na marca; vazio sem loja no mapa.
+   * Só o nome, o bairro, o município, o raio e a demanda (D-RG-2: nada do endereço vai ao modelo). A demanda entra
+   * inteira porque o plano só abre para quem vê Resultados (`planos.ver` e `vendas.ver`, D-RG-24).
+   */
+  async lojasParaOPlano(tenantId: string, brandId: string, agora = new Date()): Promise<LojaDaMidia[] | null> {
+    if (!(await this.flags.isEnabled(FLAG_DA_REGIAO, this.flags.context({ tenantId, userId: null, brandId })))) return null;
+    const lojas = (
+      await currentTx().execute<{ id: string; name: string; address_district: string | null; address_city: string; delivery_radius_km: string | number | null }>(sql`
+        select id, name, address_district, address_city, delivery_radius_km from liame.unit
+         where brand_id = ${brandId} and address_postal_code is not null and address_city is not null
+           and address_state is not null and ibge_city_code is not null
+         order by created_at, id
+         limit ${LOJAS_NO_PLANO + 1}`)
+    ).rows;
+    const saida: LojaDaMidia[] = [];
+    for (const [i, l] of lojas.entries()) {
+      // A 6ª loja só avisa o modelo de que há mais lojas: a demanda dela não é lida.
+      const demanda = i < LOJAS_NO_PLANO ? (await this.demandaDaLoja(true, brandId, l.id, agora)).demanda : null;
+      saida.push({
+        unitId: l.id,
+        nome: l.name,
+        bairro: l.address_district,
+        municipio: l.address_city,
+        raioKm: l.delivery_radius_km === null ? RAIO_PADRAO_KM : Number(l.delivery_radius_km),
+        demanda,
+      });
+    }
+    return saida;
   }
 
   private async lojaSalva(unitId: string): Promise<StoreLocation> {

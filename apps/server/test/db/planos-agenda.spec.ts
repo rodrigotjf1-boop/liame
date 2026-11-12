@@ -11,6 +11,7 @@ import { RevisorService } from '../../src/ai/revisor/revisor.service.js';
 import { APP_CONFIG, type AppConfig } from '../../src/config.js';
 import { DATABASE } from '../../src/database/database.module.js';
 import { FlagService } from '../../src/flags/flag.service.js';
+import { RegiaoService } from '../../src/regiao/regiao.service.js';
 import { ResultsService } from '../../src/results/results.service.js';
 import { DIAS_ENTRE_PLANOS_DE_90, EstrategistaAgenda } from '../../src/worker/estrategista-agenda.js';
 import { EstrategistaLoop } from '../../src/worker/estrategista-loop.js';
@@ -82,7 +83,11 @@ describe.skipIf(!hasDb)('Planos agendados: a pauta de segunda e o plano de 90 di
     modelos = new ModelosDeTeste(config);
     api.app.get(ModelosIa).modelo = (provider, model) => modelos.modelo(provider, model);
     agenda = new EstrategistaAgenda(database, flags);
-    loop = new EstrategistaLoop(database, flags, new EstrategistaService(database, api.app.get(AiGateway), api.app.get(FerramentasDeLeitura), api.app.get(ResultsService), api.app.get(RevisorService)));
+    loop = new EstrategistaLoop(
+      database,
+      flags,
+      new EstrategistaService(database, api.app.get(AiGateway), api.app.get(FerramentasDeLeitura), api.app.get(ResultsService), api.app.get(RevisorService), api.app.get(RegiaoService)),
+    );
     // A tarefa do Estrategista também é usada por `planos.spec.ts`, que roda em outro processo: a rota é a
     // compartilhada (ninguém apaga a do outro), e o modelo simulado é o deste arquivo.
     alvo = await rotaCompartilhada(modelos, TAREFA_ESTRATEGISTA, new MockLanguageModelV4({ doGenerate: [] }));

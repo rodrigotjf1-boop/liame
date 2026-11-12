@@ -143,6 +143,10 @@
 .inbox-det .dias li { display: grid; grid-template-columns: 7.5rem minmax(0, 1fr); gap: var(--sp-3); padding: var(--sp-2) 0; border-bottom: 1px solid var(--border); font-size: var(--text-sm); }
 .inbox-det .dias li:last-child { border-bottom: 0; }
 .inbox-det .dias .dia { padding-top: 2px; font-family: var(--font-mono); font-size: 11px; letter-spacing: .06em; text-transform: uppercase; color: var(--text-muted); }
+/* O plano de mídia por região (R5; P45): o título de cada parte, a linha da loja e o respiro entre as lojas. */
+.inbox-det .ap-midia-tit { margin: var(--sp-3) 0 0; font-size: var(--text-sm); font-weight: 600; }
+.inbox-det .ap-midia-sub { margin: 2px 0 0; font-size: var(--text-sm); color: var(--text-muted); overflow-wrap: anywhere; }
+.inbox-det .ap-midia-loja { margin-top: var(--sp-4); padding-top: var(--sp-3); border-top: 1px solid var(--border); }
 /* Nas tabelas do pedido, o nome quebra a linha e o valor não: a coluna da proposta não some no celular. */
 .inbox-det .tabela tbody th { white-space: normal; }
 .inbox-det .tabela td.n { white-space: nowrap; }
