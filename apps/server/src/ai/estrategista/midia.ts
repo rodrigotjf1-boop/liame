@@ -223,8 +223,19 @@ const aneisEmPalavras = (raioKm: number): string =>
     .map((r) => (r.ring === 'nucleo' ? `núcleo até ${km(r.to_km)}, com ${porcento(r.share)} da verba da loja` : `expansão de ${km(r.from_km)} a ${km(r.to_km)}, com ${porcento(r.share)}`))
     .join('; ');
 
+/**
+ * A hora dos anúncios da marca (R4): o bloco de até 4 horas com mais cliques nas 4 semanas até ontem, Meta e Google
+ * somados, no fuso das contas, com a parte dos cliques dele. Nulo sem clique lido.
+ */
+export type BlocoDosAnuncios = { de: number; ate: number; parte: number };
+
+/** O bloco dos anúncios em palavras, para o contexto do modelo. */
+export function anunciosEmPalavras(b: BlocoDosAnuncios): string {
+  return `os anúncios da marca (Meta e Google, nas 4 semanas até ontem) têm o bloco com mais cliques das ${b.de}h às ${b.ate}h (${porcento(b.parte)} dos cliques); compare com os horários dos pedidos de cada loja`;
+}
+
 /** O bloco do contexto do modelo (D-RG-2: o bairro, o município e os números; nunca o endereço). */
-export function contextoDaMidia(lojas: readonly LojaDaMidia[]): string {
+export function contextoDaMidia(lojas: readonly LojaDaMidia[], anuncios: BlocoDosAnuncios | null = null): string {
   const usadas = lojas.slice(0, LOJAS_NO_PLANO);
   const faixa = (e: MediaStageKind) => `${FAIXA_DA_ETAPA[e][0]}% a ${FAIXA_DA_ETAPA[e][1]}%`;
   return [
@@ -233,19 +244,21 @@ export function contextoDaMidia(lojas: readonly LojaDaMidia[]): string {
       const onde = [l.bairro ? `bairro ${l.bairro}` : null, l.municipio].filter(Boolean).join(', ');
       return `  - Loja "${l.nome}"${onde ? ` (${onde})` : ''}: entrega até ${km(l.raioKm)}. Anéis: ${aneisEmPalavras(l.raioKm)}. Horários ${horariosEmPalavras(horariosDaLoja(l.demanda))}.`;
     }),
+    ...(anuncios ? [`  - A hora dos anúncios: ${anunciosEmPalavras(anuncios)}.`] : []),
     `  - A verba proposta se divide igual entre ${usadas.length === 1 ? 'a loja' : `as ${usadas.length} lojas`} e, em cada loja, pela parte de cada anel: o dinheiro de cada anel é conta do sistema, feita depois da sua proposta; não o escreva.`,
     `  - As etapas do funil e a parte da verba de partida: reconhecimento (${faixa('reconhecimento')}), seguidores (${faixa('seguidores')}), cardápio e conversa (${faixa('cardapio_conversa')}) e pedido (${faixa('pedido')}). Regras: as quatro somam 100%; reconhecimento e seguidores juntos até ${TETO_DO_TOPO}%; cardápio e conversa pelo menos ${MINIMO_DA_CONVERSA}%; pedido pelo menos ${MINIMO_DO_PEDIDO}%. Com pouca verba, reconhecimento e seguidores podem ficar em 0% (o orgânico faz o reconhecimento).`,
   ].join('\n');
 }
 
 /** Os números e nomes do bloco do contexto: podem aparecer nos textos do plano como estão ali. */
-export function permitidoDaMidia(lojas: readonly LojaDaMidia[]): string[] {
+export function permitidoDaMidia(lojas: readonly LojaDaMidia[], anuncios: BlocoDosAnuncios | null = null): string[] {
   // Sem o bloco no contexto, nada daqui vale: as faixas do funil não podem liberar "15" ou "30" em outro plano.
   if (!lojas.length) return [];
   const usadas = lojas.slice(0, LOJAS_NO_PLANO);
   const faixas = Object.values(FAIXA_DA_ETAPA).flatMap(([a, b]) => [porcento(a), porcento(b)]);
   return [
     ...faixas,
+    ...(anuncios ? [`${anuncios.de}h`, `${anuncios.ate}h`, porcento(anuncios.parte)] : []),
     porcento(TETO_DO_TOPO),
     porcento(MINIMO_DA_CONVERSA),
     porcento(MINIMO_DO_PEDIDO),

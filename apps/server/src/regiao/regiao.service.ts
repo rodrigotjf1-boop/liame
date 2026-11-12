@@ -16,7 +16,7 @@ import {
 import { type Database, uuidv7 } from '@liame/database';
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import { sql } from 'drizzle-orm';
-import { LOJAS_NO_PLANO, type LojaDaMidia, RAIO_PADRAO_KM } from '../ai/estrategista/midia.js';
+import { type BlocoDosAnuncios, LOJAS_NO_PLANO, type LojaDaMidia, RAIO_PADRAO_KM } from '../ai/estrategista/midia.js';
 import { naTransacaoDaEmpresa } from '../ai/na-empresa.js';
 import { APP_CONFIG, type AppConfig } from '../config.js';
 import { contaConectada } from '../connections/conectada.js';
@@ -626,6 +626,25 @@ export class RegiaoService {
          group by 1, 2, 3`)
     ).rows;
     return { status: 'disponivel', demanda: demandaDaLoja(linhas, hoje) };
+  }
+
+  /**
+   * A hora dos anúncios da marca para o plano de mídia do Estrategista (R4 na R5): o bloco de até 4 horas com mais
+   * cliques nas 4 semanas completas até ontem (Meta e Google somados, como a rotina `regiao-midia` leu). Rotina do
+   * sistema, na transação da empresa já aberta; nulo sem clique lido.
+   */
+  async blocoDosAnuncios(brandId: string, agora = new Date()): Promise<BlocoDosAnuncios | null> {
+    const j = janelaDaMidia(diaNoFuso(agora, 'America/Sao_Paulo'));
+    const linhas = (
+      await currentTx().execute<{ hour: number; clicks: string }>(sql`
+        select hour, sum(clicks)::text as clicks from liame.ad_hour_daily
+         where brand_id = ${brandId} and day between ${j.inicio}::date and ${j.fim}::date
+         group by hour`)
+    ).rows;
+    const cliques = Array.from({ length: 24 }, (_, h) => Number(linhas.find((l) => Number(l.hour) === h)?.clicks ?? 0));
+    const total = cliques.reduce((t, n) => t + n, 0);
+    const bloco = blocoMaisForte(cliques);
+    return bloco && total > 0 ? { de: bloco.de, ate: bloco.ate, parte: porcentoDe(bloco.soma, total) } : null;
   }
 
   /**

@@ -225,4 +225,16 @@ describe('a conferência, as fontes e o contexto do plano de mídia', () => {
     expect(conteudo(noventa(), seis).media_plan!.stores).toHaveLength(5);
     expect(contextoDoPlano(dados(seis))).toContain('só as 5 primeiras lojas no mapa');
   });
+
+  it('a hora dos anúncios (R4) entra no bloco, com os números permitidos e a fonte; sem ela, nada muda', () => {
+    const comAnuncios = { ...dados([TIJUCA]), anuncios: { de: 11, ate: 15, parte: 41 } };
+    expect(contextoDoPlano(comAnuncios)).toContain('A hora dos anúncios: os anúncios da marca (Meta e Google, nas 4 semanas até ontem) têm o bloco com mais cliques das 11h às 15h (41% dos cliques)');
+    expect(contextoDoPlano(dados([TIJUCA]))).not.toContain('A hora dos anúncios');
+    // O criativo pode dizer o bloco dos anúncios; sem ele no contexto, o "11h" não vale.
+    const criativo = conteudo(noventa({ midia: etapas([15, 10, 30, 45], { 3: 'A verba sai do almoço, das 11h às 15h, e vai para a noite.' }) }));
+    expect(conferirPlano(criativo, { ...permitidos([TIJUCA]), emDia: [permitidoNoContexto(comAnuncios)] })).toBeNull();
+    expect(conferirPlano(criativo, permitidos([TIJUCA]))).toMatchObject({ recusa: 'numero_fora' });
+    const origens = origensDoPlano(comAnuncios, { leituras: [], content: criativo, atrasadas: [] });
+    expect(origens.find((o) => o.rotulo.startsWith('Meta e Google · cliques por hora'))?.valor).toEqual(['11h', '15h', '41%']);
+  });
 });
