@@ -257,3 +257,33 @@ export const ResearchListResponse = z.strictObject({
   daily: z.strictObject({ used: z.number().int().min(0), limit: z.number().int().min(1), resets_at: z.string() }),
 });
 export type ResearchListResponse = z.infer<typeof ResearchListResponse>;
+
+// ---------------------------------------------------------------- a logo do restaurante (A6 · Z15, parte 1; D-A6-138)
+
+/**
+ * A logo do restaurante em Minha marca: PNG ou JPG, até 1 MB (SVG não, porque pode levar código). O servidor regrava em
+ * JPEG sobre fundo branco, cabendo em 512 × 512 px: o vídeo montado pelo Liame a põe num selo redondo.
+ */
+export const BRAND_LOGO_LIMITS = {
+  maxBytes: 1024 * 1024,
+  minShortSide: 32,
+  maxLongSide: 4000,
+  storedMaxWidth: 512,
+  storedMaxHeight: 512,
+} as const;
+
+export const BrandLogoResponse = z.strictObject({
+  brand_id: z.uuid(),
+  /** A logo regravada pelo servidor; o endereço vale poucos minutos. Nulo sem logo. */
+  logo: z
+    .strictObject({
+      url: z.string().nullable(),
+      width: z.int().min(1).max(BRAND_LOGO_LIMITS.storedMaxWidth),
+      height: z.int().min(1).max(BRAND_LOGO_LIMITS.storedMaxHeight),
+      updated_at: z.string(),
+    })
+    .nullable(),
+  /** O armazenamento de imagens está configurado (sem ele, a logo não é aceita). */
+  logo_available: z.boolean(),
+});
+export type BrandLogoResponse = z.infer<typeof BrandLogoResponse>;

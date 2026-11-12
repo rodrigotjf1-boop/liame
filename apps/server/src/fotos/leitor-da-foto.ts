@@ -1,4 +1,4 @@
-import { ACCOUNT_RECOVERY_DOCUMENT_LIMITS, AGENCY_LOGO_LIMITS, BRAND_PHOTO_LIMITS } from '@liame/contracts';
+import { ACCOUNT_RECOVERY_DOCUMENT_LIMITS, AGENCY_LOGO_LIMITS, BRAND_LOGO_LIMITS, BRAND_PHOTO_LIMITS } from '@liame/contracts';
 import { AppProblem } from '../errors/problems.js';
 import { API_PREFIX } from '../setup-constants.js';
 
@@ -36,6 +36,18 @@ export const ROTA_DO_LOGO_DA_AGENCIA: RotaDoArquivo = {
   passa: 'Passa de 1 MB.',
   semCompressao: 'Envie o logo sem compressão.',
   interrompido: 'O logo não chegou inteiro. Tente de novo.',
+};
+
+/** A logo do restaurante em Minha marca (A6 · Z15, parte 1; D-A6-138), até 1 MB, como a da agência. */
+export const ROTA_DO_LOGO_DA_MARCA: RotaDoArquivo = {
+  metodo: 'PUT',
+  // Expressão fixa (V116): o prefixo `v1` escrito, como o `API_PREFIX`.
+  caminho: /^\/v1\/brands\/[0-9a-f-]{36}\/logo$/,
+  limite: BRAND_LOGO_LIMITS.maxBytes,
+  grande: 'Logo grande demais',
+  passa: 'Passa de 1 MB.',
+  semCompressao: 'Envie a logo sem compressão.',
+  interrompido: 'A logo não chegou inteira. Tente de novo.',
 };
 
 /** A capa do vídeo das Fotos (A6 · Z10, parte 1): um quadro do vídeo que a tela tira, até 10 MB, como a foto. */

@@ -10,6 +10,7 @@ import {
   ROTA_DA_CAPA_DO_VIDEO,
   ROTA_DO_DOCUMENTO_DA_RECUPERACAO,
   ROTA_DO_LOGO_DA_AGENCIA,
+  ROTA_DO_LOGO_DA_MARCA,
   ROTA_DOS_DOCUMENTOS_DA_PROPRIEDADE,
 } from './fotos/leitor-da-foto.js';
 import { applyHttpSecurity } from './http-security.js';
@@ -26,6 +27,8 @@ export function configureApp(app: INestApplication): void {
   app.use(leitorDaFoto());
   // O logo da agência também chega cru (A7, W7, parte 3), até 1 MB.
   app.use(leitorDaFoto(ROTA_DO_LOGO_DA_AGENCIA.limite, ROTA_DO_LOGO_DA_AGENCIA));
+  // E a logo do restaurante em Minha marca (A6 · Z15, parte 1), até 1 MB.
+  app.use(leitorDaFoto(ROTA_DO_LOGO_DA_MARCA.limite, ROTA_DO_LOGO_DA_MARCA));
   // E o documento com foto do pedido de recuperação da conta (A7, W8, parte 4a), até 10 MB.
   app.use(leitorDaFoto(ROTA_DO_DOCUMENTO_DA_RECUPERACAO.limite, ROTA_DO_DOCUMENTO_DA_RECUPERACAO));
   // E os documentos do pedido da propriedade à DMS (A7, W8, parte 6a), um por vez, até 10 MB cada.

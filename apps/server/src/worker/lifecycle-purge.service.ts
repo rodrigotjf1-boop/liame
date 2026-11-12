@@ -310,7 +310,9 @@ export class LifecyclePurgeService {
       tx.execute<{ id: string; tenant_id: string }>(sql`
         select b.id, b.tenant_id from liame.brand b
          where archived_at is not null and purge_after <= now() and ${noHold('b')} ${inList(sql`b.tenant_id`, scope.tenantIds)}
-           and exists (select 1 from liame.brand_photo p where p.brand_id = b.id)`),
+           and (exists (select 1 from liame.brand_photo p where p.brand_id = b.id)
+                -- A logo do restaurante (0140): quem já mexeu nela pode ter deixado um arquivo, mesmo a logo tirada.
+                or b.logo_updated_by is not null)`),
     );
     const presas: string[] = [];
     for (const m of comFotos.rows) {
@@ -342,7 +344,9 @@ export class LifecyclePurgeService {
    */
   async purgeBrand(tenantId: string, brandId: string): Promise<boolean> {
     const fotos = await withSystem(this.db, (tx) =>
-      tx.execute<{ n: number }>(sql`select count(*)::int as n from liame.brand_photo where brand_id = ${brandId} and tenant_id = ${tenantId}`),
+      tx.execute<{ n: number }>(sql`
+        select (select count(*)::int from liame.brand_photo where brand_id = ${brandId} and tenant_id = ${tenantId})
+             + (select count(*)::int from liame.brand where id = ${brandId} and tenant_id = ${tenantId} and logo_updated_by is not null) as n`),
     );
     if ((fotos.rows[0]?.n ?? 0) > 0) {
       try {
@@ -408,7 +412,8 @@ export class LifecyclePurgeService {
     // mesmo prefixo (A7, W7, parte 3), inclusive um anterior que não saiu na troca.
     const temFotos = await withSystem(this.db, (tx) =>
       tx.execute(sql`select 1 from liame.brand_photo where tenant_id = ${tenantId}
-                     union all select 1 from liame.agency_brand where tenant_id = ${tenantId} limit 1`),
+                     union all select 1 from liame.agency_brand where tenant_id = ${tenantId}
+                     union all select 1 from liame.brand where tenant_id = ${tenantId} and logo_updated_by is not null limit 1`),
     );
     if (temFotos.rows[0]) await this.armazem.apagarPrefixo(prefixoDaEmpresa(tenantId));
 

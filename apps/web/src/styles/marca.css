@@ -10,6 +10,13 @@
 .mk-geral-linha { display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: var(--sp-2) var(--sp-4); }
 .mk-geral-tit { margin-top: 2px; font-size: var(--text-md); font-weight: 600; }
 .mk-geral-sub { font-size: var(--text-sm); color: var(--text-muted); }
+/* A logo do restaurante (A6 · Z15, parte 1; D-A6-138): a logo guardada e como ela aparece no selo redondo do vídeo. */
+.mk-logo { gap: var(--sp-3); }
+.mk-logo-img { display: block; max-height: 72px; max-width: min(160px, 100%); width: auto; height: auto; border-radius: 8px; background: #fff; }
+.mk-logo-selo { flex: none; width: 56px; height: 56px; display: grid; place-items: center; overflow: hidden; border-radius: 50%; background: #fff; box-shadow: 0 0 0 1px var(--border); }
+.mk-logo-selo img { width: 78%; height: 78%; object-fit: contain; }
+.mk-logo .campo { display: grid; gap: var(--sp-1); justify-items: start; }
+.mk-logo .input-arquivo { max-width: 100%; }
 .mk-barra { position: relative; height: 8px; border-radius: var(--radius-full); background: var(--bg-subtle); overflow: hidden; }
 .mk-barra span { position: absolute; inset: 0 auto 0 0; border-radius: inherit; background: var(--fio); transition: width var(--dur-slow) var(--ease); }
 

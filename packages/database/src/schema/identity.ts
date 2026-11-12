@@ -103,6 +103,12 @@ export const brand = liame.table('brand', {
   archivedAt: timestamp('archived_at', { withTimezone: true }),
   purgeAfter: timestamp('purge_after', { withTimezone: true }),
   purgeReason: text('purge_reason'),
+  // A logo do restaurante (0140; A6 · Z15, parte 1; D-A6-138): o arquivo no armazenamento, no prefixo da marca.
+  logoId: uuid('logo_id'),
+  logoWidth: integer('logo_width'),
+  logoHeight: integer('logo_height'),
+  logoUpdatedAt: timestamp('logo_updated_at', { withTimezone: true }),
+  logoUpdatedBy: uuid('logo_updated_by'),
 });
 
 export const unit = liame.table('unit', {

@@ -12,6 +12,7 @@ import { api, chamar, mensagemDe, type Problema } from '@/lib/api';
 import { disparar } from '@/lib/disparar';
 import { quandoComHora } from '@/lib/formato';
 import { useSessao } from '@/lib/sessao';
+import { CartaoLogo } from './cartao-logo';
 import { CartaoPaginas } from './cartao-paginas';
 import { CartaoSecao } from './cartao-secao';
 import { GavetaPagina } from './gaveta-pagina';
@@ -442,6 +443,7 @@ export function MarcaTela() {
           <p className="mk-geral-sub">{linhaDoAndamento(a)}</p>
           <p className="explica-nota">Os funcionários de IA usam a versão confirmada. Sugestão só vale depois que alguém confere, e cada mudança vira uma versão nova.</p>
         </article>
+        <CartaoLogo brandId={dossie.brand_id} nomeDaMarca={nomeDaMarca} podeEditar={podeEditar} aoAvisar={(texto, tipo = 'ok') => avisar(texto, { tipo })} />
         <div className="mk-grade">
           {SECOES.map((s) => {
             const sugestao = dados.sugestoes.find((x) => x.section === s.id) ?? null;

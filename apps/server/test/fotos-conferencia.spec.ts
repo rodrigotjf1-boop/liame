@@ -264,8 +264,12 @@ describe('o armazenamento de imagens', () => {
       await expect(m.gravar(ruim, Buffer.from('x')), ruim).rejects.toThrow('chave fora do formato');
       await expect(m.ler(ruim), ruim).rejects.toThrow('chave fora do formato');
     }
-    // O apagamento da marca leva o recorte junto.
-    expect(await m.apagarPrefixo(prefixoDaMarca(EMPRESA, MARCA))).toBe(1);
+    // A logo do restaurante (A6 · Z15, parte 1) mora no mesmo prefixo, em `logo/<id>.jpg`; outro final não entra.
+    const logo = `t/${EMPRESA}/b/${MARCA}/logo/${POST}.jpg`;
+    await m.gravar(logo, Buffer.from('logo'));
+    await expect(m.gravar(`t/${EMPRESA}/b/${MARCA}/logo/${POST}.png`, Buffer.from('x'))).rejects.toThrow('chave fora do formato');
+    // O apagamento da marca leva o recorte e a logo juntos.
+    expect(await m.apagarPrefixo(prefixoDaMarca(EMPRESA, MARCA))).toBe(2);
     // No disco: o arquivo que não existe também é "sem arquivo".
     const d = new ArmazemNoDisco(pasta);
     await d.gravar(recorte, Buffer.from('no disco'));
