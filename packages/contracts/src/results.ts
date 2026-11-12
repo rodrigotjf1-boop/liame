@@ -88,6 +88,23 @@ export const PlatformResult = z.strictObject({
 });
 export type PlatformResult = z.infer<typeof PlatformResult>;
 
+/**
+ * O anúncio que mais gastou na campanha no período (A3 · I14; P44 aprovado em 11/11/2026; D-A3-29 a D-A3-33): a imagem
+ * para reconhecer a campanha. A imagem é a cópia que o Liame guarda (o endereço vale poucos minutos); nula enquanto não
+ * foi copiada, no anúncio de texto e no anúncio fora do ar.
+ */
+export const CampaignTopAd = z.strictObject({
+  name: z.string(),
+  /** `imagem`, `video` ou `texto` (o anúncio de texto do Google não tem imagem). */
+  kind: z.enum(['imagem', 'video', 'texto']),
+  /** Reprovado ou removido na plataforma: sem imagem (D-A3-32). */
+  off_air: z.boolean(),
+  image: z.strictObject({ url: z.string(), width: z.int().min(1), height: z.int().min(1) }).nullable(),
+  /** O anúncio no Gerenciador de Anúncios (Meta), ou nulo. */
+  manager_url: z.string().nullable(),
+});
+export type CampaignTopAd = z.infer<typeof CampaignTopAd>;
+
 export const CampaignResult = z.strictObject({
   campaign_id: z.uuid(),
   provider: Slug,
@@ -95,6 +112,8 @@ export const CampaignResult = z.strictObject({
   status: Slug,
   platform: PlatformReport,
   confirmed: ConfirmedResult,
+  /** O anúncio que mais gastou no período; nulo sem anúncio com gasto. Opcional: a resposta de antes não traz. */
+  top_ad: CampaignTopAd.nullable().optional(),
 });
 export type CampaignResult = z.infer<typeof CampaignResult>;
 

@@ -114,6 +114,8 @@ function contaValida(id: string): void {
 const CAMPOS_CONJUNTO = 'id,name,status,effective_status,campaign_id,daily_budget';
 const CAMPOS_CONJUNTO_DESTINO = `${CAMPOS_CONJUNTO},destination_type`;
 const CAMPOS_CRIATIVO = 'id,name,object_type,thumbnail_url';
+/** O tamanho da miniatura que a Meta desenha (`thumbnail_width` e `thumbnail_height`, reconferidos em 11/11/2026). */
+export const MINIATURA_DO_CRIATIVO = { thumbnail_width: '480', thumbnail_height: '480' };
 const CAMPOS_CRIATIVO_URL = `${CAMPOS_CRIATIVO},url_tags,object_url,object_story_spec{link_data{link,child_attachments{link}},video_data{call_to_action}},asset_feed_spec{link_urls}`;
 
 /** O criativo como a Meta devolve, com os campos de URL (quando lidos). */
@@ -267,8 +269,8 @@ export class ConectorMeta implements ConectorLeitura {
 
   async lerEntidades(conta: ContextoConta): Promise<EntidadesLidas> {
     contaValida(conta.externalId);
-    const ler = <T>(aresta: string, fields: string) =>
-      this.paginas<T>(conta.credencial, conta.externalId, `${conta.externalId}/${aresta}`, { fields, limit: '200' }, aresta);
+    const ler = <T>(aresta: string, fields: string, extra: Record<string, string> = {}) =>
+      this.paginas<T>(conta.credencial, conta.externalId, `${conta.externalId}/${aresta}`, { fields, limit: '200', ...extra }, aresta);
     type Campanha = { id: string; name: string; status?: string; effective_status?: string; objective?: string; daily_budget?: string; lifetime_budget?: string; created_time?: string; updated_time?: string };
     type Conjunto = { id: string; name: string; status?: string; effective_status?: string; campaign_id?: string; daily_budget?: string; destination_type?: string };
     type Anuncio = { id: string; name: string; status?: string; effective_status?: string; adset_id?: string; creative?: { id?: string } };
@@ -276,7 +278,8 @@ export class ConectorMeta implements ConectorLeitura {
       ler<Campanha>('campaigns', 'id,name,status,effective_status,objective,daily_budget,lifetime_budget,created_time,updated_time'),
       this.comReserva((f) => ler<Conjunto>('adsets', f), CAMPOS_CONJUNTO_DESTINO, CAMPOS_CONJUNTO, 'adsets'),
       ler<Anuncio>('ads', 'id,name,status,effective_status,adset_id,creative{id}'),
-      this.comReserva((f) => ler<CriativoMeta>('adcreatives', f), CAMPOS_CRIATIVO_URL, CAMPOS_CRIATIVO, 'adcreatives'),
+      // A miniatura em 480 × 480 (o padrão da Meta é 64 × 64): a cópia do cartão de Resultados (A3 · I14; D-A3-30).
+      this.comReserva((f) => ler<CriativoMeta>('adcreatives', f, MINIATURA_DO_CRIATIVO), CAMPOS_CRIATIVO_URL, CAMPOS_CRIATIVO, 'adcreatives'),
     ]);
     return {
       campaigns: campanhas.map((c) => ({

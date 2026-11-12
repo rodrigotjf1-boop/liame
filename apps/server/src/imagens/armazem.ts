@@ -112,8 +112,8 @@ function chaveValida(chave: string): boolean {
         ? semFinal(arquivo, ['-mini.jpg', '.mp4', '.mov'])
         : p[4] === 'post'
           ? semFinal(arquivo, ['-instagram.jpg'])
-          : // A logo do restaurante em Minha marca (A6 · Z15, parte 1).
-            p[4] === 'logo'
+          : // A logo do restaurante em Minha marca (A6 · Z15, parte 1) e a cópia da miniatura do anúncio (A3 · I14).
+            p[4] === 'logo' || p[4] === 'anuncio'
             ? semFinal(arquivo, ['.jpg'])
             : '';
   return ehUuid(p[1] ?? '') && ehUuid(p[3] ?? '') && ehUuid(id);

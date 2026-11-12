@@ -312,7 +312,10 @@ export class LifecyclePurgeService {
          where archived_at is not null and purge_after <= now() and ${noHold('b')} ${inList(sql`b.tenant_id`, scope.tenantIds)}
            and (exists (select 1 from liame.brand_photo p where p.brand_id = b.id)
                 -- A logo do restaurante (0140): quem já mexeu nela pode ter deixado um arquivo, mesmo a logo tirada.
-                or b.logo_updated_by is not null)`),
+                or b.logo_updated_by is not null
+                -- A cópia da miniatura do anúncio (0142), das contas da marca.
+                or exists (select 1 from liame.creative c join liame.connected_account a on a.id = c.connected_account_id
+                            where a.brand_id = b.id and c.thumbnail_key is not null))`),
     );
     const presas: string[] = [];
     for (const m of comFotos.rows) {
@@ -346,7 +349,9 @@ export class LifecyclePurgeService {
     const fotos = await withSystem(this.db, (tx) =>
       tx.execute<{ n: number }>(sql`
         select (select count(*)::int from liame.brand_photo where brand_id = ${brandId} and tenant_id = ${tenantId})
-             + (select count(*)::int from liame.brand where id = ${brandId} and tenant_id = ${tenantId} and logo_updated_by is not null) as n`),
+             + (select count(*)::int from liame.brand where id = ${brandId} and tenant_id = ${tenantId} and logo_updated_by is not null)
+             + (select count(*)::int from liame.creative c join liame.connected_account a on a.id = c.connected_account_id
+                 where a.brand_id = ${brandId} and c.tenant_id = ${tenantId} and c.thumbnail_key is not null) as n`),
     );
     if ((fotos.rows[0]?.n ?? 0) > 0) {
       try {
@@ -413,7 +418,8 @@ export class LifecyclePurgeService {
     const temFotos = await withSystem(this.db, (tx) =>
       tx.execute(sql`select 1 from liame.brand_photo where tenant_id = ${tenantId}
                      union all select 1 from liame.agency_brand where tenant_id = ${tenantId}
-                     union all select 1 from liame.brand where tenant_id = ${tenantId} and logo_updated_by is not null limit 1`),
+                     union all select 1 from liame.brand where tenant_id = ${tenantId} and logo_updated_by is not null
+                     union all select 1 from liame.creative where tenant_id = ${tenantId} and thumbnail_key is not null limit 1`),
     );
     if (temFotos.rows[0]) await this.armazem.apagarPrefixo(prefixoDaEmpresa(tenantId));
 

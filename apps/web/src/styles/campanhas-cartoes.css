@@ -1,0 +1,109 @@
+/* ============ A3 · I14 · Por campanha em cartões, com a imagem do anúncio (protótipo P44, aprovado em 11/11/2026) ============
+   Nenhuma cor nova: os tokens do tema. A miniatura do anúncio (no cartão e no modo simples), os cartões do Pro, o
+   alternador "Cartões | Tabela", a tabela que vira blocos no estreito e a prévia maior do anúncio. */
+
+/* a miniatura: a cópia da imagem do anúncio; sem imagem, um quadro neutro com o ícone e o porquê */
+.cc-mini { position: relative; display: grid; place-items: center; align-content: center; gap: 4px; width: 100%; aspect-ratio: 1 / 1; padding: 0; border: 1px solid var(--border); border-radius: var(--radius); background: var(--bg-subtle); color: var(--text-muted); overflow: hidden; }
+button.cc-mini { cursor: zoom-in; }
+.cc-mini img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+button.cc-mini:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+.cc-mini-play { position: absolute; inset: 0; z-index: 1; margin: auto; width: 34px; height: 34px; display: grid; place-items: center; border-radius: var(--radius-full); background: color-mix(in srgb, var(--text) 62%, transparent); color: var(--surface); pointer-events: none; }
+.cc-mini-play .ic { width: 16px; height: 16px; margin-left: 2px; }
+.cc-mini--vazio { border-style: dashed; border-color: var(--border-strong); padding: 6px; text-align: center; }
+.cc-mini-ic { display: grid; place-items: center; width: 28px; height: 28px; border-radius: var(--radius-full); background: var(--surface); color: var(--text-muted); }
+.cc-mini .cc-mini-ic--fora { color: var(--danger); }
+.cc-mini-txt { font-size: 11px; font-weight: 600; line-height: 1.2; color: var(--text-muted); }
+/* no modo simples: pequena, ao lado do nome; a regra do nome do Lite (`.cl-nome span`) não vale dentro dela */
+.cc-mini--lite { width: 40px; height: 40px; border-radius: var(--radius-sm); }
+.cc-mini--lite.cc-mini--vazio { padding: 0; }
+.cc-mini--lite .cc-mini-play { width: 20px; height: 20px; }
+.cc-mini--lite .cc-mini-play .ic { width: 10px; height: 10px; margin-left: 1px; }
+.cc-mini--lite .cc-mini-ic { width: 24px; height: 24px; }
+.cl-nome.cc-cl { display: grid; grid-template-columns: 40px minmax(0, 1fr); column-gap: var(--sp-3); align-items: center; }
+.cc-cl > .cc-mini { grid-row: 1 / span 2; grid-column: 1; font-size: inherit; }
+.cc-cl > b, .cc-cl > span:not(.cc-mini) { grid-column: 2; min-width: 0; }
+.cl-nome .cc-mini-ic { color: var(--text-muted); }
+.cl-nome .cc-mini .cc-mini-ic--fora { color: var(--danger); }
+
+/* o cabeçalho do bloco: a legenda e o alternador "Cartões | Tabela", que quebram a linha */
+.cc-cab-dir { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: var(--sp-2) var(--sp-4); min-width: 0; }
+.cc-vista { flex-wrap: wrap; max-width: 100%; }
+.cc-vista button { display: inline-flex; align-items: center; gap: 6px; }
+
+/* os cartões */
+.cc-cartoes { display: grid; gap: var(--sp-3); margin: 0; padding: 0; list-style: none; }
+.cc-cartao { container: ccc / inline-size; min-width: 0; padding: var(--sp-4); border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface-2); }
+@container pagina (max-width: 479px) { .cc-cartao { padding: var(--sp-3); } }
+.cc-grade { display: grid; grid-template-columns: 88px minmax(0, 1fr); align-items: start; gap: var(--sp-3) var(--sp-4); }
+.cc-grade > .cc-mini { grid-column: 1; grid-row: 1; }
+.cc-cab { grid-column: 2; grid-row: 1; display: grid; gap: 4px; min-width: 0; }
+.cc-nome { margin: 0; font-size: var(--text-md); font-weight: 600; line-height: 1.3; overflow-wrap: anywhere; }
+.cc-canal { display: flex; flex-wrap: wrap; align-items: center; gap: 4px var(--sp-2); }
+.cc-anuncio { font-size: var(--text-xs); color: var(--text-muted); overflow-wrap: anywhere; }
+.cc-nums { grid-column: 1 / -1; display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 6.25rem), 1fr)); gap: var(--sp-3); margin: 0; }
+.cc-nums > div { display: grid; align-content: start; gap: 1px; min-width: 0; }
+.cc-nums dt { font-size: var(--text-xs); color: var(--text-muted); }
+.cc-nums dd { margin: 0; font-family: var(--font-mono); font-size: var(--text-base); font-weight: 600; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.cc-nums dd.cc-txt { font-family: var(--font-sans); font-weight: 500; color: var(--text-muted); }
+.cc-nums dd small { display: block; font-family: var(--font-sans); font-size: 11px; font-weight: 400; line-height: 1.3; color: var(--text-subtle); }
+.cc-nums .cc-forte dd { font-size: var(--text-md); }
+.cc-rodape { grid-column: 1 / -1; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--sp-2) var(--sp-4); padding-top: var(--sp-3); border-top: 1px solid var(--border); }
+.cc-rodape > .camp-acao { margin-left: auto; }
+.cc-barra { display: flex; flex-wrap: wrap; align-items: center; gap: 4px var(--sp-3); min-width: 0; }
+.cc-barra-rot { font-size: var(--text-xs); color: var(--text-muted); }
+.cc-barra .halteres svg { width: 140px; height: auto; }
+.cc-total { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px var(--sp-3); margin-top: var(--sp-3); padding: var(--sp-3) var(--sp-4); border-radius: var(--radius); background: var(--bg-subtle); font-size: var(--text-sm); color: var(--text-muted); overflow-wrap: anywhere; }
+.cc-total > span:first-child { color: var(--text); font-weight: 600; }
+.cc-total b { color: var(--text); font-family: var(--font-mono); font-weight: 600; }
+@container ccc (min-width: 600px) {
+  .cc-grade { grid-template-columns: 120px minmax(0, 1fr); }
+  .cc-grade > .cc-mini { grid-row: 1 / span 3; }
+  .cc-nums, .cc-rodape { grid-column: 2; }
+}
+@container ccc (max-width: 299px) {
+  .cc-grade { grid-template-columns: 72px minmax(0, 1fr); column-gap: var(--sp-3); }
+  .cc-grade > .cc-mini--vazio { padding: 3px; gap: 2px; }
+  .cc-grade > .cc-mini--vazio .cc-mini-ic { width: 22px; height: 22px; }
+  .cc-grade > .cc-mini--vazio .cc-mini-txt { font-size: 10px; line-height: 1.15; }
+  .cc-grade > .cc-mini .cc-mini-play { width: 26px; height: 26px; }
+}
+@container ccc (max-width: 239px) {
+  .cc-grade { grid-template-columns: minmax(0, 1fr); }
+  .cc-grade > .cc-mini { width: 120px; }
+  .cc-cab { grid-column: 1; grid-row: 2; }
+}
+
+/* a tabela (a um clique): abaixo de 1.070 px de espaço, cada linha vira um bloco com o nome de cada coluna (P44) */
+.cc-tab { container: cctab / inline-size; }
+@container cctab (max-width: 1069px) {
+  .cc-tab .tabela--camp thead { display: none; }
+  .cc-tab .tabela--camp, .cc-tab .tabela--camp tbody, .cc-tab .tabela--camp tfoot { display: block; }
+  .cc-tab .tabela--camp tr { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 6.25rem), 1fr)); gap: var(--sp-2) var(--sp-3); margin-bottom: var(--sp-3); padding: var(--sp-3); border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface-2); }
+  .cc-tab .tabela--camp th[scope="row"], .cc-tab .tabela--camp td { display: block; min-width: 0; max-width: none; padding: 0; border: 0; background: transparent; text-align: left; white-space: normal; overflow-wrap: anywhere; }
+  .cc-tab .tabela--camp th[scope="row"], .cc-tab .tabela--camp .cc-tab-barra, .cc-tab .tabela--camp td.mudar { grid-column: 1 / -1; }
+  .cc-tab .tabela--camp td[data-col]::before { content: attr(data-col); display: block; font-family: var(--font-sans); font-size: var(--text-xs); font-weight: 400; color: var(--text-muted); }
+  .cc-tab .tabela--camp td .sub, .cc-tab .tabela--camp td.n .sub { max-width: none; margin-left: 0; white-space: normal; }
+  .cc-tab .tabela--camp td.cc-vazia, .cc-tab .tabela--camp td:empty { display: none; }
+  .cc-tab .tabela--camp .mudar { position: static; box-shadow: none; background: transparent; text-align: left; }
+  .cc-tab .tabela--camp td.mudar .pedido-esperando { margin-left: 0; text-align: left; }
+  .cc-tab .tabela--camp tfoot tr { border-color: var(--border-strong); }
+  .cc-tab .table-wrap { overflow: visible; border: 0; }
+  /* No bloco, o Pedir fica só no fim (como no P44): o de baixo do nome, do celular, não repete. */
+  .cc-tab .tabela--camp .mudar-linha { display: none; }
+}
+
+/* a prévia maior do anúncio */
+/* Até 480 px vale a regra do diálogo (a tela inteira); acima, a prévia fica estreita. */
+@media (min-width: 481px) { .cc-dlg { width: min(560px, calc(100vw - 32px)); } }
+.cc-dlg h2 { overflow-wrap: anywhere; }
+.cc-dlg h2:focus { outline: none; }
+.cc-prev { display: grid; gap: var(--sp-4); justify-items: start; }
+.cc-prev-midia { display: grid; gap: var(--sp-2); justify-items: center; width: 100%; margin: 0; }
+.cc-prev-img { position: relative; display: block; width: 100%; max-width: 360px; }
+.cc-prev-img img { display: block; width: 100%; height: auto; border: 1px solid var(--border); border-radius: var(--radius); }
+.cc-prev-img .cc-mini-play { width: 48px; height: 48px; }
+.cc-prev-midia figcaption { justify-self: stretch; }
+@media (prefers-reduced-motion: no-preference) {
+  button.cc-mini img { transition: transform var(--dur) var(--ease); }
+  button.cc-mini:hover img { transform: scale(1.04); }
+}

@@ -213,6 +213,7 @@ export {
   AdDeliveryResponse,
   AdDeliveryResult,
   CampaignResult,
+  CampaignTopAd,
   ClosedLoopQuery,
   ClosedLoopAttentionQuery,
   ClosedLoopAttentionResponse,

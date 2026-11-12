@@ -512,8 +512,11 @@ describe('desenho da tela (o mesmo componente do navegador)', () => {
     semLixo(pro);
     expect(pro).toContain('<th scope="col" class="mudar">Mudar</th>');
     expect(pro).toContain('; na última coluna, o pedido de mudança</caption>');
-    // Cada campanha com pedido tem o botão na coluna e embaixo do nome (no celular a coluna some).
-    expect(botoes(pro)).toEqual(['Combo sexta', 'Combo sexta', 'Smash em dobro', 'Smash em dobro']);
+    // Nos cartões (o padrão do Pro, P44), um botão por campanha com pedido. Na tabela (a um clique, montada escondida),
+    // cada campanha com pedido tem o botão na coluna e embaixo do nome (no celular a coluna some).
+    const [cartoes, tabela] = pro.split('class="cc-tab"');
+    expect(botoes(cartoes!)).toEqual(['Combo sexta', 'Smash em dobro']);
+    expect(botoes(tabela!)).toEqual(['Combo sexta', 'Combo sexta', 'Smash em dobro', 'Smash em dobro']);
     expect(pro.match(/class="mudar-linha"/g)).toHaveLength(2);
     // Quatro campanhas, a linha "sem campanha identificada" e o total: a coluna existe em todas.
     expect(pro.match(/<td class="mudar">/g)).toHaveLength(6);
@@ -528,6 +531,41 @@ describe('desenho da tela (o mesmo componente do navegador)', () => {
     expect(soVe).toContain('1 pedido esperando');
     expect(soVe).toContain('<th scope="col" class="mudar">Mudar</th>');
     expect(desenhar(base7(), '7', 'pro', 'Loja Centro', null, alvos(false, false))).not.toContain('class="mudar"');
+  });
+
+  it('a imagem do anúncio (P44): os cartões no Pro com a imagem e a prévia; fora do ar e de texto sem imagem; a miniatura no Lite', () => {
+    const r = base7();
+    r.campaigns[0]!.top_ad = {
+      name: 'Anúncio do combo',
+      kind: 'video',
+      off_air: false,
+      image: { url: 'https://armazem.exemplo/anuncio.jpg', width: 480, height: 480 },
+      manager_url: 'https://adsmanager.facebook.com/adsmanager/manage/ads?act=1&selected_ad_ids=2',
+    };
+    r.campaigns[1]!.top_ad = { name: 'Anúncio reprovado', kind: 'imagem', off_air: true, image: null, manager_url: null };
+    r.campaigns[2]!.top_ad = { name: 'Busca hambúrguer', kind: 'texto', off_air: false, image: null, manager_url: null };
+    const pro = desenhar(r, '7', 'pro');
+    semLixo(pro);
+    // Os cartões são o padrão; o alternador diz qual está à vista.
+    expect(pro).toContain('class="cc-cartoes"');
+    expect(pro).toMatch(/aria-pressed="true"[^>]*>(<svg[^]*?<\/svg>)?Cartões/);
+    expect(pro).toContain('aria-label="Vídeo do anúncio Anúncio do combo. Abrir a prévia"');
+    expect(pro).toContain('<img src="https://armazem.exemplo/anuncio.jpg"');
+    expect(pro).toContain('Anúncio fora do ar');
+    expect(pro).toContain('Anúncio de texto');
+    // Fora do ar não mostra imagem nenhuma, nem a do armazenamento.
+    expect(pro.match(/<img src="https:\/\/armazem.exemplo/g)).toHaveLength(1);
+    expect(pro).toContain('<span>Total do período</span>');
+    // O nome da campanha é um título (o leitor de tela navega pelos cartões), e a situação é um selo.
+    expect(pro).toContain('<h3 class="cc-nome">');
+    expect(pro).toContain('Toque na imagem para ver o anúncio maior.');
+    // Na tabela (a um clique), cada número leva o nome da coluna, para o bloco do estreito.
+    expect(pro).toContain('data-col="ROAS caixa"');
+    // No Lite, a miniatura pequena ao lado do nome, sem abrir a prévia.
+    const lite = desenhar(r, '7', 'lite');
+    semLixo(lite);
+    expect(lite.split('id="camp-pro"')[0]).toContain('class="cc-mini cc-mini--lite"');
+    expect(lite.split('id="camp-pro"')[0]).not.toContain('Abrir a prévia');
   });
 
   it('piloto no modo simples: a faixa do topo pede o Regem, o gasto de cada campanha e os estados vazios do caixa', () => {

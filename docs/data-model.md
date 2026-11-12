@@ -38,6 +38,9 @@ Não fingir que Meta e Google têm os mesmos conceitos.
 | `ad` | ad | ad (RSA etc.) | ad |
 | `creative` | creative | asset | creative |
 
+**A cópia da miniatura do anúncio (0142; A3 · I14, parte 1; D-A3-30):** o `creative` guarda a cópia da miniatura que o Liame fez no armazenamento de imagens (`thumbnail_key`, no prefixo da marca, `t/{empresa}/b/{marca}/anuncio/{creative_id}.jpg`, JPEG até 480 × 480), de onde veio (`thumbnail_source`: o endereço sem a assinatura, para copiar de novo só quando a imagem muda), as medidas e quando; tudo nulo ou a cópia inteira (regra `creative_miniatura_inteira`). Só a do criativo que mais gastou em cada campanha (7 e 30 dias) é copiada, depois de cada sincronização da conta; o expurgo da marca e o da empresa apagam o prefixo também quando só há cópias.
+
+
 Cada entidade tem colunas canônicas + `provider_attributes jsonb` (o que é só do provider) + `raw_ref` (ponteiro para o payload bruto).
 
 **Link do anúncio (A2.5 · F5, sem migration):** para a conferência do rastreio, o conector guarda em `provider_attributes.rastreio` para onde o anúncio leva e o que ele acrescenta ao link — no `creative` da Meta (`url_tags` e os links do criativo, cada um com os próprios parâmetros) e no `ad` do Google (URLs finais e o sufixo do URL final e o modelo de acompanhamento que valem para o anúncio, com o nível de onde vieram). O conjunto da Meta guarda o `destination_type` (site, WhatsApp…). Sem a chave, o link ainda não foi lido.
