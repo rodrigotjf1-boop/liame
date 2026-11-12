@@ -1,16 +1,29 @@
+import sharp from 'sharp';
 import { describe, expect, it } from 'vitest';
 import {
+  AUTOMACOES_DESLIGADAS,
+  areasDosRecortes,
   campanhaGoogleDoRecurso,
+  consultaDaCampanhaCriada,
   type EstadoDaCampanhaNovaNoGoogle,
+  type ImagensDoGoogle,
+  idsDaCriacao,
+  idsDaProcura,
+  marcaDoLiame,
   motivoDaFotoPequena,
   motivoDosTextos,
+  nomeNoGoogle,
+  type OperacaoDoGoogle,
+  operacoesDaCriacao,
   planoDaCampanhaGoogle,
   recortesDaFoto,
   recursoDaCampanhaGoogle,
 } from '../src/campanhas/campanha-google-plano.js';
+import { FotoNaoServe, imagensDoGoogle } from '../src/campanhas/imagens-do-google.js';
 
-// A5 · Y9, parte 2, sem rede e sem banco: o recurso, os recortes da foto (os mesmos números do P45), a conferência dos
-// textos nos tamanhos do Google (base §3.1, lida em 12/11/2026) e o plano da ferramenta `campanha_google_criar`.
+// A5 · Y9, partes 2 e 3, sem rede e sem banco: o recurso, os recortes da foto (os mesmos números do P45), a conferência
+// dos textos nos tamanhos do Google (base §3.1, lida em 12/11/2026), o plano da ferramenta `campanha_google_criar` e a
+// criação: o nome único, as áreas dos recortes, as operações da requisição única, os ids da resposta e as imagens.
 
 const ID = '01900000-0000-7000-8000-000000000001';
 const TEXTOS = {
@@ -88,5 +101,160 @@ describe('a campanha nova no Google (A5 · Y9, parte 2)', () => {
     expect(planoDaCampanhaGoogle(estado({ loja_no_google: { nome: 'Mister Burgers', logo: 'x', logo_lado: 96 } })).ok).toBe(false);
     expect(planoDaCampanhaGoogle(estado({ conta: { id: 'act_123', nome: 'x' } })).ok).toBe(false);
     expect(planoDaCampanhaGoogle({ qualquer: 1 }).ok).toBe(false);
+  });
+});
+
+describe('a criação no Google, sem rede (A5 · Y9, parte 3; D-A5-27, D-A5-28)', () => {
+  const imagens: ImagensDoGoogle = {
+    recortes: [
+      { id: 'deitada', tipo: 'MARKETING_IMAGE', base64: 'ZGVpdGFkYQ==' },
+      { id: 'quadrada', tipo: 'SQUARE_MARKETING_IMAGE', base64: 'cXVhZHJhZGE=' },
+    ],
+    logo: 'bG9nbw==',
+  };
+  const tipo = (op: OperacaoDoGoogle) => Object.keys(op)[0]!;
+  const corpo = (op: OperacaoDoGoogle) => Object.values(op)[0]!.create;
+
+  it('o nome único: o da pessoa com a marca do Liame (os 12 últimos dígitos do id), e a procura por ela', () => {
+    expect(marcaDoLiame(ID)).toBe('(Liame 000000000001)');
+    expect(nomeNoGoogle(estado())).toBe('Combo sexta · Google · novembro (Liame 000000000001)');
+    // Dois ids do mesmo minuto (uuidv7: o começo é a hora) não se confundem.
+    expect(marcaDoLiame('01900000-0000-7000-8000-000000000002')).not.toBe(marcaDoLiame(ID));
+    expect(consultaDaCampanhaCriada(ID)).toBe(
+      "SELECT campaign.id, campaign.campaign_budget, asset_group.id FROM asset_group WHERE campaign.name LIKE '%(Liame 000000000001)' AND campaign.status != 'REMOVED'",
+    );
+  });
+
+  it('as áreas dos recortes: pelo centro, no tamanho recomendado; o em pé só quando cabe', () => {
+    expect(areasDosRecortes(1440, 1800)).toEqual([
+      { id: 'deitada', tipo: 'MARKETING_IMAGE', left: 0, top: 523, width: 1440, height: 754, saida: { largura: 1200, altura: 628 } },
+      { id: 'quadrada', tipo: 'SQUARE_MARKETING_IMAGE', left: 0, top: 180, width: 1440, height: 1440, saida: { largura: 1200, altura: 1200 } },
+      { id: 'em_pe', tipo: 'PORTRAIT_MARKETING_IMAGE', left: 0, top: 0, width: 1440, height: 1800, saida: { largura: 960, altura: 1200 } },
+    ]);
+    // Deitada e menor que o recomendado: vai como está; o em pé não alcança 480 × 600.
+    expect(areasDosRecortes(900, 500).map((a) => [a.id, a.left, a.top, a.width, a.height, a.saida.largura, a.saida.altura])).toEqual([
+      ['deitada', 0, 14, 900, 471, 900, 471],
+      ['quadrada', 200, 0, 500, 500, 500, 500],
+    ]);
+  });
+
+  it('as operações: uma requisição, na ordem em que o Google resolve os ids provisórios, com a campanha pausada e a marca', () => {
+    const ops = operacoesDaCriacao(estado({ fim: '2026-12-31' }), imagens);
+    const cliente = 'customers/4445556667';
+    expect(ops.map(tipo)).toEqual([
+      'campaignBudgetOperation',
+      'campaignOperation',
+      'campaignCriterionOperation',
+      'campaignCriterionOperation',
+      ...Array(6).fill('assetOperation'), // 3 títulos, 1 longo, 2 descrições
+      'assetOperation', // deitada
+      'assetOperation', // quadrada
+      'assetOperation', // o nome da loja
+      'assetOperation', // a logo
+      'campaignAssetOperation',
+      'campaignAssetOperation',
+      'assetGroupOperation',
+      ...Array(8).fill('assetGroupAssetOperation'),
+    ]);
+    expect(corpo(ops[0]!)).toEqual({
+      resourceName: `${cliente}/campaignBudgets/-1`,
+      name: 'Verba · Combo sexta · Google · novembro (Liame 000000000001)',
+      amountMicros: '30000000',
+      deliveryMethod: 'STANDARD',
+      explicitlyShared: false,
+    });
+    expect(corpo(ops[1]!)).toEqual({
+      resourceName: `${cliente}/campaigns/-2`,
+      name: 'Combo sexta · Google · novembro (Liame 000000000001)',
+      advertisingChannelType: 'PERFORMANCE_MAX',
+      status: 'PAUSED',
+      campaignBudget: `${cliente}/campaignBudgets/-1`,
+      maximizeConversions: {},
+      brandGuidelinesEnabled: true,
+      containsEuPoliticalAdvertising: 'DOES_NOT_CONTAIN_EU_POLITICAL_ADVERTISING',
+      assetAutomationSettings: AUTOMACOES_DESLIGADAS.map((t) => ({ assetAutomationType: t, assetAutomationStatus: 'OPTED_OUT' })),
+      finalUrlSuffix: 'utm_source=google&utm_medium=cpc&campaign_id={campaignid}',
+      endDateTime: '2026-12-31 23:59:59',
+    });
+    expect(corpo(ops[2]!)).toEqual({
+      campaign: `${cliente}/campaigns/-2`,
+      proximity: { geoPoint: { latitudeInMicroDegrees: -22906847, longitudeInMicroDegrees: -43172897 }, radius: 5, radiusUnits: 'KILOMETERS' },
+    });
+    expect(corpo(ops[3]!)).toEqual({ campaign: `${cliente}/campaigns/-2`, language: { languageConstant: 'languageConstants/1014' } });
+    // Sem fim: a campanha roda até alguém pausar (nada de data no pedido).
+    expect(corpo(operacoesDaCriacao(estado(), imagens)[1]!)).not.toHaveProperty('endDateTime');
+
+    const recursos = ops.filter((o) => tipo(o) === 'assetOperation').map(corpo);
+    const porNome = new Map(recursos.map((r) => [r.resourceName as string, r]));
+    expect(recursos.filter((r) => r.imageAsset).map((r) => r.name)).toEqual(['Foto deitado (Liame 000000000001)', 'Foto quadrado (Liame 000000000001)', 'Logo (Liame 000000000001)']);
+    const daCampanha = ops.filter((o) => tipo(o) === 'campaignAssetOperation').map(corpo);
+    expect(daCampanha.map((c) => [c.fieldType, porNome.get(c.asset as string)?.textAsset ?? (porNome.get(c.asset as string)?.imageAsset as { data: string }).data])).toEqual([
+      ['BUSINESS_NAME', { text: 'Mister Burgers' }],
+      ['LOGO', 'bG9nbw=='],
+    ]);
+    expect(corpo(ops.find((o) => tipo(o) === 'assetGroupOperation')!)).toEqual({
+      resourceName: `${cliente}/assetGroups/-3`,
+      name: 'Combo sexta · Google · novembro',
+      campaign: `${cliente}/campaigns/-2`,
+      finalUrls: ['https://cardapio.exemplo.com.br/mister-centro'],
+      status: 'ENABLED',
+    });
+    const doGrupo = ops.filter((o) => tipo(o) === 'assetGroupAssetOperation').map(corpo);
+    expect(doGrupo.every((d) => d.assetGroup === `${cliente}/assetGroups/-3`)).toBe(true);
+    expect(doGrupo.map((d) => [d.fieldType, (porNome.get(d.asset as string)?.textAsset as { text: string } | undefined)?.text ?? 'imagem'])).toEqual([
+      ...TEXTOS.titulos.map((t) => ['HEADLINE', t]),
+      ...TEXTOS.titulos_longos.map((t) => ['LONG_HEADLINE', t]),
+      ...TEXTOS.descricoes.map((t) => ['DESCRIPTION', t]),
+      ['MARKETING_IMAGE', 'imagem'],
+      ['SQUARE_MARKETING_IMAGE', 'imagem'],
+    ]);
+    // Cada id provisório é criado uma vez só.
+    const nomes = ops.map((o) => corpo(o).resourceName).filter(Boolean);
+    expect(new Set(nomes).size).toBe(nomes.length);
+  });
+
+  it('o mesmo texto em dois papéis usa um recurso só (o nome da loja igual a um título)', () => {
+    const ops = operacoesDaCriacao(estado({ loja_no_google: { ...estado().loja_no_google, nome: 'Smash, batata e refri' } }), imagens);
+    const textos = ops.filter((o) => tipo(o) === 'assetOperation' && corpo(o).textAsset).map((o) => (corpo(o).textAsset as { text: string }).text);
+    expect(textos.filter((t) => t === 'Smash, batata e refri')).toHaveLength(1);
+    const titulo = ops.filter((o) => tipo(o) === 'assetGroupAssetOperation').map(corpo)[1]!.asset;
+    expect(ops.filter((o) => tipo(o) === 'campaignAssetOperation').map(corpo)[0]!.asset).toBe(titulo);
+  });
+
+  it('os ids da resposta da criação e da procura; o que falta não vira id', () => {
+    const c = 'customers/4445556667';
+    expect(
+      idsDaCriacao({
+        mutateOperationResponses: [
+          { campaignBudgetResult: { resourceName: `${c}/campaignBudgets/111` } },
+          { campaignResult: { resourceName: `${c}/campaigns/222` } },
+          { assetResult: { resourceName: `${c}/assets/9` } },
+          { assetGroupResult: { resourceName: `${c}/assetGroups/333` } },
+        ],
+      }),
+    ).toEqual({ orcamento: '111', campanha: '222', grupo: '333' });
+    expect(idsDaCriacao({ mutateOperationResponses: [{ campaignResult: { resourceName: `${c}/campaigns/222` } }] })).toBeNull();
+    expect(idsDaCriacao({})).toBeNull();
+    expect(idsDaProcura([{ results: [{ campaign: { id: '222', campaignBudget: `${c}/campaignBudgets/111` }, assetGroup: { id: '333' } }] }])).toEqual({ orcamento: '111', campanha: '222', grupo: '333' });
+    expect(idsDaProcura([])).toBeNull();
+    expect(idsDaProcura([{ results: [{ campaign: { id: '222' }, assetGroup: { id: '333' } }] }])).toBeNull();
+  });
+
+  it('as imagens de verdade: os recortes nas medidas do Google e a logo deitada inteira num quadrado; a foto pequena recusada', async () => {
+    const jpeg = (width: number, height: number) => sharp({ create: { width, height, channels: 3, background: { r: 200, g: 40, b: 40 } } }).jpeg().toBuffer();
+    const r = await imagensDoGoogle(await jpeg(1440, 1800), await jpeg(600, 300));
+    const medir = async (b64: string) => {
+      const m = await sharp(Buffer.from(b64, 'base64')).metadata();
+      return [m.format, m.width, m.height];
+    };
+    expect(await Promise.all(r.recortes.map(async (x) => [x.tipo, ...(await medir(x.base64))]))).toEqual([
+      ['MARKETING_IMAGE', 'jpeg', 1200, 628],
+      ['SQUARE_MARKETING_IMAGE', 'jpeg', 1200, 1200],
+      ['PORTRAIT_MARKETING_IMAGE', 'jpeg', 960, 1200],
+    ]);
+    expect(await medir(r.logo)).toEqual(['jpeg', 600, 600]);
+    // A logo maior que o recomendado desce a 1200.
+    expect(await medir((await imagensDoGoogle(await jpeg(1440, 1800), await jpeg(2000, 1000))).logo)).toEqual(['jpeg', 1200, 1200]);
+    await expect(imagensDoGoogle(await jpeg(520, 520), await jpeg(300, 300))).rejects.toBeInstanceOf(FotoNaoServe);
   });
 });

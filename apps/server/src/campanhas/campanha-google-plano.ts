@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { REGRAS } from '../links/construtor.js';
 
 // A campanha nova no Google, criada pausada (A5, Y9, parte 2; P45 pré-aprovado em 12/11/2026; D-A5-21 a D-A5-26). A peça
 // aprovada em Criativos, com os textos nos tamanhos do Google e uma foto de Fotos, vira um pedido de criar uma campanha
@@ -134,4 +135,207 @@ export function planoDaCampanhaGoogle(before: unknown): PlanoDaCampanhaGoogle {
   const foto = motivoDaFotoPequena(e.foto.largura, e.foto.altura);
   if (foto) return { ok: false, motivo: foto };
   return { ok: true, desejado: { ...e, situacao: 'criada' } };
+}
+
+// ------------------------------------------------------------------ a criação no Google (Y9, parte 3; D-A5-27, D-A5-28)
+
+/** A marca do Liame no nome da campanha: `(Liame 0123456789ab)`, com os 12 últimos dígitos do id (a parte aleatória). */
+export function marcaDoLiame(campanha: string): string {
+  return `(Liame ${campanha.replace(/-/g, '').slice(-12).toLowerCase()})`;
+}
+
+/**
+ * O nome da campanha no Google: o da pessoa e, no fim, a marca do Liame. O nome é único na conta (o Google recusa o
+ * repetido), e é por ele que a tentativa seguinte acha a campanha que o Google criou quando a resposta se perdeu.
+ */
+export function nomeNoGoogle(e: Pick<EstadoDaCampanhaNovaNoGoogle, 'nome' | 'campanha'>): string {
+  return `${e.nome} ${marcaDoLiame(e.campanha)}`;
+}
+
+/** O tamanho que vai ao Google de cada recorte (o recomendado; o recorte menor vai como está). */
+export const TAMANHO_NO_GOOGLE: Record<IdDoRecorte, { largura: number; altura: number }> = {
+  deitada: { largura: 1200, altura: 628 },
+  quadrada: { largura: 1200, altura: 1200 },
+  em_pe: { largura: 960, altura: 1200 },
+};
+/** O lado da logo quadrada no Google (o recomendado); a logo menor vai no lado dela. */
+export const LADO_DA_LOGO_NO_GOOGLE = 1200;
+
+export type TipoDoRecorte = (typeof RECORTES)[number]['tipo'];
+export type AreaDoRecorteNoGoogle = { id: IdDoRecorte; tipo: TipoDoRecorte; left: number; top: number; width: number; height: number; saida: { largura: number; altura: number } };
+
+/**
+ * As áreas da foto que vão ao Google: o maior pedaço de cada proporção, pelo centro (os números de `recortesDaFoto`, os
+ * mesmos do P45), e o tamanho de saída (o recomendado, quando o pedaço é maior). Só os que alcançam o mínimo: o em pé
+ * fica de fora quando não cabe; um obrigatório que não cabe também (quem chama recusa antes, por `motivoDaFotoPequena`).
+ */
+export function areasDosRecortes(largura: number, altura: number): AreaDoRecorteNoGoogle[] {
+  return recortesDaFoto(largura, altura)
+    .filter((r) => r.ok)
+    .map((r) => {
+      const alvo = TAMANHO_NO_GOOGLE[r.id];
+      return {
+        id: r.id,
+        tipo: RECORTES.find((x) => x.id === r.id)!.tipo,
+        left: Math.floor((largura - r.largura) / 2),
+        top: Math.floor((altura - r.altura) / 2),
+        width: r.largura,
+        height: r.altura,
+        saida: r.largura > alvo.largura ? alvo : { largura: r.largura, altura: r.altura },
+      };
+    });
+}
+
+/** As imagens prontas para o Google, em base64: os recortes da foto (o em pé, quando cabe) e a logo quadrada. */
+export type ImagensDoGoogle = { recortes: { id: IdDoRecorte; tipo: TipoDoRecorte; base64: string }[]; logo: string };
+
+/**
+ * A automação de recursos da Performance Max que o Liame desliga (D-A5-27): o Google não escreve textos (vai ao ar o que
+ * a pessoa aprovou e o Compliance conferiu), não troca o destino pelo resto do site (o link é o do cardápio, com o
+ * rastreio), não mexe na foto e não gera versões de vídeo. Os quatro nascem ligados na Performance Max
+ * (AssetAutomationTypeEnum da v25, lido em 12/11/2026).
+ */
+export const AUTOMACOES_DESLIGADAS = ['TEXT_ASSET_AUTOMATION', 'FINAL_URL_EXPANSION_TEXT_ASSET_AUTOMATION', 'GENERATE_IMAGE_ENHANCEMENT', 'GENERATE_ENHANCED_YOUTUBE_VIDEOS'] as const;
+
+/** O idioma da campanha: português (`languageConstants/1014`); na Performance Max vale para os canais fora da Pesquisa. */
+export const IDIOMA_PORTUGUES = 'languageConstants/1014';
+
+/**
+ * O rastreio do Liame no sufixo do URL final da campanha (D-A5-26, D-A5-29): a origem, o meio e o id da campanha (o
+ * ValueTrack `{campaignid}`, que o Google troca no clique). A Performance Max não tem grupo de anúncios nem anúncio: o
+ * id da campanha é o que liga a venda a ela (a conferência dos links aceita o id da campanha sozinho).
+ */
+export function rastreioDaPerformanceMax(): string {
+  const r = REGRAS.google_ads;
+  const campanha = r.dinamicos.find(([k]) => k === 'campaign_id')!;
+  return [`utm_source=${r.utmSource}`, `utm_medium=${r.utmMedium}`, `${campanha[0]}=${campanha[1]}`].join('&');
+}
+
+export type OperacaoDoGoogle = Record<string, { create: Record<string, unknown> }>;
+
+/**
+ * A criação inteira numa requisição só (`googleAds:mutate`; a Performance Max pede o grupo de recursos com todos os
+ * recursos dele, e as regras da marca pedem o nome da loja e a logo, na mesma requisição): o orçamento diário só desta
+ * campanha; a campanha PAUSADA (Maximizar conversões, regras da marca, a automação desligada, o rastreio, o fim); o raio em volta da
+ * loja e o idioma; os textos e as imagens; o nome e a logo da loja na campanha; o grupo de recursos com o link e os
+ * recursos dele. Os ids negativos são os provisórios da requisição, e o Google cria tudo ou nada. Função pura.
+ */
+export function operacoesDaCriacao(e: EstadoDaCampanhaNovaNoGoogle, imagens: ImagensDoGoogle): OperacaoDoGoogle[] {
+  const cliente = `customers/${e.conta.id}`;
+  let proximo = -1;
+  const provisorio = (tipo: string) => `${cliente}/${tipo}/${proximo--}`;
+  const orcamento = provisorio('campaignBudgets');
+  const campanha = provisorio('campaigns');
+  const grupo = provisorio('assetGroups');
+  const nome = nomeNoGoogle(e);
+  const marca = marcaDoLiame(e.campanha);
+  const ops: OperacaoDoGoogle[] = [];
+
+  ops.push({ campaignBudgetOperation: { create: { resourceName: orcamento, name: `Verba · ${nome}`, amountMicros: String(e.verba_diaria_micros), deliveryMethod: 'STANDARD', explicitlyShared: false } } });
+  ops.push({
+    campaignOperation: {
+      create: {
+        resourceName: campanha,
+        name: nome,
+        advertisingChannelType: 'PERFORMANCE_MAX',
+        status: 'PAUSED',
+        campaignBudget: orcamento,
+        maximizeConversions: {},
+        brandGuidelinesEnabled: true,
+        containsEuPoliticalAdvertising: 'DOES_NOT_CONTAIN_EU_POLITICAL_ADVERTISING',
+        assetAutomationSettings: AUTOMACOES_DESLIGADAS.map((tipo) => ({ assetAutomationType: tipo, assetAutomationStatus: 'OPTED_OUT' })),
+        finalUrlSuffix: rastreioDaPerformanceMax(),
+        ...(e.fim ? { endDateTime: `${e.fim} 23:59:59` } : {}),
+      },
+    },
+  });
+  ops.push({
+    campaignCriterionOperation: {
+      create: {
+        campaign: campanha,
+        proximity: {
+          geoPoint: { latitudeInMicroDegrees: Math.round(e.loja.latitude * 1e6), longitudeInMicroDegrees: Math.round(e.loja.longitude * 1e6) },
+          radius: e.raio_km,
+          radiusUnits: 'KILOMETERS',
+        },
+      },
+    },
+  });
+  ops.push({ campaignCriterionOperation: { create: { campaign: campanha, language: { languageConstant: IDIOMA_PORTUGUES } } } });
+
+  // Um recurso de texto por texto diferente: o mesmo texto em dois papéis (um título igual ao nome da loja) usa o mesmo.
+  const textos = new Map<string, string>();
+  const texto = (t: string): string => {
+    const ja = textos.get(t);
+    if (ja) return ja;
+    const recurso = provisorio('assets');
+    textos.set(t, recurso);
+    ops.push({ assetOperation: { create: { resourceName: recurso, textAsset: { text: t } } } });
+    return recurso;
+  };
+  const imagem = (base64: string, qual: string): string => {
+    const recurso = provisorio('assets');
+    ops.push({ assetOperation: { create: { resourceName: recurso, name: `${qual} ${marca}`, imageAsset: { data: base64 } } } });
+    return recurso;
+  };
+
+  const doGrupo: { asset: string; fieldType: string }[] = [
+    ...e.textos.titulos.map((t) => ({ asset: texto(t), fieldType: 'HEADLINE' })),
+    ...e.textos.titulos_longos.map((t) => ({ asset: texto(t), fieldType: 'LONG_HEADLINE' })),
+    ...e.textos.descricoes.map((t) => ({ asset: texto(t), fieldType: 'DESCRIPTION' })),
+    ...imagens.recortes.map((r) => ({ asset: imagem(r.base64, `Foto ${NOME_DO_RECORTE[r.id]}`), fieldType: r.tipo })),
+  ];
+  const nomeDaLoja = texto(e.loja_no_google.nome);
+  const logo = imagem(imagens.logo, 'Logo');
+  ops.push({ campaignAssetOperation: { create: { campaign: campanha, asset: nomeDaLoja, fieldType: 'BUSINESS_NAME' } } });
+  ops.push({ campaignAssetOperation: { create: { campaign: campanha, asset: logo, fieldType: 'LOGO' } } });
+  ops.push({ assetGroupOperation: { create: { resourceName: grupo, name: e.nome, campaign: campanha, finalUrls: [e.link], status: 'ENABLED' } } });
+  for (const d of doGrupo) ops.push({ assetGroupAssetOperation: { create: { assetGroup: grupo, asset: d.asset, fieldType: d.fieldType } } });
+  return ops;
+}
+
+/** Os ids do que o Google criou: o orçamento, a campanha e o grupo de recursos. */
+export type IdsNoGoogle = { orcamento: string; campanha: string; grupo: string };
+
+function idDoRecurso(nome: unknown, tipo: string): string | null {
+  const m = typeof nome === 'string' ? new RegExp(`^customers/\\d+/${tipo}/(\\d+)$`).exec(nome) : null;
+  return m ? m[1]! : null;
+}
+
+/** Os ids na resposta da criação (`mutateOperationResponses`, uma por operação). Nulo quando falta algum. */
+export function idsDaCriacao(corpo: unknown): IdsNoGoogle | null {
+  const respostas = (corpo as { mutateOperationResponses?: unknown } | null)?.mutateOperationResponses;
+  if (!Array.isArray(respostas)) return null;
+  const achar = (campo: string, tipo: string): string | null => {
+    for (const r of respostas as Record<string, { resourceName?: unknown } | undefined>[]) {
+      const id = idDoRecurso(r?.[campo]?.resourceName, tipo);
+      if (id) return id;
+    }
+    return null;
+  };
+  const orcamento = achar('campaignBudgetResult', 'campaignBudgets');
+  const campanha = achar('campaignResult', 'campaigns');
+  const grupo = achar('assetGroupResult', 'assetGroups');
+  return orcamento && campanha && grupo ? { orcamento, campanha, grupo } : null;
+}
+
+/**
+ * A procura da campanha que uma tentativa anterior pode ter criado (a resposta se perdeu): pelo nome, que termina na
+ * marca do Liame. A marca só tem letras, números, espaço e parênteses: nada que o LIKE do GAQL leia como curinga.
+ */
+export function consultaDaCampanhaCriada(campanha: string): string {
+  return `SELECT campaign.id, campaign.campaign_budget, asset_group.id FROM asset_group WHERE campaign.name LIKE '%${marcaDoLiame(campanha)}' AND campaign.status != 'REMOVED'`;
+}
+
+/** Os ids da campanha achada pela procura; nulo quando o Google não a tem. */
+export function idsDaProcura(corpo: unknown): IdsNoGoogle | null {
+  type Linha = { campaign?: { id?: unknown; campaignBudget?: unknown }; assetGroup?: { id?: unknown } };
+  const linhas = Array.isArray(corpo) ? (corpo as { results?: Linha[] }[]).flatMap((l) => l?.results ?? []) : [];
+  for (const l of linhas) {
+    const campanha = String(l.campaign?.id ?? '');
+    const grupo = String(l.assetGroup?.id ?? '');
+    const orcamento = idDoRecurso(l.campaign?.campaignBudget, 'campaignBudgets');
+    if (/^\d+$/.test(campanha) && /^\d+$/.test(grupo) && orcamento) return { orcamento, campanha, grupo };
+  }
+  return null;
 }
