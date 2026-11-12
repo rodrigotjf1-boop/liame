@@ -676,3 +676,17 @@ export {
   NewCampaignStatus,
   NewCampaignUnitOption,
 } from './campanhas-novas.js';
+export {
+  CreateVideoMontageRequest,
+  VIDEO_FORMATS,
+  VIDEO_MONTAGE_LIMITS,
+  VIDEO_MONTAGE_STATUSES,
+  VIDEO_TEMPLATE_RULES,
+  VIDEO_TEMPLATES,
+  VideoFormat,
+  VideoMontageListQuery,
+  VideoMontageListResponse,
+  VideoMontageResponse,
+  VideoMontageStatus,
+  VideoTemplate,
+} from './video-montado.js';

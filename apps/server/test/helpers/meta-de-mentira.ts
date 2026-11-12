@@ -361,6 +361,7 @@ export async function ligarFlagDaEmpresa(
     | 'messenger'
     | 'stories'
     | 'campanha_nova'
+    | 'video_montado'
     | 'regiao'
     | 'ia',
   tenantId: string,
