@@ -381,6 +381,41 @@ export const RegionOverviewResponse = z.strictObject({
       cities: z.array(z.strictObject({ id: z.string(), name: z.string(), full_name: z.string(), clicks: z.number().int(), impressions: z.number().int(), clicks_pct: z.number().int() })),
     })
     .nullable(),
+  /**
+   * Os pedidos por bairro (R3, parte 2; D-RG-36 a D-RG-39): `disponivel`, `sem_endereco`, `sem_regem`, `sem_permissao`
+   * (quem pergunta não vê Resultados) ou `lendo` (a primeira leitura do Regem ainda não veio).
+   */
+  order_districts_status: Slug,
+  /**
+   * Os pedidos de entrega confirmados por bairro, das 4 semanas completas até ontem, que o Regem manda somados (o bairro
+   * com menos de `minimum` pedidos vem em `others`, sem o nome), com a gente do bairro no Censo (o mesmo município da
+   * loja) e os pedidos por mil moradores; os bairros da área de entrega sem o mínimo entram com `orders` nulo. `role`
+   * (`atacar`, `defender` ou `manter`) só com pelo menos 3 bairros com gente conhecida (`comparable`). Nula fora de
+   * `disponivel`.
+   */
+  order_districts: z
+    .strictObject({
+      from: z.string(),
+      to: z.string(),
+      minimum: z.number().int(),
+      read_at: z.string(),
+      comparable: z.boolean(),
+      districts: z.array(
+        z.strictObject({
+          name: z.string(),
+          orders: z.number().int().nullable(),
+          population: z.number().int().nullable(),
+          per_1000: z.number().nullable(),
+          role: Slug.nullable(),
+          in_delivery_area: z.boolean(),
+        }),
+      ),
+      others: z.strictObject({ districts: z.number().int(), orders: z.number().int() }),
+      without_district: z.number().int(),
+      pickup: z.number().int(),
+      delivery_orders: z.number().int(),
+    })
+    .nullable(),
   sources: z.array(RegionSourceStatus),
   generated_at: z.iso.datetime(),
 });

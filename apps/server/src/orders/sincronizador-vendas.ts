@@ -9,8 +9,11 @@ import type { CredencialGuardada } from '../connections/oauth.js';
 import { ClienteConector, ErroConector, type TipoErroConector } from '../connectors/cliente-http.js';
 import { enderecosDasPlataformas } from '../connectors/enderecos.js';
 import { AcessoDaExecucao, credencialDaLoja, PERMISSOES_DA_LEITURA, recusaDaLoja } from '../connectors/regem/acesso-da-loja.js';
-import { lerLoja, lerPagina, registrarAvisoNoRegem, VERSAO_CONTRATO_REGEM } from '../connectors/regem/conector-regem.js';
-import { ClienteAnonimizado, CupomRegem, type LojaRegem, PedidoRegem } from '../connectors/regem/contrato-regem.js';
+import { lerBairros, lerLoja, lerPagina, registrarAvisoNoRegem, VERSAO_CONTRATO_REGEM } from '../connectors/regem/conector-regem.js';
+import { type BairrosRegem, ClienteAnonimizado, CupomRegem, type LojaRegem, PedidoRegem } from '../connectors/regem/contrato-regem.js';
+import { linhasDosBairros } from '../regiao/bairros.js';
+import { janelaDaMidia } from '../regiao/midia-paga.js';
+import { diaNoFuso } from '../results/fora-do-normal.js';
 import { newWebhookSecret } from '../events/standard-webhooks.js';
 import type { VaultService } from '../vault/vault.service.js';
 import { gravarPedidos, type PedidoLido } from './order-store.js';
@@ -80,7 +83,12 @@ type CursorVendas = {
   aviso?: { em: string; ok: boolean; via?: 'token' | 'ligacao' };
   /** Pedidos: quando chegou o último aviso do Regem (gravado por quem recebe; a execução nunca o sobrescreve). */
   evento_em?: string;
+  /** Pedidos: a última leitura dos pedidos por bairro (plano da região, R3, parte 2) e se deu certo. */
+  bairros?: { em: string; ok: boolean };
 };
+
+/** Os pedidos por bairro são relidos uma vez por dia; depois de uma falha (a rota fora do ar), em 6 horas. */
+const BAIRROS_DE_NOVO_MS = 6 * 3_600_000;
 
 /** Um conjunto durante a execução: o último cursor gravado (a falha parte dele, não do início da execução). */
 type EstadoConjunto = { cursor: CursorVendas };
@@ -159,6 +167,8 @@ export class SincronizadorVendas {
     private readonly vault: VaultService,
     private readonly config: AppConfig,
     private readonly apagarAnonimizados: ApagarAnonimizados,
+    /** A função `regiao` ligada na marca (a leitura dos pedidos por bairro só roda com ela). Sem quem diga, desligada. */
+    private readonly regiaoLigada: (tenantId: string, brandId: string) => Promise<boolean> = async () => false,
   ) {}
 
   async sincronizar(contaId: string, tenantId: string, agora: Date = new Date()): Promise<ResultadoVendas> {
@@ -234,6 +244,7 @@ export class SincronizadorVendas {
     if (falharam.length) resultado.erro = falharam.map((d) => `${d}: ${resultado.falhas![d]}`).join('; ').slice(0, 500);
     await this.fecharExecucao(conta, runId, status, cliente.chamadas, resultado, resultado.erro ?? null);
     await this.conferirAviso(ctx, conta, acesso, cursores.pedidos ?? {}, agora);
+    await this.conferirBairros(ctx, conta, acesso, cursores.pedidos ?? {}, agora);
     // Sem nenhum conjunto liberado pelo token, a loja é vista de novo no dia seguinte.
     await this.agendarLoja(conta, proximas.length ? Math.min(...proximas) : agora.getTime() + DIA_MS, conta.inicio);
     await this.atualizarSituacao(conta, comErro);
@@ -486,6 +497,51 @@ export class SincronizadorVendas {
       );
     } catch (err) {
       this.logger.warn(`loja ${conta.id}: situação do aviso não gravada (${err instanceof Error ? err.name : 'erro'}); o registro é repetido na próxima leitura`);
+    }
+  }
+
+  /**
+   * Os pedidos de entrega por bairro (plano da região, R3, parte 2; D-RG-8): as 4 semanas completas até ontem, no fuso
+   * da loja, uma vez por dia, só para a marca com a função `regiao` ligada e o escopo `pedidos.ler`. A leitura substitui a
+   * anterior. É um extra da leitura das vendas: nada aqui falha a execução (a rota fora do ar tenta de novo em 6 horas).
+   */
+  private async conferirBairros(ctx: Contexto, conta: LinhaConta, acesso: AcessoDaExecucao, cursor: CursorVendas, agora: Date): Promise<void> {
+    if (!cursor.carga_inicial_em || !conta.unit_id || !acesso.credencial.escopos.includes('pedidos.ler')) return;
+    const ultimo = cursor.bairros?.em ? Date.parse(cursor.bairros.em) : Number.NaN;
+    if (agora.getTime() - ultimo < (cursor.bairros?.ok ? DIA_MS : BAIRROS_DE_NOVO_MS)) return;
+    try {
+      if (!(await this.regiaoLigada(conta.tenant_id, conta.brand_id))) return;
+      const fuso =
+        (await withTenant(this.db, conta.tenant_id, (tx) => tx.execute<{ timezone: string }>(sql`select timezone from liame.unit where id = ${conta.unit_id}`))).rows[0]?.timezone ??
+        'America/Sao_Paulo';
+      const j = janelaDaMidia(diaNoFuso(agora, fuso));
+      let lido: BairrosRegem | null = null;
+      try {
+        lido = await acesso.chamar((a) => lerBairros(ctx, a, { de: j.inicio, ate: j.fim }));
+      } catch (err) {
+        this.logger.warn(`loja ${conta.id}: os pedidos por bairro não vieram (${err instanceof ErroConector ? `${err.tipo}: ${err.message}` : 'erro interno'}); nova tentativa em 6 horas`);
+      }
+      // Resposta de outra loja não entra nesta.
+      const ok = lido !== null && lido.loja_id === conta.external_id;
+      await withTenant(this.db, conta.tenant_id, async (tx) => {
+        if (ok && lido) {
+          const linhas = linhasDosBairros(lido);
+          await tx.execute(sql`delete from liame.region_order_district where connected_account_id = ${conta.id}`);
+          await tx.execute(sql`
+            insert into liame.region_order_district (connected_account_id, tenant_id, brand_id, unit_id, position, kind, district, city, uf, districts, orders,
+                                                     revenue_micros, day_from, day_to, minimum, read_at)
+            select ${conta.id}, ${conta.tenant_id}, ${conta.brand_id}, ${conta.unit_id}, x.posicao, x.tipo, x.bairro, x.cidade, x.uf, x.bairros, x.pedidos,
+                   x.receita::bigint, ${lido.de}::date, ${lido.ate}::date, ${lido.minimo}, ${agora.toISOString()}::timestamptz
+              from jsonb_to_recordset(${JSON.stringify(linhas)}::jsonb) as x (
+                     posicao smallint, tipo text, bairro text, cidade text, uf text, bairros integer, pedidos integer, receita text)`);
+        }
+        await tx.execute(sql`
+          update liame.sync_state
+             set cursor = cursor || jsonb_build_object('bairros', jsonb_build_object('em', ${agora.toISOString()}::text, 'ok', ${ok}::boolean)), updated_at = now()
+           where connected_account_id = ${conta.id} and dataset = 'pedidos'`);
+      });
+    } catch (err) {
+      this.logger.warn(`loja ${conta.id}: os pedidos por bairro não foram gravados (${err instanceof Error ? err.name : 'erro'}); de novo na próxima leitura`);
     }
   }
 

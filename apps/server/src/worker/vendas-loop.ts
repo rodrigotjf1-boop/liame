@@ -1,9 +1,11 @@
 import { type Database, type Tx, withSystem } from '@liame/database';
-import { Inject, Injectable, Logger } from '@nestjs/common';
+import { Inject, Injectable, Logger, Optional } from '@nestjs/common';
 import { sql } from 'drizzle-orm';
 import { APP_CONFIG, type AppConfig } from '../config.js';
 import { contaConectada } from '../connections/conectada.js';
 import { DATABASE } from '../database/database.module.js';
+import { FlagService } from '../flags/flag.service.js';
+import { FLAG_DA_REGIAO } from '../regiao/regiao.js';
 import { apagarClientesDaOrigem } from '../orders/order-store.js';
 import { type ApagarAnonimizados, INTERVALO_VENDAS_MIN, type ResultadoVendas, SincronizadorVendas } from '../orders/sincronizador-vendas.js';
 import { VaultService } from '../vault/vault.service.js';
@@ -26,6 +28,8 @@ export class VendasLoop {
     @Inject(DATABASE) private readonly database: Database | null,
     @Inject(APP_CONFIG) private readonly config: AppConfig,
     private readonly vault: VaultService,
+    /** A função `regiao` de cada marca: a leitura dos pedidos por bairro (R3, parte 2) só roda com ela ligada. */
+    @Optional() private readonly flags?: FlagService,
   ) {}
 
   async executarLote(limite = 3, scope: JobScope = {}, agora?: Date): Promise<ResultadoVendas[]> {
@@ -60,7 +64,14 @@ export class VendasLoop {
         returning s.connected_account_id as id, s.tenant_id`);
       return r.rows;
     });
-    const sincronizador = new SincronizadorVendas(db, this.vault, this.config, apagarAnonimizadosNoSistema(db));
+    const flags = this.flags;
+    const sincronizador = new SincronizadorVendas(
+      db,
+      this.vault,
+      this.config,
+      apagarAnonimizadosNoSistema(db),
+      flags ? (tenantId, brandId) => flags.isEnabled(FLAG_DA_REGIAO, flags.context({ tenantId, brandId })) : undefined,
+    );
     const resultados: ResultadoVendas[] = [];
     for (const c of reservadas) {
       try {

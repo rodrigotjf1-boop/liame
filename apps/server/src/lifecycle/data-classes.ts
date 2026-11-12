@@ -134,6 +134,9 @@ export const DATA_CLASSES: Record<string, TableClassification> = {
   ad_hour_daily: { class: 'CONFIDENTIAL', retention: 'com a conta conectada (as 4 semanas mais novas de cada conta de anúncio)' },
   ad_city_daily: { class: 'CONFIDENTIAL', retention: 'com a conta conectada (as 4 semanas mais novas de cada conta de anúncio)' },
   region_geo_target: { class: 'PUBLIC', retention: 'do produto (o nome dos lugares do Google Ads, públicos)' },
+  // Os pedidos da loja por bairro (plano da região, R3, parte 2; migration 0148): as somas que o Regem manda (bairro com
+  // o mínimo de pedidos dele; o resto somado em "outros"), sem cliente, rua, número nem CEP; a leitura substitui a anterior.
+  region_order_district: { class: 'CONFIDENTIAL', retention: 'com a conta conectada (as 4 semanas mais novas de cada loja do Regem)' },
   ai_usage: { class: 'PERSONAL', retention: 'com a empresa (registro técnico, sem conteúdo)' },
   ai_exchange: { class: 'CONFIDENTIAL', retention: '30 dias (o que foi enviado ao modelo e o que voltou)', purge: { job: 'conteudo_ia', days: 30 } },
   // O que a conferência recusou (A3, D-A3-15): o funcionário, o fluxo, o porquê e a regra; sem o texto e sem quem pediu.

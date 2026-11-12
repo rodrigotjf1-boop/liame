@@ -3,7 +3,7 @@ import type { ClienteConector } from '../cliente-http.js';
 import { ErroConector } from '../cliente-http.js';
 import { CABECALHO_LIGACAO } from '../dms/integracao-dms.js';
 import type { AcessoAoRegem } from './acesso-da-loja.js';
-import { AvisoRegem, CanaisRegem, CupomRegem, LigacaoRegem, LigacoesDoClique, LojaRegem, PedidoDeAutorizacaoRegem, pagina, TokensRegem } from './contrato-regem.js';
+import { AvisoRegem, BairrosRegem, CanaisRegem, CupomRegem, LigacaoRegem, LigacoesDoClique, LojaRegem, PedidoDeAutorizacaoRegem, pagina, TokensRegem } from './contrato-regem.js';
 
 // Chamadas ao Regem pelo contrato v1 (docs/integracoes/regem.md; ADR-019). A credencial vai só no cabeçalho e nunca em
 // log; o endereço é o da distribuição, liberado no cliente HTTP (V33). Cota e disjuntor por loja, como nas plataformas
@@ -41,6 +41,24 @@ export async function lerLoja(ctx: Contexto, a: AcessoAoRegem): Promise<LojaRege
     apiVersion: VERSAO_CONTRATO_REGEM,
   });
   return conferir(LojaRegem, r.corpo, 'loja');
+}
+
+/**
+ * Os pedidos de entrega somados por bairro (plano da região, R3, parte 2; D-RG-8), na janela pedida (até 92 dias, no
+ * fuso da loja). Escopo `pedidos.ler`. As datas vão já conferidas pelo formato (AAAA-MM-DD).
+ */
+export async function lerBairros(ctx: Contexto, a: AcessoAoRegem, janela: { de: string; ate: string }): Promise<BairrosRegem> {
+  const dia = /^\d{4}-\d{2}-\d{2}$/;
+  if (!dia.test(janela.de) || !dia.test(janela.ate)) throw new ErroConector('definitivo', 'regem', 'janela dos bairros fora do formato');
+  const r = await ctx.cliente.requisitar({
+    provider: 'regem',
+    conta: a.lojaChave,
+    url: `${ctx.apiUrl}/pedidos/bairros?${new URLSearchParams({ de: janela.de, ate: janela.ate }).toString()}`,
+    cabecalhos: cabecalhosDoAcesso(a),
+    endpoint: 'pedidos/bairros',
+    apiVersion: VERSAO_CONTRATO_REGEM,
+  });
+  return conferir(BairrosRegem, r.corpo, 'pedidos/bairros');
 }
 
 /**

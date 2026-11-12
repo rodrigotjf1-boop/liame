@@ -35,6 +35,7 @@ import { FONTE_CENSO_BAIRRO } from './censo.js';
 import { type Coordenada, nomeComparavel, ProcuraDeCoordenada } from './coordenada.js';
 import { MUNICIPIOS_DO_IPCA, RMS_DO_IPCA } from './ibge.js';
 import { diaNoFuso } from '../results/fora-do-normal.js';
+import { BAIRROS_NA_SECAO, type BairroParaComparar, compararBairros } from './bairros.js';
 import { type DemandaDaLoja, demandaDaLoja, janelas, type LinhaDaDemanda } from './demanda.js';
 import { blocoMaisForte, CIDADES_NA_SECAO, DATASET_DA_MIDIA, janelaDaMidia, porcentoDe, somaDoBloco } from './midia-paga.js';
 import { type DataGuardada, datasDaSemana, diaEmBrasilia, REFERENCIAS_DO_SETOR } from './semana.js';
@@ -391,6 +392,8 @@ export class RegiaoService {
       store_demand: null,
       paid_media_status: 'sem_endereco',
       paid_media: null,
+      order_districts_status: 'sem_endereco',
+      order_districts: null,
       generated_at: agora.toISOString(),
     };
     if (!(await this.ligada(auth, brandId))) {
@@ -515,6 +518,8 @@ export class RegiaoService {
     const demanda = await this.demandaDaLoja(auth.permissions.has('vendas.ver'), brandId, unitId, agora);
     // A mídia na região (R4): os anúncios da marca por hora e, do Google, por cidade; a mesma régua da demanda.
     const midia = await this.midiaNaRegiao(auth, brandId, unitId, agora, demanda.demanda);
+    // Os pedidos por bairro (R3, parte 2): o que o Regem manda somado, com a gente do Censo; a mesma régua da demanda.
+    const bairrosDosPedidos = await this.bairrosDosPedidos(auth.permissions.has('vendas.ver'), brandId, unitId, cidade, loja.address_city, areas);
 
     const noMunicipio = (indicador: string) => numeroMaisNovo(numeros, indicador, 'municipio', cidade);
     const populacao = noMunicipio('populacao');
@@ -582,6 +587,8 @@ export class RegiaoService {
       store_demand: demanda.demanda,
       paid_media_status: midia.status,
       paid_media: midia.midia,
+      order_districts_status: bairrosDosPedidos.status,
+      order_districts: bairrosDosPedidos.bairros,
       sources: fontes,
       generated_at: agora.toISOString(),
     };
@@ -729,6 +736,81 @@ export class RegiaoService {
           impressions: Number(c.impressions),
           clicks_pct: porcentoDe(Number(c.clicks), Number(c.total)),
         })),
+      },
+    };
+  }
+
+  /**
+   * Os pedidos por bairro (R3, parte 2; D-RG-36 a D-RG-39): o que a leitura das vendas gravou do Regem para esta loja, os
+   * bairros do mesmo município casados com o Censo pelo nome (a gente e os pedidos por mil moradores) e os bairros da
+   * área de entrega que não chegaram ao mínimo de pedidos; a conta de atacar e defender é a de `bairros.ts`. Só para quem
+   * vê Resultados, como a demanda.
+   */
+  private async bairrosDosPedidos(
+    podeVerVendas: boolean,
+    brandId: string,
+    unitId: string,
+    cidade: string,
+    municipio: string | null,
+    areas: readonly string[],
+  ): Promise<{ status: string; bairros: RegionOverviewResponse['order_districts'] }> {
+    if (!podeVerVendas) return { status: 'sem_permissao', bairros: null };
+    if (!(await this.temRegem(brandId))) return { status: 'sem_regem', bairros: null };
+    const tx = currentTx();
+    const linhas = (
+      await tx.execute<{ kind: string; district: string | null; city: string | null; districts: number | null; orders: number; day_from: string; day_to: string; minimum: number; read_at: Date | string }>(sql`
+        select kind, district, city, districts, orders, day_from::text as day_from, day_to::text as day_to, minimum, read_at
+          from liame.region_order_district
+         where brand_id = ${brandId} and unit_id = ${unitId}
+         order by position`)
+    ).rows;
+    if (!linhas.length) return { status: 'lendo', bairros: null };
+    const doMunicipio = (c: string | null) => !c || !municipio || nomeComparavel(c) === nomeComparavel(municipio);
+    const lidos = linhas.filter((l) => l.kind === 'bairro' && l.district && doMunicipio(l.city));
+    const daEntrega = new Map<string, string>();
+    for (const a of areas) if (!daEntrega.has(nomeComparavel(a))) daEntrega.set(nomeComparavel(a), a);
+    const chaves = [...new Set([...lidos.map((l) => nomeComparavel(l.district!)), ...daEntrega.keys()])];
+    const gente = chaves.length
+      ? (
+          await tx.execute<{ name_key: string; name: string; population: number | null }>(sql`
+            select distinct on (name_key) name_key, name, population from liame.region_district
+             where city_code = ${cidade} and name_key = any(array(select jsonb_array_elements_text(${JSON.stringify(chaves)}::jsonb)))
+             order by name_key, population desc nulls last, district_code`)
+        ).rows
+      : [];
+    const doCenso = new Map(gente.map((g) => [g.name_key, g]));
+    const lista = new Map<string, BairroParaComparar>();
+    for (const l of lidos) {
+      const k = nomeComparavel(l.district!);
+      const antes = lista.get(k);
+      lista.set(k, { nome: antes?.nome ?? l.district!, pedidos: (antes?.pedidos ?? 0) + l.orders, populacao: doCenso.get(k)?.population ?? null, naEntrega: daEntrega.has(k) });
+    }
+    for (const [k, nome] of daEntrega) {
+      if (!lista.has(k)) lista.set(k, { nome: doCenso.get(k)?.name ?? nome, pedidos: null, populacao: doCenso.get(k)?.population ?? null, naEntrega: true });
+    }
+    const comparados = compararBairros([...lista.values()]);
+    const de = (tipo: string) => linhas.find((l) => l.kind === tipo);
+    const primeira = linhas[0]!;
+    return {
+      status: 'disponivel',
+      bairros: {
+        from: primeira.day_from,
+        to: primeira.day_to,
+        minimum: primeira.minimum,
+        read_at: (primeira.read_at instanceof Date ? primeira.read_at : new Date(primeira.read_at)).toISOString(),
+        comparable: comparados.some((b) => b.papel !== null),
+        districts: comparados.slice(0, BAIRROS_NA_SECAO).map((b) => ({
+          name: b.nome,
+          orders: b.pedidos,
+          population: b.populacao,
+          per_1000: b.porMil === null ? null : Math.round(b.porMil * 10) / 10,
+          role: b.papel,
+          in_delivery_area: b.naEntrega,
+        })),
+        others: { districts: de('outros')?.districts ?? 0, orders: de('outros')?.orders ?? 0 },
+        without_district: de('sem_bairro')?.orders ?? 0,
+        pickup: de('retirada')?.orders ?? 0,
+        delivery_orders: linhas.filter((l) => l.kind !== 'retirada').reduce((t, l) => t + l.orders, 0),
       },
     };
   }
