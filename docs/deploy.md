@@ -77,7 +77,7 @@ Menus em português, como aparecem no painel. Em cada serviço: **Fonte → Gith
 
 1. **+ Serviço → App** → `liame-render`. Fonte igual à da API; **Construção → Dockerfile** → `apps/server/Dockerfile.render`. Sem comando (a imagem já sobe o serviço de montagem).
 2. **Ambiente**: `DATABASE_URL`, `IMAGENS_BUCKET`, `AWS_REGION`, `AWS_ACCESS_KEY_ID` e `AWS_SECRET_ACCESS_KEY` com os mesmos valores do `liame-worker` (o serviço lê a fila no banco e grava o vídeo no mesmo bucket). **Sem domínio**.
-3. **Avançado → Recursos**: limite de **2 núcleos** e **3 GB** de memória, **1 réplica** (D-A6-139): o vídeo pesado não tira CPU dos outros projetos da VPS.
+3. **Avançado → Recursos** (*Resources*): limite de memória `3072` (MB) e limite de CPU `2` (núcleos), as reservas em `0`; **Avançado → Implantar** (*Deploy*): **Réplicas** `1` (D-A6-139). O vídeo pesado não tira CPU dos outros projetos da VPS. Criado pelo dono em 12/11/2026 (no ar às 08:09 UTC).
 4. **Implantar**. O primeiro build demora mais (baixa o navegador do Remotion, ~120 MB). Conferir nos logs `serviço de montagem no ar`. Com a função `video_montado` desligada, a fila fica vazia e o serviço só olha a cada 5 segundos.
 
 ### 3.3 `liame-web`

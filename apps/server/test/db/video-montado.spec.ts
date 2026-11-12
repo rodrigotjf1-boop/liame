@@ -77,6 +77,13 @@ describe.skipIf(!hasDb)('o vídeo montado: os pedidos e a fila (Z15, parte 2a)',
     expect((await pedir(e, { template: 'novidade', media_ids: [f1!.id], price_line: 'R$ 39,90' })).body.code).toBe('preco-no-modelo');
     expect((await pedir(e, { template: 'novidade', media_ids: [f1!.id], sound: 'original' })).body.code).toBe('som-sem-video');
     expect((await pedir(e, { template: 'novidade', media_ids: [v.id], sound: 'original' })).status).toBe(201);
+    // O vídeo toca uma vez: precisa da duração escolhida; o som original só com o vídeo que tem som (parte 3).
+    const curto = await videoGuardado(e, armazem, { capa: true, duracaoMs: 7_000 });
+    const curtoRecusado = await pedir(e, { template: 'novidade', media_ids: [curto.id], duration_s: 10 });
+    expect([curtoRecusado.body.code, curtoRecusado.body.detail]).toEqual(['video-curto', 'O vídeo tem 7 s: escolha uma duração de até 7 s, ou outro vídeo.']);
+    const mudo = await videoGuardado(e, armazem, {});
+    await ownerQuery(`update liame.brand_photo set has_audio = false where id = $1`, [mudo.id]);
+    expect((await pedir(e, { template: 'novidade', media_ids: [mudo.id], sound: 'original' })).body.code).toBe('video-sem-som');
     expect((await pedir(e, { media_ids: [f1!.id], with_logo: true })).body.code).toBe('sem-logo');
     expect((await pedir(e, { template: 'combo', media_ids: [f1!.id, f1!.id] })).body.code).toBe('midia-repetida');
 

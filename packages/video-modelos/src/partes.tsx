@@ -33,13 +33,16 @@ export function Titulo({ s, estilo, altura, children }: Base & { altura: number;
   );
 }
 
-/** A linha do preço: a pílula âmbar, com a fonte dos números. */
-export function Preco({ s, estilo, baixo, children }: Base & { baixo: string; children: ReactNode }) {
+/**
+ * A linha do preço: a pílula âmbar, com a fonte dos números. No fim do Combo ela vem ao centro, maior (`centro`, como o
+ * `.p43-quadro--combo-fim` do protótipo).
+ */
+export function Preco({ s, estilo, baixo, centro = false, children }: Base & { baixo: string; centro?: boolean; children: ReactNode }) {
   return (
     <div
       style={{
         position: 'absolute',
-        left: '7%',
+        ...(centro ? { left: 0, right: 0, width: 'fit-content', marginInline: 'auto' } : { left: '7%' }),
         bottom: baixo,
         maxWidth: '86%',
         padding: `${4 * s}px ${12 * s}px`,
@@ -47,10 +50,35 @@ export function Preco({ s, estilo, baixo, children }: Base & { baixo: string; ch
         background: COR.preco,
         color: COR.tinta,
         fontFamily: FONTE.numero,
-        fontSize: 18 * s,
+        fontSize: (centro ? 22 : 18) * s,
         fontWeight: 700,
         lineHeight: 1.3,
         overflowWrap: 'anywhere',
+        ...estilo,
+      }}
+    >
+      {children}
+    </div>
+  );
+}
+
+/** A faixa "Novidade" no canto de cima, colada à esquerda (só no modelo "Novidade da casa"). */
+export function Faixa({ s, estilo, children }: Base & { children: ReactNode }) {
+  return (
+    <div
+      style={{
+        position: 'absolute',
+        left: 0,
+        top: '4%',
+        padding: `${3 * s}px ${12 * s}px ${3 * s}px ${10 * s}px`,
+        borderRadius: `0 ${999 * s}px ${999 * s}px 0`,
+        background: COR.faixa,
+        color: COR.tinta,
+        fontFamily: FONTE.texto,
+        fontSize: 12 * s,
+        fontWeight: 700,
+        letterSpacing: '0.08em',
+        textTransform: 'uppercase',
         ...estilo,
       }}
     >
