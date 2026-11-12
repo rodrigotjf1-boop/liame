@@ -2,6 +2,7 @@ import type { ClosedLoopResponse, ExplanationNumber, PlanBudget, PlanContent, Pl
 import { canonicalJson, sha256 } from '../../audit/audit.js';
 import { criarMarcador, type Lugar } from '../conversa/fontes.js';
 import { dia, dinheiro } from '../registro/formatos.js';
+import { fonteDosHorarios, propostaDaMidia } from './midia.js';
 
 // O que o código sabe de um plano do Estrategista (A3, I11; protótipo P8), sem banco nem modelo: os textos livres e o
 // caminho de cada um, o que o plano propõe nos campos, a verba de hoje (calculada aqui, nunca pelo modelo), o dinheiro
@@ -63,6 +64,8 @@ export function textosDoPlano(c: PlanContent): Array<{ caminho: string; texto: s
         ...c.goals.flatMap((g, i) => [t(`goals.${i}.goal`, g.goal), t(`goals.${i}.how_to_know`, g.how_to_know)]),
         ...c.months.flatMap((m, i) => [t(`months.${i}.month`, m.month), t(`months.${i}.plan`, m.plan)]),
         ...c.dates.flatMap((d, i) => [t(`dates.${i}.name`, d.name), t(`dates.${i}.what`, d.what)]),
+        // O criativo de cada etapa do plano de mídia (R5): vai para a rua, passa pelo Compliance como o texto do anúncio.
+        ...(c.media_plan?.stages.map((e, i) => t(`media_plan.stages.${i}.creative`, e.creative)) ?? []),
         ...fim,
       ];
     case 'pauta':
@@ -83,7 +86,7 @@ export function propostaDoPlano(c: PlanContent): string[] {
     case 'pauta':
       return c.days.map((d) => dia(d.day)!);
     case 'noventa_dias':
-      return [reais(c.budget.proposal.meta), reais(c.budget.proposal.google)];
+      return [reais(c.budget.proposal.meta), reais(c.budget.proposal.google), ...(c.media_plan ? propostaDaMidia(c.media_plan) : [])];
   }
 }
 
@@ -115,13 +118,24 @@ export function marcarPlano(
   };
   const textos = textosDoPlano(c);
   // A verba de hoje entra depois dos meses, onde a tabela fica na tela.
-  const antesDaVerba = c.kind === 'noventa_dias' ? textos.findIndex((x) => x.caminho.startsWith('dates.') || x.caminho === 'risk_reason') : -1;
+  const antesDaVerba = c.kind === 'noventa_dias' ? textos.findIndex((x) => x.caminho.startsWith('dates.') || x.caminho.startsWith('media_plan.') || x.caminho === 'risk_reason') : -1;
+  // Os horários do plano de mídia (a parte dos pedidos, calculada pelo código) vêm depois dos criativos, como na tela.
+  const depoisDaMidia = c.kind === 'noventa_dias' && c.media_plan ? textos.map((x) => x.caminho).lastIndexOf(`media_plan.stages.${c.media_plan.stages.length - 1}.creative`) : -1;
   textos.forEach((x, i) => {
     if (i === antesDaVerba && c.kind === 'noventa_dias' && opcoes.fontesDaVerba) {
       guardar('budget.today.meta', comFonte(reais(c.budget.today.meta), opcoes.fontesDaVerba.meta));
       guardar('budget.today.google', comFonte(reais(c.budget.today.google), opcoes.fontesDaVerba.google));
     }
     guardar(x.caminho, marcar(x.texto));
+    if (i === depoisDaMidia && c.kind === 'noventa_dias' && c.media_plan) {
+      c.media_plan.stores.forEach((s, j) => {
+        const h = s.hours;
+        if (h.source !== 'loja') return;
+        const fonte = [fonteDosHorarios(h)];
+        if (h.days_share !== null) guardar(`media_plan.stores.${j}.hours.days_share`, comFonte(`${h.days_share}%`, fonte));
+        if (h.hours_share !== null) guardar(`media_plan.stores.${j}.hours.hours_share`, comFonte(`${h.hours_share}%`, fonte));
+      });
+    }
   });
   return { numbers, marked };
 }

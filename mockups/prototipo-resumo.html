@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Resumo e plano · Liame</title>
 <!--
-@prototipo Liame · A3 · P8 · Resumo e plano do Estrategista (APROVADO PELO DONO EM 03/10/2026)
+@prototipo Liame · A3 · P8 · Resumo e plano do Estrategista (APROVADO PELO DONO EM 03/10/2026) · REVISÃO P45 de 12/11/2026: o plano de mídia por região no plano de 90 dias (R5; estado "P45"), aprovada pelo dono antecipadamente pela autorização geral da noite de 12/11/2026, D-RG-26 a D-RG-31 como recomendadas
 base: prototipo-explicar.html (P4, aprovado em 02/10/2026), com a visão do dono do protótipo geral aprovado
       (Resumo como página inicial do Lite; Atenção como a do Pro) e a tela Aprovações que já está no app.
 o que tem: Resumo com o dinheiro do marketing nos últimos 7 dias (vendas confirmadas no caixa, gasto e o que sobrou),
@@ -1000,6 +1000,10 @@ select.input { padding-right: var(--sp-2); }
 .inbox-det .plano-mudar-bts { display: flex; flex-wrap: wrap; gap: var(--sp-2); }
 /* Mês a mês, calendário comercial e dia a dia: a data à esquerda, o que fazer à direita. */
 .inbox-det .dias { display: grid; margin: 0; padding: 0; list-style: none; }
+/* P45 (R5): o plano de mídia por região, dentro do plano de 90 dias. */
+.inbox-det .p45-sub { font-size: var(--text-sm); color: var(--text-muted); }
+.inbox-det .p45-tit { font-size: var(--text-sm); font-weight: 600; margin-top: var(--sp-2); }
+.inbox-det .p45-loja { margin-top: var(--sp-4); padding-top: var(--sp-3); border-top: 1px solid var(--border); }
 .inbox-det .dias li { display: grid; grid-template-columns: 7.5rem minmax(0, 1fr); gap: var(--sp-3); padding: var(--sp-2) 0; border-bottom: 1px solid var(--border); font-size: var(--text-sm); }
 .inbox-det .dias li:last-child { border-bottom: 0; }
 .inbox-det .dias .dia { padding-top: 2px; font-family: var(--font-mono); font-size: 11px; letter-spacing: .06em; text-transform: uppercase; color: var(--text-muted); }
@@ -2901,6 +2905,7 @@ const ESTADOS_P8 = {
     'plano-codigo': 'Código do app recusado',
     'plano-aprovado': 'Promoção aprovada: o que fazer agora',
     'plano-trimestre-aprovado': 'Plano de 90 dias aprovado',
+    'plano-trimestre-midia': 'P45 · Plano de 90 dias com o plano de mídia por região (R5)',
     'plano-recusar': 'Recusar com o motivo',
     'plano-nova-analise': 'Pedir nova análise',
     'plano-refazendo': 'Nova análise pedida',
@@ -2965,6 +2970,64 @@ const porqueItem = (b, span, small) => `<div class="porque-item"><b>${b}</b><spa
 const listaDias = (itens) => `<ul class="dias">${itens.map(([dia, txt]) => `<li><span class="dia">${dia}</span><span>${txt}</span></li>`).join('')}</ul>`;
 const lista1a3 = (itens) => `<ol class="afazer">${itens.map((t, i) => `<li><span class="num" aria-hidden="true">${i + 1}</span><span>${t}</span></li>`).join('')}</ol>`;
 
+/* ---------- P45 · o plano de mídia por região no plano de 90 dias (plano da região, R5; revisão do P8, aprovada pelo
+   dono antecipadamente em 12/11/2026 pela autorização geral da noite, D-RG-26 a D-RG-31 como recomendadas) ----------
+   Os anéis, a verba de cada anel e os horários saem do código (o raio da loja, a demanda dos pedidos do Regem); o
+   Estrategista escolhe a parte de cada etapa do funil, dentro das faixas do plano, e o criativo de cada uma. */
+function midiaPorRegiao(pl, n) {
+  // A verba proposta se divide igual entre as lojas no mapa e, em cada loja, pela parte de cada anel (maior resto,
+  // reais inteiros; conta do sistema). Aqui, duas lojas: a Tijuca, com pedidos, e o Méier, ainda sem pedidos que bastem.
+  const dividir = (total, pesos) => {
+    const soma = pesos.reduce((t, p) => t + p, 0);
+    const base = pesos.map((p) => Math.floor((total * p) / soma));
+    let falta = total - base.reduce((t, x) => t + x, 0);
+    pesos.map((p, i) => ({ i, r: (total * p) % soma })).sort((a, b) => b.r - a.r || a.i - b.i).forEach(({ i }) => { if (falta > 0) { base[i] += 1; falta -= 1; } });
+    return base;
+  };
+  const pesos = [60, 40, 100];
+  const meta = dividir(pl.meta, pesos);
+  const google = dividir(pl.google, pesos);
+  const anel = (nome, km, parte, j) => `<li><span class="dia">${nome}</span><span><b>${parte}% da verba</b> · ${km} · Instagram e Facebook ${moeda(meta[j], 0)}, Google ${moeda(google[j], 0)} por mês</span></li>`;
+  const etapa = (nome, parte, criativo) => `<li><span class="dia">${nome} · ${parte}%</span><span>${criativo}</span></li>`;
+  const doRegem = 'Regem · pedidos confirmados de 15/10/2026 a 11/11/2026 (as 4 semanas completas até ontem) · calculado pelo Liame';
+  return `<div class="secao"><p class="rotulo-marca">Plano de mídia por região</p>
+      <p class="p45-tit">Etapas do funil</p>
+      <ul class="dias">
+        ${etapa('Reconhecimento', 15, 'Vídeo curto do smash na chapa, para quem ainda não conhece a loja.')}
+        ${etapa('Seguidores', 10, 'Os bastidores da cozinha e o "novo no cardápio", para quem já viu o vídeo.')}
+        ${etapa('Cardápio e conversa', 30, 'O combo para dividir, com o botão do cardápio e o do WhatsApp.')}
+        ${etapa('Pedido', 45, 'Cupom exclusivo da campanha na noite mais forte, para quem já pediu ou visitou o cardápio.')}
+      </ul>
+      ${linha('i-shield', 'Reconhecimento e seguidores somam 25% (o teto é 25%: o resto vai para pedido e conversa). A renda do bairro não vai ao Estrategista e nunca entra no texto do anúncio.')}
+      <div class="p45-loja">
+        <p class="p45-tit">Mister Burgers Tijuca</p>
+        <p class="p45-sub">Bairro Tijuca, Rio de Janeiro · entrega até 3 km · ${moeda(meta[0] + meta[1] + google[0] + google[1], 0)} por mês nesta loja</p>
+        <p class="p45-tit">Anéis</p>
+        <ul class="dias">${anel('Núcleo', 'até 2 km da loja', 60, 0)}${anel('Expansão', 'de 2 a 3 km', 40, 1)}</ul>
+        ${linha('i-compass', 'O núcleo é onde o pedido chega mais rápido: fica com a maior parte. A conta é do sistema; com a conta de anúncios (R6), os anéis passam a seguir o público estimado pela Meta.')}
+        <p class="p45-tit">Horários</p>
+        <ul class="dias">
+          <li><span class="dia">Dias fortes</span><span><b>sexta e sábado:</b> ${n('67%', doRegem)} dos pedidos.</span></li>
+          <li><span class="dia">Horário</span><span><b>Das 19h às 23h:</b> ${n('86%', doRegem)} dos pedidos. A verba de pedido começa às 18h, 1 hora antes.</span></li>
+        </ul>
+        ${linha('i-clock', 'Os horários saem dos pedidos da própria loja nas 4 semanas completas até ontem (Sua região › A demanda da loja).')}
+      </div>
+      <div class="p45-loja">
+        <p class="p45-tit">Mister Burgers Méier</p>
+        <p class="p45-sub">Bairro Méier, Rio de Janeiro · entrega até 2 km · ${moeda(meta[2] + google[2], 0)} por mês nesta loja</p>
+        <p class="p45-tit">Anéis</p>
+        <ul class="dias">${anel('Núcleo', 'até 2 km da loja', 100, 2)}</ul>
+        ${linha('i-compass', 'O raio de entrega cabe no núcleo: a verba da loja fica toda nele. A conta é do sistema; com a conta de anúncios (R6), os anéis passam a seguir o público estimado pela Meta.')}
+        <p class="p45-tit">Horários</p>
+        <ul class="dias">
+          <li><span class="dia">Do setor</span><span><b>O jantar, de sexta, sábado e domingo, das 18h às 22h.</b> A verba de pedido começa às 17h. É a referência do setor (iFood, imprensa), não um número da loja.</span></li>
+        </ul>
+        ${linha('i-clock', 'A loja ainda não tem 20 pedidos nas 4 semanas pelo Regem: vale a referência do setor até lá.')}
+      </div>
+      ${linha('i-info', 'Nada é executado por aqui: a campanha com raio nasce pausada e com a sua aprovação numa próxima entrega.')}
+    </div>`;
+}
+
 /* ---------- os três tipos de plano do Estrategista (I11) ---------- */
 const DEF = {
   trimestre: {
@@ -3005,7 +3068,8 @@ const DEF = {
           ['Dezembro', 'Natal e Réveillon: avisar os horários com antecedência e destacar os combos para dividir.'],
         ])}</div>
         <div class="secao"><p class="rotulo-marca">Verba por canal, por mês</p>${tabela}${linha('i-info', `Hoje: o gasto de ${P7D} levado para 30 dias. Mudar a verba é com quem cuida das campanhas: nada muda por aqui.`)}</div>
-        <div class="secao"><p class="rotulo-marca">Calendário comercial</p>${listaDias(CALENDARIO.map(([d, sem, o]) => [`${d} · ${sem.slice(0, 3)}`, esc(o)]))}${linha('i-calendar', 'As datas vêm da tabela de feriados e datas do varejo do Liame, não da memória da IA.')}</div>`;
+        <div class="secao"><p class="rotulo-marca">Calendário comercial</p>${listaDias(CALENDARIO.map(([d, sem, o]) => [`${d} · ${sem.slice(0, 3)}`, esc(o)]))}${linha('i-calendar', 'As datas vêm da tabela de feriados e datas do varejo do Liame, não da memória da IA.')}</div>
+        ${p8.midia ? midiaPorRegiao(pl, n) : ''}`;
     },
     riscoTxt(pl) {
       const d = this.difTotal(pl);
@@ -3298,10 +3362,10 @@ function desenharP8() {
   else return;
   sincLinks();
 }
-const SEL_DO_ESTADO = { 'plano-trimestre': 'trimestre', 'plano-trimestre-verba': 'trimestre', 'plano-trimestre-aprovado': 'trimestre', 'plano-pauta': 'pauta' };
+const SEL_DO_ESTADO = { 'plano-trimestre': 'trimestre', 'plano-trimestre-verba': 'trimestre', 'plano-trimestre-aprovado': 'trimestre', 'plano-trimestre-midia': 'trimestre', 'plano-pauta': 'pauta' };
 function definirP8(v, { focar = false } = {}) {
   if (!TODOS_P8[v]) v = 'resumo';
-  Object.assign(p8, { estado: v, resumo: 'normal', pagina: null, planos: planosBase(), cupom: { estado: 'pendente', motivo: '' }, sel: SEL_DO_ESTADO[v] || 'promo', mostraDetalhe: false, ui: uiBase() });
+  Object.assign(p8, { estado: v, resumo: 'normal', pagina: null, planos: planosBase(), cupom: { estado: 'pendente', motivo: '' }, sel: SEL_DO_ESTADO[v] || 'promo', mostraDetalhe: false, ui: uiBase(), midia: v === 'plano-trimestre-midia' });
   const { trimestre, promo } = p8.planos, pro = v === 'resumo-pro';
   if (v.startsWith('resumo')) {
     p8.resumo = { 'resumo-em-dia': 'em-dia', 'resumo-sem-dados': 'sem-dados', 'resumo-sem-regem': 'sem-regem' }[v] || 'normal';

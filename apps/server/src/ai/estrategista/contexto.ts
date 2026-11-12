@@ -3,6 +3,7 @@ import { diaDaSemana, menosDias } from '../../results/fora-do-normal.js';
 import { A_SEMANA, contextoPermitido } from '../conversa/contexto.js';
 import type { OrigemDosNumeros } from '../conversa/fontes.js';
 import { dia } from '../registro/formatos.js';
+import { contasDaMidia, contextoDaMidia, fonteDosHorarios, type LojaDaMidia, permitidoDaMidia } from './midia.js';
 import { contasDaVerba, propostaDoPlano, reais, textosDoPlano } from './plano.js';
 import { JANELA_DO_TIPO, respostaDoConteudo } from './resposta.js';
 
@@ -44,7 +45,15 @@ export interface DadosDoPlano {
   pedido: PedidoDoPlano | null;
   /** Na nova análise: a versão atual, o que a pessoa pediu e de onde vieram os números dela. */
   anterior: { version: number; content: PlanContent; pedido: string; numbers: ExplanationNumber[] } | null;
+  /**
+   * O plano de mídia por região (R5), só no plano de 90 dias: as lojas no mapa com o bairro, o município, o raio e a
+   * demanda (nunca o endereço, D-RG-2). Nulo ou vazio sem a função `regiao` ligada ou sem loja no mapa.
+   */
+  regiao?: LojaDaMidia[] | null;
 }
+
+/** As lojas do plano de mídia, quando o tipo é o plano de 90 dias e há loja no mapa. */
+const lojasDaMidia = (d: Pick<DadosDoPlano, 'kind' | 'regiao'>): LojaDaMidia[] => (d.kind === 'noventa_dias' && d.regiao?.length ? d.regiao : []);
 
 const diasDe = (de: string, ate: string): string[] => {
   const dias: string[] = [];
@@ -96,6 +105,9 @@ export function contextoDoPlano(d: DadosDoPlano): string {
           .join('\n')}`
       : '- O calendário comercial do Liame não tem data neste período.',
     d.dossie ? `- Dossiê da marca (o que ela é, como fala, o que vende e o que nunca diz):\n${d.dossie}` : '- A marca ainda não preencheu o dossiê (Minha marca).',
+    ...(d.kind === 'noventa_dias'
+      ? [lojasDaMidia(d).length ? contextoDaMidia(lojasDaMidia(d)) : '- Plano de mídia por região: a marca não tem loja no mapa com a região ligada; `midia` vai nulo.']
+      : []),
     ...(d.anterior
       ? [
           `- Versão anterior deste plano (versão ${d.anterior.version}):\n${JSON.stringify(respostaDoConteudo(d.anterior.content))}`,
@@ -155,6 +167,7 @@ export function permitidoNoContexto(d: DadosDoPlano): unknown {
     verba_de_hoje: [reais(d.verbaDeHoje.meta), reais(d.verbaDeHoje.google)],
     pedido: d.pedido ? [d.pedido.title, d.pedido.detail, d.pedido.notes ?? '', d.pedido.due_on ? dia(d.pedido.due_on) : ''] : [],
     anterior: d.anterior ? [d.anterior.pedido, ...d.anterior.numbers.map((n) => n.value), ...textosDoPlano(d.anterior.content).map((x) => x.texto), ...propostaDoPlano(d.anterior.content)] : [],
+    midia: permitidoDaMidia(lojasDaMidia(d)),
   };
 }
 
@@ -182,6 +195,19 @@ export function origensDoPlano(d: DadosDoPlano, x: { leituras: LeituraDoPlano[];
         ]
       : []),
     ...(x.content.kind === 'noventa_dias' ? [{ rotulo: 'Liame · verba de hoje e a proposta, nas contas do sistema', valor: contasDaVerba(x.content.budget), comCaminho: false, ordem: 3 }] : []),
+    // O plano de mídia (R5): o dinheiro de cada anel, os horários da loja (com a fonte deles) e o raio e o funil do contexto.
+    ...(x.content.kind === 'noventa_dias' && x.content.media_plan
+      ? [
+          { rotulo: 'Liame · plano de mídia por região, nas contas do sistema (a verba proposta dividida pelas lojas e pelos anéis)', valor: contasDaMidia(x.content.media_plan), comCaminho: false, ordem: 3 },
+          ...x.content.media_plan.stores.map((s) => ({
+            rotulo: fonteDosHorarios(s.hours),
+            valor: [s.hours.days_share, s.hours.hours_share].filter((n) => n !== null).map((n) => `${n}%`),
+            comCaminho: false,
+            ordem: 3,
+          })),
+          { rotulo: 'Liame · Minha marca › Região (o raio de entrega, os anéis e o funil local)', valor: permitidoDaMidia(lojasDaMidia(d)), comCaminho: false, ordem: 4 },
+        ]
+      : []),
     ...(x.atrasadas.length
       ? [{ rotulo: 'Liame · fonte fora do dia, com a última leitura', valor: x.atrasadas.map((a) => `${a.platform ?? ''} ${a.name} ${a.last_read ?? ''}`), comCaminho: false, ordem: 4 }]
       : []),

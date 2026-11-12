@@ -43,6 +43,82 @@ export const PlanBudget = z.strictObject({
 });
 export type PlanBudget = z.infer<typeof PlanBudget>;
 
+// O plano de mídia por região (plano da região, R5; revisão P45 do P8; D-RG-26 a D-RG-31): dentro do plano de 90 dias,
+// só quando a marca tem loja no mapa e a função `regiao` ligada. O código faz os anéis do raio, o dinheiro de cada anel e
+// os horários (dos pedidos da loja ou, sem pedidos que bastem, da referência do setor); o Estrategista escolhe a parte de
+// cada etapa do funil, dentro das regras, e escreve o criativo de cada uma. Nada é executado: a campanha com raio é a R6.
+
+/** As etapas do funil local (plano da região §4.1), na ordem. A recompra fica fora da verba de mídia. */
+export const MEDIA_STAGES = ['reconhecimento', 'seguidores', 'cardapio_conversa', 'pedido'] as const;
+export const MediaStageKind = z.enum(MEDIA_STAGES);
+export type MediaStageKind = z.infer<typeof MediaStageKind>;
+const Parte = z.int().min(0).max(100);
+/** Quilômetros do raio, em passos de 0,5 (D-RG-15). */
+const Km = z.number().min(0).max(15).multipleOf(0.5);
+
+/** Um anel do raio de entrega: a parte da verba da loja e quanto isso dá em cada canal, por mês (contas do código). */
+export const MediaRing = z.strictObject({
+  ring: z.enum(['nucleo', 'expansao']),
+  from_km: Km,
+  to_km: Km,
+  share: Parte,
+  meta: Reais,
+  google: Reais,
+});
+export type MediaRing = z.infer<typeof MediaRing>;
+
+/**
+ * Os horários da loja (D-RG-29): os dias mais fortes e o bloco de até 4 horas com mais pedidos, dos pedidos confirmados
+ * da própria loja; sem pedidos que bastem, a referência do setor (imprensa), dita como tal. Os anúncios começam 1 hora
+ * antes do bloco.
+ */
+export const MediaHours = z.strictObject({
+  /** `loja` (os pedidos dela, pelo Regem) ou `setor` (a referência da imprensa, nunca como número da loja). */
+  source: z.enum(['loja', 'setor']),
+  /** Os dias mais fortes (0 = domingo), na ordem da semana a partir de segunda. */
+  days: z.array(z.int().min(0).max(6)).min(1).max(7),
+  /** O bloco de horas com mais pedidos: começa em `from` e acaba em `to` (pode passar da meia-noite). */
+  from: Hora,
+  to: Hora,
+  /** Quando os anúncios começam: 1 hora antes do bloco. */
+  ads_from: Hora,
+  /** A parte dos pedidos que caem nesses dias e nesse bloco; nulas na referência do setor. */
+  days_share: Parte.nullable(),
+  hours_share: Parte.nullable(),
+  /** Os dias dos pedidos lidos (as 4 semanas completas até ontem); nulos na referência do setor. */
+  orders_from: Dia.nullable(),
+  orders_to: Dia.nullable(),
+});
+export type MediaHours = z.infer<typeof MediaHours>;
+
+/** Uma loja no plano de mídia: o nome, o bairro e o município (nunca o endereço, D-RG-2), o raio, os anéis e os horários. */
+export const StoreMediaPlan = z.strictObject({
+  unit_id: z.uuid(),
+  store: Texto(120),
+  district: z.string().trim().min(1).max(120).nullable(),
+  city: z.string().trim().min(1).max(120).nullable(),
+  radius_km: Km,
+  rings: z.array(MediaRing).min(1).max(2),
+  hours: MediaHours,
+});
+export type StoreMediaPlan = z.infer<typeof StoreMediaPlan>;
+
+/** Uma etapa do funil: a parte da verba (as quatro somam 100) e o criativo que o Estrategista propõe para ela. */
+export const MediaStage = z.strictObject({
+  stage: MediaStageKind,
+  share: Parte,
+  creative: Texto(240),
+});
+export type MediaStage = z.infer<typeof MediaStage>;
+
+export const MediaPlan = z.strictObject({
+  /** Até 5 lojas no mapa; a verba proposta se divide igual entre elas. */
+  stores: z.array(StoreMediaPlan).min(1).max(5),
+  /** As quatro etapas, na ordem de `MEDIA_STAGES`. */
+  stages: z.array(MediaStage).length(4),
+});
+export type MediaPlan = z.infer<typeof MediaPlan>;
+
 export const NinetyDaysPlanContent = z.strictObject({
   kind: z.literal('noventa_dias'),
   ...Comum,
@@ -52,6 +128,8 @@ export const NinetyDaysPlanContent = z.strictObject({
   budget: PlanBudget,
   /** As datas do calendário comercial que o plano usa (dia e nome, como estão na tabela do Liame) e o que fazer em cada uma. */
   dates: z.array(z.strictObject({ day: Dia, name: Texto(120), what: Texto(240) })).max(12),
+  /** O plano de mídia por região (R5): só com loja no mapa e a função `regiao` ligada na marca. */
+  media_plan: MediaPlan.optional(),
 });
 
 export const WeekPlanContent = z.strictObject({

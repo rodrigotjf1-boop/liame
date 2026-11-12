@@ -23,6 +23,7 @@ import { DATABASE } from '../database/database.module.js';
 import { dossieParaOModelo, proibidasDaMarca } from '../marca/marca.service.js';
 import { nomesDaMarca, prazoDoPlano } from '../planos/prazo.js';
 import { nomesPoliticos, REGRAS_DE_TEXTO_VERSAO } from '../policy/texto.js';
+import { RegiaoService } from '../regiao/regiao.service.js';
 import { diaNoFuso, menosDias } from '../results/fora-do-normal.js';
 import { ResultsService } from '../results/results.service.js';
 
@@ -79,6 +80,7 @@ export class EstrategistaService {
     private readonly leituras: FerramentasDeLeitura,
     private readonly resultados: ResultsService,
     private readonly revisor: RevisorService,
+    private readonly regiao: RegiaoService,
   ) {}
 
   /** A falha da IA (do Estrategista ou do revisor): fora do ar conta como tentativa; o resto volta para a fila sem contar. */
@@ -157,7 +159,7 @@ export class EstrategistaService {
     }
 
     // ---- 3. conferência
-    const mapeado = conteudoDaResposta(item.kind, r.object, dados.verbaDeHoje);
+    const mapeado = conteudoDaResposta(item.kind, r.object, dados.verbaDeHoje, dados.regiao ?? null);
     if (!mapeado.ok) {
       this.logger.warn(`plano do Estrategista fora do formato (${mapeado.detalhe.join(' | ')}); uso ${r.usageId}`);
       await this.anotarRecusa(item, r.usageId, 'formato');
@@ -167,7 +169,8 @@ export class EstrategistaService {
     const velhas = leituras.filter((l) => foraDoDia(l.ferramenta, l.valor).length > 0);
     const emDia = leituras.filter((l) => !velhas.includes(l));
     const atrasadas = semRepetir(velhas.flatMap((l) => foraDoDia(l.ferramenta, l.valor)));
-    const nomes = [...new Set([dados.marca.nome, ...leituras.flatMap((l) => nomesDaLeitura(l.valor))])];
+    // O nome das lojas do plano de mídia também é dado da empresa (pode trazer número: "Loja 2").
+    const nomes = [...new Set([dados.marca.nome, ...(dados.regiao ?? []).map((l) => l.nome), ...leituras.flatMap((l) => nomesDaLeitura(l.valor))])];
     const recusa = conferirPlano(content, {
       hoje: dados.hoje,
       calendario: dados.calendario,
@@ -271,6 +274,8 @@ export class EstrategistaService {
         semana,
         pedido,
         anterior,
+        // O plano de mídia por região (R5): só no plano de 90 dias, com a função `regiao` ligada na marca.
+        regiao: item.kind === 'noventa_dias' ? await this.regiao.lojasParaOPlano(item.tenantId, marca.id, agora) : null,
       },
       pediu,
       ativo: await funcionarioAtivo(tx, { tenantId: item.tenantId, brandId: marca.id, agentKey: ESTRATEGISTA.key, ativoPorPadrao: ESTRATEGISTA.ativoPorPadrao }),
