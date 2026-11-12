@@ -11,6 +11,7 @@ import {
   operacoesDaCriacao,
 } from '../campanhas/campanha-google-plano.js';
 import { FotoNaoServe, imagensDoGoogle } from '../campanhas/imagens-do-google.js';
+import { contaConectada } from '../connections/conectada.js';
 import type { CredencialGuardada } from '../connections/oauth.js';
 import { type ClienteConector, ErroConector } from '../connectors/cliente-http.js';
 import { soDigitos } from '../connectors/validacao.js';
@@ -39,7 +40,7 @@ import type { ResourceState } from './tools.js';
 
 const PROVIDER = 'google_ads';
 const FORA_DO_AMBIENTE = 'A criação de campanha no Google não está disponível neste ambiente: nada foi criado no Google.';
-const SUMIU = 'Esta campanha nova não está mais aqui (a peça, a foto, a logo ou a conta saiu da marca).';
+const SUMIU = 'Esta campanha nova não está mais aqui (a foto, a logo ou o ponto da loja saiu da marca, ou a conta do Google Ads foi desconectada): nada foi criado no Google.';
 const IMAGEM_SAIU = 'A foto ou a logo desta campanha não está mais no Liame: nada foi criado no Google. Escolha outra foto e peça de novo.';
 const IMAGEM_NAO_ABRE = 'A foto ou a logo desta campanha não abriu para o recorte: nada foi criado no Google. Escolha outra foto e peça de novo.';
 const SEM_IDS = 'O Google não devolveu o que criou: confira as campanhas da conta no Google Ads antes de pedir de novo.';
@@ -82,7 +83,8 @@ const recusado = (mensagem: string): ApplyResult => ({ ok: false, reason: 'recus
 
 /**
  * A campanha nova do Google (sob a RLS da empresa) e o estado dela, como o pedido guarda. Nulo quando ela não é desta
- * empresa e desta conta, quando a conta foi desconectada, ou quando a foto, a logo ou o ponto da loja não estão mais lá.
+ * empresa e desta conta, quando a conta não está conectada (`contaConectada`: tirada da marca, ou recusada pelo Google),
+ * ou quando a foto, a logo ou o ponto da loja não estão mais lá.
  */
 export async function lerCampanhaGoogle(tx: Tx, ref: ResourceRef, travar = false): Promise<{ linha: Linha; estado: EstadoDaCampanhaNovaNoGoogle } | null> {
   const id = campanhaGoogleDoRecurso(ref.resourceId);
@@ -129,7 +131,7 @@ export async function lerCampanhaGoogle(tx: Tx, ref: ResourceRef, travar = false
       join liame.brand_photo m on m.id = c.media_id and m.tenant_id = c.tenant_id and m.status = 'pronta' and m.removed_at is null
       join liame.brand b on b.id = c.brand_id and b.tenant_id = c.tenant_id
       join liame.unit u on u.id = c.unit_id and u.tenant_id = c.tenant_id
-      join liame.connected_account a on a.id = c.ad_account_id and a.tenant_id = c.tenant_id and a.provider = ${PROVIDER} and a.disconnected_at is null
+      join liame.connected_account a on a.id = c.ad_account_id and a.tenant_id = c.tenant_id and a.provider = ${PROVIDER} and ${contaConectada('a')}
       join liame.organization o on o.id = c.tenant_id
      where c.id = ${id} and c.tenant_id = ${ref.tenantId} and c.ad_account_id = ${ref.accountId}
      ${travar ? sql`for update of c` : sql``}`);
