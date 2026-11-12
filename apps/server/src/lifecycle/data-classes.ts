@@ -133,6 +133,8 @@ export const DATA_CLASSES: Record<string, TableClassification> = {
   // conta desligada leva junto o que foi lido dela. O nome dos lugares do Google é dado público, do produto.
   ad_hour_daily: { class: 'CONFIDENTIAL', retention: 'com a conta conectada (as 4 semanas mais novas de cada conta de anúncio)' },
   ad_city_daily: { class: 'CONFIDENTIAL', retention: 'com a conta conectada (as 4 semanas mais novas de cada conta de anúncio)' },
+  social_audience: { class: 'CONFIDENTIAL', retention: 'com a conta conectada (a última leitura de cada Instagram e Página)' },
+  social_follower_daily: { class: 'CONFIDENTIAL', retention: 'com a conta conectada (400 dias por conta)' },
   region_geo_target: { class: 'PUBLIC', retention: 'do produto (o nome dos lugares do Google Ads, públicos)' },
   // Os pedidos da loja por bairro (plano da região, R3, parte 2; migration 0148): as somas que o Regem manda (bairro com
   // o mínimo de pedidos dele; o resto somado em "outros"), sem cliente, rua, número nem CEP; a leitura substitui a anterior.

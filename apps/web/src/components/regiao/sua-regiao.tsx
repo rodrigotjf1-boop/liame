@@ -13,6 +13,7 @@ import { BairrosDosPedidos } from './bairros-dos-pedidos';
 import { DemandaDaLoja } from './demanda-da-loja';
 import { GavetaFontes } from './gaveta-fontes';
 import { MidiaNaRegiao } from './midia-na-regiao';
+import { PublicoNasRedes } from './publico-nas-redes';
 import { Numero } from './numero';
 import {
   comparaDensidade,
@@ -469,6 +470,7 @@ export function SuaRegiao({ brandId, lojas }: { brandId: string; lojas: StoreLoc
           <DemandaDaLoja r={r} lojaNome={loja.unit_name} ids={ids} mostraPro={mostraPro} />
           <BairrosDosPedidos r={r} ids={ids} mostraPro={mostraPro} />
           <MidiaNaRegiao r={r} ids={ids} mostraPro={mostraPro} />
+          <PublicoNasRedes r={r} ids={ids} mostraPro={mostraPro} />
 
           {c?.pix && (
             <section className="rg-grupo" aria-labelledby={`${ids}-pulso`}>

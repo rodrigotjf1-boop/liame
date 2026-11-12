@@ -38,6 +38,7 @@ import { diaNoFuso } from '../results/fora-do-normal.js';
 import { BAIRROS_NA_SECAO, type BairroParaComparar, compararBairros } from './bairros.js';
 import { type DemandaDaLoja, demandaDaLoja, janelas, type LinhaDaDemanda } from './demanda.js';
 import { blocoMaisForte, CIDADES_NA_SECAO, DATASET_DA_MIDIA, janelaDaMidia, porcentoDe, somaDoBloco } from './midia-paga.js';
+import { type LinhaDoPublico, retratoDoPublico } from './publico-nas-redes.js';
 import { type DataGuardada, datasDaSemana, diaEmBrasilia, REFERENCIAS_DO_SETOR } from './semana.js';
 import { DIAS_DA_PREVISAO } from './tempo.js';
 import {
@@ -394,6 +395,8 @@ export class RegiaoService {
       paid_media: null,
       order_districts_status: 'sem_endereco',
       order_districts: null,
+      social_audience_status: 'sem_endereco',
+      social_audience: null,
       generated_at: agora.toISOString(),
     };
     if (!(await this.ligada(auth, brandId))) {
@@ -520,6 +523,8 @@ export class RegiaoService {
     const midia = await this.midiaNaRegiao(auth, brandId, unitId, agora, demanda.demanda);
     // Os pedidos por bairro (R3, parte 2): o que o Regem manda somado, com a gente do Censo; a mesma régua da demanda.
     const bairrosDosPedidos = await this.bairrosDosPedidos(auth.permissions.has('vendas.ver'), brandId, unitId, cidade, loja.address_city, areas);
+    // O público nas redes (R4, parte 3): os números da conta do Instagram e da Página; não são de venda (D-RG-42).
+    const publico = await this.publicoNasRedes(brandId, loja.address_city);
 
     const noMunicipio = (indicador: string) => numeroMaisNovo(numeros, indicador, 'municipio', cidade);
     const populacao = noMunicipio('populacao');
@@ -589,6 +594,8 @@ export class RegiaoService {
       paid_media: midia.midia,
       order_districts_status: bairrosDosPedidos.status,
       order_districts: bairrosDosPedidos.bairros,
+      social_audience_status: publico.status,
+      social_audience: publico.publico,
       sources: fontes,
       generated_at: agora.toISOString(),
     };
@@ -757,6 +764,27 @@ export class RegiaoService {
         })),
       },
     };
+  }
+
+  /**
+   * O público nas redes (R4, parte 3; D-RG-40 a D-RG-43): a última leitura de cada Instagram e Página conectados à marca
+   * (a rotina `regiao-publico`), com os seguidores da série do Liame no começo da janela. Quem vê Sua região vê: são
+   * números públicos de perfil, somados, não de venda (D-RG-42).
+   */
+  private async publicoNasRedes(brandId: string, municipio: string | null): Promise<{ status: string; publico: RegionOverviewResponse['social_audience'] }> {
+    const linhas = (
+      await currentTx().execute<LinhaDoPublico>(sql`
+        select a.provider, a.name, p.day_from::text as day_from, p.day_to::text as day_to, p.followers::text as followers,
+               p.follows::text as follows, p.unfollows::text as unfollows, p.taps, p.page_views::text as page_views, p.cities,
+               p.cities_read_at, p.read_at,
+               (select f.followers::text from liame.social_follower_daily f
+                 where f.connected_account_id = a.id and f.day <= p.day_from order by f.day desc limit 1) as base
+          from liame.connected_account a
+          left join liame.social_audience p on p.connected_account_id = a.id
+         where a.brand_id = ${brandId} and a.provider in ('instagram', 'facebook_page') and ${contaConectada('a')}
+         order by a.provider, p.read_at desc nulls last, a.created_at, a.id`)
+    ).rows;
+    return retratoDoPublico(linhas, municipio);
   }
 
   /**

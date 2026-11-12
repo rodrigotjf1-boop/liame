@@ -416,6 +416,51 @@ export const RegionOverviewResponse = z.strictObject({
       delivery_orders: z.number().int(),
     })
     .nullable(),
+  /**
+   * O público nas redes (R4, parte 3; D-RG-40 a D-RG-43): `disponivel`, `sem_endereco`, `sem_redes` (a marca sem o
+   * Instagram nem a Página conectados) ou `lendo` (conectados, a primeira leitura ainda não veio). Não são números de
+   * venda: quem vê Sua região vê (D-RG-42).
+   */
+  social_audience_status: Slug,
+  /**
+   * Os números da conta do Instagram e da Página da marca, das 4 semanas completas até ontem da última leitura (uma por
+   * dia, a rotina `regiao-publico`): os seguidores agora, quem seguiu e quem deixou de seguir (no Instagram, só a partir
+   * de 100 seguidores), a mudança na janela (quem seguiu menos quem saiu; sem isso, pela série que o Liame guarda), os
+   * toques nos botões do perfil (Instagram) e as visitas (Página). Do Instagram, as cidades dos seguidores (as 5 maiores,
+   * relidas uma vez por semana; `followers_pct` sobre os seguidores; `store_city`: o município da loja); `cities_status`:
+   * `disponivel`, `poucos_seguidores` (menos de 100) ou `lendo`. A Página não informa mais a cidade (a Meta tirou em
+   * 2025). Cada rede nula quando não está conectada. Nula fora de `disponivel`.
+   */
+  social_audience: z
+    .strictObject({
+      from: z.string(),
+      to: z.string(),
+      instagram: z
+        .strictObject({
+          name: z.string(),
+          read_at: z.string(),
+          followers: z.number().int().nullable(),
+          follows: z.number().int().nullable(),
+          unfollows: z.number().int().nullable(),
+          followers_change: z.number().int().nullable(),
+          taps: z.strictObject({ total: z.number().int(), directions: z.number().int(), call: z.number().int(), message: z.number().int(), other: z.number().int() }).nullable(),
+          cities_status: Slug,
+          cities: z.array(z.strictObject({ name: z.string(), full_name: z.string(), followers: z.number().int(), followers_pct: z.number().int().nullable(), store_city: z.boolean() })),
+        })
+        .nullable(),
+      page: z
+        .strictObject({
+          name: z.string(),
+          read_at: z.string(),
+          followers: z.number().int().nullable(),
+          follows: z.number().int().nullable(),
+          unfollows: z.number().int().nullable(),
+          followers_change: z.number().int().nullable(),
+          views: z.number().int().nullable(),
+        })
+        .nullable(),
+    })
+    .nullable(),
   sources: z.array(RegionSourceStatus),
   generated_at: z.iso.datetime(),
 });
