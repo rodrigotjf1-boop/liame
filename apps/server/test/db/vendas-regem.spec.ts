@@ -275,9 +275,12 @@ describe.skipIf(!hasDb)('conector do Regem: vendas da loja (A2.5 · F4)', () => 
   });
 
   it('nenhum telefone em claro no banco: nem pedido, nem ponto de contato, nem auditoria (A2.5-7)', async () => {
+    // As colunas de resumo (`*_hash`, um SHA-256 em hexadecimal) ficam de fora: nunca guardam telefone, e no banco do CI,
+    // com milhares de resumos, um deles às vezes traz por acaso uma das sequências de dígitos procuradas (ERR-218).
     const colunas = await ownerQuery<{ tabela: string; coluna: string }>(
       `select c.table_name as tabela, c.column_name as coluna from information_schema.columns c
-        where c.table_schema = 'liame' and c.data_type in ('text', 'jsonb', 'character varying', 'ARRAY')`,
+        where c.table_schema = 'liame' and c.data_type in ('text', 'jsonb', 'character varying', 'ARRAY')
+          and c.column_name not like '%\\_hash'`,
     );
     // Uma consulta só, com todas as colunas de texto do schema (os telefones das respostas gravadas, com e sem o nono dígito).
     const padrao = '(999998888|99998888|988887777|98887777|977776666|97777666)';
