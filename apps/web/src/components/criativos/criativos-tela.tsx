@@ -143,8 +143,11 @@ export function CriativosTela() {
   }, []);
 
   /** Abre a gaveta da campanha nova com as fotos e os vídeos prontos de Fotos (sem eles, a gaveta diz por quê). */
+  const [abrindoCampanha, setAbrindoCampanha] = useState(false);
   const abrirCampanha = useCallback(async (p: AdPieceResponse, brandId: string) => {
+    setAbrindoCampanha(true);
     const r = await chamar(() => api.GET('/v1/brand-photos', { params: { query: { brand_id: brandId } } }));
+    setAbrindoCampanha(false);
     setMontando({ peca: p, midias: r.ok && r.data.enabled ? r.data.items : null });
   }, []);
 
@@ -466,6 +469,7 @@ export function CriativosTela() {
             ? {
                 atual: campanhas.by_piece.find((x) => x.piece_id === detalhe.id) ?? null,
                 podePedir: podeOperar,
+                abrindo: abrindoCampanha,
                 aoUsar: (p) => disparar(abrirCampanha(p, carga.marca)),
               }
             : null
@@ -517,6 +521,7 @@ export function CriativosTela() {
           opcoes={campanhas}
           midias={montando.midias}
           hoje={new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Sao_Paulo', year: 'numeric', month: '2-digit', day: '2-digit' }).format(agora)}
+          reserva={titulo}
           aoFechar={() => setMontando(null)}
           aoCriado={() => disparar(ler(carga.marca, true))}
         />

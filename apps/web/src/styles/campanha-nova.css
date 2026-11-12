@@ -6,7 +6,14 @@
 .cn-gaveta { width: min(880px, 100vw); }
 @media (max-width: 880px) { .cn-gaveta { border-width: 0; border-radius: 0; } }
 .cn-gaveta .dialogo-corpo { container: cng / inline-size; }
-.cn-gaveta h2:focus { outline: none; }
+.cn-gaveta h2:focus, .cn-bloqueio:focus { outline: none; }
+/* o pedido que não pode sair (a conta, a Página, a loja sem o endereço): o botão parece desligado e o clique leva ao aviso */
+.cn-gaveta .btn[aria-disabled="true"] { opacity: .62; cursor: not-allowed; }
+/* "Quem assina" e "Para onde leva": o rótulo não toma a largura do valor no estreito */
+.cn-destino { grid-template-columns: fit-content(38%) minmax(0, 1fr); }
+.cn-destino dt { overflow-wrap: anywhere; }
+.cn-op video { display: block; width: 100%; aspect-ratio: 1 / 1; object-fit: cover; }
+.cn-midia video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
 .cn-gaveta fieldset.campo { min-width: 0; margin: 0; padding: 0; border: 0; }
 .cn-gaveta .campo > legend { margin-bottom: var(--sp-2); font-weight: 600; }
 .cn-grade { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--sp-5); min-width: 0; }
@@ -63,4 +70,7 @@
 .cn-passos small { display: block; color: var(--text-muted); font-size: var(--text-xs); }
 .cn-ap-previa { display: grid; gap: var(--sp-2); justify-items: center; min-width: 0; }
 .cn-gerenciador { display: grid; gap: var(--sp-2); justify-items: start; }
-.cn-gerenciador .btn { max-width: 100%; height: auto; white-space: normal; text-align: left; }
+.cn-acoes { display: flex; flex-wrap: wrap; gap: var(--sp-2); min-width: 0; max-width: 100%; }
+/* os botões com texto longo ("Abrir no Gerenciador de Anúncios") quebram a linha no estreito */
+.cn-gerenciador .btn, .cn-acoes .btn { max-width: 100%; height: auto; white-space: normal; text-align: left; }
+.cn-na-peca .btn[aria-disabled="true"] { opacity: .62; cursor: progress; }

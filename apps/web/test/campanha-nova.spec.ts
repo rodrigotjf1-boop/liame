@@ -6,6 +6,7 @@ import {
   efeitoDaCampanha,
   erroDoPedido,
   idDaCampanhaNova,
+  linkDoGerenciador,
   passosDaCriacao,
   raiosDaLoja,
   situacaoDaCampanha,
@@ -80,13 +81,21 @@ describe('campanha nova: a situação e o passo a passo', () => {
   it('criando com vídeo: a campanha e o conjunto feitos, o vídeo agora, o resto pendente', () => {
     expect(passosDaCriacao(c(), true).map((p) => `${p.rotulo}:${p.estado}`)).toEqual(['A campanha:feito', 'O conjunto:feito', 'O vídeo:agora', 'O criativo:pendente', 'O anúncio:pendente']);
     expect(passosDaCriacao(c(), true)[2]!.detalhe).toBe('a Meta prepara o vídeo (até 15 minutos)');
+    // Cada um com a sua concordância.
+    expect(passosDaCriacao(c(), true).slice(0, 2).map((p) => p.detalhe)).toEqual(['criada na Meta, pausada', 'criado na Meta, pausado']);
     expect(passosDaCriacao(c({ status: 'nao_criada' }), false).map((p) => p.estado)).toEqual(['feito', 'feito', 'pendente', 'pendente']);
   });
 
   it('a etiqueta de cada situação', () => {
-    expect(situacaoDaCampanha({ status: 'criada', active: false })).toEqual({ rotulo: 'Criada e pausada', tom: 'pausado' });
+    // Pausada não é perigo: a etiqueta neutra, como no P42.
+    expect(situacaoDaCampanha({ status: 'criada', active: false })).toEqual({ rotulo: 'Criada e pausada', tom: 'neutro' });
     expect(situacaoDaCampanha({ status: 'criada', active: true })).toEqual({ rotulo: 'Ativa na Meta', tom: 'concluido' });
     expect(situacaoDaCampanha({ status: 'nao_criada', active: false }).tom).toBe('perigo');
+  });
+
+  it('o link do Gerenciador abre na conta da campanha (sem o prefixo act_)', () => {
+    expect(linkDoGerenciador('120210', 'act_9876')).toBe('https://adsmanager.facebook.com/adsmanager/manage/campaigns?act=9876&selected_campaign_ids=120210');
+    expect(linkDoGerenciador('120210', null)).toBe('https://adsmanager.facebook.com/adsmanager/manage/campaigns?selected_campaign_ids=120210');
   });
 
   it('o recurso do pedido aponta para a campanha nova', () => {

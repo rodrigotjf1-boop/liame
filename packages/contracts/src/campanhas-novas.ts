@@ -67,8 +67,9 @@ export const NewCampaignResponse = z.strictObject({
   activated_at: z.iso.datetime({ offset: true }).nullable(),
   /** O pedido de ativar (ou a volta, pausar) que ainda espera a decisão ou a execução, se houver. */
   pending_action_id: z.uuid().nullable(),
-  /** O que já existe na Meta (os ids), na ordem em que o Liame cria. */
+  /** O que já existe na Meta (os ids), na ordem em que o Liame cria; e a conta de anúncios (para o link do Gerenciador). */
   meta: z.strictObject({
+    account_id: z.string().nullable(),
     campaign_id: z.string().nullable(),
     adset_id: z.string().nullable(),
     video_id: z.string().nullable(),

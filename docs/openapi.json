@@ -125298,6 +125298,12 @@
                     "meta": {
                       "type": "object",
                       "properties": {
+                        "account_id": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
                         "campaign_id": {
                           "type": [
                             "string",
@@ -125330,6 +125336,7 @@
                         }
                       },
                       "required": [
+                        "account_id",
                         "campaign_id",
                         "adset_id",
                         "video_id",
@@ -125835,6 +125842,12 @@
                     "meta": {
                       "type": "object",
                       "properties": {
+                        "account_id": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
                         "campaign_id": {
                           "type": [
                             "string",
@@ -125867,6 +125880,7 @@
                         }
                       },
                       "required": [
+                        "account_id",
                         "campaign_id",
                         "adset_id",
                         "video_id",
@@ -126799,6 +126813,12 @@
                     "meta": {
                       "type": "object",
                       "properties": {
+                        "account_id": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
                         "campaign_id": {
                           "type": [
                             "string",
@@ -126831,6 +126851,7 @@
                         }
                       },
                       "required": [
+                        "account_id",
                         "campaign_id",
                         "adset_id",
                         "video_id",

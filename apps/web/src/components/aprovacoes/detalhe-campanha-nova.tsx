@@ -1,6 +1,7 @@
 'use client';
 
-import type { ActionResponse, AdPieceResponse, BrandPhoto, NewCampaignResponse } from '@liame/contracts';
+import type { ActionResponse, AdPieceResponse, BrandPhoto, NewCampaignOptionsResponse, NewCampaignResponse } from '@liame/contracts';
+import Link from 'next/link';
 import { type RefObject, useCallback, useEffect, useId, useState } from 'react';
 import { Icone } from '@/components/ui/icone';
 import { PreviaDoAnuncio } from '@/components/criativos/gaveta-campanha-nova';
@@ -10,11 +11,12 @@ import type { Prova } from '@/lib/chave-de-acesso';
 import { disparar } from '@/lib/disparar';
 import { reaisDeMicros } from '@/lib/formato';
 import { BarraDaDecisao, type Decisao } from './barra-da-decisao';
-import { cabecalhoDe, type Grupo, MOTIVOS_DA_RECUSA, politicaDe, prazoDe, resultadoDe } from './textos';
+import { cabecalhoDe, type Grupo, MOTIVOS_DA_RECUSA, politicaDe, prazoDe, resultadoDe, riscoDe, ROTULO_RISCO } from './textos';
 
 // O pedido da campanha nova em Aprovações (A4, X5, parte 5; P42 aprovado em 11/11/2026; D-A4-44 e D-A4-45): criar
 // pausada (a prévia do anúncio, quem assina, o raio e a verba), a criação passo a passo, criada e pausada (o que existe
-// na Meta e "Pedir para ativar"), não criada (o motivo da Meta) e ativar (os limites; a volta é pausar).
+// na Meta e "Pedir para ativar"), não criada (o motivo da Meta) e ativar (os limites; a volta é pausar). A situação e o
+// que fazer vêm antes da prévia: no estreito, a prévia ocupa a tela.
 
 type Props = {
   acao: ActionResponse;
@@ -35,11 +37,15 @@ type Props = {
   aoPedirAtivar: (campanha: string) => Promise<Problema | null>;
 };
 
-type Lida = { estado: 'lendo' } | { estado: 'ok'; c: NewCampaignResponse; peca: AdPieceResponse | null } | { estado: 'erro'; problema: Problema };
+type Lida =
+  | { estado: 'lendo' }
+  | { estado: 'ok'; c: NewCampaignResponse; peca: AdPieceResponse | null; quem: Pick<NewCampaignOptionsResponse, 'page' | 'instagram'> | null }
+  | { estado: 'erro'; problema: Problema };
 
 const MOTIVOS = MOTIVOS_DA_RECUSA.map((m) => ({ valor: m, rotulo: m }));
 /** Enquanto a campanha está sendo criada, a tela pergunta de novo neste intervalo. */
 const ESPERA_MS = 10_000;
+const dataEscrita = (d: string) => d.split('-').reverse().join('/');
 
 export function DetalheCampanhaNova({ acao, grupo, agora, podeDecidir, podeOperar, temApp, temChave = false, fotos, titulo, campoCodigo, aoVoltar, aoAprovar, aoRecusar, aoPedirAtivar }: Props) {
   const ids = useId();
@@ -56,8 +62,12 @@ export function DetalheCampanhaNova({ acao, grupo, agora, podeDecidir, podeOpera
     if (!id) return;
     const r = await chamar(() => api.GET('/v1/new-campaigns/{id}', { params: { path: { id } } }));
     if (!r.ok) return setLida({ estado: 'erro', problema: r.problema });
-    const p = await chamar(() => api.GET('/v1/ad-pieces/{id}', { params: { path: { id: r.data.piece_id } } }));
-    setLida({ estado: 'ok', c: r.data, peca: p.ok ? p.data : null });
+    // A peça (o texto da prévia) e quem assina (a Página e o Instagram): sem eles, a prévia só fica mais pobre.
+    const [p, o] = await Promise.all([
+      chamar(() => api.GET('/v1/ad-pieces/{id}', { params: { path: { id: r.data.piece_id } } })),
+      chamar(() => api.GET('/v1/new-campaigns/options', { params: { query: { brand_id: r.data.brand_id } } })),
+    ]);
+    setLida({ estado: 'ok', c: r.data, peca: p.ok ? p.data : null, quem: o.ok ? { page: o.data.page, instagram: o.data.instagram } : null });
   }, [id]);
 
   useEffect(() => {
@@ -151,27 +161,18 @@ export function DetalheCampanhaNova({ acao, grupo, agora, podeDecidir, podeOpera
   const passos = passosDaCriacao(c, video);
   const pendente = grupo === 'pendente';
   const verba = reaisDeMicros(BigInt(c.daily_budget_micros));
-  const resultado = pendente ? null : resultadoDe(acao);
-
-  const resumo = (
-    <dl className="pd-agora">
-      <dt>Objetivo</dt>
-      <dd>
-        {OBJETIVOS[c.objective].rotulo}
-        <small>botão “{OBJETIVOS[c.objective].botao}”</small>
-      </dd>
-      <dt>Quem vê</dt>
-      <dd>
-        {kmEscrito(c.radius_km)} em volta da loja
-        <small>pessoas de 18 anos ou mais; o público ampliado da Meta fica desligado</small>
-      </dd>
-      <dt>Verba diária</dt>
-      <dd>
-        {verba}
-        <small>{c.end_date ? `até ${c.end_date.split('-').reverse().join('/')}` : 'sem data de fim'}</small>
-      </dd>
-    </dl>
-  );
+  const naoCriada = c.status === 'nao_criada';
+  // A campanha não criada já diz o motivo no aviso: o resultado do pedido repetiria o mesmo texto.
+  const resultado = pendente || naoCriada ? null : resultadoDe(acao);
+  const risco = riscoDe(acao);
+  const assina = aba === 'instagram' ? (lida.quem?.instagram?.name ?? lida.quem?.page?.name ?? '') : (lida.quem?.page?.name ?? '');
+  const gerenciador = c.meta.campaign_id ? (
+    <a className="btn btn--sm" href={linkDoGerenciador(c.meta.campaign_id, c.meta.account_id)} target="_blank" rel="noopener noreferrer">
+      <Icone nome="external" pequeno />
+      Abrir no Gerenciador de Anúncios
+      <span className="sr-only"> (abre em outra aba)</span>
+    </a>
+  ) : null;
 
   return (
     <>
@@ -179,6 +180,7 @@ export function DetalheCampanhaNova({ acao, grupo, agora, podeDecidir, podeOpera
       {cabecalho}
       <div className="det-chips">
         <span className={`st st--${situacao.tom}`}>{situacao.rotulo}</span>
+        {pendente && <span className={`risco risco--${risco}`}>{ROTULO_RISCO[risco]}</span>}
       </div>
 
       {criar && pendente && (
@@ -193,40 +195,44 @@ export function DetalheCampanhaNova({ acao, grupo, agora, podeDecidir, podeOpera
           <p className="lite-frase lite-frase--grande">
             Ativada, a campanha gasta <b>até {verba} por dia</b>, depois que a Meta revisar o anúncio. A volta é pausar.
           </p>
+        </div>
+      )}
+      {pendente && (
+        <div className="secao">
+          <p className="rotulo-marca">Risco e limites</p>
           <div className="politica">
             <Icone nome="shield" />
-            <span>{politicaDe(acao)}</span>
+            <span>
+              <b className={`risco risco--${risco}`}>{ROTULO_RISCO[risco]}.</b> {politicaDe(acao)}
+            </span>
+          </div>
+          <p className="nota">
+            <Icone nome="clock" />
+            <span>Prazo: {prazoDe(acao, agora)}. Se ninguém decidir, o pedido expira e nada é feito.</span>
+          </p>
+        </div>
+      )}
+
+      {naoCriada && (
+        <div className="secao">
+          <div className="pd-aviso pd-aviso--perigo" role="alert">
+            <Icone nome="alert-circle" />
+            <div>
+              <b>A campanha não foi criada</b>
+              {c.error && <span>{c.error}</span>}
+              <span>O que já foi criado na Meta ficou pausado: nada aparece para ninguém nem gasta. Para tentar de novo, peça de novo pela peça, em Criativos.</span>
+              <span className="cn-acoes">
+                <Link className="btn btn--sm" href={`/criativos?peca=${c.piece_id}`}>
+                  Abrir a peça em Criativos
+                </Link>
+                {gerenciador}
+              </span>
+            </div>
           </div>
         </div>
       )}
 
-      <div className="secao cn-ap-previa">
-        {lida.peca && (
-          <>
-            <div className="seg" role="group" aria-label="Ver como sai em">
-              {(['instagram', 'facebook'] as const).map((a) => (
-                <button key={a} type="button" aria-pressed={aba === a} onClick={() => setAba(a)}>
-                  {a === 'instagram' ? 'Instagram' : 'Facebook'}
-                </button>
-              ))}
-            </div>
-            <PreviaDoAnuncio peca={lida.peca} midia={midia} objetivo={c.objective} nome="" instagram={aba === 'instagram'} />
-          </>
-        )}
-        {!midia && (
-          <p className="nota">
-            <Icone nome="info" pequeno />
-            <span>A foto ou o vídeo da loja aparece aqui para quem vê as Fotos.</span>
-          </p>
-        )}
-      </div>
-
-      <div className="secao">
-        <p className="rotulo-marca">O que foi pedido</p>
-        {resumo}
-      </div>
-
-      {(c.status === 'criando' || c.status === 'criada' || c.status === 'nao_criada') && (
+      {(c.status === 'criando' || c.status === 'criada' || naoCriada) && (
         <div className="secao">
           <p className="rotulo-marca">Na Meta</p>
           <ul className="cn-passos">
@@ -249,25 +255,9 @@ export function DetalheCampanhaNova({ acao, grupo, agora, podeDecidir, podeOpera
         </div>
       )}
 
-      {c.status === 'nao_criada' && (
-        <div className="secao">
-          <div className="pd-aviso pd-aviso--perigo" role="alert">
-            <Icone nome="alert-circle" />
-            <div>
-              <b>A campanha não foi criada</b>
-              {c.error && <span>{c.error}</span>}
-              <span>O que já foi criado na Meta ficou pausado: nada aparece para ninguém nem gasta. Para tentar de novo, peça de novo pela peça, em Criativos.</span>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {c.status === 'criada' && c.meta.campaign_id && (
+      {c.status === 'criada' && (
         <div className="secao cn-gerenciador">
-          <a className="btn btn--sm" href={linkDoGerenciador(c.meta.campaign_id)} target="_blank" rel="noopener noreferrer">
-            <Icone nome="external" pequeno />
-            Abrir no Gerenciador de Anúncios
-          </a>
+          {gerenciador}
           {c.active ? (
             <p className="nota">
               <Icone nome="info" pequeno />
@@ -281,11 +271,13 @@ export function DetalheCampanhaNova({ acao, grupo, agora, podeDecidir, podeOpera
           ) : (
             podeOperar && (
               <>
-                <button className="btn btn--primary btn--sm" type="button" onClick={() => disparar(pedirAtivar(c))} disabled={ativando}>
+                <button className="btn btn--primary btn--sm" type="button" onClick={() => disparar(pedirAtivar(c))} disabled={ativando} aria-describedby={`${ids}-ativar-d`}>
                   <Icone nome="play" pequeno />
                   {ativando ? 'Pedindo…' : 'Pedir para ativar'}
                 </button>
-                <p className="campo-dica">Ativar é outro pedido, com o código do app, os limites da empresa e a verba do mês. A volta é pausar.</p>
+                <p className="campo-dica" id={`${ids}-ativar-d`}>
+                  Ativar é outro pedido, com o código do app, os limites da empresa e a verba do mês. A volta é pausar.
+                </p>
               </>
             )
           )}
@@ -306,25 +298,67 @@ export function DetalheCampanhaNova({ acao, grupo, agora, podeDecidir, podeOpera
         </div>
       )}
 
+      <div className="secao">
+        <p className="rotulo-marca">O que foi pedido</p>
+        <dl className="pd-agora cn-destino">
+          <dt>Objetivo</dt>
+          <dd>
+            {OBJETIVOS[c.objective].rotulo}
+            <small>botão “{OBJETIVOS[c.objective].botao}”</small>
+          </dd>
+          <dt>Quem vê</dt>
+          <dd>
+            {kmEscrito(c.radius_km)} em volta da loja
+            <small>pessoas de 18 anos ou mais; o público ampliado da Meta fica desligado</small>
+          </dd>
+          <dt>Verba diária</dt>
+          <dd>
+            {verba}
+            <small>{c.end_date ? `até ${dataEscrita(c.end_date)}` : 'sem data de fim'}</small>
+          </dd>
+          <dt>Quem assina</dt>
+          <dd>
+            {lida.quem?.page ? `Página ${lida.quem.page.name}` : 'a Página da marca'}
+            <small>{lida.quem?.instagram ? `no Instagram, ${lida.quem.instagram.name}` : 'no Instagram, em nome da Página'}</small>
+          </dd>
+        </dl>
+      </div>
+
+      <div className="secao cn-ap-previa">
+        <p className="rotulo-marca">Como o anúncio aparece</p>
+        {lida.peca && (
+          <>
+            <div className="seg" role="group" aria-label="Ver como sai em">
+              {(['instagram', 'facebook'] as const).map((a) => (
+                <button key={a} type="button" aria-pressed={aba === a} onClick={() => setAba(a)}>
+                  {a === 'instagram' ? 'Instagram' : 'Facebook'}
+                </button>
+              ))}
+            </div>
+            <PreviaDoAnuncio peca={lida.peca} midia={midia} objetivo={c.objective} nome={assina} instagram={aba === 'instagram'} />
+          </>
+        )}
+        {!midia && (
+          <p className="nota">
+            <Icone nome="info" pequeno />
+            <span>A foto ou o vídeo da loja aparece aqui para quem vê as Fotos.</span>
+          </p>
+        )}
+      </div>
+
       {pendente &&
         (podeDecidir ? (
-          <>
-            <p className="nota">
-              <Icone nome="clock" />
-              <span>Prazo: {prazoDe(acao, agora)}. Se ninguém decidir, o pedido expira e nada é feito.</span>
-            </p>
-            <BarraDaDecisao
-              key={`${acao.id}:${acao.plan_hash}`}
-              ids={ids}
-              temApp={temApp}
-              temChave={temChave}
-              campoCodigo={campoCodigo}
-              motivos={MOTIVOS}
-              dica="O código de 6 números que o app autenticador mostra agora. A aprovação vale só para este plano."
-              aoAprovar={(prova) => aoAprovar(acao, prova)}
-              aoRecusar={(motivo) => aoRecusar(acao, motivo)}
-            />
-          </>
+          <BarraDaDecisao
+            key={`${acao.id}:${acao.plan_hash}`}
+            ids={ids}
+            temApp={temApp}
+            temChave={temChave}
+            campoCodigo={campoCodigo}
+            motivos={MOTIVOS}
+            dica="O código de 6 números que o app autenticador mostra agora. A aprovação vale só para este plano."
+            aoAprovar={(prova) => aoAprovar(acao, prova)}
+            aoRecusar={(motivo) => aoRecusar(acao, motivo)}
+          />
         ) : (
           <p className="nota ap-so-leitura">
             <Icone nome="lock" />

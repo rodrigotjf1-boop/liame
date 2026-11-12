@@ -113,7 +113,7 @@ export function efeitoDaCampanha(verba: string): string {
 export type Tom = 'aguardando' | 'trabalhando' | 'concluido' | 'pausado' | 'perigo' | 'neutro';
 
 export function situacaoDaCampanha(c: Pick<NewCampaignResponse, 'status' | 'active'>): { rotulo: string; tom: Tom } {
-  if (c.status === 'criada') return c.active ? { rotulo: 'Ativa na Meta', tom: 'concluido' } : { rotulo: 'Criada e pausada', tom: 'pausado' };
+  if (c.status === 'criada') return c.active ? { rotulo: 'Ativa na Meta', tom: 'concluido' } : { rotulo: 'Criada e pausada', tom: 'neutro' };
   if (c.status === 'criando') return { rotulo: 'Criando na Meta', tom: 'trabalhando' };
   if (c.status === 'nao_criada') return { rotulo: 'Não criada', tom: 'perigo' };
   if (c.status === 'cancelada') return { rotulo: 'Cancelada', tom: 'neutro' };
@@ -127,16 +127,17 @@ export type Passo = { rotulo: string; estado: 'feito' | 'agora' | 'pendente'; de
  * que o Liame cria. O primeiro que falta é o de agora enquanto a campanha está `criando`.
  */
 export function passosDaCriacao(c: NewCampaignResponse, video: boolean): Passo[] {
-  const lista: [string, string | null][] = [
-    ['A campanha', c.meta.campaign_id],
-    ['O conjunto', c.meta.adset_id],
-    ...(video ? ([['O vídeo', c.meta.video_id]] as [string, string | null][]) : []),
-    ['O criativo', c.meta.creative_id],
-    ['O anúncio', c.meta.ad_id],
+  // O rótulo, o id na Meta e o que diz quando já existe (a concordância de cada um).
+  const lista: [string, string | null, string][] = [
+    ['A campanha', c.meta.campaign_id, 'criada na Meta, pausada'],
+    ['O conjunto', c.meta.adset_id, 'criado na Meta, pausado'],
+    ...(video ? ([['O vídeo', c.meta.video_id, 'enviado à Meta']] as [string, string | null, string][]) : []),
+    ['O criativo', c.meta.creative_id, 'criado na Meta'],
+    ['O anúncio', c.meta.ad_id, 'criado na Meta, pausado'],
   ];
   let agoraMarcado = false;
-  return lista.map(([rotulo, id]) => {
-    if (id) return { rotulo, estado: 'feito', detalhe: rotulo === 'O vídeo' || rotulo === 'O criativo' ? 'criado na Meta' : 'criado na Meta, pausado' };
+  return lista.map(([rotulo, id, feito]) => {
+    if (id) return { rotulo, estado: 'feito', detalhe: feito };
     if (c.status === 'criando' && !agoraMarcado) {
       agoraMarcado = true;
       return { rotulo, estado: 'agora', detalhe: rotulo === 'O vídeo' ? 'a Meta prepara o vídeo (até 15 minutos)' : 'o Liame cria agora' };
@@ -153,7 +154,11 @@ export function idDaCampanhaNova(resourceId: string | null | undefined): string 
 
 export const FERRAMENTAS_DA_CAMPANHA_NOVA = ['campanha_criar', 'campanha_nova_ativar', 'campanha_nova_pausar'] as const;
 
-/** O link da campanha no Gerenciador de Anúncios da Meta (só o id da campanha e o da conta, que a Meta usa na URL). */
-export function linkDoGerenciador(campanha: string): string {
-  return `https://adsmanager.facebook.com/adsmanager/manage/campaigns?selected_campaign_ids=${encodeURIComponent(campanha)}`;
+/**
+ * O link da campanha no Gerenciador de Anúncios da Meta: a conta (`act`, sem o prefixo `act_`) e a campanha. Sem a
+ * conta, a Meta abre na última conta usada por quem clica.
+ */
+export function linkDoGerenciador(campanha: string, conta: string | null): string {
+  const act = conta ? `act=${encodeURIComponent(conta.replace(/^act_/, ''))}&` : '';
+  return `https://adsmanager.facebook.com/adsmanager/manage/campaigns?${act}selected_campaign_ids=${encodeURIComponent(campanha)}`;
 }

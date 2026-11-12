@@ -65,6 +65,8 @@ interface Props {
   campanha?: {
     atual: NewCampaignOptionsResponse['by_piece'][number] | null;
     podePedir: boolean;
+    /** A gaveta está abrindo (lendo as Fotos). */
+    abrindo?: boolean;
     aoUsar: (p: AdPieceResponse) => void;
   } | null;
 }
@@ -206,10 +208,20 @@ function BlocoDaCampanha({ p, campanha }: { p: AdPieceResponse; campanha: NonNul
           : 'A peça vira uma campanha na Meta com a foto ou o vídeo da loja, criada pausada: não aparece para ninguém e não gasta até você ativar.'}
       </p>
       <div className="vazio-acoes">
+        {/* `aria-disabled` e não `disabled`: o botão desligado perderia o foco, e a gaveta não saberia para onde voltar. */}
         {campanha.podePedir && !andando && (
-          <button className="btn btn--primary btn--sm" type="button" aria-haspopup="dialog" onClick={() => campanha.aoUsar(p)}>
+          <button
+            className="btn btn--primary btn--sm"
+            type="button"
+            aria-haspopup="dialog"
+            aria-busy={campanha.abrindo || undefined}
+            aria-disabled={campanha.abrindo || undefined}
+            onClick={() => {
+              if (!campanha.abrindo) campanha.aoUsar(p);
+            }}
+          >
             <Icone nome="megaphone" pequeno />
-            Usar numa campanha nova
+            {campanha.abrindo ? 'Abrindo…' : 'Usar numa campanha nova'}
           </button>
         )}
         {atual?.action_id && (

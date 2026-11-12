@@ -465,7 +465,7 @@ export function resultadoDaPeca(p: Peca, v: AdPieceVersion, agora: Date, pode: b
   const quem = p.decided_by ? ` por ${p.decided_by.name}` : '';
   const quando = p.decided_at ? ` ${quandoComHora(p.decided_at, agora)}` : '';
   if (p.status === 'aprovada') {
-    return { tom: 'ok', icone: 'check', forte: `Aprovada${quem}${quando} (versão ${p.current.version}).`, texto: ' Está na biblioteca. Nada foi para a Meta: criar a campanha com a peça chega numa próxima fase.' };
+    return { tom: 'ok', icone: 'check', forte: `Aprovada${quem}${quando} (versão ${p.current.version}).`, texto: ' Está na biblioteca. Nada foi para a Meta.' };
   }
   if (p.status === 'recusada') {
     const d = p.decisions?.find((x) => x.decision === 'recusada');

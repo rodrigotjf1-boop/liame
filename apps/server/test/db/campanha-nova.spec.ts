@@ -261,6 +261,9 @@ describe.skipIf(!hasDb)('a campanha nova na Meta (A4 · X5, parte 1)', () => {
     expect(meta.defeitos).toEqual([]);
     const lida = await api.call('GET', `/v1/new-campaigns/${id}`, { cookie: e.cookie });
     expect(lida.body).toMatchObject({ status: 'criada', meta: { campaign_id: campanha!.id, ad_id: anuncio!.id } });
+    // A conta de anúncios na Meta, para o link do Gerenciador (a tela tira o `act_`).
+    const [externa] = await ownerQuery<{ external_id: string }>(`select external_id from liame.connected_account where id = $1`, [e.conta]);
+    expect(lida.body.meta.account_id).toBe(externa!.external_id);
   }, 120_000);
 
   it('a Meta manda esperar no meio: a tentativa seguinte continua de onde parou, e a resposta perdida não cria de novo', async () => {

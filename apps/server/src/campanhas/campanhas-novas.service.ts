@@ -98,6 +98,7 @@ type LinhaDaCampanhaNova = {
   meta_video_id: string | null;
   meta_creative_id: string | null;
   meta_ad_id: string | null;
+  meta_account_id: string | null;
   created_at: Date;
 };
 
@@ -121,7 +122,7 @@ function resposta(l: LinhaDaCampanhaNova): NewCampaignResponse {
     active: l.active,
     activated_at: l.activated_at ? new Date(l.activated_at).toISOString() : null,
     pending_action_id: l.pending_action_id,
-    meta: { campaign_id: l.meta_campaign_id, adset_id: l.meta_adset_id, video_id: l.meta_video_id, creative_id: l.meta_creative_id, ad_id: l.meta_ad_id },
+    meta: { account_id: l.meta_account_id, campaign_id: l.meta_campaign_id, adset_id: l.meta_adset_id, video_id: l.meta_video_id, creative_id: l.meta_creative_id, ad_id: l.meta_ad_id },
     created_at: new Date(l.created_at).toISOString(),
   };
 }
@@ -375,6 +376,7 @@ export class CampanhasNovasService {
              case when c.status = 'criando' and r.status in ${ENCERRADOS} then coalesce(r.status_reason, 'A criação parou antes do fim.') else c.error end as error,
              c.meta_campaign_id, c.meta_adset_id, c.meta_video_id, c.meta_creative_id, c.meta_ad_id, c.created_at,
              c.active, c.activated_at,
+             (select x.external_id from liame.connected_account x where x.id = c.ad_account_id and x.tenant_id = c.tenant_id) as meta_account_id,
              (select a.id from liame.action_request a
                where a.tenant_id = c.tenant_id and a.resource_id = ${recursoDaCampanhaNova(id)} and a.tool in ('campanha_nova_ativar', 'campanha_nova_pausar')
                  and a.status in ${EM_ABERTO}

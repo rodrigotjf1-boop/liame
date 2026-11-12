@@ -2,7 +2,8 @@
 
 import type { AdPieceResponse, BrandPhoto, NewCampaignObjective, NewCampaignOptionsResponse, NewCampaignResponse } from '@liame/contracts';
 import Link from 'next/link';
-import { type FormEvent, useId, useRef, useState } from 'react';
+import { type FormEvent, type RefObject, useEffect, useId, useRef, useState } from 'react';
+import { videoNoTempo } from '@/components/agenda/video-do-post';
 import { Icone } from '@/components/ui/icone';
 import { useDialogo } from '@/components/ui/use-dialogo';
 import { microsDeReais } from '@/components/links/cupons-textos';
@@ -38,14 +39,17 @@ interface Props {
   midias: BrandPhoto[] | null;
   /** Hoje no fuso da empresa (`AAAA-MM-DD`): o fim precisa ser depois. */
   hoje: string;
+  /** Para onde o foco volta ao fechar quando o botão que abriu sumiu (a peça passou a "Espera a aprovação"). */
+  reserva?: RefObject<HTMLElement | null>;
   aoFechar: () => void;
   aoCriado: (c: NewCampaignResponse) => void;
 }
 
-export function GavetaCampanhaNova({ brandId, peca, opcoes, midias, hoje, aoFechar, aoCriado }: Props) {
+export function GavetaCampanhaNova({ brandId, peca, opcoes, midias, hoje, reserva, aoFechar, aoCriado }: Props) {
   const ids = useId();
   const titulo = useRef<HTMLHeadingElement>(null);
-  const { ref, fechar, devolverFoco } = useDialogo({ focoInicial: titulo });
+  const aviso = useRef<HTMLDivElement>(null);
+  const { ref, fechar, devolverFoco } = useDialogo({ focoInicial: titulo, reserva });
   // O vídeo sem capa aparece, marcado: escolhido, a conferência diz por que não serve.
   const prontas = midias ?? [];
   const lojas = opcoes.units;
@@ -65,6 +69,18 @@ export function GavetaCampanhaNova({ brandId, peca, opcoes, midias, hoje, aoFech
   const [erroGeral, setErroGeral] = useState<string | null>(null);
   const [enviando, setEnviando] = useState(false);
   const [criado, setCriado] = useState<NewCampaignResponse | null>(null);
+  /** O campo que recebe o foco depois do próximo desenho (os campos ficam desligados enquanto o pedido vai). */
+  const [focoEm, setFocoEm] = useState<CampoComErro | null>(null);
+
+  useEffect(() => {
+    if (!focoEm || enviando) return;
+    ref.current?.querySelector<HTMLElement>(`[data-campo="${focoEm}"]`)?.focus();
+    setFocoEm(null);
+  }, [focoEm, enviando, ref]);
+  // O pedido criado troca o formulário pelo "Pedido criado": o foco vai para o título novo.
+  useEffect(() => {
+    if (criado) titulo.current?.focus();
+  }, [criado]);
 
   const loja = lojas.find((u) => u.id === campos.loja) ?? null;
   const midia = prontas.find((m) => m.id === campos.midia) ?? null;
@@ -84,12 +100,14 @@ export function GavetaCampanhaNova({ brandId, peca, opcoes, midias, hoje, aoFech
   function focar(e: ErrosDaCampanha) {
     const ordem: CampoComErro[] = ['midia', 'loja', 'nome', 'objetivo', 'verba', 'fim'];
     const primeiro = ordem.find((c) => e[c]);
-    if (primeiro) ref.current?.querySelector<HTMLElement>(`[data-campo="${primeiro}"]`)?.focus();
+    if (primeiro) setFocoEm(primeiro);
   }
 
   async function mandar(ev: FormEvent) {
     ev.preventDefault();
-    if (enviando || bloqueio || semEndereco) return;
+    if (enviando) return;
+    // O que impede pedir (a conta, a Página, a loja sem o endereço): o aviso recebe o foco e é lido de novo.
+    if (bloqueio || semEndereco) return aviso.current?.focus();
     const e = conferirCampanha(campos, opcoes, prontas, hoje);
     setErros(e);
     if (Object.values(e).some(Boolean)) return focar(e);
@@ -185,7 +203,7 @@ export function GavetaCampanhaNova({ brandId, peca, opcoes, midias, hoje, aoFech
           {cab}
           <div className="dialogo-corpo">
             {bloqueio && (
-              <div className="pd-aviso pd-aviso--perigo" role="alert">
+              <div className="pd-aviso pd-aviso--perigo cn-bloqueio" role="alert" ref={aviso} tabIndex={-1}>
                 <Icone nome="alert-circle" />
                 <div>
                   <b>{bloqueio.title}</b>
@@ -199,7 +217,7 @@ export function GavetaCampanhaNova({ brandId, peca, opcoes, midias, hoje, aoFech
               </div>
             )}
             {!bloqueio && semEndereco && (
-              <div className="pd-aviso pd-aviso--perigo" role="alert">
+              <div className="pd-aviso pd-aviso--perigo cn-bloqueio" role="alert" ref={aviso} tabIndex={-1}>
                 <Icone nome="alert-circle" />
                 <div>
                   <b>Falta o endereço da loja</b>
@@ -258,7 +276,12 @@ export function GavetaCampanhaNova({ brandId, peca, opcoes, midias, hoje, aoFech
                             onClick={() => mudar({ midia: m.id }, 'midia')}
                             disabled={enviando}
                           >
-                            <img src={m.thumbnail_url} alt="" referrerPolicy="no-referrer" />
+                            {temCapa(m) ? (
+                              <img src={m.thumbnail_url} alt="" referrerPolicy="no-referrer" />
+                            ) : (
+                              // Sem a capa, o endereço da miniatura é o do próprio vídeo (o contrato de Fotos): um quadro dele.
+                              <video src={videoNoTempo(m.url, 100)} muted playsInline preload="metadata" aria-hidden="true" tabIndex={-1} />
+                            )}
                             {ehVideo(m) && m.video && (
                               <span className="po-video-dur" aria-hidden="true">
                                 {duracaoCurta(m.video.duration_ms)}
@@ -461,7 +484,7 @@ export function GavetaCampanhaNova({ brandId, peca, opcoes, midias, hoje, aoFech
                 </p>
                 <div className="pd-bloco">
                   <p className="rotulo-marca">Quem assina o anúncio</p>
-                  <dl className="pd-agora">
+                  <dl className="pd-agora cn-destino">
                     <dt>No Facebook</dt>
                     <dd>
                       {pagina ? `Página ${pagina}` : 'Falta a Página'}
@@ -476,7 +499,7 @@ export function GavetaCampanhaNova({ brandId, peca, opcoes, midias, hoje, aoFech
                 </div>
                 <div className="pd-bloco">
                   <p className="rotulo-marca">Para onde leva</p>
-                  <dl className="pd-agora">
+                  <dl className="pd-agora cn-destino">
                     <dt>Destino</dt>
                     <dd>
                       {destino.leva}
@@ -499,6 +522,29 @@ export function GavetaCampanhaNova({ brandId, peca, opcoes, midias, hoje, aoFech
                     </dd>
                   </dl>
                 </div>
+                {opcoes.campaign_cap_micros === null ? (
+                  <div className="pd-aviso">
+                    <Icone nome="alert" />
+                    <div>
+                      <b>A empresa ainda não definiu os limites</b>
+                      <span>A campanha pode ser criada pausada. Para ativar, o Dono ou o Administrador define antes o teto do mês e o teto por campanha, em Verba do mês.</span>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="pd-bloco">
+                    <p className="rotulo-marca">Limites da empresa</p>
+                    <ul className="pd-limites">
+                      <li>
+                        <span>Teto por campanha</span>
+                        <b>{reaisDeMicros(BigInt(opcoes.campaign_cap_micros))} por dia</b>
+                      </li>
+                      <li>
+                        <span>Verba do mês</span>
+                        <b>conferida ao ativar</b>
+                      </li>
+                    </ul>
+                  </div>
+                )}
                 <p className="pd-nota">
                   <Icone nome="shield" pequeno />
                   <span>
@@ -552,11 +598,13 @@ export function PreviaDoAnuncio({
     .slice(0, 2)
     .map((x) => x.charAt(0).toLocaleUpperCase('pt-BR'))
     .join('');
+  const video = midia ? ehVideo(midia) : false;
+  const alt = midia ? midia.description || `${video ? 'Vídeo' : 'Foto'}: ${midia.product ?? 'sem produto'}` : '';
   return (
     <div className="previa cn-previa" role="group" aria-label={`Prévia do anúncio no ${instagram ? 'Instagram' : 'Facebook'}`}>
       <div className="pv-cab">
         <span className="pv-av" aria-hidden="true">
-          {iniciais || 'MB'}
+          {iniciais || <Icone nome="store" pequeno />}
         </span>
         <span className="pv-quem">
           <b>{nome || 'A Página da marca'}</b>
@@ -567,8 +615,12 @@ export function PreviaDoAnuncio({
       <div className={`cn-midia cn-midia--${forma}`}>
         {midia ? (
           <>
-            <img src={midia.thumbnail_url} alt={midia.description || `Foto: ${midia.product ?? 'sem produto'}`} referrerPolicy="no-referrer" />
-            {ehVideo(midia) && (
+            {temCapa(midia) ? (
+              <img src={midia.thumbnail_url} alt={alt} referrerPolicy="no-referrer" />
+            ) : (
+              <video src={videoNoTempo(midia.url, 100)} muted playsInline preload="metadata" aria-label={alt} tabIndex={-1} />
+            )}
+            {video && (
               <span className="cn-play" aria-hidden="true">
                 <Icone nome="play" />
               </span>
@@ -589,7 +641,7 @@ export function PreviaDoAnuncio({
       </div>
       {instagram && (
         <p className="pv-texto">
-          <b>{nome}</b> {peca.current.body}
+          {nome && <b>{nome}</b>} {peca.current.body}
         </p>
       )}
     </div>
