@@ -21,6 +21,14 @@
 | Conectar a Meta de novo na conta de testes, depois de somar as permissões | falta (plano-a6, Z11) | o dono |
 | A função de cada recurso ligada na empresa de testes, para o vídeo mostrar a tela no ar | `comentarios`, `direct`, `messenger` e os números: conferir na produção antes de gravar | o dono liga; esta sessão prepara a linha |
 | As instruções de teste para o analista (o login de teste e o caminho de cada tela) | este documento, seção 3 | esta sessão |
+| A `pages_show_list` junto da `pages_read_engagement` (a Meta exige: "Seu envio deve incluir as pages_show_list…") | ✅ no rascunho do painel (12/11/2026, pela sessão da região, com o dono logado); ela fica na lista de Provedor de Tecnologia | — |
+
+**O rascunho no painel da Meta (submission 1441909268031807), em 12/11/2026:** 5 permissões configuradas, nada enviado —
+`read_insights`, `instagram_manage_insights`, `pages_read_engagement`, `instagram_basic` (o "Uso permitido" com os textos
+da seção 4, sem a frase da região, que ainda não está no ar; os quatro com o visto verde) e `pages_show_list`. **Faltam no
+rascunho:** os vídeos; o quadrinho "você concorda" de cada permissão (é o aceite do dono); "Tratamento de dados";
+"Instruções da análise"; e as permissões de comentários e de mensagens, que entram no **mesmo rascunho**. Ninguém clicou em
+"Enviar para análise".
 
 ## 2. As permissões
 
@@ -32,6 +40,7 @@ de menu confirmado).
 | --- | --- | --- | --- |
 | `instagram_basic` | Lê o perfil e as publicações da conta do Instagram da marca: a lista de "Do seu Instagram" (o Reels e o post, com a miniatura e a legenda) | Fotos › Do seu Instagram | No ar (A6, Z10, parte 5) |
 | `instagram_manage_insights` | Lê os números de cada publicação (visualizações, alcance, curtidas, comentários, salvamentos e compartilhamentos) e os do perfil | Fotos › Do seu Instagram (a gaveta da publicação); Agenda › o post publicado › "O que o post trouxe" | No ar |
+| `pages_show_list` | Mostra, na conexão, a lista das Páginas que o dono administra, para ele escolher a Página do restaurante (e o Instagram ligado a ela); depois, o Liame trabalha só com a Página escolhida | Contas conectadas › conectar a Meta (o passo de escolher a Página) | No ar (a Meta exige com a `pages_read_engagement`) |
 | `pages_read_engagement` | Lê as publicações da Página do Facebook e o engajamento delas | Agenda › o post publicado › "O que o post trouxe" | No ar |
 | `read_insights` | Lê os números da Página e das publicações dela | Agenda › o post publicado › "O que o post trouxe" | No ar |
 | `instagram_manage_comments` | Lê os comentários dos posts da marca no Instagram, responde (com aprovação de uma pessoa), oculta e mostra de novo | Comentários | No ar no piloto (A6, Z11), só com contas que têm papel no app até a análise |
@@ -78,6 +87,9 @@ vivo no painel, da mesma conta, e o login da Meta no começo do vídeo**. Então
 
 **Roteiros por grupo (rascunho):**
 
+- **A lista das Páginas (`pages_show_list`):** o passo da conexão em que o dono escolhe a Página do restaurante (Contas
+  conectadas › conectar a Meta), com a lista das Páginas que ele administra; depois, mostrar que o Liame só usa a Página
+  escolhida.
 - **Os números (`instagram_basic`, `instagram_manage_insights`, `pages_read_engagement`, `read_insights`):** Fotos › Do
   seu Instagram, abrir o primeiro Reels e mostrar as visualizações e as curtidas; abrir o mesmo Reels no Instagram e
   mostrar os mesmos números. Depois, Agenda › um post publicado › "O que o post trouxe", e a Página no Business Suite.
@@ -91,6 +103,14 @@ vivo no painel, da mesma conta, e o login da Meta no começo do vídeo**. Então
 
 ## 4. Os textos do uso (rascunhos em inglês, para o formulário)
 
+> No painel, cada texto começa com "Liame is a marketing tool for restaurants." (a sessão da região usou assim nos quatro
+> de números, em 12/11/2026).
+
+- **`pages_show_list`** *(o texto que está no rascunho do painel, escrito pela sessão da região em 12/11/2026)*: "Liame is
+  a marketing tool for restaurants. When the owner connects their business, Liame uses pages_show_list to show the list of
+  Facebook Pages they manage, so they can pick the restaurant's own Page (and the Instagram account linked to it). Liame
+  then works only with the Page the owner chose: publishing the approved posts, reading the posts' results and creating
+  ads in the name of that Page."
 - **`instagram_basic`:** "Liame is a marketing tool for restaurants. With instagram_basic, Liame reads the profile and the
   media of the restaurant's own Instagram professional account, so the owner can see their Reels and posts inside Liame
   ('From your Instagram') and use them as the base of new ads. Liame only reads the account the business connected."
