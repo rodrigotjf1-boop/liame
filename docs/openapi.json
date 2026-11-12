@@ -123801,6 +123801,200 @@
                         "additionalProperties": false
                       }
                     },
+                    "store_demand_status": {
+                      "type": "string",
+                      "maxLength": 60,
+                      "pattern": "^[a-z0-9_]+$"
+                    },
+                    "store_demand": {
+                      "type": [
+                        "object",
+                        "null"
+                      ],
+                      "properties": {
+                        "status": {
+                          "type": "string",
+                          "maxLength": 60,
+                          "pattern": "^[a-z0-9_]+$"
+                        },
+                        "from": {
+                          "type": "string"
+                        },
+                        "to": {
+                          "type": "string"
+                        },
+                        "days": {
+                          "type": "integer",
+                          "minimum": -9007199254740991,
+                          "maximum": 9007199254740991
+                        },
+                        "minimum_orders": {
+                          "type": "integer",
+                          "minimum": -9007199254740991,
+                          "maximum": 9007199254740991
+                        },
+                        "orders": {
+                          "type": "integer",
+                          "minimum": -9007199254740991,
+                          "maximum": 9007199254740991
+                        },
+                        "revenue_micros": {
+                          "type": "string"
+                        },
+                        "ticket_micros": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "previous": {
+                          "type": "object",
+                          "properties": {
+                            "orders": {
+                              "type": "integer",
+                              "minimum": -9007199254740991,
+                              "maximum": 9007199254740991
+                            },
+                            "revenue_micros": {
+                              "type": "string"
+                            },
+                            "ticket_micros": {
+                              "type": [
+                                "string",
+                                "null"
+                              ]
+                            }
+                          },
+                          "required": [
+                            "orders",
+                            "revenue_micros",
+                            "ticket_micros"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "customers": {
+                          "type": "object",
+                          "properties": {
+                            "new": {
+                              "type": "integer",
+                              "minimum": -9007199254740991,
+                              "maximum": 9007199254740991
+                            },
+                            "returning": {
+                              "type": "integer",
+                              "minimum": -9007199254740991,
+                              "maximum": 9007199254740991
+                            },
+                            "unknown": {
+                              "type": "integer",
+                              "minimum": -9007199254740991,
+                              "maximum": 9007199254740991
+                            }
+                          },
+                          "required": [
+                            "new",
+                            "returning",
+                            "unknown"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "by_weekday": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "weekday": {
+                                "type": "integer",
+                                "minimum": -9007199254740991,
+                                "maximum": 9007199254740991
+                              },
+                              "orders": {
+                                "type": "integer",
+                                "minimum": -9007199254740991,
+                                "maximum": 9007199254740991
+                              },
+                              "revenue_micros": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "weekday",
+                              "orders",
+                              "revenue_micros"
+                            ],
+                            "additionalProperties": false
+                          }
+                        },
+                        "by_hour": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "hour": {
+                                "type": "integer",
+                                "minimum": -9007199254740991,
+                                "maximum": 9007199254740991
+                              },
+                              "orders": {
+                                "type": "integer",
+                                "minimum": -9007199254740991,
+                                "maximum": 9007199254740991
+                              }
+                            },
+                            "required": [
+                              "hour",
+                              "orders"
+                            ],
+                            "additionalProperties": false
+                          }
+                        },
+                        "peak": {
+                          "type": [
+                            "object",
+                            "null"
+                          ],
+                          "properties": {
+                            "weekday": {
+                              "type": "integer",
+                              "minimum": -9007199254740991,
+                              "maximum": 9007199254740991
+                            },
+                            "hour": {
+                              "type": "integer",
+                              "minimum": -9007199254740991,
+                              "maximum": 9007199254740991
+                            },
+                            "orders": {
+                              "type": "integer",
+                              "minimum": -9007199254740991,
+                              "maximum": 9007199254740991
+                            }
+                          },
+                          "required": [
+                            "weekday",
+                            "hour",
+                            "orders"
+                          ],
+                          "additionalProperties": false
+                        }
+                      },
+                      "required": [
+                        "status",
+                        "from",
+                        "to",
+                        "days",
+                        "minimum_orders",
+                        "orders",
+                        "revenue_micros",
+                        "ticket_micros",
+                        "previous",
+                        "customers",
+                        "by_weekday",
+                        "by_hour",
+                        "peak"
+                      ],
+                      "additionalProperties": false
+                    },
                     "sources": {
                       "type": "array",
                       "items": {
@@ -123861,6 +124055,8 @@
                     "food_places",
                     "week_ahead",
                     "sector_references",
+                    "store_demand_status",
+                    "store_demand",
                     "sources",
                     "generated_at"
                   ],

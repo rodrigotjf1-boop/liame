@@ -250,6 +250,8 @@ describe('Sua região (R2, parte 2)', () => {
       dates: [{ day: '2026-11-15', name: 'Proclamação da República', kind: 'feriado_nacional', source: 'Lei 662/1949' }],
     },
     sector_references: [],
+    store_demand_status: 'sem_regem',
+    store_demand: null,
     sources: [
       { source: 'ibge_censo_bairro', status: 'em_dia', read_at: '2026-11-11T09:10:00.000Z', next_try_at: null },
       { source: 'ibge_9528', status: 'falhou', read_at: null, next_try_at: '2026-11-11T18:00:00.000Z' },

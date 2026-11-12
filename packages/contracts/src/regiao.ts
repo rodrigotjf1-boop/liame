@@ -326,6 +326,35 @@ export const RegionOverviewResponse = z.strictObject({
     .nullable(),
   /** A referência do setor (D-RG-9): números divulgados à imprensa, com a fonte; nunca o número da loja. */
   sector_references: z.array(z.strictObject({ text: z.string(), source: z.string(), extra: z.string().nullable(), as_of: z.string() })),
+  /**
+   * A demanda da loja (R3, parte 1): `disponivel`, `sem_endereco` (a loja fora do mapa), `sem_regem` (a marca não tem o Regem ligado: o Liame não lê os
+   * pedidos) ou `sem_permissao` (quem pergunta não vê Resultados, `vendas.ver`: os números de venda não vêm).
+   */
+  store_demand_status: Slug,
+  /**
+   * Os pedidos confirmados da loja nas 4 semanas completas até ontem (no fuso da loja), pelas regras de Resultados:
+   * a receita líquida (sem o estorno), o tíquete médio, o cliente novo × de volta (`unknown`: o pedido sem cliente, como
+   * o de marketplace), os pedidos por dia da semana (0 = domingo) e por hora (a hora em que o cliente pediu), e o pico.
+   * `status`: `pronto`, `poucos_pedidos` (abaixo de `minimum_orders`: sem dia, hora e pico) ou `sem_pedidos`. Nula fora
+   * de `disponivel`.
+   */
+  store_demand: z
+    .strictObject({
+      status: Slug,
+      from: z.string(),
+      to: z.string(),
+      days: z.number().int(),
+      minimum_orders: z.number().int(),
+      orders: z.number().int(),
+      revenue_micros: z.string(),
+      ticket_micros: z.string().nullable(),
+      previous: z.strictObject({ orders: z.number().int(), revenue_micros: z.string(), ticket_micros: z.string().nullable() }),
+      customers: z.strictObject({ new: z.number().int(), returning: z.number().int(), unknown: z.number().int() }),
+      by_weekday: z.array(z.strictObject({ weekday: z.number().int(), orders: z.number().int(), revenue_micros: z.string() })),
+      by_hour: z.array(z.strictObject({ hour: z.number().int(), orders: z.number().int() })),
+      peak: z.strictObject({ weekday: z.number().int(), hour: z.number().int(), orders: z.number().int() }).nullable(),
+    })
+    .nullable(),
   sources: z.array(RegionSourceStatus),
   generated_at: z.iso.datetime(),
 });

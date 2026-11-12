@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Região P40</title>
 <!--
-@prototipo Liame · Região · P40 · A loja no mapa (R1) e Sua região (R2) (APROVADO PELO DONO em 11/11/2026, com as D-RG-11 a D-RG-20 como recomendadas)
+@prototipo Liame · Região · P40 · A loja no mapa (R1) e Sua região (R2) (APROVADO PELO DONO em 11/11/2026, com as D-RG-11 a D-RG-20 como recomendadas) · REVISÃO de 12/11/2026, AGUARDANDO APROVAÇÃO: a demanda da loja (R3, parte 1; estados 19 a 22; D-RG-21 a D-RG-25)
 pedido: o plano "tráfego pela região" (docs/plano-regiao.md), aprovado pelo dono em 11/11/2026 com as decisões D-RG-1 a
       D-RG-10 na recomendação. Cada entrega tem protótipo aprovado antes de tela nova: este é o das duas primeiras, R1
       (a loja no mapa) e R2 (o raio-x da região). Acréscimo do mesmo dia: a marca sem loja (sem o Regem), vários Perfis
@@ -677,6 +677,18 @@ select.input { padding-right: var(--sp-2); }
 .p40-duas > div { display: grid; align-content: start; gap: var(--sp-2); min-width: 0; }
 .p40-duas h4 { font-size: var(--text-sm); font-weight: 600; }
 @container p40card (max-width: 620px) { .p40-duas { grid-template-columns: minmax(0, 1fr); } }
+/* A demanda da loja (R3, parte 1; revisão aguardando aprovação): os dias em barras e as horas em colunas. */
+.p40-barras-dia { display: grid; gap: 6px; }
+.p40-barras-dia .p40-barra { grid-template-columns: 2.6rem minmax(0, 1fr) 2.8rem; }
+.p40-barras-dia .p40-barra-trilho { grid-column: auto; grid-row: auto; }
+.p40-horas { display: grid; grid-template-columns: repeat(13, minmax(0, 1fr)); gap: 3px; align-items: end; margin: 0; padding: 0; list-style: none; }
+.p40-hora { display: grid; gap: 4px; justify-items: center; min-width: 0; }
+.p40-hora-trilho { display: flex; align-items: flex-end; width: 100%; height: 96px; border-radius: 3px; background: var(--chart-grade); overflow: hidden; }
+.p40-hora-trilho i { display: block; width: 100%; height: var(--v, 0%); border-radius: 3px 3px 0 0; background: var(--chart-cinza-2); }
+.p40-hora--foco .p40-hora-trilho i { background: var(--chart-foco); }
+.p40-hora .num { font-size: 0.65rem; color: var(--text-muted); white-space: nowrap; }
+.p40-pico { display: flex; gap: var(--sp-2); align-items: flex-start; font-size: var(--text-sm); }
+.p40-pico .ic { flex: none; width: 18px; height: 18px; margin-top: 2px; color: var(--chart-foco); }
 
 /* referência do setor e o que ainda não dá */
 .p40-ref { display: grid; gap: var(--sp-2); margin: 0; padding: 0; list-style: none; }
@@ -1141,6 +1153,15 @@ window.P40_DECISOES = [
   { id: 'D-RG-20', titulo: 'A renda de 2022 sem correção, por enquanto', texto: 'O plano pede a renda do Censo corrigida pelo IPCA até hoje (seção 3), mas a tabela do índice do IPCA ainda não foi conferida na fonte (base §19.3). Até lá, a tela mostra o valor de 2022 com "valor de 2022, sem correção" escrito ao lado; depois de conferida, passa a "corrigido pelo IPCA até <mês>".', rec: 'mostrar já, com o ano escrito, e corrigir depois de conferir a tabela.', porque: 'Esperar a correção atrasaria o bolso, o número que mais escolhe a oferta; o ano escrito impede que alguém leia R$ 5.500 como valor de hoje.' },
 ];
 
+/* A revisão de 12/11/2026 (R3, parte 1: a demanda da loja), AGUARDANDO APROVAÇÃO. */
+window.P40_DECISOES_R3 = [
+  { id: 'D-RG-21', titulo: 'A janela da demanda', texto: 'As 4 semanas completas até ontem, no fuso da loja, comparadas com as 4 semanas antes delas (o tíquete de agora e o de antes).', rec: '4 semanas até ontem.', porque: 'Cada dia da semana entra 4 vezes, então a sexta se compara com a segunda de igual para igual; o dia de hoje, ainda aberto, puxaria a conta para baixo.' },
+  { id: 'D-RG-22', titulo: 'O mínimo para dizer o dia e a hora', texto: 'Com menos de 20 pedidos confirmados nas 4 semanas, a seção mostra só o total e o tíquete e diz que ainda são poucos pedidos; o dia, a hora e o pico aparecem a partir de 20.', rec: '20 pedidos.', porque: 'Com poucos pedidos, um pedido só vira "o pico" e levaria a verba para a hora errada.' },
+  { id: 'D-RG-23', titulo: 'O que conta', texto: 'As regras de Resultados: só o pedido confirmado; a receita líquida (a receita da definição única menos o estorno); a hora é a em que o cliente pediu (quando o Regem manda), não a confirmação. O cliente novo × de volta é o que o Regem marca; o pedido sem cliente (iFood, 99) aparece como "sem o cliente identificado".', rec: 'as mesmas regras de Resultados.', porque: 'O mesmo pedido não pode valer uma coisa em Resultados e outra em Sua região; a hora do pedido é a da fome, a da confirmação é a da cozinha.' },
+  { id: 'D-RG-24', titulo: 'Quem vê os números de venda', texto: 'Só quem vê Resultados (a permissão de ver vendas). Quem vê Minha marca sem ela vê a seção com o aviso, sem os números; a LIA segue a mesma regra na resposta da região.', rec: 'a mesma permissão de Resultados.', porque: 'É o faturamento da loja: a regra já vale em Resultados e não pode vazar por outra tela.' },
+  { id: 'D-RG-25', titulo: 'Onde a demanda mora', texto: 'Em Sua região, depois da Concorrência (a sua loja ao lado dos vizinhos); o item "Pedidos por hora e tíquete médio" sai do "Ainda não". A LIA passa a dizer o total, o tíquete e o pico na resposta "como é a minha região?" (D-RG-18). Os pedidos por bairro continuam no "Ainda não" (a parte 2 da R3, pela trilha C, D-RG-8).', rec: 'em Sua região, depois da Concorrência.', porque: 'É o número da loja que a região explica: o bolso e a concorrência dizem o que é possível; a demanda diz o que a loja já faz. O plano de mídia (R5) usa os dois juntos.' },
+];
+
 /* ---------- os dados de exemplo (o CEP e os números da região são reais) ---------- */
 const P40_PERFIS = {
   tijuca: { id: 'tijuca', nome: 'Mister Burgers Tijuca', end: { rua: 'Rua Conde de Bonfim', numero: '450', compl: '', bairro: 'Tijuca', municipio: 'Rio de Janeiro', uf: 'RJ', cep: '20520-054', ibge: '3304557' }, areas: ['Tijuca', 'Maracanã', 'Vila Isabel', 'Praça da Bandeira', 'Andaraí', 'Grajaú', 'Rio Comprido'] },
@@ -1185,6 +1206,10 @@ const P40_ESTADOS = {
   pro: '16 · Modo Pro: códigos, precisão e as fontes com o período',
   lia: '17 · A LIA responde "como é a minha região?"',
   desligada: '18 · A função desligada pela Liame',
+  demanda: '19 · R3: A demanda da loja (pedidos por dia e hora, tíquete e clientes) · aguardando aprovação',
+  'demanda-poucos': '20 · R3: A demanda com poucos pedidos (menos de 20 nas 4 semanas)',
+  'demanda-sem-regem': '21 · R3: A marca sem o Regem (a demanda não aparece)',
+  'demanda-sem-permissao': '22 · R3: Quem não vê Resultados (sem os números de venda)',
 };
 
 const km = (v) => numero(v, Number.isInteger(v) ? 0 : 1);
@@ -1207,6 +1232,8 @@ function p40Base() {
     podeEditar: true, funcao: true,
     perfis: ['tijuca'], lojas: [lojaTijuca()], sel: 'tijuca',
     raiox: { tijuca: 'lido' }, quando: 'hoje às 06:10', g: null, seq: 0, timer: 0,
+    // R3, parte 1: a demanda da loja (`pronto` ou `poucos`) e se quem vê pode ver Resultados (`vendas.ver`).
+    demanda: 'pronto', vendas: true,
   };
 }
 const p40Loja = (id) => p40.lojas.find((l) => l.id === id) || null;
@@ -1326,6 +1353,50 @@ function p40Num(v, o, f, { pro = '', cls = '', extra = '' } = {}) {
 function p40FalhaIbge(o) {
   return `<p class="p40-falhou">${ic('i-alert-circle')}<span><b>${o}: o IBGE não respondeu.</b> Tentamos de novo em 1 hora, às 15:00. Os outros números valem.</span></p>`;
 }
+/* ---------- A demanda da loja (R3, parte 1; revisão do P40 AGUARDANDO APROVAÇÃO, D-RG-21 a D-RG-25) ---------- */
+const P40_DEMANDA = {
+  dias: [['dom', 52], ['seg', 28], ['ter', 31], ['qua', 36], ['qui', 42], ['sex', 68], ['sáb', 55]],
+  horas: [[11, 6], [12, 22], [13, 18], [14, 7], [15, 4], [16, 5], [17, 9], [18, 24], [19, 47], [20, 66], [21, 54], [22, 35], [23, 15]],
+};
+function p40Demanda(loja) {
+  const cab = (sub) => `<div class="p40-grupo-cab"><h3 id="g-dem">A demanda da loja <span class="st st--espera">Revisão aguardando aprovação</span></h3><p>${sub}</p></div>`;
+  if (!p40.vendas) {
+    return `<section class="p40-grupo" aria-labelledby="g-dem">${cab('pedidos do Regem')}<p class="p40-nota">${ic('i-lock')}<span>Os números de venda da loja ficam para quem vê Resultados. Peça ao dono a permissão, se precisar deles.</span></p></section>`;
+  }
+  if (!p40.marca.regem) {
+    return `<section class="p40-grupo" aria-labelledby="g-dem">${cab('pedidos por dia e hora, tíquete e clientes')}<p class="lite-frase">A demanda da loja aparece com os pedidos do Regem: com ele, o Liame mostra os pedidos por dia da semana e por hora, o tíquete médio e o cliente novo × de volta. Sem ele, a medida de pedido é o cupom exclusivo de cada campanha.</p></section>`;
+  }
+  if (p40.demanda === 'poucos') {
+    return `<section class="p40-grupo" aria-labelledby="g-dem">${cab('pedidos do Regem, 4 semanas até ontem (11/11)')}<div class="p40-nums">
+        ${p40Num('12 <small>pedidos</small>', `confirmados de 15/10 a 11/11, na ${esc(loja.nome)}`, 'Regem · pedidos confirmados')}
+        ${p40Num('R$ 47,10', 'de tíquete médio', 'Regem · receita líquida (sem o estorno) ÷ pedidos')}
+      </div>
+      <p class="lite-frase">Ainda são poucos pedidos para dizer o dia e a hora: eles aparecem a partir de 20 pedidos nas 4 semanas.</p></section>`;
+  }
+  const maxDia = Math.max(...P40_DEMANDA.dias.map((d) => d[1]));
+  const maxHora = Math.max(...P40_DEMANDA.horas.map((h) => h[1]));
+  const dias = P40_DEMANDA.dias
+    .map(([d, n]) => `<div class="p40-barra${n === maxDia ? ' p40-barra--foco' : ''}"><span>${d}</span><span class="p40-barra-trilho" aria-hidden="true"><i style="--v:${(n / maxDia) * 100}%"></i></span><span class="num">${n}</span></div>`)
+    .join('');
+  const horas = P40_DEMANDA.horas
+    .map(([h, n]) => `<li class="p40-hora${n === maxHora ? ' p40-hora--foco' : ''}"><span class="p40-hora-trilho" aria-hidden="true"><i style="--v:${(n / maxHora) * 100}%"></i></span><span class="num">${h}h</span></li>`)
+    .join('');
+  const descricao = `Pedidos por hora nas 4 semanas: ${P40_DEMANDA.horas.map(([h, n]) => `${h}h, ${n}`).join('; ')}. O pico é às 20h.`;
+  return `<section class="p40-grupo" aria-labelledby="g-dem">${cab('pedidos do Regem, 4 semanas até ontem (11/11)')}
+    <div class="p40-nums">
+      ${p40Num('312 <small>pedidos</small>', `confirmados de 15/10 a 11/11, na ${esc(loja.nome)}`, 'Regem · pedidos confirmados', { pro: 'order_fact · status confirmado · loja da Tijuca · janela de 28 dias no fuso da loja' })}
+      ${p40Num('R$ 48,90', 'de tíquete médio; nas 4 semanas antes, R$ 46,20 (+5,8%)', 'Regem · receita líquida (sem o estorno) ÷ pedidos', { pro: 'soma(revenue − refunded) ÷ pedidos · janela anterior: 17/09 a 14/10' })}
+      ${p40Num('58% <small>de volta</small>', '31% de clientes novos; 11% sem o cliente identificado (o iFood e a 99 não mandam o cliente)', 'Regem · cliente novo × de volta', { pro: 'is_new_customer · nulo = sem cliente (marketplace)' })}
+    </div>
+    <div class="p40-duas">
+      <div><h4>Por dia da semana</h4><div class="p40-barras-dia">${dias}</div></div>
+      <div><h4>Por hora em que o cliente pediu</h4><ul class="p40-horas" role="img" aria-label="${esc(descricao)}">${horas}</ul></div>
+    </div>
+    <p class="p40-pico">${ic('i-clock')}<span><b>O pico é na sexta, das 20h às 21h:</b> 19 pedidos nas 4 sextas.</span></p>
+    <p class="p40-nota">${ic('i-info')}<span>O pico vira o horário da verba no plano de mídia (R5), e o tíquete se compara com o bolso do bairro. Os números são da sua loja, não da região.</span></p>
+  </section>`;
+}
+
 function p40Grupos(loja, falhou) {
   const b = loja.end.bairro;
   const gente = `<section class="p40-grupo" aria-labelledby="g-gente"><div class="p40-grupo-cab"><h3 id="g-gente">Gente</h3><p>no bairro da loja</p></div><div class="p40-nums">
@@ -1371,17 +1442,14 @@ function p40Grupos(loja, falhou) {
         <li><span><span class="st st--espera">Referência do setor (imprensa)</span></span><span><b>R$ 46,70</b> de tíquete médio no Brasil em mar/2026, 2,9% acima de 12 meses antes.</span><small>Instituto Foodservice Brasil (IFB), divulgado à imprensa (Mercado &amp; Consumo, 11/05/2026).</small><small class="so-pro">Em jun/2026, R$ 44,70 (mesma fonte, outra divulgação) · renova na revisão de 90 dias da base.</small></li>
         <li><span><span class="st st--espera">Referência do setor (imprensa)</span></span><span>Em 2025, o jantar teve 487,7 milhões de pedidos no iFood e o almoço, 278 milhões; de sexta a domingo, cerca de 37% acima dos outros dias; no hambúrguer, o pico da tarde fica perto das 17h.</span><small>iFood, retrospectivas e notícias divulgadas à imprensa; os números variam entre as notícias. Vale até haver o dado da sua loja.</small></li>
       </ul></section>`;
-  const pedidos = p40.marca.regem
-    ? 'Aparece com os pedidos do Regem (R3): o Liame já recebe os pedidos; falta a conta por hora e o tíquete.'
-    : 'Aparece com os pedidos do Regem. Sem ele, a medida de pedido é o cupom exclusivo de cada campanha.';
+  // Revisão R3, parte 1: os pedidos por hora e o tíquete saíram do "Ainda não" e viraram a seção "A demanda da loja".
   const ainda = `<section class="p40-grupo" aria-labelledby="g-ainda"><div class="p40-grupo-cab"><h3 id="g-ainda">Ainda não</h3><p>o que depende de outra entrega</p></div>
       <ul class="p40-ainda">
-        <li><span class="st st--espera">Ainda não</span><span><b>Pedidos por hora e tíquete médio da loja</b><small>${pedidos}</small></span></li>
         <li><span class="st st--espera">Ainda não</span><span><b>Pessoas no raio, na Meta</b><small>Aparece com a conta de anúncios: a Meta estima quantas pessoas há no raio, por faixa de idade, antes de gastar (R6).</small></span></li>
         <li><span class="st st--espera">Ainda não</span><span><b>Concorrentes no raio</b><small>Aparece com o servidor de mapas próprio (R8). Hoje, a conta é a do município.</small></span></li>
         <li><span class="st st--espera">Ainda não</span><span><b>Bairros para atacar e para defender</b><small>Pede os pedidos por bairro do Regem, somados e sem identificar ninguém (R3, D-RG-8).</small></span></li>
       </ul></section>`;
-  return `<div class="p40-grupos">${gente}${bolso}${conc}${preco}${semana}${ref}${ainda}</div>`;
+  return `<div class="p40-grupos">${gente}${bolso}${conc}${p40Demanda(loja)}${preco}${semana}${ref}${ainda}</div>`;
 }
 
 function p40Lendo(loja) {
@@ -1450,7 +1518,12 @@ function p40CardLia() {
     ? '<p>O IBGE não respondeu hoje às 14:00: os restaurantes do município e a inflação de comer fora voltam quando ele responder (nova tentativa às 15:00).</p>'
     : `<p><b>Concorrência:</b> o Rio de Janeiro tem 16.242 restaurantes e similares, 24 para cada 10 mil habitantes <small>(IBGE, Cadastro Central de Empresas, 2024)</small>.</p>
        <p><b>Preço de comer fora</b>, em 12 meses até setembro: o lanche subiu 7,75% na região do Rio (Brasil: 7,59%) e a refeição, 2,66% (Brasil: 5,01%) <small>(IBGE, IPCA)</small>.</p>`;
-  const pedidos = p40.marca.regem ? 'pedidos por hora e tíquete médio (com os pedidos do Regem)' : 'pedidos por hora e tíquete médio (só com o Regem)';
+  // Revisão R3, parte 1: com o Regem e a permissão de ver Resultados, a LIA diz a demanda da loja; senão, ela fica no "ainda não".
+  const comDemanda = p40.marca.regem && p40.vendas && p40.demanda === 'pronto';
+  const demanda = comDemanda
+    ? '<p><b>A demanda da loja:</b> 312 pedidos nas 4 semanas até ontem, tíquete médio de R$ 48,90 (R$ 46,20 nas 4 semanas antes); o pico é na sexta, às 20h <small>(Regem)</small>.</p>'
+    : '';
+  const pedidos = comDemanda ? '' : p40.marca.regem ? 'pedidos por hora e tíquete médio (com mais pedidos do Regem), ' : 'pedidos por hora e tíquete médio (só com o Regem), ';
   return `<section class="card p40-card" aria-labelledby="p40-lia-t">
     <div class="p40-card-cab"><div><h2 id="p40-lia-t" tabindex="-1">Pergunte à LIA</h2><p class="card-sub">Quando alguém pergunta à LIA “como é a minha região?”, em qualquer tela, a resposta sai por regra, com os números e as fontes de Sua região.</p></div></div>
     <div class="p40-conversa">
@@ -1462,7 +1535,8 @@ function p40CardLia() {
           <p><b>Bolso:</b> a renda mediana do responsável pelo domicílio é R$ 5.500, acima de 87% dos 162 bairros do Rio; o bairro típico tem R$ 2.000 <small>(IBGE, Censo 2022, valor de 2022)</small>.</p>
           ${meio}
           <p><b>Semana que vem:</b> chuva na sexta, 13/11 <small>(CPTEC)</small>; feriado no domingo, 15/11, e na sexta, 20/11 <small>(BrasilAPI)</small>; Black Friday em 27/11.</p>
-          <p><b>Ainda não dá para saber:</b> ${pedidos}, pessoas no raio (com a conta de anúncios) e concorrentes no raio.</p>
+          ${demanda}
+          <p><b>Ainda não dá para saber:</b> ${pedidos}pessoas no raio (com a conta de anúncios), concorrentes no raio e os bairros dos pedidos.</p>
         </div>
         <div class="p40-resp-acoes"><button class="btn btn--sm" type="button" data-p40-ir-regiao>${ic('i-map')}Ver Sua região</button><button class="btn btn--sm" type="button" data-p40-fontes aria-haspopup="dialog">${ic('i-file')}Ver as fontes</button></div>
         <p class="p40-resp-nota">Resumo montado pelo sistema, por regra, com os mesmos números. Nenhuma IA escreveu este texto.</p>
@@ -1489,7 +1563,9 @@ function p40CardMk() {
 }
 function p40Decisoes() {
   const lista = window.P40_DECISOES.map((d) => `<li class="p40-dec"><p class="p40-dec-cab"><code>${esc(d.id)}</code><b>${esc(d.titulo)}</b></p><p>${esc(d.texto)}</p>${d.porque ? `<p>Por quê: ${esc(d.porque)}</p>` : ''}<p class="rec">Recomendo: ${esc(d.rec)}</p></li>`).join('');
-  return `<section class="card p40-proto p40-decisoes" aria-labelledby="p40-dec-t"><h2 id="p40-dec-t">Decisões do protótipo (D-RG-11 a D-RG-20)</h2><p class="lite-frase">Aprovadas pelo dono em 11/11/2026, todas como recomendadas, junto com o plano e as D-RG-1 a D-RG-10.</p><ul class="p40-dec-lista">${lista}</ul></section>`;
+  const novas = window.P40_DECISOES_R3.map((d) => `<li class="p40-dec"><p class="p40-dec-cab"><code>${esc(d.id)}</code><b>${esc(d.titulo)}</b></p><p>${esc(d.texto)}</p>${d.porque ? `<p>Por quê: ${esc(d.porque)}</p>` : ''}<p class="rec">Recomendo: ${esc(d.rec)}</p></li>`).join('');
+  return `<section class="card p40-proto p40-decisoes" aria-labelledby="p40-dec-r3-t"><h2 id="p40-dec-r3-t">Revisão R3, parte 1: a demanda da loja (D-RG-21 a D-RG-25) <span class="st st--espera">Aguardando aprovação</span></h2><p class="lite-frase">Estados 19 a 22 do menu. A seção usa os pedidos que o Liame já lê do Regem; nada muda no Regem.</p><ul class="p40-dec-lista">${novas}</ul></section>
+  <section class="card p40-proto p40-decisoes" aria-labelledby="p40-dec-t"><h2 id="p40-dec-t">Decisões do protótipo (D-RG-11 a D-RG-20)</h2><p class="lite-frase">Aprovadas pelo dono em 11/11/2026, todas como recomendadas, junto com o plano e as D-RG-1 a D-RG-10.</p><ul class="p40-dec-lista">${lista}</ul></section>`;
 }
 
 /* ---------- a página ---------- */
@@ -1745,6 +1821,9 @@ function p40Aplicar(estado, { focar = false } = {}) {
       break;
     case 'leitura': s.podeEditar = false; s.pessoa = { nome: 'Camila', ini: 'C', papel: 'Aprovadora' }; break;
     case 'desligada': s.funcao = false; break;
+    case 'demanda-poucos': s.demanda = 'poucos'; break;
+    case 'demanda-sem-regem': s.marca = { nome: 'Mister Burgers', ini: 'MB', regem: false, pedidos: 'Brendi' }; break;
+    case 'demanda-sem-permissao': s.vendas = false; s.podeEditar = false; s.pessoa = { nome: 'Camila', ini: 'C', papel: 'Aprovadora' }; break;
     default: break;
   }
   const sel = $('#rev-p40'); if (sel && sel.value !== estado) sel.value = estado;
@@ -1769,6 +1848,8 @@ function p40Aplicar(estado, { focar = false } = {}) {
     p40AbrirFontes($('[data-p40-fontes]'));
   } else if (estado === 'lia') {
     const t2 = $('#p40-lia-t'); if (t2) { t2.scrollIntoView({ block: 'start' }); t2.focus({ preventScroll: true }); }
+  } else if (estado.startsWith('demanda')) {
+    const t3 = $('#g-dem'); if (t3) t3.scrollIntoView({ block: 'start' });
   }
 }
 
