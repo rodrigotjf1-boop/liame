@@ -80,15 +80,26 @@ catalog:
   openapi-typescript: 7.13.0
   openapi-fetch: 0.17.0
 
+  # O vídeo montado pelo Liame (A6 · Z15; D-A6-133 a D-A6-141): os modelos em React (`packages/video-modelos`, empacotados
+  # pelo bundler no build) e a montagem no serviço `liame-render` (o renderer, com o Chrome Headless Shell só na imagem
+  # dele). Licença própria do Remotion: a grátis vale para empresa de até 3 pessoas (D-A6-137), com a exceção conferida no
+  # `osv-scanner.toml`. 4.0.539, de 26/10/2026: mais de duas semanas no ar (a 4.0.543 saiu em 11/11/2026).
+  remotion: 4.0.539
+  '@remotion/bundler': 4.0.539
+  '@remotion/renderer': 4.0.539
+
 # Scripts de instalação: só roda o que foi revisado (strictDepBuilds é padrão no pnpm 12).
 # Revisados em 25/09/2026; nenhum é necessário:
 # - @swc/core: só testa o binário nativo e, se falhar, instala @swc/wasm por fora do lockfile.
 # - protobufjs: checa dependências da CLI pbjs, que não usamos.
 # - @scarf/scarf: rastreador de instalação (vem do swagger-ui-dist).
+# - esbuild (12/11/2026, vem do @remotion/bundler): o script só confere o binário da plataforma, que já chega pela
+#   dependência opcional (`@esbuild/<plataforma>`) do lockfile; o build dos modelos do vídeo empacota sem ele.
 allowBuilds:
   '@swc/core': false
   protobufjs: false
   '@scarf/scarf': false
+  esbuild: false
 
 # Versão com menos de 1 dia não entra, nem por exceção automática: o install falha e alguém decide.
 minimumReleaseAgeStrict: true
@@ -107,6 +118,11 @@ peerDependencyRules:
 # @redocly/openapi-core 1.34 do gerador do SDK (fixa a 5.1.9; chama o pacote como função só ao baixar um arquivo por
 # endereço com cabeçalhos, o que o SDK, gerado do `docs/openapi.json` local, não faz). Quando os dois pedirem uma versão
 # corrigida, a linha sai.
+# O mesmo para o zod (12/11/2026): o Remotion 4.0.539 (`@remotion/studio-protocol`, `@remotion/sdk` e outros) fixa o zod
+# em 4.5.4, com o aviso GHSA-mrhx-c7xc-m3w5 (alta), corrigido na 4.6.6, a versão do catálogo que o resto do projeto já usa
+# (mesma linha 4; a montagem de verdade passou na fumaça com ela). Quando o Remotion pedir uma versão corrigida, a linha
+# sai.
 overrides:
   multer: 2.5.0
   minimatch: 11.0.3
+  zod: 4.6.6

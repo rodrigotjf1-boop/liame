@@ -1,0 +1,25 @@
+{
+  "name": "@liame/video-modelos",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Os modelos do vídeo montado pelo Liame (A6 · Z15), em React com o Remotion; o build empacota em build/ para o serviço liame-render.",
+  "type": "module",
+  "scripts": {
+    "build": "tsc -p tsconfig.json --noEmit && node scripts/empacotar.mjs",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@liame/contracts": "workspace:*",
+    "react": "catalog:",
+    "react-dom": "catalog:",
+    "remotion": "catalog:"
+  },
+  "devDependencies": {
+    "@liame/config": "workspace:*",
+    "@remotion/bundler": "catalog:",
+    "@types/node": "catalog:",
+    "@types/react": "catalog:",
+    "@types/react-dom": "catalog:",
+    "typescript": "catalog:"
+  }
+}

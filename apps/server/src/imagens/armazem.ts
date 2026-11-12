@@ -9,12 +9,18 @@ import { z } from 'zod';
 
 export const ARMAZEM_DE_IMAGENS = Symbol('ARMAZEM_DE_IMAGENS');
 
+/** O que o servidor grava: a imagem regravada (JPEG) e o vídeo montado pelo Liame (MP4). */
+export type TipoGravado = 'image/jpeg' | 'video/mp4';
+
 export interface ArmazemDeImagens {
   /** `false` em produção sem o bucket configurado: a função de imagem fica indisponível. */
   readonly disponivel: boolean;
   readonly tipo: 's3' | 'disco' | 'memoria' | 'indisponivel';
-  /** Grava a imagem (sempre JPEG) na chave. */
-  gravar(chave: string, bytes: Buffer): Promise<void>;
+  /**
+   * Grava o arquivo na chave: a imagem (JPEG, o padrão) ou o vídeo montado pelo Liame (MP4, A6 · Z15), com o tipo que o
+   * endereço de leitura devolve.
+   */
+  gravar(chave: string, bytes: Buffer, tipo?: TipoGravado): Promise<void>;
   /** Apaga as chaves; a que já não existe não é erro. */
   apagar(chaves: readonly string[]): Promise<void>;
   /** Apaga tudo o que começa pelo prefixo (a marca ou a empresa inteira) e diz quantos objetos saíram. */
@@ -140,13 +146,16 @@ export class ArmazemNaMemoria implements ArmazemDeImagens {
   readonly disponivel = true;
   readonly tipo = 'memoria';
   readonly objetos = new Map<string, Buffer>();
+  /** O tipo com que cada chave foi gravada (o vídeo montado sai como MP4). */
+  readonly tipos = new Map<string, TipoGravado>();
   /** O que falha de propósito, para os testes. */
   falhar: { gravar?: boolean; apagar?: boolean; ler?: boolean } = {};
 
-  async gravar(chave: string, bytes: Buffer): Promise<void> {
+  async gravar(chave: string, bytes: Buffer, tipo: TipoGravado = 'image/jpeg'): Promise<void> {
     exigirChave(chave);
     if (this.falhar.gravar) throw new FalhaDoArmazem('memória: falha simulada ao gravar');
     this.objetos.set(chave, Buffer.from(bytes));
+    this.tipos.set(chave, tipo);
   }
 
   async ler(chave: string): Promise<Buffer> {
@@ -403,9 +412,9 @@ export class ArmazemS3 implements ArmazemDeImagens {
     }
   }
 
-  async gravar(chave: string, bytes: Buffer): Promise<void> {
+  async gravar(chave: string, bytes: Buffer, tipo: TipoGravado = 'image/jpeg'): Promise<void> {
     exigirChave(chave);
-    await this.enviar(new this.sdk.PutObjectCommand({ Bucket: this.bucket, Key: chave, Body: bytes, ContentType: 'image/jpeg', CacheControl: 'private, max-age=300' }));
+    await this.enviar(new this.sdk.PutObjectCommand({ Bucket: this.bucket, Key: chave, Body: bytes, ContentType: tipo, CacheControl: 'private, max-age=300' }));
   }
 
   async apagar(chaves: readonly string[]): Promise<void> {

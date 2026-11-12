@@ -5,6 +5,8 @@
 **/.turbo
 **/coverage
 **/*.tsbuildinfo
+# Os modelos do vídeo montado são empacotados de novo no build da imagem do liame-render.
+packages/video-modelos/build
 .git
 .github
 .env
