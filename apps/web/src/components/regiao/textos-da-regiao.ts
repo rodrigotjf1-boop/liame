@@ -87,6 +87,50 @@ export function tipoDaData(kind: string): string {
   return kind;
 }
 
+// ------------------------------------------------------------------ a demanda da loja (R3, parte 1; D-RG-21 a D-RG-25)
+
+const DIA_CURTO = ['dom', 'seg', 'ter', 'qua', 'qui', 'sex', 'sáb'];
+const NO_DIA = ['no domingo', 'na segunda', 'na terça', 'na quarta', 'na quinta', 'na sexta', 'no sábado'];
+const NOS_DIAS = ['nos 4 domingos', 'nas 4 segundas', 'nas 4 terças', 'nas 4 quartas', 'nas 4 quintas', 'nas 4 sextas', 'nos 4 sábados'];
+
+/** O dia da semana curto (0 = domingo): "sex". */
+export function diaDaSemanaCurto(dia: number): string {
+  return DIA_CURTO[dia] ?? String(dia);
+}
+
+/** Reais com centavos, de um valor em micros ("48900000" → "R$ 48,90"). */
+export function reaisDeMicros(micros: string): string {
+  return `R$ ${fmt(Number(micros) / 1_000_000, 2)}`;
+}
+
+/** A parte do total em porcentagem inteira ("58%"); zero sem total. */
+export function parteEmPorcento(parte: number, total: number): string {
+  return `${total > 0 ? Math.round((parte / total) * 100) : 0}%`;
+}
+
+/** O dia "2026-10-15" como "15/10". */
+export function diaEMes(dia: string): string {
+  return `${dia.slice(8, 10)}/${dia.slice(5, 7)}`;
+}
+
+/** O pico em palavras: "O pico é na sexta, das 20h às 21h: 19 pedidos nas 4 sextas." */
+export function fraseDoPico(pico: { weekday: number; hour: number; orders: number }): { titulo: string; resto: string } {
+  const ate = (pico.hour + 1) % 24;
+  return {
+    titulo: `O pico é ${NO_DIA[pico.weekday] ?? ''}, das ${pico.hour}h às ${ate}h:`,
+    resto: `${inteiro(pico.orders)} ${pico.orders === 1 ? 'pedido' : 'pedidos'} ${NOS_DIAS[pico.weekday] ?? ''}.`,
+  };
+}
+
+/** As horas do gráfico: da primeira à última com pedido (seguidas, para o vão aparecer); vazio sem pedido. */
+export function horasDoGrafico(porHora: ReadonlyArray<{ hour: number; orders: number }>): Array<{ hour: number; orders: number }> {
+  const com = porHora.filter((h) => h.orders > 0);
+  if (!com.length) return [];
+  const de = Math.min(...com.map((h) => h.hour));
+  const ate = Math.max(...com.map((h) => h.hour));
+  return porHora.filter((h) => h.hour >= de && h.hour <= ate);
+}
+
 /** O mês "2026-09" como a tela escreve: "set/2026". */
 export function mesAno(periodo: string): string {
   const m = Number(periodo.slice(5, 7));

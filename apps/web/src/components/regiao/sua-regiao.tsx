@@ -9,7 +9,9 @@ import { Icone } from '@/components/ui/icone';
 import { api, chamar, mensagemDe } from '@/lib/api';
 import { disparar } from '@/lib/disparar';
 import { useDetalhes } from '@/lib/modo';
+import { DemandaDaLoja } from './demanda-da-loja';
 import { GavetaFontes } from './gaveta-fontes';
+import { Numero } from './numero';
 import {
   comparaDensidade,
   condicaoEmFrase,
@@ -47,18 +49,6 @@ const RELER_MS = 10_000;
 const ESPERA_MAXIMA_MS = 3 * 60_000;
 
 type Carga = { tipo: 'carregando'; loja: string } | { tipo: 'ok'; loja: string; r: RegionOverviewResponse } | { tipo: 'erro'; loja: string; texto: string };
-
-function Numero({ valor, obs, fonte, pro, classe, extra, mostraPro }: { valor: ReactNode; obs: ReactNode; fonte: string; pro?: string; classe?: string; extra?: ReactNode; mostraPro: boolean }) {
-  return (
-    <div className={`rg-num${classe ? ` ${classe}` : ''}`}>
-      <p className="rg-num-v">{valor}</p>
-      <p className="rg-num-o">{obs}</p>
-      {extra}
-      <p className="rg-num-f">{fonte}</p>
-      {pro && mostraPro && <p className="rg-num-c">{pro}</p>}
-    </div>
-  );
-}
 
 export function SuaRegiao({ brandId, lojas }: { brandId: string; lojas: StoreLocation[] }) {
   const ids = useId();
@@ -474,6 +464,8 @@ export function SuaRegiao({ brandId, lojas }: { brandId: string; lojas: StoreLoc
             )}
           </section>
 
+          <DemandaDaLoja r={r} lojaNome={loja.unit_name} ids={ids} mostraPro={mostraPro} />
+
           {c?.pix && (
             <section className="rg-grupo" aria-labelledby={`${ids}-pulso`}>
               <div className="rg-grupo-cab">
@@ -629,9 +621,9 @@ export function SuaRegiao({ brandId, lojas }: { brandId: string; lojas: StoreLoc
             </div>
             <ul className="rg-ainda">
               {[
-                ['Pedidos por hora e tíquete médio da loja', 'Aparecem com os pedidos do Regem (R3). Sem ele, a medida de pedido é o cupom exclusivo de cada campanha.'],
                 ['Pessoas no raio, na Meta', 'Aparece com a conta de anúncios: a Meta estima quantas pessoas há no raio, por faixa de idade, antes de gastar (R6).'],
                 ['Concorrentes no raio', 'Aparece com o servidor de mapas próprio (R8). Hoje, a conta é a do município.'],
+                ['Bairros para atacar e para defender', 'Pede os pedidos por bairro do Regem, somados e sem identificar ninguém (R3, parte 2; D-RG-8).'],
               ].map(([t, s]) => (
                 <li key={t}>
                   <span className="st st--espera">Ainda não</span>
