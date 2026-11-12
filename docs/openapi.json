@@ -143296,6 +143296,10 @@
       "description": "Campanha nova na Meta: a peça aprovada com a foto ou o vídeo da loja vira um pedido de criar a campanha, o conjunto e o anúncio, tudo pausado, com aprovação e o código do app (A4, X5)"
     },
     {
+      "name": "campanhas-google",
+      "description": "Campanha nova no Google: a peça aprovada, com os textos nos tamanhos do Google e uma foto da loja recortada, vira um pedido de criar uma Performance Max pausada, com aprovação e o código do app (A5, Y9)"
+    },
+    {
       "name": "video-montado",
       "description": "O vídeo montado pelo Liame: modelos sobre as fotos e os vídeos de Fotos, com os textos conferidos pelo Compliance, numa fila de um vídeo por vez; o pronto entra em Fotos (A6, Z15)"
     },
