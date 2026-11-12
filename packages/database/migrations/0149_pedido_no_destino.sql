@@ -1,4 +1,4 @@
--- 0146 · Hub DMS (F5, parte D): o Liame pede o disparo ao RegemCast e espera o destino.
+-- 0149 · Hub DMS (F5, parte D): o Liame pede o disparo ao RegemCast e espera o destino.
 -- Na mensagem cuja aprovação é do destino (decisão F5-9), o Liame não pede a própria aprovação: ele monta a campanha
 -- em rascunho, cria o cupom e pede o disparo ao RegemCast (`campanha_disparo_pedir`), onde uma pessoa da conta aprova
 -- com o código do aplicativo autenticador e o teto de gasto. O Liame mostra "esperando o destino", com o prazo e o
