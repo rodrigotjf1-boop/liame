@@ -1,10 +1,13 @@
 'use client';
 
+import { useEffect, useState } from 'react';
 import type { LinhaDasVendas } from '@/components/contas/vendas-google';
 import { BotaoPedir, type PedirNaLista } from '@/components/pedir/botao-pedir';
 import { mostraOPedir, notaDoPedir } from '@/components/pedir/textos';
+import { Icone } from '@/components/ui/icone';
 import { useDetalhes } from '@/lib/modo';
 import { ListaDeCampanhas } from './campanhas-lite';
+import { CartoesDeCampanhas } from './cartoes-de-campanhas';
 import type { CampanhasLite } from './graficos';
 import { Halteres } from './halteres';
 import { LinhaVendasGoogle } from './linha-vendas-google';
@@ -55,8 +58,33 @@ type Props = {
   vendasAoGoogle?: LinhaDasVendas | null;
 };
 
+/** A vista do Pro ("Cartões | Tabela"), guardada no navegador de quem vê (D-A3-31); os cartões são o padrão. */
+const CHAVE_DA_VISTA = 'liame.resultados.campanhas.vista';
+type Vista = 'cartoes' | 'tabela';
+
+function useVista(): [Vista, (v: Vista) => void] {
+  const [vista, setVista] = useState<Vista>('cartoes');
+  useEffect(() => {
+    try {
+      if (localStorage.getItem(CHAVE_DA_VISTA) === 'tabela') setVista('tabela');
+    } catch {
+      // Sem o armazenamento do navegador (janela anônima, bloqueado): fica nos cartões.
+    }
+  }, []);
+  const mudar = (v: Vista) => {
+    setVista(v);
+    try {
+      localStorage.setItem(CHAVE_DA_VISTA, v);
+    } catch {
+      // Sem guardar: vale só nesta visita.
+    }
+  };
+  return [vista, mudar];
+}
+
 export function CartaoCampanhas({ campanhas, lite, rotuloPeriodo, pedir = null, vendasAoGoogle = null }: Props) {
   const d = useDetalhes();
+  const [vista, mudarVista] = useVista();
   // A coluna só existe quando alguma campanha à vista tem o que mostrar nela.
   const comPedir =
     pedir &&
@@ -116,7 +144,33 @@ export function CartaoCampanhas({ campanhas, lite, rotuloPeriodo, pedir = null, 
           {!d.pro && vendasAoGoogle && <LinhaVendasGoogle linha={vendasAoGoogle} />}
           {!d.pro && <BotaoDetalhes aberto={d.aberto} controla="camp-pro" aoAlternar={d.alternar} />}
           <div className="res-pro" id="camp-pro" hidden={!d.mostraPro}>
-            <div className="table-wrap">
+            <div className="cc-vista-linha">
+              <div className="seg cc-vista" role="group" aria-label="Ver as campanhas em">
+                <button type="button" aria-pressed={vista === 'cartoes'} onClick={() => mudarVista('cartoes')}>
+                  <Icone nome="image" pequeno />
+                  Cartões
+                </button>
+                <button type="button" aria-pressed={vista === 'tabela'} onClick={() => mudarVista('tabela')}>
+                  <Icone nome="menu" pequeno />
+                  Tabela
+                </button>
+              </div>
+            </div>
+            {vista === 'cartoes' && (
+              <>
+                <CartoesDeCampanhas campanhas={campanhas} pedir={comPedir} />
+                {campanhas.soPlataforma.map((s) => (
+                  <p className="lite-frase" key={s.provider}>
+                    <TextoRico frase={s.frase} />
+                  </p>
+                ))}
+                <p className="cc-total">
+                  <b>Total</b> {campanhas.total.investimento.texto} investidos · {campanhas.total.pedidos.texto} pedidos · {campanhas.total.receita.texto} de receita · ROAS do caixa{' '}
+                  {campanhas.total.roasCaixa.texto}
+                </p>
+              </>
+            )}
+            <div className="table-wrap" hidden={vista !== 'tabela'}>
               <table className="tabela tabela--camp">
                 <caption className="sr-only">
                   Resultado por campanha em {rotuloPeriodo}: investimento, conversas, pedidos, receita, margem conhecida, custo por pedido, ROAS da plataforma e ROAS confirmado no caixa
@@ -213,7 +267,7 @@ export function CartaoCampanhas({ campanhas, lite, rotuloPeriodo, pedir = null, 
                 </tfoot>
               </table>
             </div>
-            <p className="eixo-nota">Escala de 0 a 7. A linha vertical marca ROAS 1, o ponto em que a mídia se paga.</p>
+            <p className="eixo-nota">Plataforma × caixa: escala de 0 a 7. A linha vertical marca ROAS 1, o ponto em que a mídia se paga.</p>
             {nota && <p className="eixo-nota">{nota}</p>}
             {d.pro && vendasAoGoogle && <LinhaVendasGoogle linha={vendasAoGoogle} />}
           </div>

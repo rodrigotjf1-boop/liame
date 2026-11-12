@@ -1,4 +1,4 @@
-import type { ClosedLoopResponse, ConfirmedResult, ConnectionResponse, PlatformResult, SourceFreshness } from '@liame/contracts';
+import type { CampaignTopAd, ClosedLoopResponse, ConfirmedResult, ConnectionResponse, PlatformResult, SourceFreshness } from '@liame/contracts';
 import { plataforma } from '@/components/contas/textos';
 import type { NomeIcone } from '@/components/ui/icone';
 import { inteiro, reaisDeMicros } from '@/lib/formato';
@@ -744,6 +744,8 @@ export type LinhaCampanha = {
   /** Pontos do gráfico plataforma × caixa (nulo = não dá para desenhar). */
   halteres: { plataforma: number | null; caixa: number } | null;
   rotuloHalteres: string;
+  /** O anúncio que mais gastou no período, com a imagem para reconhecer a campanha (A3 · I14; P44); nulo sem gasto. */
+  anuncio: CampaignTopAd | null;
 };
 
 export type LinhaSoPlataforma = { provider: string; titulo: string; pedidos: string; receita: string; nota: string; frase: Frase };
@@ -809,6 +811,7 @@ export function campanhasDe(r: ClosedLoopResponse, b: Base): CartaoCampanhas {
       },
       halteres: caixa === null ? null : { plataforma: plat, caixa },
       rotuloHalteres,
+      anuncio: c.top_ad ?? null,
     };
   });
 

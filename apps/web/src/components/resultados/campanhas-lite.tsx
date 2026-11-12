@@ -3,6 +3,7 @@
 import type { CSSProperties } from 'react';
 import { BotaoPedir, type PedirNaLista } from '@/components/pedir/botao-pedir';
 import { Selo } from './desenhos';
+import { MiniaturaDoAnuncio } from './imagem-do-anuncio';
 import type { BarraDaCampanha, CampanhasLite as Dados, LinhaConversa } from './graficos';
 import { TextoRico } from './pecas';
 
@@ -58,7 +59,9 @@ export function ListaDeCampanhas({ campanhas, pedir }: { campanhas: Dados; /** O
       )}
       {campanhas.linhas.map((c) => (
         <li key={c.id}>
-          <div className="cl-nome">
+          {/* A miniatura do anúncio que mais gastou, para reconhecer a campanha (A3 · I14; P44). */}
+          <div className="cl-nome cc-cl">
+            <MiniaturaDoAnuncio anuncio={c.anuncio} pequeno />
             <b>{c.nome}</b>
             <span>{c.sub}</span>
           </div>

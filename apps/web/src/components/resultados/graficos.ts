@@ -1,4 +1,4 @@
-import type { ClosedLoopResponse, DailyResultsResponse } from '@liame/contracts';
+import type { CampaignTopAd, ClosedLoopResponse, DailyResultsResponse } from '@liame/contracts';
 import type { NomeIcone } from '@/components/ui/icone';
 import { inteiro, reaisDeMicros } from '@/lib/formato';
 import {
@@ -385,7 +385,17 @@ export type BarraDaCampanha =
   | { tipo: 'tamanho'; tom: 'foco' | 'gasto'; largura: number; valor: string; dica: string }
   | { tipo: 'neutro' | 'semcusto'; texto: string; dica: string };
 
-export type LinhaCampanhaLite = { id: string; nome: string; provider: string; sub: string; barra: BarraDaCampanha; selo: SeloDoPeriodo | null; rotulo: string };
+export type LinhaCampanhaLite = {
+  id: string;
+  nome: string;
+  provider: string;
+  sub: string;
+  barra: BarraDaCampanha;
+  selo: SeloDoPeriodo | null;
+  rotulo: string;
+  /** O anúncio que mais gastou no período: a miniatura ao lado do nome (A3 · I14; P44). */
+  anuncio: CampaignTopAd | null;
+};
 
 export type CampanhasLite = {
   titulo: string;
@@ -432,7 +442,7 @@ export function campanhasLiteDe(r: ClosedLoopResponse, b: Base): CampanhasLite {
           barra = { tipo: 'neutro', texto: 'sem pedido ainda', dica: 'Sem pedido hoje, até agora' };
           rotulo = `${c.name}: sem pedido hoje, até agora`;
         }
-        return { id: c.campaign_id, nome: c.name, provider: c.provider, sub: sub(c), barra, selo: null, rotulo };
+        return { id: c.campaign_id, nome: c.name, provider: c.provider, sub: sub(c), barra, selo: null, rotulo, anuncio: c.top_ad ?? null };
       }),
     };
   }
@@ -497,7 +507,7 @@ export function campanhasLiteDe(r: ClosedLoopResponse, b: Base): CampanhasLite {
         selo = { rotulo: m.ver.rotulo, classe: m.ver.classe };
         rotulo = `${c.name}: ${ganho ? 'sobraram' : 'faltaram'} ${reais(absoluto)} depois de pagar o anúncio`;
       }
-      return { id: c.campaign_id, nome: c.name, provider: c.provider, sub: sub(c), barra, selo, rotulo };
+      return { id: c.campaign_id, nome: c.name, provider: c.provider, sub: sub(c), barra, selo, rotulo, anuncio: c.top_ad ?? null };
     }),
   };
 }
