@@ -29,8 +29,14 @@ import {
   inteiro,
   condicaoEmFrase,
   diaCurto,
+  diaDaSemanaCurto,
+  diaEMes,
   fontesQueFalharam,
+  fraseDoPico,
+  horasDoGrafico,
   iconeDoTempo,
+  parteEmPorcento,
+  reaisDeMicros,
   mesAno,
   movimentoDaContagem,
   quandoFoiLida,
@@ -271,6 +277,17 @@ describe('Sua região (R2, parte 2)', () => {
     expect(quandoFoiLida('2026-11-10T09:10:00.000Z', hoje)).toMatch(/^em 10\/11 às \d{2}:\d{2}$/);
     // A previsão que falhou fica na semana que vem, fora da faixa do IBGE.
     expect(fontesQueFalharam(retrato).map((f) => f.source)).toEqual(['ibge_9528']);
+  });
+
+  it('a demanda da loja (R3, parte 1): o dinheiro em micros, a porcentagem, o dia, o pico e as horas do gráfico', () => {
+    expect([reaisDeMicros('48900000'), reaisDeMicros('1050000000'), parteEmPorcento(181, 312), parteEmPorcento(1, 0), diaEMes('2026-10-15')]).toEqual(['R$ 48,90', 'R$ 1.050,00', '58%', '0%', '15/10']);
+    expect([diaDaSemanaCurto(0), diaDaSemanaCurto(5), diaDaSemanaCurto(6)]).toEqual(['dom', 'sex', 'sáb']);
+    expect(fraseDoPico({ weekday: 5, hour: 20, orders: 19 })).toEqual({ titulo: 'O pico é na sexta, das 20h às 21h:', resto: '19 pedidos nas 4 sextas.' });
+    expect(fraseDoPico({ weekday: 0, hour: 23, orders: 1 })).toEqual({ titulo: 'O pico é no domingo, das 23h às 0h:', resto: '1 pedido nos 4 domingos.' });
+    const porHora = Array.from({ length: 24 }, (_, hour) => ({ hour, orders: hour === 11 ? 3 : hour === 14 ? 0 : hour === 20 ? 9 : 0 }));
+    // Da primeira à última hora com pedido, com o vão no meio (o gráfico mostra que às 14h não houve pedido).
+    expect(horasDoGrafico(porHora).map((h) => h.hour)).toEqual([11, 12, 13, 14, 15, 16, 17, 18, 19, 20]);
+    expect(horasDoGrafico(porHora.map((h) => ({ ...h, orders: 0 })))).toEqual([]);
   });
 
   it('a resposta da LIA sobre a região (D-RG-18): Ver Sua região e Ver as fontes, na marca da conversa, sem pedir a análise', () => {

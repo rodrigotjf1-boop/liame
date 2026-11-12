@@ -175,19 +175,41 @@ describe('a LIA por regra: "como é a minha região?" (D-RG-18)', () => {
     conferirResposta(r.resposta, { emDia: [r.valor, r.calculados.map((c) => c.valor)], velhas: [], nomes: ['Mister Burgers', loja.nome, loja.bairro, loja.municipio, ...retrato.week_ahead!.dates.map((d) => d.name)] });
   const texto = (r: ReturnType<typeof respostaDaRegiao>) => r.resposta.blocos.map((b) => b.texto);
 
-  it('o retrato inteiro: gente, bolso, concorrência, preço de comer fora, a semana que vem e o que ainda não dá para saber; passa na conferência', () => {
-    const r = respostaDaRegiao({ lojasNoMapa: 2, temRegem: true, loja, retrato });
+  // A demanda da loja (R3, parte 1): como o retrato a traz para quem vê Resultados.
+  const demanda: NonNullable<RegionOverviewResponse['store_demand']> = {
+    status: 'pronto',
+    from: '2026-10-15',
+    to: '2026-11-11',
+    days: 28,
+    minimum_orders: 20,
+    orders: 312,
+    revenue_micros: '15256800000',
+    ticket_micros: '48900000',
+    previous: { orders: 290, revenue_micros: '13398000000', ticket_micros: '46200000' },
+    customers: { new: 97, returning: 181, unknown: 34 },
+    by_weekday: [],
+    by_hour: [],
+    peak: { weekday: 5, hour: 20, orders: 19 },
+  };
+
+  it('o retrato inteiro: gente, bolso, concorrência, a demanda, preço de comer fora, a semana que vem e o que ainda não dá para saber, em 8 blocos; passa na conferência', () => {
+    const r = respostaDaRegiao({ lojasNoMapa: 2, temRegem: true, loja, retrato: { ...retrato, store_demand_status: 'disponivel', store_demand: demanda } });
     expect(r.tipo).toBe('regiao');
     expect(texto(r)).toEqual([
       'A marca tem 2 lojas no mapa; esta resposta é da loja Mister Burgers Tijuca. As outras estão em Sua região.',
       'Gente: a loja Mister Burgers Tijuca fica no bairro Tijuca, Rio de Janeiro: 142.909 pessoas em 9,94 km², 14.375 por km² (IBGE, Censo 2022).',
       'Bolso: a renda mediana do responsável pelo domicílio no bairro é R$ 6.601, a preços de set/2026, acima de 87% dos 162 bairros do município (IBGE, Censo 2022, corrigida pelo IPCA).',
       'Concorrência: 812 lugares de comida com CNPJ ativo no bairro e 31.512 no município, 46,8 para cada 10 mil pessoas (Receita Federal, CNPJ aberto, out/2026).',
+      'A demanda da loja: 312 pedidos nas 4 semanas até ontem, tíquete médio de R$ 48,90 (R$ 46,20 nas 4 semanas antes); o pico é na sexta, às 20h (Regem).',
       'Preço de comer fora, em 12 meses até set/2026: o lanche subiu 7,75% na região metropolitana (Brasil: 7,59%) e a refeição, 2,66% (Brasil: 5,01%) (IBGE, IPCA).',
       'Semana que vem: chuva prevista na sexta, 13/11 (CPTEC); Proclamação da República no domingo, 15/11; Dia Nacional de Zumbi e da Consciência Negra na sexta, 20/11; Black Friday na sexta, 27/11.',
-      'Ainda não dá para saber: pedidos por hora e tíquete médio da loja (com os pedidos do Regem), pessoas no raio (com a conta de anúncios) e concorrentes no raio.',
+      'Ainda não dá para saber: pessoas no raio (com a conta de anúncios), concorrentes no raio e os bairros dos pedidos.',
     ]);
     expect(conferir(r)).toBeNull();
+    // Mesmo parcial, com tudo, cabe em 8 blocos (a falha abre o último).
+    const parcial = respostaDaRegiao({ lojasNoMapa: 2, temRegem: true, loja, retrato: { ...retrato, status: 'parcial', store_demand_status: 'disponivel', store_demand: demanda } });
+    expect(texto(parcial)).toHaveLength(8);
+    expect(conferir(parcial)).toBeNull();
     // Nada do endereço da loja (D-RG-2): só o bairro, o município e os números.
     expect(JSON.stringify(r.valor)).not.toMatch(/Rua|Conde|20520/);
   });
@@ -200,9 +222,20 @@ describe('a LIA por regra: "como é a minha região?" (D-RG-18)', () => {
     expect(t).toContain('Bolso: a renda mediana do responsável pelo domicílio no bairro é R$ 5.500, acima de 87% dos 162 bairros do município (IBGE, Censo 2022, valor de 2022).');
     expect(t).toContain('Concorrência: o município tem 16.242 restaurantes e similares, 24,1 para cada 10 mil habitantes (IBGE, Cadastro Central de Empresas, 2024).');
     expect(t.some((x) => x.startsWith('Semana que vem'))).toBe(false);
-    expect(t).toContain('Uma das fontes públicas não respondeu na última leitura; o número que faltou aparece em Sua região quando ela responder.');
-    expect(t.at(-1)).toContain('(só com o Regem)');
+    expect(t.at(-1)).toBe(
+      'Uma das fontes públicas não respondeu na última leitura; o número que faltou aparece em Sua região quando ela responder. Ainda não dá para saber: pedidos por hora e tíquete médio da loja (só com o Regem), pessoas no raio (com a conta de anúncios), concorrentes no raio e os bairros dos pedidos.',
+    );
     expect(conferir(r)).toBeNull();
+  });
+
+  it('a demanda com poucos pedidos diz o total e o tíquete, e o dia e a hora ficam no "ainda não"; sem a permissão de ver Resultados, a demanda não é citada', () => {
+    const poucos = respostaDaRegiao({ lojasNoMapa: 1, temRegem: true, loja, retrato: { ...retrato, store_demand_status: 'disponivel', store_demand: { ...demanda, status: 'poucos_pedidos', orders: 12, previous: { orders: 0, revenue_micros: '0', ticket_micros: null }, peak: null } } });
+    const t = texto(poucos);
+    expect(t).toContain('A demanda da loja: 12 pedidos nas 4 semanas até ontem, tíquete médio de R$ 48,90 (Regem).');
+    expect(t.at(-1)).toContain('Ainda não dá para saber: o dia e a hora dos pedidos (com mais pedidos do Regem), ');
+    expect(conferir(poucos)).toBeNull();
+    const semPermissao = respostaDaRegiao({ lojasNoMapa: 1, temRegem: true, loja, retrato: { ...retrato, store_demand_status: 'sem_permissao', store_demand: null } });
+    expect(texto(semPermissao).some((x) => /demanda|pedidos por hora|tíquete/.test(x))).toBe(false);
   });
 
   it('sem loja no mapa, diz como pôr; com o retrato ainda lendo, pede para perguntar de novo', () => {

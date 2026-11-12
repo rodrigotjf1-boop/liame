@@ -146,6 +146,27 @@ export function respostaDaRegiao(e: EntradaDaRegiao): RespostaDaRegiao {
     m.p(`${frase} (${conc.fonte}).`);
   }
 
+  // A demanda da loja (R3, parte 1; D-RG-25): o total, o tíquete e o pico, só quando o retrato a trouxe (quem vê Resultados).
+  const dem = r.store_demand;
+  if (r.store_demand_status === 'disponivel' && dem && dem.status !== 'sem_pedidos') {
+    const demanda: Record<string, string> = { pedidos: inteiro(dem.orders), periodo: '4 semanas até ontem', fonte: 'Regem' };
+    let frase = `A demanda da loja: ${demanda.pedidos} ${dem.orders === 1 ? 'pedido' : 'pedidos'} nas ${demanda.periodo}`;
+    if (dem.ticket_micros) {
+      demanda.tiquete = reaisDeMicros(dem.ticket_micros);
+      frase += `, tíquete médio de ${demanda.tiquete}`;
+      if (dem.previous.ticket_micros) {
+        demanda.tiquete_antes = reaisDeMicros(dem.previous.ticket_micros);
+        frase += ` (${demanda.tiquete_antes} nas 4 semanas antes)`;
+      }
+    }
+    if (dem.peak) {
+      demanda.pico = `${NO_DIA[dem.peak.weekday]}, às ${dem.peak.hour}h`;
+      frase += `; o pico é ${demanda.pico}`;
+    }
+    valor.demanda_da_loja = demanda;
+    m.p(`${frase} (${demanda.fonte}).`);
+  }
+
   // Preço de comer fora: o IPCA de 12 meses do lanche e da refeição, no lugar e no Brasil.
   const ipca = c?.food_away_inflation;
   if (ipca && (ipca.snack !== null || ipca.meal !== null)) {
@@ -193,9 +214,19 @@ export function respostaDaRegiao(e: EntradaDaRegiao): RespostaDaRegiao {
     m.p(`Semana que vem: ${partes.join('; ')}.`);
   }
 
-  if (r.status === 'parcial') m.p('Uma das fontes públicas não respondeu na última leitura; o número que faltou aparece em Sua região quando ela responder.');
-
-  const pedidos = e.temRegem ? 'pedidos por hora e tíquete médio da loja (com os pedidos do Regem)' : 'pedidos por hora e tíquete médio da loja (só com o Regem)';
-  m.p(`Ainda não dá para saber: ${pedidos}, pessoas no raio (com a conta de anúncios) e concorrentes no raio.`);
+  // O que ainda não dá para saber (e a fonte que falhou, no mesmo bloco: a resposta cabe em 8 blocos). Sem a permissão
+  // de ver Resultados, a demanda não é citada (D-RG-24).
+  const semDemanda =
+    r.store_demand_status === 'sem_regem'
+      ? 'pedidos por hora e tíquete médio da loja (só com o Regem), '
+      : r.store_demand_status === 'disponivel' && dem?.status === 'sem_pedidos'
+        ? 'pedidos por hora e tíquete médio da loja (quando os pedidos do Regem chegarem), '
+        : r.store_demand_status === 'disponivel' && dem?.status === 'poucos_pedidos'
+          ? 'o dia e a hora dos pedidos (com mais pedidos do Regem), '
+          : '';
+  const falhou = r.status === 'parcial' ? 'Uma das fontes públicas não respondeu na última leitura; o número que faltou aparece em Sua região quando ela responder. ' : '';
+  m.p(`${falhou}Ainda não dá para saber: ${semDemanda}pessoas no raio (com a conta de anúncios), concorrentes no raio e os bairros dos pedidos.`);
   return { ...m.pronto(), valor, tipo: 'regiao' };
 }
+
+const reaisDeMicros = (micros: string): string => `R$ ${(Number(micros) / 1_000_000).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
