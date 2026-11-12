@@ -16,6 +16,7 @@ import { uuidv7 } from '@liame/database';
 import { Injectable } from '@nestjs/common';
 import { sql } from 'drizzle-orm';
 import { indiceDasOrigens } from '../ai/conversa/fontes.js';
+import { comAVerba } from '../ai/estrategista/midia.js';
 import { dinheiroDoPlano, hashDoConteudo, marcarPlano } from '../ai/estrategista/plano.js';
 import { conferirEdicao } from '../ai/estrategista/resposta.js';
 import { limparJson, limparTexto } from '../ai/sanitizar.js';
@@ -165,7 +166,17 @@ export class PlanosService {
     const anterior = PlanContent.parse(atual.content);
     // O dado pessoal sai antes de tudo; a verba de hoje é a do código, nunca a da edição.
     let content = PlanContent.parse(limparJson(body.content).valor);
-    if (content.kind === 'noventa_dias' && anterior.kind === 'noventa_dias') content = { ...content, budget: { ...content.budget, today: anterior.budget.today } };
+    if (content.kind === 'noventa_dias' && anterior.kind === 'noventa_dias') {
+      content = { ...content, budget: { ...content.budget, today: anterior.budget.today } };
+      // O plano de mídia (R5): as lojas, os anéis e os horários são os da versão anterior (contas do código); as etapas
+      // são as da versão nova, e o dinheiro de cada anel é refeito pela verba proposta nela (D-RG-27). Plano de mídia que
+      // a versão anterior não tinha não entra pela edição.
+      const { media_plan: _semMidia, ...semMidia } = content;
+      content =
+        content.media_plan && anterior.media_plan
+          ? { ...semMidia, media_plan: comAVerba({ stores: anterior.media_plan.stores, stages: content.media_plan.stages }, content.budget.proposal) }
+          : semMidia;
+    }
     const nomes = await nomesDaMarca(tx, p.brand_id);
     const problemas = conferirEdicao(content, { nomes, daMarca: await proibidasDaMarca(p.brand_id) });
     if (problemas.length) {

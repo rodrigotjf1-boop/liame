@@ -15,12 +15,14 @@ import { currentStep, totpCode } from '../../src/auth/totp.js';
 import { APP_CONFIG, type AppConfig } from '../../src/config.js';
 import { DATABASE } from '../../src/database/database.module.js';
 import { FlagService } from '../../src/flags/flag.service.js';
+import { RegiaoService } from '../../src/regiao/regiao.service.js';
 import { diaNoFuso, menosDias } from '../../src/results/fora-do-normal.js';
 import { ResultsService } from '../../src/results/results.service.js';
 import { EstrategistaLoop, TENTATIVAS } from '../../src/worker/estrategista-loop.js';
 import { EstrategistaService } from '../../src/worker/estrategista.service.js';
 import { codigoErrado, enableMfa, ownerQuery, PASSWORD, resetIpRateLimits, signupAndLogin, startApi, TERMOS, type TestApi, tokenFrom, uniqueEmail } from '../helpers/api.js';
 import { ligarIa, ligarRevisor, ModelosDeTeste, parecer, recusa, rotaCompartilhada, uso } from '../helpers/ia.js';
+import { ligarFlagDaEmpresa } from '../helpers/meta-de-mentira.js';
 import { hasDb, OWNER_URL } from './env.js';
 
 // Planos do Estrategista (A3, I11): a demanda que a LIA registrou vira plano pela fila do worker, com o modelo simulado;
@@ -183,7 +185,7 @@ describe.skipIf(!hasDb)('Planos do Estrategista: fila, conferência, decisão, v
     modelos = new ModelosDeTeste(config);
     api.app.get(ModelosIa).modelo = (provider, model) => modelos.modelo(provider, model);
     // A fila do worker com o gateway e as leituras da aplicação (os mesmos serviços das rotas).
-    const servico = new EstrategistaService(database, api.app.get(AiGateway), api.app.get(FerramentasDeLeitura), api.app.get(ResultsService), api.app.get(RevisorService));
+    const servico = new EstrategistaService(database, api.app.get(AiGateway), api.app.get(FerramentasDeLeitura), api.app.get(ResultsService), api.app.get(RevisorService), api.app.get(RegiaoService));
     loop = new EstrategistaLoop(database, flags, servico);
     // A tarefa do Estrategista também é usada por `planos-agenda.spec.ts`, que roda em outro processo: a rota é a
     // compartilhada (ninguém apaga a do outro), e o modelo simulado é o deste arquivo.
@@ -238,8 +240,8 @@ describe.skipIf(!hasDb)('Planos do Estrategista: fila, conferência, decisão, v
 
     // Custo de quem pediu; o agente na auditoria.
     expect(await usos(d.tenantId)).toEqual([
-      { workflow: 'estrategista.plano', user_id: d.userId, prompt_version: 'estrategista.plano@3' },
-      { workflow: 'estrategista.plano', user_id: d.userId, prompt_version: 'estrategista.plano@3' },
+      { workflow: 'estrategista.plano', user_id: d.userId, prompt_version: 'estrategista.plano@4' },
+      { workflow: 'estrategista.plano', user_id: d.userId, prompt_version: 'estrategista.plano@4' },
     ]);
     const auditoria = await ownerQuery<{ actor_type: string; actor_label: string; agent: string; origin: string; after: Record<string, unknown> }>(
       `select actor_type, actor_label, agent, origin, after from liame.audit_event where tenant_id = $1 and action = 'plano.propor' and resource_id = $2`,
@@ -360,6 +362,8 @@ describe.skipIf(!hasDb)('Planos do Estrategista: fila, conferência, decisão, v
       meses: mesesDoPlano(hoje).map((m, i) => ({ mes: m.nome, plano: ['Rastreio nos anúncios.', 'Um combo novo para testar.', 'Os horários avisados antes.'][i]! })),
       verba_proposta: { meta: 1000, google: 0 },
       datas,
+      // Sem loja no mapa (a região desligada), o plano de mídia vem nulo: o campo é obrigatório no schema (prompt v4).
+      midia: null,
     };
     responder(roteiro(pede('resultados_ciclo_fechado', { brand_id: d.brandId, ...semana }), responde(plano)));
     expect(await rodarFila(d)).toEqual([{ tipo: 'demanda', id, tenantId: d.tenantId, status: 'proposto' }]);
@@ -374,6 +378,89 @@ describe.skipIf(!hasDb)('Planos do Estrategista: fila, conferência, decisão, v
     const outra = await demanda(d, 'plano', 'Outro plano');
     responder(roteiro(responde({ ...plano, datas: [{ dia: amanha, nome: 'Dia do Hambúrguer', o_que_fazer: 'Combo.' }] })));
     expect(await rodarFila(d)).toEqual([{ tipo: 'demanda', id: outra, tenantId: d.tenantId, status: 'recusado', motivo: 'data_fora_do_calendario' }]);
+  });
+
+  it('com loja no mapa e a região ligada, o plano de 90 dias traz o plano de mídia (R5): o endereço não vai ao modelo', async () => {
+    const d = await dono();
+    // A loja no mapa e o Regem com 24 pedidos confirmados numa noite das 4 semanas até ontem, às 20h15 no fuso da loja.
+    const loja = randomUUID();
+    await ownerQuery(
+      `insert into liame.unit (id, tenant_id, brand_id, name, address_postal_code, address_street, address_number, address_district, address_city, address_state, ibge_city_code, location_source, delivery_radius_km)
+       values ($1, $2, $3, 'Loja Tijuca', '20520054', 'Rua Conde de Bonfim', '450', 'Tijuca', 'Rio de Janeiro', 'RJ', '3304557', 'cep', 3)`,
+      [loja, d.tenantId, d.brandId],
+    );
+    const regem = randomUUID();
+    await ownerQuery(
+      `insert into liame.connected_account (id, tenant_id, brand_id, provider, external_id, name, currency, timezone) values ($1, $2, $3, 'regem', $4, 'Loja Tijuca', 'BRL', $5)`,
+      [regem, d.tenantId, d.brandId, `loja-${randomUUID().slice(0, 8)}`, FUSO],
+    );
+    // Os pedidos lidos há pouco: a fonte do Regem em dia (fora do dia, o Estrategista não planeja com os números dela).
+    await ownerQuery(`insert into liame.sync_state (connected_account_id, dataset, tenant_id, expected_every_minutes, last_success_at) values ($1, 'pedidos', $2, 60, now() - interval '5 minutes')`, [regem, d.tenantId]);
+    const noite = `${menosDias(hoje, 3)}T20:15:00-03:00`;
+    for (let i = 0; i < 24; i++) {
+      await ownerQuery(
+        `insert into liame.order_fact (id, tenant_id, brand_id, unit_id, connected_account_id, provider, external_id, channel, channel_group, status, currency, timezone,
+                                       revenue_micros, refunded_micros, is_new_customer, placed_at, confirmed_at, source_version, source_updated_at)
+         values (gen_random_uuid(), $1, $2, $3, $4, 'regem', $5, 'cardapio', 'cardapio', 'confirmado', 'BRL', $6, 50000000, 0, false, $7::timestamptz, $7::timestamptz + interval '3 minutes', 1, now())`,
+        [d.tenantId, d.brandId, loja, regem, `p-${randomUUID().slice(0, 12)}`, FUSO, noite],
+      );
+    }
+    await ligarFlagDaEmpresa(api, 'regiao', d.tenantId, true);
+    const id = await demanda(d, 'plano', 'Plano com a região');
+    const plano = {
+      resumo: 'Em três meses: anúncios no raio de entrega, com a verba na noite mais forte.',
+      porques: [`A Combo sexta investiu R$ 200,00 de ${br(semana.from)} a ${br(semana.to)}.`],
+      risco: 'medio',
+      risco_motivo: 'pede verba nova na Meta.',
+      fazer: ['Na Meta, deixe a verba do mês em R$ 1.000,00.'],
+      depois: 'A pauta de cada semana sai deste plano.',
+      objetivos: [{ objetivo: 'Mais pedidos no raio', como_saber: 'Os pedidos confirmados na revisão de cada segunda.' }],
+      meses: mesesDoPlano(hoje).map((m) => ({ mes: m.nome, plano: 'Anúncios no núcleo, a 2 km da loja, na noite mais forte.' })),
+      verba_proposta: { meta: 1000, google: 0 },
+      datas: [],
+      midia: {
+        etapas: [
+          { etapa: 'reconhecimento', parte: 15, criativo: 'Vídeo curto do smash na chapa.' },
+          { etapa: 'seguidores', parte: 10, criativo: 'Os bastidores da cozinha.' },
+          { etapa: 'cardapio_conversa', parte: 30, criativo: 'O combo para dividir, com o botão do WhatsApp.' },
+          { etapa: 'pedido', parte: 45, criativo: 'O combo da noite, a partir das 19h, com o cupom da campanha.' },
+        ],
+      },
+    };
+    const mock = responder(roteiro(pede('resultados_ciclo_fechado', { brand_id: d.brandId, ...semana }), responde(plano)));
+    expect(await rodarFila(d)).toEqual([{ tipo: 'demanda', id, tenantId: d.tenantId, status: 'proposto' }]);
+    // O modelo recebeu o bairro, o município, o raio e os horários; nunca a rua, o número ou o CEP (D-RG-2).
+    const prompt = enviado(mock, 0);
+    expect(prompt).toContain('Loja \\"Loja Tijuca\\" (bairro Tijuca, Rio de Janeiro): entrega até 3 km');
+    expect(prompt).toContain('das 20h às 21h (100% dos pedidos)');
+    for (const fora of ['Conde de Bonfim', '20520054']) expect(prompt).not.toContain(fora);
+
+    const lista = PlanListResponse.parse((await api.call('GET', `/v1/plans?brand_id=${d.brandId}`, { cookie: d.cookie })).body);
+    const p = await ver(d, lista.items.find((x) => x.demand_id === id)!.id);
+    const midia = p.content.kind === 'noventa_dias' ? p.content.media_plan : undefined;
+    expect(midia?.stores).toEqual([
+      {
+        unit_id: loja,
+        store: 'Loja Tijuca',
+        district: 'Tijuca',
+        city: 'Rio de Janeiro',
+        radius_km: 3,
+        rings: [
+          { ring: 'nucleo', from_km: 0, to_km: 2, share: 60, meta: 600, google: 0 },
+          { ring: 'expansao', from_km: 2, to_km: 3, share: 40, meta: 400, google: 0 },
+        ],
+        hours: expect.objectContaining({ source: 'loja', from: '20:00', to: '21:00', ads_from: '19:00', days_share: 100, hours_share: 100 }),
+      },
+    ]);
+    const horario = p.marked.find((m) => m.path === 'media_plan.stores.0.hours.hours_share')!;
+    expect(p.numbers[horario.text[0]!.number!]!.sources[0]).toMatch(/^Regem · pedidos confirmados de /);
+
+    // A edição muda a verba: o dinheiro dos anéis é refeito pelo código, com a mesma divisão.
+    const novo = { ...p.content, budget: { ...(p.content.kind === 'noventa_dias' ? p.content.budget : {}), proposal: { meta: 2001, google: 0 } } };
+    const editado = await api.call('PUT', `/v1/plans/${p.plan.id}`, { cookie: d.cookie, body: { base_version: 1, content: novo } });
+    expect(editado.status, JSON.stringify(editado.body)).toBe(200);
+    const v2 = PlanResponse.parse(editado.body);
+    expect(v2.content.kind === 'noventa_dias' && v2.content.media_plan!.stores[0]!.rings.map((r) => r.meta)).toEqual([1201, 800]);
   });
 
   it('a pauta da semana pode começar hoje e espera a decisão até o fim do último dia dela', async () => {

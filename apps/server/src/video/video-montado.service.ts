@@ -4,17 +4,35 @@ import {
   VIDEO_TEMPLATE_RULES,
   type VideoMontageListResponse,
   type VideoMontageResponse,
+  type VideoTextsRequest,
+  type VideoTextsResponse,
 } from '@liame/contracts';
 import { type Database, uuidv7 } from '@liame/database';
 import { Inject, Injectable } from '@nestjs/common';
 import { sql } from 'drizzle-orm';
 import { baseDoPedido } from '../ai/criativo/contexto.js';
 import { conferirPeca } from '../ai/criativo/peca.js';
+import { AiError, AiGateway } from '../ai/gateway.js';
+import { naTransacaoDaEmpresa } from '../ai/na-empresa.js';
+import { registrarRecusa } from '../ai/recusas.js';
+import { funcionarioAtivo } from '../ai/registro/ativacao.js';
+import { SOCIAL } from '../ai/social/prompt.js';
+import {
+  contextoDosTextosDoVideo,
+  mensagemDosTextosDoVideo,
+  type MidiaParaOVideo,
+  PROMPT_SOCIAL_VIDEO,
+  RespostaDosTextosDoVideo,
+  TAREFA_SOCIAL_VIDEO,
+  textosDaResposta,
+  WORKFLOW_DO_SOCIAL_VIDEO,
+} from '../ai/social/video.js';
 import { type AuthContext, auditDetail, currentTx } from '../context/request-context.js';
 import { marcaDoCriativo } from '../criativo/base.js';
 import { DATABASE } from '../database/database.module.js';
 import { AppProblem } from '../errors/problems.js';
 import { FlagService } from '../flags/flag.service.js';
+import { REGRAS_DE_TEXTO_VERSAO } from '../policy/texto.js';
 import { contarNaFrente } from '../worker/fila-do-video.js';
 
 // O vídeo montado pelo Liame (A6 · Z15, parte 2a; P43 aprovado em 11/11/2026; D-A6-133 a D-A6-138): os pedidos e a
@@ -71,6 +89,7 @@ export class VideoMontadoService {
   constructor(
     @Inject(DATABASE) private readonly database: Database | null,
     private readonly flags: FlagService,
+    private readonly gateway: AiGateway,
   ) {}
 
   private quem(auth: AuthContext): Quem {
@@ -174,15 +193,21 @@ export class VideoMontadoService {
 
     // As fotos e o vídeo de Fotos: prontos, da marca; o vídeo montado não entra de novo.
     const midias = (
-      await tx.execute<{ id: string; kind: string | null; montage_id: string | null }>(sql`
-        select id, kind, montage_id from liame.brand_photo
+      await tx.execute<{ id: string; kind: string | null; montage_id: string | null; duration_ms: number | null; has_audio: boolean | null }>(sql`
+        select id, kind, montage_id, duration_ms, has_audio from liame.brand_photo
          where id in ${ids} and tenant_id = ${quem.tenantId} and brand_id = ${body.brand_id} and status = 'pronta' and removed_at is null`)
     ).rows;
     if (midias.length !== ids.length) throw recusa('midia-fora-das-fotos', 'Foto não encontrada', 'Escolha fotos ou vídeos prontos de Fotos desta marca.', 'media_ids');
     if (midias.some((m) => m.montage_id)) throw recusa('midia-montada', 'Vídeo montado', 'Um vídeo montado pelo Liame não entra de novo numa montagem.', 'media_ids');
-    const comVideo = midias.some((m) => m.kind === 'video');
-    if (comVideo && !regra.video) throw recusa('video-no-modelo', 'Só fotos', 'Este modelo leva só fotos. Para usar um vídeo, escolha "Novidade da casa".', 'media_ids');
-    if (body.sound === 'original' && !comVideo) throw recusa('som-sem-video', 'Sem vídeo', 'O som original só vale quando o vídeo da loja entra no modelo.', 'sound');
+    const video = midias.find((m) => m.kind === 'video');
+    if (video && !regra.video) throw recusa('video-no-modelo', 'Só fotos', 'Este modelo leva só fotos. Para usar um vídeo, escolha "Novidade da casa".', 'media_ids');
+    if (body.sound === 'original' && !video) throw recusa('som-sem-video', 'Sem vídeo', 'O som original só vale quando o vídeo da loja entra no modelo.', 'sound');
+    // O vídeo da loja toca uma vez, do começo: ele precisa ter pelo menos a duração escolhida (parte 3).
+    if (video && (video.duration_ms ?? 0) < body.duration_s * 1000) {
+      const tem = Math.floor((video.duration_ms ?? 0) / 1000);
+      throw recusa('video-curto', 'Vídeo curto', `O vídeo tem ${tem} s: escolha uma duração de até ${tem} s, ou outro vídeo.`, 'duration_s');
+    }
+    if (body.sound === 'original' && video && video.has_audio === false) throw recusa('video-sem-som', 'Vídeo sem som', 'Este vídeo não tem som: escolha "Sem música".', 'sound');
 
     // A logo de Minha marca.
     if (body.with_logo) {
@@ -227,5 +252,111 @@ export class VideoMontadoService {
               ${body.title}, ${body.price_line ?? null}, ${body.cta}, ${body.with_logo}, ${body.sound}, ${quem.userId})`);
     auditDetail({ resourceId: id, before: null, after: { brand_id: body.brand_id, template: body.template, format: body.format, duration_s: body.duration_s, media: ids.length } });
     return this.obter(auth, id);
+  }
+
+  /**
+   * Os textos do vídeo pelo Social media (parte 3b; D-A6-135): a leitura numa transação curta (a marca, a função, as
+   * fotos escolhidas, o funcionário e Minha marca); a IA sem transação aberta (a rota espera o modelo por segundos); a
+   * proposta conferida pelo Compliance antes de voltar. Sem a IA, `sem_ia` com o motivo, e a pessoa escreve os textos;
+   * a proposta barrada conta em Sua equipe, sem o texto.
+   */
+  async textos(auth: AuthContext, body: VideoTextsRequest): Promise<VideoTextsResponse> {
+    const quem = this.quem(auth);
+    if (!this.database) throw new AppProblem(503, 'sem-banco', 'Indisponível', 'Tente de novo em instantes.');
+    const database = this.database;
+    const ids = [...new Set(body.media_ids)];
+    const lido = await naTransacaoDaEmpresa(database, quem, async () => {
+      const tx = currentTx();
+      await this.marca(quem, body.brand_id);
+      if (!(await this.ligada(quem, body.brand_id))) throw conflito('funcao-desligada', 'Função desligada', 'O vídeo montado não está ligado para esta empresa.');
+      const midias = (
+        await tx.execute<{ id: string; kind: string; product: string | null; description: string }>(sql`
+          select id, kind, product, description from liame.brand_photo
+           where id in ${ids} and tenant_id = ${quem.tenantId} and brand_id = ${body.brand_id} and status = 'pronta'
+             and removed_at is null and montage_id is null`)
+      ).rows;
+      if (midias.length !== ids.length) throw recusa('midia-fora-das-fotos', 'Foto não encontrada', 'Escolha fotos ou vídeos prontos de Fotos desta marca.', 'media_ids');
+      const porId = new Map(midias.map((m) => [m.id, m]));
+      const ativo = await funcionarioAtivo(tx, { tenantId: quem.tenantId, brandId: body.brand_id, agentKey: SOCIAL.key, ativoPorPadrao: SOCIAL.ativoPorPadrao });
+      const fuso = (await tx.execute<{ timezone: string | null }>(sql`select timezone from liame.organization where id = ${quem.tenantId}`)).rows[0]?.timezone ?? 'America/Sao_Paulo';
+      const nome = (await tx.execute<{ name: string }>(sql`select name from liame.brand where id = ${body.brand_id}`)).rows[0]!.name;
+      return {
+        ativo,
+        nome,
+        marca: await marcaDoCriativo(body.brand_id, fuso, new Date()),
+        midias: ids.map((id): MidiaParaOVideo => {
+          const m = porId.get(id)!;
+          return { produto: m.product, descricao: m.description || null, video: m.kind === 'video' };
+        }),
+      };
+    });
+
+    const semIa = (reason: NonNullable<VideoTextsResponse['reason']>, extra: { voltaEm?: Date; usageId?: string } = {}): VideoTextsResponse => ({
+      origin: 'sem_ia',
+      reason,
+      texts: null,
+      offer: null,
+      retry_at: extra.voltaEm ? extra.voltaEm.toISOString() : null,
+      usage_id: extra.usageId ?? null,
+    });
+    if (!lido.ativo) return semIa('funcionario_desligado');
+    if (!(await this.gateway.ligada({ tenantId: quem.tenantId, userId: quem.userId, brandId: body.brand_id }))) return semIa('ia_desligada');
+
+    const marca = lido.marca;
+    const pedido = {
+      marca: lido.nome,
+      dossie: marca?.dossie ?? `Marca "${lido.nome}": Minha marca ainda não foi preenchida.`,
+      modelo: body.template,
+      ofertas: marca?.conteudo.offers.items ?? [],
+      midias: lido.midias,
+    };
+    let r: Awaited<ReturnType<AiGateway['structured']>>;
+    try {
+      r = await this.gateway.structured({
+        tenantId: quem.tenantId,
+        brandId: body.brand_id,
+        userId: quem.userId,
+        workflow: WORKFLOW_DO_SOCIAL_VIDEO,
+        task: TAREFA_SOCIAL_VIDEO,
+        promptVersion: `${PROMPT_SOCIAL_VIDEO.key}@${PROMPT_SOCIAL_VIDEO.version}`,
+        instructions: PROMPT_SOCIAL_VIDEO.content,
+        context: contextoDosTextosDoVideo(pedido),
+        messages: [{ role: 'user', content: mensagemDosTextosDoVideo(pedido) }],
+        schema: RespostaDosTextosDoVideo,
+      });
+    } catch (err) {
+      if (!(err instanceof AiError)) throw err;
+      return semIa(err.code === 'desligada' ? 'ia_desligada' : err.code, { voltaEm: err.detalhe.voltaEm });
+    }
+
+    const recusar = async (kind: string, rules: string[], reason: 'formato' | 'barrado'): Promise<VideoTextsResponse> => {
+      await registrarRecusa(database, {
+        tenantId: quem.tenantId,
+        brandId: body.brand_id,
+        userId: quem.userId,
+        usageId: r.usageId,
+        member: SOCIAL.key,
+        workflow: WORKFLOW_DO_SOCIAL_VIDEO,
+        kind,
+        rules,
+        rulesVersion: kind === 'compliance' ? REGRAS_DE_TEXTO_VERSAO : null,
+      });
+      return semIa(reason, { usageId: r.usageId });
+    };
+    const resposta = RespostaDosTextosDoVideo.safeParse(r.object);
+    if (!resposta.success) return recusar('formato', [], 'formato');
+    const c = textosDaResposta(resposta.data, pedido, { fatos: marca?.fatos ?? '', proibidas: marca?.proibidas ?? [], concorrentes: marca?.concorrentes ?? [] });
+    if (!c.ok) {
+      const doCompliance = c.motivo === 'compliance' || c.motivo === 'dado_pessoal';
+      return recusar(doCompliance ? 'compliance' : c.motivo, c.motivo === 'dado_pessoal' ? ['dado_pessoal'] : c.achados.map((a) => a.tipo), 'barrado');
+    }
+    return {
+      origin: 'ia',
+      reason: null,
+      texts: { title: c.textos.title, price_line: c.textos.price_line, cta: c.textos.cta },
+      offer: c.textos.offer,
+      retry_at: null,
+      usage_id: r.usageId,
+    };
   }
 }

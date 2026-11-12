@@ -80,8 +80,10 @@ import { PesquisaLoop } from './pesquisa-loop.js';
 import { PesquisadorService } from './pesquisa.service.js';
 import { RotinaDoCrmLoop } from './rotina-do-crm-loop.js';
 import { SearchConsoleLoop } from './search-console-loop.js';
+import { RegiaoService } from '../regiao/regiao.service.js';
 import { RegiaoCnpjService } from './regiao-cnpj.service.js';
 import { RegiaoFontesService } from './regiao-fontes.service.js';
+import { RegiaoMidiaLoop } from './regiao-midia.service.js';
 import { ComparacaoDmsIdLoop } from './comparacao-dms-id.js';
 import { RotinaDoCrmService } from './rotina-do-crm.service.js';
 import { SugestoesDeRespostaLoop } from './sugestoes-de-resposta-loop.js';
@@ -162,6 +164,8 @@ import { WebhookDeliverer } from './webhook-deliverer.js';
     // Os números da região (plano da região, R2): os bairros do Censo e os números do município das lojas no mapa, do IBGE.
     RegiaoFontesService,
     RegiaoCnpjService,
+    // A mídia por região e por hora (R4, parte 1): a hora dos anúncios da Meta e do Google e a cidade dos cliques do Google.
+    RegiaoMidiaLoop,
     // Hub DMS (F2, A3): compara as leituras do RegemCast pelas duas credenciais; só com a função `comparacao_dms_id` ligada.
     ComparacaoDmsIdLoop,
     // Fotos dos produtos (A6, Z4): tira do armazenamento o arquivo da foto apagada (e do envio que não terminou), e depois a linha.
@@ -227,6 +231,8 @@ import { WebhookDeliverer } from './webhook-deliverer.js';
     // E a de "Como te acham no Google" (A6 · Z3), que o Estrategista lê para a pauta: o mesmo serviço da rota do cartão.
     ComoTeAchamService,
     FerramentasDeLeitura,
+    // O plano de mídia por região (plano da região, R5): as lojas no mapa e a demanda, pelo mesmo serviço da rota.
+    RegiaoService,
     EstrategistaService,
     EstrategistaLoop,
     // Os planos agendados (I11b): a pauta de segunda-feira e o plano de 90 dias a cada 12 semanas, como demandas da rotina.

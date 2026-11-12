@@ -68,7 +68,7 @@ type Linha = {
   video_esperando_ms: number | null;
   conta_externa: string;
   credential_secret_id: string | null;
-  midia_chave: string;
+  midia_chave: string | null;
   midia_viva: boolean;
 };
 
@@ -85,6 +85,9 @@ const VIDEO_SEM_PREPARO = 'A Meta não terminou de preparar o vídeo em 15 minut
 const VIDEO_RECUSADO = 'A Meta não aceitou o vídeo: a campanha não foi criada. Use outro vídeo de Fotos.';
 const FICOU_PAUSADO = 'O que já foi criado na Meta ficou pausado: nada aparece para ninguém nem gasta.';
 const APAGADA_NA_META = 'A campanha foi apagada ou arquivada no Gerenciador de Anúncios: nada foi mudado.';
+const REELS_SAIU = 'O Reels desta campanha saiu do Instagram da marca (ou da leitura do Liame): a campanha não foi criada.';
+const REELS_NAO_PODE =
+  'A Meta não deixa este Reels virar anúncio (por exemplo, com música do Instagram ou um filtro interativo): a campanha não foi criada, e nada foi criado na Meta. Use um vídeo de Fotos.';
 
 /**
  * A campanha nova do pedido (sob a RLS da empresa) e o estado dela, como o pedido guarda: a peça na versão pedida, a
@@ -103,14 +106,16 @@ export async function lerCampanhaNova(tx: Tx, ref: ResourceRef, travar = false):
       daily_budget_micros: string;
       end_date: string | null;
       link: string | null;
-      piece_id: string;
-      piece_version: number;
-      title: string;
-      body: string;
-      button: 'pedir_agora' | 'ver_cardapio' | 'enviar_mensagem';
-      media_id: string;
-      media_kind: string;
-      media_file: string;
+      piece_id: string | null;
+      piece_version: number | null;
+      title: string | null;
+      body: string | null;
+      button: 'pedir_agora' | 'ver_cardapio' | 'enviar_mensagem' | null;
+      media_id: string | null;
+      media_kind: string | null;
+      media_file: string | null;
+      instagram_media_id: string | null;
+      reels_legenda: string | null;
       pagina_externa: string;
       pagina_nome: string;
       instagram_externo: string | null;
@@ -128,16 +133,21 @@ export async function lerCampanhaNova(tx: Tx, ref: ResourceRef, travar = false):
            c.brand_id, c.name, c.objective, c.radius_km::text, c.daily_budget_micros::text, c.end_date::text as end_date, c.link,
            c.piece_id, c.piece_version, v.title, v.body, v.button,
            c.media_id, m.kind as media_kind, coalesce(m.sha256, m.object_key) as media_file, m.object_key as midia_chave,
-           (m.status = 'pronta' and m.removed_at is null) as midia_viva,
+           c.instagram_media_id, im.caption as reels_legenda,
+           -- A mídia viva: a foto ou o vídeo pronto em Fotos; o Reels, ainda na leitura do Instagram da marca.
+           case when c.instagram_media_id is not null then im.media_id is not null
+                else coalesce(m.status = 'pronta' and m.removed_at is null, false) end as midia_viva,
            p.external_id as pagina_externa, p.name as pagina_nome, ig.external_id as instagram_externo, ig.name as instagram_nome,
            u.id as unit_id, u.name as unit_nome, u.latitude::text, u.longitude::text,
            a.external_id as conta_externa, a.credential_secret_id, a.currency, o.timezone
       from liame.ad_campaign_new c
-      join liame.ad_piece_version v on v.piece_id = c.piece_id and v.version = c.piece_version and v.tenant_id = c.tenant_id
-      join liame.brand_photo m on m.id = c.media_id and m.tenant_id = c.tenant_id
+      left join liame.ad_piece_version v on v.piece_id = c.piece_id and v.version = c.piece_version and v.tenant_id = c.tenant_id
+      left join liame.brand_photo m on m.id = c.media_id and m.tenant_id = c.tenant_id
       join liame.connected_account p on p.id = c.page_account_id and p.tenant_id = c.tenant_id
       left join liame.connected_account ig on ig.tenant_id = c.tenant_id and ig.brand_id = c.brand_id and ig.provider = 'instagram'
                 and ig.external_id = p.provider_attributes->>'instagram_id' and ${contaConectada('ig')}
+      -- O Reels do perfil que assina o anúncio (o Instagram da Página): de outro perfil, a Meta não aceita.
+      left join liame.instagram_media im on im.connected_account_id = ig.id and im.media_id = c.instagram_media_id and im.kind = 'reels'
       join liame.unit u on u.id = c.unit_id and u.tenant_id = c.tenant_id
       join liame.connected_account a on a.id = c.ad_account_id and a.tenant_id = c.tenant_id and a.provider = ${PROVIDER}
       join liame.organization o on o.id = c.tenant_id
@@ -145,13 +155,18 @@ export async function lerCampanhaNova(tx: Tx, ref: ResourceRef, travar = false):
      ${travar ? sql`for update of c` : sql``}`);
   const l = r.rows[0];
   if (!l || l.latitude === null || l.longitude === null) return null;
+  // A peça e a foto de Fotos (as linhas delas) ou o Reels (A4, X5, parte 6): sem a peça ou a foto, a campanha sumiu.
+  const doReels = l.instagram_media_id !== null;
+  if (!doReels && (l.title === null || l.media_kind === null)) return null;
   const estado = EstadoDaCampanhaNova.parse({
     campanha: l.id,
     marca: l.brand_id,
     nome: l.name,
     objetivo: l.objective,
-    peca: { id: l.piece_id, versao: l.piece_version, titulo: l.title, texto: l.body, botao: l.button },
-    midia: { id: l.media_id, tipo: l.media_kind === 'video' ? 'video' : 'foto', arquivo: l.media_file },
+    peca: doReels ? null : { id: l.piece_id, versao: l.piece_version, titulo: l.title, texto: l.body, botao: l.button },
+    midia: doReels
+      ? { id: l.instagram_media_id, tipo: 'reels', legenda: l.reels_legenda ?? '' }
+      : { id: l.media_id, tipo: l.media_kind === 'video' ? 'video' : 'foto', arquivo: l.media_file },
     pagina: { id: l.pagina_externa, nome: l.pagina_nome },
     instagram: l.instagram_externo ? { id: l.instagram_externo, nome: l.instagram_nome ?? '' } : null,
     loja: { id: l.unit_id, nome: l.unit_nome, latitude: Number(l.latitude), longitude: Number(l.longitude) },
@@ -208,7 +223,8 @@ export class CampanhaNovaNaMetaConnector implements Connector {
     if (options.validateOnly) return { ok: true, state: desired, version: linha.version };
     const deps = this.deps;
     if (!deps) return recusado(FORA_DO_AMBIENTE);
-    if (!linha.midia_viva) return this.naoCriou(tx, linha, MIDIA_SAIU);
+    const doReels = estado.midia.tipo === 'reels';
+    if (!linha.midia_viva) return this.naoCriou(tx, linha, doReels ? REELS_SAIU : MIDIA_SAIU);
 
     await tx.execute(sql`update liame.ad_campaign_new set status = 'criando', updated_at = now() where id = ${linha.id}`);
     const g = { deps, conta: linha.conta_externa, token: await this.token(tx, linha, deps), versao: await deps.versao('anuncio_criar') };
@@ -216,6 +232,9 @@ export class CampanhaNovaNaMetaConnector implements Connector {
     const guardar = (coluna: 'meta_campaign_id' | 'meta_adset_id' | 'meta_video_id' | 'meta_creative_id' | 'meta_ad_id', valor: string) =>
       tx.execute(sql`update liame.ad_campaign_new set ${sql.raw(coluna)} = ${valor}, updated_at = now() where id = ${linha.id}`);
     try {
+      // O Reels (D-A4-46): antes de criar qualquer coisa, a pergunta à Meta se o post pode virar anúncio (o campo
+      // `boost_eligibility_info` do post; a música do Instagram e os filtros interativos não podem). Recusado, nada é criado.
+      if (doReels && !linha.meta_campaign_id && (await this.reelsPodeVirarAnuncio(g, estado.midia.id)) === false) return this.naoCriou(tx, linha, REELS_NAO_PODE);
       const campanha = linha.meta_campaign_id ?? (await this.criar(g, 'campaigns', parametrosDaCampanha(estado), chave('campanha')));
       if (!linha.meta_campaign_id) await guardar('meta_campaign_id', campanha);
       const conjunto = linha.meta_adset_id ?? (await this.criar(g, 'adsets', parametrosDoConjunto(estado, campanha), chave('conjunto')));
@@ -356,14 +375,18 @@ export class CampanhaNovaNaMetaConnector implements Connector {
     estado: EstadoDaCampanhaNova,
     guardar: (coluna: 'meta_video_id', valor: string) => Promise<unknown>,
   ): Promise<MidiaNaMeta | 'recusado' | 'sem_preparo'> {
-    if (estado.midia.tipo === 'foto') return { tipo: 'foto', imagem: await g.deps.armazem.enderecoDeLeitura(linha.midia_chave, VALIDADE_DA_MIDIA_S) };
+    // O Reels é o próprio post: nada a enviar (D-A4-46).
+    if (estado.midia.tipo === 'reels') return { tipo: 'reels', id: estado.midia.id };
+    const chaveDaMidia = linha.midia_chave;
+    if (!chaveDaMidia) throw new CriacaoRecusada(MIDIA_SAIU);
+    if (estado.midia.tipo === 'foto') return { tipo: 'foto', imagem: await g.deps.armazem.enderecoDeLeitura(chaveDaMidia, VALIDADE_DA_MIDIA_S) };
     const versao = await g.deps.versao('anuncio_video');
     let video = linha.meta_video_id;
     if (!video) {
       const r = await g.deps.cliente().requisitar<{ id?: unknown } | null>({
         provider: PROVIDER,
         conta: g.conta,
-        url: this.endereco(g, versao, `${g.conta}/advideos`, { file_url: await g.deps.armazem.enderecoDeLeitura(linha.midia_chave, VALIDADE_DA_MIDIA_S), name: estado.nome }),
+        url: this.endereco(g, versao, `${g.conta}/advideos`, { file_url: await g.deps.armazem.enderecoDeLeitura(chaveDaMidia, VALIDADE_DA_MIDIA_S), name: estado.nome }),
         metodo: 'POST',
         endpoint: 'anuncio_video',
         apiVersion: versao,
@@ -390,7 +413,33 @@ export class CampanhaNovaNaMetaConnector implements Connector {
       // A espera fixa do vídeo (como no post): não conta tentativa; quem encerra são os 15 minutos acima.
       throw new ErroConector('limite', PROVIDER, 'a Meta ainda prepara o vídeo da campanha nova', null, ESPERA_DO_VIDEO_MS, VIDEO_EM_PREPARO);
     }
-    return { tipo: 'video', videoId: video, capa: await g.deps.armazem.enderecoDeLeitura(chaveDaMiniatura(linha.midia_chave), VALIDADE_DA_MIDIA_S) };
+    return { tipo: 'video', videoId: video, capa: await g.deps.armazem.enderecoDeLeitura(chaveDaMiniatura(chaveDaMidia), VALIDADE_DA_MIDIA_S) };
+  }
+
+  /**
+   * O Reels pode virar anúncio? `GET /{ig-media-id}?fields=boost_eligibility_info` (o guia "Use Posts as Instagram Ads"
+   * da Meta; o subcampo `eligible_to_boost`, booleano). `false` só quando a Meta responde que não. Sem a resposta (a
+   * permissão que falta no post, o campo que não veio), segue: a recusa do criativo, se vier, diz o porquê. O que é
+   * passageiro e o acesso revogado sobem, como nos outros passos.
+   */
+  private async reelsPodeVirarAnuncio(g: Grafo, midia: string): Promise<boolean | null> {
+    const versao = await g.deps.versao('entity_state');
+    try {
+      const r = await g.deps.cliente().requisitar<{ boost_eligibility_info?: { eligible_to_boost?: unknown } } | null>({
+        provider: PROVIDER,
+        conta: g.conta,
+        url: this.endereco(g, versao, midia, { fields: 'boost_eligibility_info' }),
+        endpoint: 'reels_elegivel',
+        apiVersion: versao,
+        cabecalhos: { authorization: `Bearer ${g.token}` },
+      });
+      const elegivel = r.corpo?.boost_eligibility_info?.eligible_to_boost;
+      return typeof elegivel === 'boolean' ? elegivel : null;
+    } catch (err) {
+      if (!(err instanceof ErroConector) || (err.tipo !== 'permissao' && err.tipo !== 'definitivo')) throw err;
+      this.logger.warn(`Reels ${midia}: a Meta não disse se ele pode virar anúncio (${err.message.slice(0, 200)}); segue para o criativo`);
+      return null;
+    }
   }
 }
 

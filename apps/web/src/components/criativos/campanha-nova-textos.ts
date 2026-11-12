@@ -63,11 +63,14 @@ export type ErrosDaCampanha = Partial<Record<CampoComErro, string>>;
  * Confere antes de mandar (o servidor confere de novo, com as mesmas regras): a mídia (o vídeo com capa), a loja no
  * endereço, o cardápio da loja, o nome, a verba (sem fração de centavo, dentro do teto) e o fim depois de hoje.
  */
-export function conferirCampanha(c: CamposDaCampanha, opcoes: NewCampaignOptionsResponse, midias: BrandPhoto[], hoje: string): ErrosDaCampanha {
+export function conferirCampanha(c: CamposDaCampanha, opcoes: NewCampaignOptionsResponse, midias: BrandPhoto[], hoje: string, doReels = false): ErrosDaCampanha {
   const e: ErrosDaCampanha = {};
-  const m = midias.find((x) => x.id === c.midia);
-  if (!m) e.midia = 'Escolha uma foto ou um vídeo de Fotos.';
-  else if (!temCapa(m)) e.midia = 'O anúncio de vídeo leva a capa: escolha a capa do vídeo em Fotos, ou use outro vídeo.';
+  // No Reels, a mídia é o próprio post (D-A4-46): não há foto nem vídeo de Fotos a escolher.
+  if (!doReels) {
+    const m = midias.find((x) => x.id === c.midia);
+    if (!m) e.midia = 'Escolha uma foto ou um vídeo de Fotos.';
+    else if (!temCapa(m)) e.midia = 'O anúncio de vídeo leva a capa: escolha a capa do vídeo em Fotos, ou use outro vídeo.';
+  }
   const loja = opcoes.units.find((u) => u.id === c.loja);
   if (!loja) e.loja = 'Escolha a loja.';
   else if (!loja.has_address) e.loja = 'A campanha mostra o anúncio em volta da loja, e o ponto dela ainda não está no endereço. Ajuste o endereço da loja em Minha marca antes.';
@@ -98,6 +101,28 @@ export function erroDoPedido(p: Problema): { campo: CampoComErro | null; texto: 
   };
   return { campo: (p.code && porCodigo[p.code]) || null, texto };
 }
+
+// ---------------------------------------------------------------- a campanha a partir de um Reels (A4, X5, parte 6)
+
+/** O dia em que o Reels foi publicado, no fuso da loja: "18/09". */
+export const diaDoReels = (publicadoEm: string): string =>
+  new Intl.DateTimeFormat('pt-BR', { day: '2-digit', month: '2-digit', timeZone: 'America/Sao_Paulo' }).format(new Date(publicadoEm));
+
+/** O nome que a gaveta sugere: "Reels de 18/09 · novembro" (o mês de hoje, como na peça). */
+export function nomeDaCampanhaDoReels(publicadoEm: string, hoje: string): string {
+  const mes = new Intl.DateTimeFormat('pt-BR', { month: 'long', timeZone: 'UTC' }).format(new Date(`${hoje}T12:00:00Z`));
+  return `Reels de ${diaDoReels(publicadoEm)} · ${mes}`.slice(0, 80);
+}
+
+/** A legenda fala do link da bio: no anúncio, o botão já leva ao destino (a nota da prévia, P42). */
+export const falaDoLinkDaBio = (legenda: string): boolean => /link\s+(na|da)\s+bio/i.test(legenda);
+
+export function notaDoLinkDaBio(objetivo: NewCampaignObjective): string {
+  return `A legenda fala do link da bio, porque é a do post. No anúncio, o botão “${OBJETIVOS[objetivo].botao}” já leva ${objetivo === 'whatsapp' ? 'à conversa' : 'ao cardápio'}.`;
+}
+
+/** A Meta pergunta antes (D-A4-46): a nota da gaveta. */
+export const NOTA_DA_ELEGIBILIDADE = 'Antes, o Liame pergunta à Meta se este Reels pode virar anúncio: o Reels com música do Instagram ou com filtro interativo não pode.';
 
 /** O que a campanha vai fazer, em palavras (o efeito do P10): nasce pausada; ativada, quanto gasta por dia. */
 export function efeitoDaCampanha(verba: string): string {

@@ -14,6 +14,7 @@ import { SincronizadorVendas } from '../../src/orders/sincronizador-vendas.js';
 import { VaultService } from '../../src/vault/vault.service.js';
 import { apagarAnonimizadosNoSistema, eventoDoRegem, VendasLoop } from '../../src/worker/vendas-loop.js';
 import { enableMfa, ownerQuery, resetIpRateLimits, signupAndLogin, startApi, type TestApi } from '../helpers/api.js';
+import { ligarFlagDaEmpresa } from '../helpers/meta-de-mentira.js';
 import { APP_URL, hasDb } from './env.js';
 
 // A2.5 · F4: conector do Regem (leitura) contra respostas gravadas no formato do contrato v1
@@ -53,6 +54,8 @@ describe.skipIf(!hasDb)('conector do Regem: vendas da loja (A2.5 · F4)', () => 
   /** Os registros de aviso que a loja Centro recebeu (`PUT /webhook`), em ordem. */
   const avisos: { url: string; segredo: string }[] = [];
   const pedidosPedidos: URLSearchParams[] = [];
+  /** As leituras dos pedidos por bairro da loja Centro (R3, parte 2), com a janela pedida. */
+  const bairrosPedidos: URLSearchParams[] = [];
   /** Leituras da rota `/loja` da loja Centro (a conexão lê uma; a reconciliação, uma por dia). */
   let lojaLida = 0;
   let lojaLidaNaReconciliacao = 0;
@@ -112,6 +115,26 @@ describe.skipIf(!hasDb)('conector do Regem: vendas da loja (A2.5 · F4)', () => 
         if (cursor === 'ped-c2') return { status: 200, corpo: estado.incremental ? fixture('pedidos-incremental.json') : vazia('ped-c2') };
         return { status: 200, corpo: vazia(cursor) };
       }
+      case '/regem/pedidos/bairros':
+        bairrosPedidos.push(q);
+        return {
+          status: 200,
+          corpo: {
+            loja_id: 'loja-centro',
+            de: q.get('de'),
+            ate: q.get('ate'),
+            fuso: 'America/Sao_Paulo',
+            minimo: 5,
+            bairros: [
+              { bairro: 'Tijuca', cidade: 'Rio de Janeiro', uf: 'RJ', pedidos: 12, receita_micros: '600000000' },
+              { bairro: 'Grajaú', cidade: 'Rio de Janeiro', uf: 'RJ', pedidos: 6, receita_micros: 300000000 },
+              { bairro: 'Centro', cidade: 'Niterói', uf: 'RJ', pedidos: 5, receita_micros: '250000000' },
+            ],
+            outros: { bairros: 2, pedidos: 5, receita_micros: '250000000' },
+            sem_bairro: { pedidos: 3, receita_micros: '150000000' },
+            retirada_e_balcao: { pedidos: 4 },
+          },
+        };
       case '/regem/clientes/anonimizados':
         // Depois da posição 'anon-c1' não há aviso novo; antes dela, o aviso de cli-1 (quando ligado).
         return { status: 200, corpo: estado.anonimizar && q.get('cursor') !== 'anon-c1' ? fixture('clientes-anonimizados.json') : vazia(q.get('cursor') ?? 'anon-c0') };
@@ -483,6 +506,56 @@ describe.skipIf(!hasDb)('conector do Regem: vendas da loja (A2.5 · F4)', () => 
     // A leitura seguinte (sem aviso no meio) devolve a loja ao ritmo normal.
     await sincronizador.sincronizar(contaId, tenantId);
     expect(await esperaDaLoja()).toBeGreaterThan(14 * 60);
+  });
+
+  it('os pedidos por bairro (R3, parte 2): só com a região ligada, as 4 semanas até ontem, uma vez por dia; o retrato de Sua região os mostra', async () => {
+    // 01/10/2026, 9h em Brasília: a janela vai de 03/09 a 30/09.
+    const quando = mais(3 * 24 * 60);
+    bairrosPedidos.length = 0;
+    // Sem a região ligada, a leitura das vendas não pede os bairros.
+    await sincronizador.sincronizar(contaId, tenantId, quando);
+    expect(bairrosPedidos).toEqual([]);
+    const comRegiao = new SincronizadorVendas(database.db, api.app.get(VaultService), loadConfig(), apagarAnonimizadosNoSistema(database.db), async () => true);
+    await comRegiao.sincronizar(contaId, tenantId, quando);
+    expect(bairrosPedidos.map((q) => [q.get('de'), q.get('ate')])).toEqual([['2026-09-03', '2026-09-30']]);
+    const linhas = () =>
+      ownerQuery<{ position: number; kind: string; district: string | null; city: string | null; districts: number | null; orders: number; revenue_micros: string | null; day_from: string; minimum: number }>(
+        `select position, kind, district, city, districts, orders, revenue_micros::text, day_from::text, minimum from liame.region_order_district where connected_account_id = $1 order by position`,
+        [contaId],
+      );
+    expect(await linhas()).toEqual([
+      { position: 0, kind: 'bairro', district: 'Tijuca', city: 'Rio de Janeiro', districts: null, orders: 12, revenue_micros: '600000000', day_from: '2026-09-03', minimum: 5 },
+      { position: 1, kind: 'bairro', district: 'Grajaú', city: 'Rio de Janeiro', districts: null, orders: 6, revenue_micros: '300000000', day_from: '2026-09-03', minimum: 5 },
+      { position: 2, kind: 'bairro', district: 'Centro', city: 'Niterói', districts: null, orders: 5, revenue_micros: '250000000', day_from: '2026-09-03', minimum: 5 },
+      { position: 3, kind: 'outros', district: null, city: null, districts: 2, orders: 5, revenue_micros: '250000000', day_from: '2026-09-03', minimum: 5 },
+      { position: 4, kind: 'sem_bairro', district: null, city: null, districts: null, orders: 3, revenue_micros: '150000000', day_from: '2026-09-03', minimum: 5 },
+      { position: 5, kind: 'retirada', district: null, city: null, districts: null, orders: 4, revenue_micros: null, day_from: '2026-09-03', minimum: 5 },
+    ]);
+    // Na mesma volta do dia, não pede de novo.
+    await comRegiao.sincronizar(contaId, tenantId, new Date(quando.getTime() + 60 * 60_000));
+    expect(bairrosPedidos).toHaveLength(1);
+
+    // O retrato: a loja no mapa (Rio de Janeiro), a região ligada; os bairros do município, sem o de Niterói, e a área de entrega.
+    const [conta] = await ownerQuery<{ unit_id: string }>(`select unit_id from liame.connected_account where id = $1`, [contaId]);
+    await ownerQuery(
+      `update liame.unit set address_postal_code = '20520054', address_district = 'Tijuca', address_city = 'Rio de Janeiro', address_state = 'RJ',
+              ibge_city_code = '3304557', location_source = 'cep', delivery_radius_km = 3, delivery_areas = '["Tijuca", "Bairro Que Ninguém Pediu"]'::jsonb
+        where id = $1`,
+      [conta!.unit_id],
+    );
+    await ligarFlagDaEmpresa(api, 'regiao', tenantId, true);
+    const r = await api.call('GET', `/v1/region/overview?brand_id=${marcaId}&unit_id=${conta!.unit_id}`, { cookie });
+    expect(r.status, JSON.stringify(r.body)).toBe(200);
+    expect(r.body.order_districts_status).toBe('disponivel');
+    const b = r.body.order_districts;
+    expect(b).toMatchObject({ from: '2026-09-03', to: '2026-09-30', minimum: 5, others: { districts: 2, orders: 5 }, without_district: 3, pickup: 4, delivery_orders: 31 });
+    expect(b.districts.map((d: { name: string; orders: number | null; in_delivery_area: boolean }) => [d.name, d.orders, d.in_delivery_area]).sort()).toEqual([
+      ['Bairro Que Ninguém Pediu', null, true],
+      ['Grajaú', 6, false],
+      ['Tijuca', 12, true],
+    ]);
+    expect(JSON.stringify(b)).not.toMatch(/micros|receita|Niterói/);
+    await ligarFlagDaEmpresa(api, 'regiao', tenantId, false);
   });
 
   it('escopo faltando para cupons não para os pedidos; token recusado desliga a leitura da loja', async () => {

@@ -1,0 +1,116 @@
+/* O vídeo montado pelo Liame (A6 · Z15, parte 4; P43 aprovado em 11/11/2026): a gaveta "Montar um vídeo", a prévia,
+   a proposta do Social media, o andamento e o cartão do pedido em Fotos. O desenho do protótipo, com o prefixo `vm-`. */
+
+.vm-gaveta { width: min(100%, 960px); }
+.vm-grade { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--sp-5); align-items: start; }
+@container (min-width: 760px) {
+  .vm-grade { grid-template-columns: minmax(0, 1fr) minmax(220px, 300px); }
+  .vm-lado { position: sticky; top: 0; }
+}
+.vm-gaveta .dialogo-corpo { container-type: inline-size; }
+.vm-campos { display: grid; gap: var(--sp-4); min-width: 0; }
+.vm-campos .faixa { margin-bottom: 0; }
+
+/* O modelo: três botões com a miniatura animada. */
+.vm-modelos { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: var(--sp-2); }
+.vm-modelo { display: flex; align-items: flex-start; gap: var(--sp-3); min-width: 0; padding: var(--sp-3); border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); color: var(--text); text-align: left; cursor: pointer; }
+.vm-modelo > span:last-child { display: grid; gap: 2px; min-width: 0; }
+.vm-modelo b { font-size: var(--text-sm); font-weight: 600; overflow-wrap: anywhere; }
+.vm-modelo small { color: var(--text-muted); font-size: var(--text-xs); line-height: 1.4; overflow-wrap: anywhere; }
+.vm-modelo[aria-pressed="true"] { border-color: var(--foco); box-shadow: 0 0 0 2px color-mix(in srgb, var(--foco) 30%, transparent); }
+.vm-modelo:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+.vm-mini { position: relative; flex: none; display: block; width: 36px; aspect-ratio: 9 / 16; overflow: hidden; border-radius: 6px; background: linear-gradient(160deg, var(--marca-ambar), var(--marca-coral)); }
+.vm-mini::before { content: ""; position: absolute; left: 4px; right: 4px; top: 7px; height: 5px; border-radius: 2px; background: #fff; }
+.vm-mini::after { content: ""; position: absolute; left: 5px; bottom: 8px; width: 18px; height: 6px; border-radius: 4px; background: #0b0d17; }
+.vm-mini--novidade::before { left: 0; right: auto; width: 22px; border-radius: 0 4px 4px 0; background: var(--marca-coral); }
+.vm-mini--novidade { background: linear-gradient(160deg, #6b3b1f, #2b4a1d); }
+
+/* As fotos e os vídeos, com a ordem. */
+.vm-midias { display: grid; grid-template-columns: repeat(auto-fill, minmax(72px, 1fr)); gap: var(--sp-2); }
+.vm-op { position: relative; display: block; width: 100%; padding: 0; border: 2px solid transparent; border-radius: var(--radius); background: var(--bg-subtle); cursor: pointer; overflow: hidden; }
+.vm-op img { display: block; width: 100%; aspect-ratio: 1 / 1; object-fit: cover; }
+.vm-op[aria-pressed="true"] { border-color: var(--foco); box-shadow: 0 0 0 2px color-mix(in srgb, var(--foco) 30%, transparent); }
+.vm-op:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+.vm-op[aria-invalid="true"] { border-color: var(--danger); }
+.vm-ordem { position: absolute; left: 4px; top: 4px; min-width: 22px; height: 22px; display: grid; place-items: center; padding: 0 5px; border-radius: var(--radius-full); background: var(--primary); color: var(--primary-fg); font-family: var(--font-mono); font-size: 12px; font-weight: 700; line-height: 1; }
+.vm-op-play { position: absolute; inset: 0; margin: auto; width: 26px; height: 26px; display: grid; place-items: center; border-radius: var(--radius-full); background: color-mix(in srgb, #0b0d17 62%, transparent); color: #fff; pointer-events: none; }
+.vm-op-play .ic { width: 13px; height: 13px; margin-left: 1px; fill: currentColor; }
+
+/* Os textos e a proposta do Social media. */
+.vm-textos-cab { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--sp-2) var(--sp-3); }
+.vm-textos-cab .btn { max-width: 100%; height: auto; min-height: 32px; padding-block: 4px; white-space: normal; text-align: left; }
+.vm-textos-cab .btn[aria-disabled="true"] { opacity: .62; cursor: not-allowed; }
+.vm-dica-linha { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 2px var(--sp-3); }
+.vm-dica-linha .campo-dica { min-width: 0; flex: 1 1 200px; overflow-wrap: anywhere; }
+.vm-contador { font-family: var(--font-mono); font-size: var(--text-xs); color: var(--text-muted); }
+.vm-contador--passou { color: var(--danger); font-weight: 600; }
+.vm-nota { display: flex; gap: var(--sp-2); margin: 0; color: var(--text-muted); font-size: var(--text-sm); }
+.vm-nota .ic { flex: none; margin-top: 2px; }
+.vm-social { display: grid; gap: var(--sp-3); padding: var(--sp-3) var(--sp-4); border: 1px solid color-mix(in srgb, var(--ai) 35%, var(--border)); border-radius: var(--radius); background: var(--ai-soft); font-size: var(--text-sm); }
+.vm-social--sem { border-color: var(--border); background: var(--bg-subtle); }
+.vm-social-cab { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-2); margin: 0; }
+.vm-social-cab b { font-weight: 600; }
+.vm-social-cab > .ic { color: var(--ai); }
+.vm-social dl { display: grid; gap: 6px; margin: 0; }
+.vm-social dl div { display: flex; flex-wrap: wrap; gap: 2px var(--sp-2); min-width: 0; }
+.vm-social dt { font-weight: 600; }
+.vm-social dd { margin: 0; min-width: 0; overflow-wrap: anywhere; }
+.vm-social-ok { display: flex; gap: var(--sp-2); margin: 0; color: var(--text); }
+.vm-social-ok .ic { flex: none; margin-top: 2px; color: var(--success); }
+.vm-social--sem .vm-social-ok .ic { color: var(--text-muted); }
+.vm-social-acoes { display: flex; flex-wrap: wrap; gap: var(--sp-2); }
+.vm-social-espera { display: flex; align-items: center; gap: var(--sp-2); margin: 0; }
+.vm-switch { align-items: center; }
+.vm-switch input { margin-top: 0; }
+.vm-switch span { min-width: 0; overflow-wrap: anywhere; }
+.vm-cota { font-size: var(--text-xs); color: var(--text-muted); }
+.vm-gaveta .dialogo-acoes .btn[aria-disabled="true"] { opacity: .62; cursor: not-allowed; }
+
+/* A prévia: as cores e as medidas do vídeo (as mesmas do `packages/video-modelos`, em qualquer tema). */
+.vm-lado { display: grid; justify-items: center; gap: var(--sp-2); min-width: 0; }
+.vm-lado > .rotulo-marca { justify-self: start; }
+.vm-quadro { --vm-claro: #fff; --vm-tinta: #0b0d17; --vm-preco: var(--marca-ambar); --vm-faixa: var(--marca-coral);
+  position: relative; width: min(100%, 260px); aspect-ratio: 9 / 16; overflow: hidden; border-radius: var(--radius); background: var(--vm-tinta); color: var(--vm-tinta); }
+.vm-quadro--4x5 { width: min(100%, 280px); aspect-ratio: 4 / 5; }
+.vm-quadro--1x1 { width: min(100%, 280px); aspect-ratio: 1 / 1; }
+.vm-cena { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; opacity: 0; transform-origin: 50% 55%; }
+.vm-cena.vm-vis { opacity: 1; }
+.vm-quadro .vm-v { position: absolute; z-index: 2; opacity: 0; transform: translateY(8px); transition: opacity .35s var(--ease), transform .35s var(--ease); overflow-wrap: anywhere; }
+.vm-quadro .vm-v.vm-vis { opacity: 1; transform: none; }
+.vm-v-titulo { left: 7%; right: 7%; top: calc(4% + 40px); padding: 6px 10px; border-radius: var(--radius-sm); background: var(--vm-claro); font-size: var(--text-md); font-weight: 700; line-height: 1.2; text-align: center; }
+.vm-v-preco { left: 7%; bottom: 22%; padding: 4px 12px; border-radius: var(--radius-full); background: var(--vm-preco); font-family: var(--font-mono); font-size: var(--text-lg); font-weight: 700; line-height: 1.3; max-width: 86%; }
+.vm-v-chamada { left: 7%; right: 7%; bottom: max(8%, 36px); padding: 6px 10px; border-radius: var(--radius-sm); background: var(--vm-tinta); color: var(--vm-claro); font-size: var(--text-sm); font-weight: 600; line-height: 1.25; text-align: center; }
+.vm-v-faixa { left: 0; top: 4%; padding: 3px 12px 3px 10px; border-radius: 0 var(--radius-full) var(--radius-full) 0; background: var(--vm-faixa); font-size: var(--text-xs); font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
+.vm-quadro--combo-fim .vm-cena.vm-vis { filter: brightness(.55); }
+.vm-quadro--combo-fim .vm-v-preco { left: 0; right: 0; bottom: 40%; width: fit-content; margin-inline: auto; font-size: var(--text-xl); }
+.vm-quadro--1x1 .vm-v-preco { bottom: 27%; }
+.vm-logo { position: absolute; z-index: 3; right: 6%; top: 3%; width: 34px; height: 34px; display: grid; place-items: center; border-radius: 50%; background: var(--vm-claro); font-size: 11px; font-weight: 700; letter-spacing: .02em; }
+.vm-quadro--novidade .vm-logo { top: 4%; }
+.vm-som { position: absolute; z-index: 3; left: 6%; bottom: 8px; display: grid; place-items: center; width: 22px; height: 22px; border-radius: 50%; background: color-mix(in srgb, var(--vm-tinta) 70%, transparent); color: var(--vm-claro); }
+.vm-barra { position: absolute; z-index: 3; left: 0; right: 0; bottom: 0; height: 4px; background: color-mix(in srgb, var(--vm-claro) 30%, transparent); }
+.vm-barra span { display: block; width: 0; height: 100%; background: var(--vm-claro); }
+.vm-vazio { position: absolute; inset: 0; display: grid; place-content: center; justify-items: center; gap: var(--sp-2); padding: var(--sp-4); color: var(--vm-claro); font-size: var(--text-sm); text-align: center; }
+.vm-vazio .ic { width: 26px; height: 26px; }
+.vm-controles { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: var(--sp-2) var(--sp-3); }
+.vm-tempo { font-family: var(--font-mono); font-size: var(--text-xs); color: var(--text-muted); }
+.vm-lado .campo-dica { justify-self: stretch; text-align: center; overflow-wrap: anywhere; }
+
+/* O andamento, na gaveta. */
+.vm-status { display: grid; justify-items: center; gap: var(--sp-3); padding: var(--sp-6) var(--sp-3) var(--sp-3); text-align: center; }
+.vm-status h3 { font-size: var(--text-lg); }
+.vm-status > p { max-width: 52ch; margin: 0; color: var(--text-muted); overflow-wrap: anywhere; }
+.vm-status-ic { width: 52px; height: 52px; display: grid; place-items: center; border-radius: 16px; background: var(--primary-soft); color: var(--link); }
+.vm-status-ic .ic { width: 24px; height: 24px; }
+.vm-status--pronto .vm-status-ic { background: var(--success-soft); color: var(--success); }
+.vm-status--falhou .vm-status-ic { background: var(--danger-soft); color: var(--danger); }
+.vm-progresso { display: grid; gap: 6px; width: min(100%, 360px); }
+.vm-progresso b { font-size: var(--text-sm); }
+
+/* O pedido na grade de Fotos. */
+.vm-job .ft-img { position: relative; }
+.vm-job-veu { position: absolute; inset: 0; display: grid; place-content: center; justify-items: center; gap: 6px; background: color-mix(in srgb, #0b0d17 55%, transparent); color: #fff; font-size: var(--text-sm); font-weight: 600; text-align: center; }
+.vm-job-veu .ic { width: 22px; height: 22px; }
+
+@media (prefers-reduced-motion: reduce) {
+  .vm-quadro .vm-v { transition: none; }
+}

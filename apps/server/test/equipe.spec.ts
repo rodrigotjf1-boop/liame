@@ -5,6 +5,7 @@ import { WORKFLOW_DO_CRM } from '../src/ai/crm/prompt.js';
 import { WORKFLOW_DA_REVISAO, WORKFLOW_DO_AVISO, WORKFLOW_DO_RELATORIO, WORKFLOW_DOS_RESULTADOS } from '../src/ai/explicar/explicar.service.js';
 import { WORKFLOW_DO_REVISOR } from '../src/ai/revisor/prompt.js';
 import { WORKFLOW_DO_SOCIAL, WORKFLOW_DO_SOCIAL_COMENTARIO, WORKFLOW_DO_SOCIAL_COMENTARIO_TIPO, WORKFLOW_DO_SOCIAL_POST } from '../src/ai/social/prompt.js';
+import { WORKFLOW_DO_SOCIAL_VIDEO } from '../src/ai/social/video.js';
 import { WORKFLOW as WORKFLOW_DA_CONVERSA } from '../src/conversa/conversa.service.js';
 import { EQUIPE, MEMBROS } from '../src/equipe/membros.js';
 import {
@@ -63,11 +64,12 @@ describe('Sua equipe (A3, I13b)', () => {
     expect(EQUIPE.compliance).toMatchObject({ kind: 'regra', desligavel: false, fluxos: [WORKFLOW_DO_REVISOR] });
     expect(MEMBROS.filter((m) => EQUIPE[m].kind === 'ia')).toEqual(['lia', 'analista', 'estrategista', 'pesquisador', 'criativo', 'crm', 'social']);
     // O Social media (A6; P21): os fluxos são os das rotinas dele, as sugestões de resposta, os posts, os pedidos para
-    // os comentários (Z11, parte 2d-2) e o tipo do comentário (parte 2d-4c; o custo soma todos), e a empresa pode desligar.
+    // os comentários (Z11, parte 2d-2), o tipo do comentário (parte 2d-4c) e os textos do vídeo (Z15, parte 3b; o custo soma
+    // todos), e a empresa pode desligar.
     expect(EQUIPE.social).toMatchObject({
       kind: 'ia',
       desligavel: true,
-      fluxos: [WORKFLOW_DO_SOCIAL, WORKFLOW_DO_SOCIAL_POST, WORKFLOW_DO_SOCIAL_COMENTARIO, WORKFLOW_DO_SOCIAL_COMENTARIO_TIPO],
+      fluxos: [WORKFLOW_DO_SOCIAL, WORKFLOW_DO_SOCIAL_POST, WORKFLOW_DO_SOCIAL_COMENTARIO, WORKFLOW_DO_SOCIAL_COMENTARIO_TIPO, WORKFLOW_DO_SOCIAL_VIDEO],
     });
     // O Criativo (A4; P12): o fluxo é o que o worker das peças grava, e a empresa pode desligar.
     expect(EQUIPE.criativo).toMatchObject({ kind: 'ia', desligavel: true, fluxos: [WORKFLOW_DO_CRIATIVO] });

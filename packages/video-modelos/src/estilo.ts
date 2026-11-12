@@ -29,3 +29,10 @@ export function entrada(quadro: number, fps: number, inicio: number, s: number):
   });
   return { opacity: p, transform: `translateY(${((1 - p) * 8 * s).toFixed(2)}px)` };
 }
+
+/** O texto que entra no segundo `inicio` e sai no segundo `fim` (no Combo, o título sai quando o preço vem ao centro). */
+export function entradaESaida(quadro: number, fps: number, inicio: number, fim: number, s: number): { opacity: number; transform: string } {
+  const e = entrada(quadro, fps, inicio, s);
+  const saida = interpolate(quadro, [fim * fps, (fim + ENTRADA_S) * fps], [1, 0], { easing: CURVA, extrapolateLeft: 'clamp', extrapolateRight: 'clamp' });
+  return { opacity: e.opacity * saida, transform: e.transform };
+}

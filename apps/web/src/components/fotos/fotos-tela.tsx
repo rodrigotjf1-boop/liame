@@ -1,6 +1,6 @@
 'use client';
 
-import type { BrandPhoto, BrandPhotosResponse, BrandResponse, InstagramMedia } from '@liame/contracts';
+import type { BrandPhoto, BrandPhotosResponse, BrandResponse, InstagramMedia, NewCampaignOptionsResponse, VideoMontageListResponse, VideoMontageResponse } from '@liame/contracts';
 import { type DragEvent, useCallback, useEffect, useRef, useState } from 'react';
 import { useAvisar } from '@/components/ui/avisos';
 import { Estado } from '@/components/ui/estado';
@@ -14,10 +14,13 @@ import { AbaDoInstagram } from './aba-do-instagram';
 import { CartaoFoto } from './cartao-foto';
 import { DialogoApagarFoto } from './dialogo-apagar-foto';
 import { type AbaDasFotos, ROTULOS_DAS_ABAS } from './do-seu-instagram';
+import { GavetaCampanhaNova } from '@/components/criativos/gaveta-campanha-nova';
 import { GavetaDoInstagram } from './gaveta-do-instagram';
 import { concluirOVideo, enviarCapa, enviarFoto, hashDoArquivo, medirImagem, medirVideo, pedirEnvioDoVideo, quadroDoMeio, subirOVideo } from './enviar';
 import { FilaDoEnvio, type ItemDoEnvio } from './fila-do-envio';
 import { GavetaFoto } from './gaveta-foto';
+import { CartaoDaMontagem } from './video-montado/cartao';
+import { GavetaMontarVideo } from './video-montado/gaveta';
 import {
   aceita,
   conferirArquivo,
@@ -92,6 +95,15 @@ export function FotosTela() {
   const [apagar, setApagar] = useState<string | null>(null);
   const [arrastando, setArrastando] = useState(false);
   const [anuncio, setAnuncio] = useState('');
+  // O vídeo montado pelo Liame (A6 · Z15, parte 4): os pedidos da marca, a gaveta aberta (nova, ou a de um pedido) e o
+  // "não deu" que a pessoa já viu.
+  const [montagens, setMontagens] = useState<VideoMontageListResponse | null>(null);
+  const [montar, setMontar] = useState<{ pedido: VideoMontageResponse | null } | null>(null);
+  const [falhaVista, setFalhaVista] = useState<string | null>(null);
+  // A campanha nova a partir de um Reels (A4, X5, parte 6; P42): as opções da gaveta (lidas ao abrir a aba do Instagram)
+  // e o Reels da gaveta aberta por cima da gaveta do Instagram.
+  const [opcoesDaCampanha, setOpcoesDaCampanha] = useState<{ marca: string; dados: NewCampaignOptionsResponse } | null>(null);
+  const [campanhaDoReels, setCampanhaDoReels] = useState<InstagramMedia | null>(null);
   const agora = useAgora(60_000, carga);
   const secao = useRef<HTMLElement>(null);
   const seq = useRef(0);
@@ -158,6 +170,35 @@ export function FotosTela() {
     if (Date.now() - relida.current < ESPERA_DA_RELEITURA_MS) return;
     disparar(reler());
   }, [reler]);
+
+  // Os pedidos do vídeo montado da marca: ao abrir a marca e, enquanto há vídeo na fila ou montando, a cada 5 segundos.
+  // O vídeo que fica pronto entra em Fotos: a lista das fotos é lida de novo. Sem a função, a resposta diz `enabled: false`.
+  const montagensAntes = useRef<VideoMontageListResponse | null>(null);
+  const lerMontagens = useCallback(async () => {
+    if (!marca) return;
+    const r = await chamar(() => api.GET('/v1/video-montages', { params: { query: { brand_id: marca } } }));
+    if (!r.ok || !montada.current) return;
+    const antes = montagensAntes.current;
+    montagensAntes.current = r.data;
+    setMontagens(r.data);
+    const ficouPronto = r.data.items.some((m) => m.status === 'pronto' && antes?.items.some((a) => a.id === m.id && a.status !== 'pronto'));
+    if (ficouPronto) {
+      disparar(reler());
+      avisar('O vídeo está pronto. Ele entrou em Fotos com a etiqueta Montado pelo Liame.');
+    }
+  }, [marca, reler, avisar]);
+  useEffect(() => {
+    montagensAntes.current = null;
+    setMontagens(null);
+    setMontar(null);
+    disparar(lerMontagens());
+  }, [lerMontagens]);
+  const montando = Boolean(montagens?.items.some((m) => m.status === 'na_fila' || m.status === 'montando'));
+  useEffect(() => {
+    if (!montando) return;
+    const t = setInterval(() => disparar(lerMontagens()), 5000);
+    return () => clearInterval(t);
+  }, [montando, lerMontagens]);
 
   // O foco depois de uma ação: o título, a lista do envio ou a foto vizinha da que foi apagada.
   useEffect(() => {
@@ -424,6 +465,21 @@ export function FotosTela() {
   }, []);
   const comArquivos = (e: DragEvent) => [...e.dataTransfer.types].includes('Files');
 
+  // As opções da campanha nova (X5, parte 6): na aba do Instagram, uma vez por marca, e de novo depois de um pedido.
+  // Sem elas (a função desligada, ou sem a permissão de ver campanhas), a gaveta do Reels só não mostra o bloco.
+  const lerOpcoesDaCampanha = useCallback(async (m: string) => {
+    const r = await chamar(() => api.GET('/v1/new-campaigns/options', { params: { query: { brand_id: m } } }));
+    if (montada.current && r.ok) setOpcoesDaCampanha({ marca: m, dados: r.data });
+  }, []);
+  const precisaDasOpcoes = naAbaDoInstagram && marca !== null && opcoesDaCampanha?.marca !== marca;
+  useEffect(() => {
+    if (precisaDasOpcoes && marca) disparar(lerOpcoesDaCampanha(marca));
+  }, [precisaDasOpcoes, marca, lerOpcoesDaCampanha]);
+  useEffect(() => {
+    setCampanhaDoReels(null);
+  }, [marca]);
+  const opcoesDaMarca = opcoesDaCampanha && opcoesDaCampanha.marca === marca ? opcoesDaCampanha.dados : null;
+
   if (!podeVer) {
     return (
       <Estado icone="lock" titulo="Esta tela é de quem cuida da marca">
@@ -434,6 +490,18 @@ export function FotosTela() {
 
   const fotos = dados?.items ?? [];
   const tem = fotos.length > 0;
+  // O vídeo montado (A6 · Z15, parte 4): o botão, os pedidos na fila ou montando (na grade, antes das fotos) e o último
+  // que não deu (uma faixa, até a pessoa fechar).
+  const podeMontar = Boolean(montagens?.enabled && dados?.can_manage && !naAbaDoInstagram && tem);
+  const emCurso = (montagens?.items ?? []).filter((m) => m.status === 'na_fila' || m.status === 'montando');
+  const ultimaFalha = montagens?.items[0]?.status === 'nao_deu' && montagens.items[0].id !== falhaVista ? montagens.items[0] : null;
+  const iniciais =
+    (marcas?.find((m) => m.id === marca)?.name ?? '')
+      .split(/\s+/)
+      .filter(Boolean)
+      .slice(0, 2)
+      .map((p) => p[0]!.toUpperCase())
+      .join('') || 'L';
   const nomeDaMarca = marcas?.find((m) => m.id === marca)?.name ?? 'sua marca';
   const lista = grupos(fotos, dados?.products ?? []);
   const filtroValido = filtro === 'todas' || lista.includes(filtro) ? filtro : 'todas';
@@ -539,6 +607,20 @@ export function FotosTela() {
           <Faixa icone={<Icone nome="lock" />} titulo="Você vê as fotos, mas só o Dono, o Administrador e o Gestor enviam e apagam" texto="Se faltar a foto de um produto, peça a um deles." />
         )}
         <FilaDoEnvio itens={fila} tituloRef={tituloDaFila} aoTentarDeNovo={tentarDeNovo} aoFechar={fecharFila} />
+        {ultimaFalha && (
+          <Faixa
+            tipo="perigo"
+            icone={<Icone nome="alert-circle" />}
+            titulo={`Não deu para montar o vídeo “${ultimaFalha.title}”`}
+            // O motivo do servidor às vezes já diz que não conta no limite: a frase não se repete.
+            texto={/limite do dia/i.test(ultimaFalha.error ?? '') ? ultimaFalha.error : `${ultimaFalha.error ?? 'Peça de novo.'} Este não conta no limite do dia.`}
+            acao={
+              <button className="btn btn--sm" type="button" onClick={() => setFalhaVista(ultimaFalha.id)}>
+                Fechar o aviso
+              </button>
+            }
+          />
+        )}
         {!tem ? (
           <div className="ft-vazio">
             <span className="ft-vazio-ic" aria-hidden="true">
@@ -602,6 +684,12 @@ export function FotosTela() {
               {quantosNaGrade(vistas)}
             </h2>
             <ul className="ft-grade" aria-labelledby="ft-grade-t" ref={grade}>
+              {/* Os vídeos sendo montados, antes das fotos (com o filtro de produto em "Todas" e o de tipo sem "Fotos"). */}
+              {filtroValido === 'todas' &&
+                tipo !== 'fotos' &&
+                emCurso.map((m) => (
+                  <CartaoDaMontagem key={`vm-${m.id}`} montagem={m} capa={fotos.find((f) => f.id === m.media_ids[0]) ?? null} aoAbrir={() => setMontar({ pedido: m })} />
+                ))}
               {vistas.map((f) => (
                 <CartaoFoto key={f.id} foto={f} agora={agora} aberta={aberta === f.id} aoAbrir={() => abrir(f.id)} aoFalhar={relerPorEndereco} />
               ))}
@@ -665,6 +753,12 @@ export function FotosTela() {
                 </select>
               </label>
             )}
+            {podeMontar && (
+              <button className="btn" type="button" data-vm-montar aria-haspopup="dialog" aria-expanded={Boolean(montar)} onClick={() => setMontar({ pedido: null })}>
+                <Icone nome="video" />
+                Montar um vídeo
+              </button>
+            )}
             {recebeArquivo && tem && (
               <button className="btn btn--primary" type="button" data-ft-enviar="cab" onClick={() => seletor.current?.click()}>
                 <Icone nome="upload" />
@@ -726,8 +820,58 @@ export function FotosTela() {
           aoFechar={() => setAberta((a) => (a === fotoAberta.id ? null : a))}
         />
       )}
+      {montar && marca && montagens && (
+        <GavetaMontarVideo
+          key={`vm-${montar.pedido?.id ?? 'novo'}`}
+          brandId={marca}
+          iniciais={iniciais}
+          fotos={fotos}
+          temLogo={montagens.has_logo}
+          hoje={montagens.today}
+          pedido={montar.pedido}
+          reserva={titulo}
+          aoPedir={(m) => {
+            // O pedido novo entra na lista na hora (a fila começa a ser acompanhada); o que andou, atualiza.
+            setMontagens((l) => (l ? { ...l, today: l.items.some((x) => x.id === m.id) ? l.today : { ...l.today, used: l.today.used + 1 }, items: [m, ...l.items.filter((x) => x.id !== m.id)] } : l));
+            if (m.status === 'pronto') disparar(reler());
+          }}
+          aoVerVideo={(id) => {
+            setMontar(null);
+            disparar(reler().then(() => setAberta(id)));
+          }}
+          aoFechar={() => setMontar(null)}
+        />
+      )}
       {naAbaDoInstagram && publicacao && (
-        <GavetaDoInstagram key={`ig-${publicacao.id}`} publicacao={publicacao} agora={agora} reserva={titulo} aoFechar={() => setPublicacao((p) => (p?.id === publicacao.id ? null : p))} />
+        <GavetaDoInstagram
+          key={`ig-${publicacao.id}`}
+          publicacao={publicacao}
+          agora={agora}
+          reserva={titulo}
+          campanha={
+            opcoesDaMarca?.enabled
+              ? {
+                  atual: opcoesDaMarca.by_reels.find((x) => x.instagram_media_id === publicacao.id) ?? null,
+                  podePedir: pode('campanhas.operar'),
+                  aoUsar: () => setCampanhaDoReels(publicacao),
+                }
+              : null
+          }
+          aoFechar={() => setPublicacao((p) => (p?.id === publicacao.id ? null : p))}
+        />
+      )}
+      {/* Por cima da gaveta do Instagram: fechar volta para ela. */}
+      {naAbaDoInstagram && campanhaDoReels && marca && opcoesDaMarca && (
+        <GavetaCampanhaNova
+          key={`cn-${campanhaDoReels.id}`}
+          brandId={marca}
+          origem={{ tipo: 'reels', reels: campanhaDoReels }}
+          opcoes={opcoesDaMarca}
+          hoje={new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Sao_Paulo', year: 'numeric', month: '2-digit', day: '2-digit' }).format(agora)}
+          reserva={titulo}
+          aoFechar={() => setCampanhaDoReels(null)}
+          aoCriado={() => disparar(lerOpcoesDaCampanha(marca))}
+        />
       )}
       {apagar && (
         <DialogoApagarFoto

@@ -326,6 +326,96 @@ export const RegionOverviewResponse = z.strictObject({
     .nullable(),
   /** A referência do setor (D-RG-9): números divulgados à imprensa, com a fonte; nunca o número da loja. */
   sector_references: z.array(z.strictObject({ text: z.string(), source: z.string(), extra: z.string().nullable(), as_of: z.string() })),
+  /**
+   * A demanda da loja (R3, parte 1): `disponivel`, `sem_endereco` (a loja fora do mapa), `sem_regem` (a marca não tem o Regem ligado: o Liame não lê os
+   * pedidos) ou `sem_permissao` (quem pergunta não vê Resultados, `vendas.ver`: os números de venda não vêm).
+   */
+  store_demand_status: Slug,
+  /**
+   * Os pedidos confirmados da loja nas 4 semanas completas até ontem (no fuso da loja), pelas regras de Resultados:
+   * a receita líquida (sem o estorno), o tíquete médio, o cliente novo × de volta (`unknown`: o pedido sem cliente, como
+   * o de marketplace), os pedidos por dia da semana (0 = domingo) e por hora (a hora em que o cliente pediu), e o pico.
+   * `status`: `pronto`, `poucos_pedidos` (abaixo de `minimum_orders`: sem dia, hora e pico) ou `sem_pedidos`. Nula fora
+   * de `disponivel`.
+   */
+  store_demand: z
+    .strictObject({
+      status: Slug,
+      from: z.string(),
+      to: z.string(),
+      days: z.number().int(),
+      minimum_orders: z.number().int(),
+      orders: z.number().int(),
+      revenue_micros: z.string(),
+      ticket_micros: z.string().nullable(),
+      previous: z.strictObject({ orders: z.number().int(), revenue_micros: z.string(), ticket_micros: z.string().nullable() }),
+      customers: z.strictObject({ new: z.number().int(), returning: z.number().int(), unknown: z.number().int() }),
+      by_weekday: z.array(z.strictObject({ weekday: z.number().int(), orders: z.number().int(), revenue_micros: z.string() })),
+      by_hour: z.array(z.strictObject({ hour: z.number().int(), orders: z.number().int() })),
+      peak: z.strictObject({ weekday: z.number().int(), hour: z.number().int(), orders: z.number().int() }).nullable(),
+    })
+    .nullable(),
+  /**
+   * A mídia na região (R4; D-RG-32 a D-RG-35): `disponivel`, `sem_conta` (a marca sem conta de anúncio da Meta ou do
+   * Google conectada) ou `sem_permissao` (quem pergunta não vê Resultados, `vendas.ver`).
+   */
+  paid_media_status: Slug,
+  /**
+   * Os anúncios da marca nas 4 semanas completas até ontem (no fuso de cada conta), sem dinheiro (D-RG-33): os cliques e
+   * as impressões por hora (Meta e Google somados), o bloco de até 4 horas com mais cliques e quanto dos cliques cai no
+   * bloco mais forte dos pedidos da loja (nulo sem a demanda pronta), e, só do Google, as cidades com mais cliques (até 8;
+   * a Meta só informa o estado, que o Liame não lê). `accounts`: as contas que entram, com a última leitura (nula: ainda
+   * lendo). `cities_status`: `disponivel`, `sem_google` ou `lendo`. Nula fora de `disponivel`.
+   */
+  paid_media: z
+    .strictObject({
+      from: z.string(),
+      to: z.string(),
+      accounts: z.array(z.strictObject({ provider: Slug, name: z.string(), read_at: z.string().nullable() })),
+      clicks: z.number().int(),
+      impressions: z.number().int(),
+      by_hour: z.array(z.strictObject({ hour: z.number().int(), clicks: z.number().int(), impressions: z.number().int() })),
+      ad_block: z.strictObject({ from_hour: z.number().int(), to_hour: z.number().int(), clicks_pct: z.number().int() }).nullable(),
+      orders_block: z.strictObject({ from_hour: z.number().int(), to_hour: z.number().int(), clicks_pct: z.number().int() }).nullable(),
+      cities_status: Slug,
+      cities: z.array(z.strictObject({ id: z.string(), name: z.string(), full_name: z.string(), clicks: z.number().int(), impressions: z.number().int(), clicks_pct: z.number().int() })),
+    })
+    .nullable(),
+  /**
+   * Os pedidos por bairro (R3, parte 2; D-RG-36 a D-RG-39): `disponivel`, `sem_endereco`, `sem_regem`, `sem_permissao`
+   * (quem pergunta não vê Resultados) ou `lendo` (a primeira leitura do Regem ainda não veio).
+   */
+  order_districts_status: Slug,
+  /**
+   * Os pedidos de entrega confirmados por bairro, das 4 semanas completas até ontem, que o Regem manda somados (o bairro
+   * com menos de `minimum` pedidos vem em `others`, sem o nome), com a gente do bairro no Censo (o mesmo município da
+   * loja) e os pedidos por mil moradores; os bairros da área de entrega sem o mínimo entram com `orders` nulo. `role`
+   * (`atacar`, `defender` ou `manter`) só com pelo menos 3 bairros com gente conhecida (`comparable`). Nula fora de
+   * `disponivel`.
+   */
+  order_districts: z
+    .strictObject({
+      from: z.string(),
+      to: z.string(),
+      minimum: z.number().int(),
+      read_at: z.string(),
+      comparable: z.boolean(),
+      districts: z.array(
+        z.strictObject({
+          name: z.string(),
+          orders: z.number().int().nullable(),
+          population: z.number().int().nullable(),
+          per_1000: z.number().nullable(),
+          role: Slug.nullable(),
+          in_delivery_area: z.boolean(),
+        }),
+      ),
+      others: z.strictObject({ districts: z.number().int(), orders: z.number().int() }),
+      without_district: z.number().int(),
+      pickup: z.number().int(),
+      delivery_orders: z.number().int(),
+    })
+    .nullable(),
   sources: z.array(RegionSourceStatus),
   generated_at: z.iso.datetime(),
 });

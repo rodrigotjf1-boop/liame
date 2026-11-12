@@ -77,9 +77,14 @@ function hojeNoFuso(agora: Date, fuso: string): string {
 type LinhaDaCampanhaNova = {
   id: string;
   brand_id: string;
-  piece_id: string;
-  piece_version: number;
-  media_id: string;
+  piece_id: string | null;
+  piece_version: number | null;
+  media_id: string | null;
+  instagram_media_id: string | null;
+  reels_caption: string | null;
+  reels_permalink: string | null;
+  reels_thumbnail_url: string | null;
+  reels_published_at: Date | null;
   unit_id: string;
   name: string;
   objective: 'cardapio' | 'whatsapp';
@@ -109,6 +114,11 @@ function resposta(l: LinhaDaCampanhaNova): NewCampaignResponse {
     piece_id: l.piece_id,
     piece_version: l.piece_version,
     media_id: l.media_id,
+    instagram_media_id: l.instagram_media_id,
+    reels:
+      l.instagram_media_id !== null && l.reels_published_at !== null
+        ? { caption: l.reels_caption ?? '', permalink: l.reels_permalink, thumbnail_url: l.reels_thumbnail_url, published_at: new Date(l.reels_published_at).toISOString() }
+        : null,
     unit_id: l.unit_id,
     name: l.name,
     objective: l.objective,
@@ -152,23 +162,28 @@ export class CampanhasNovasService {
     const ligada = await this.flags.isEnabled(FLAG_DA_CAMPANHA_NOVA, this.flags.context({ tenantId: quem.tenantId, userId: quem.userId, brandId: body.brand_id }));
     if (!ligada) throw conflito('funcao-desligada', 'Função desligada', 'A campanha nova não está ligada para esta empresa.');
 
-    // A peça aprovada, na versão atual.
-    const peca = (
-      await tx.execute<{ status: string; version: number }>(sql`
-        select status, version from liame.ad_piece where id = ${body.piece_id} and tenant_id = ${quem.tenantId} and brand_id = ${body.brand_id}`)
-    ).rows[0];
-    if (!peca) throw recusa('peca-nao-encontrada', 'Peça não encontrada', 'A peça não está em Criativos desta marca.', 'piece_id');
-    if (peca.status !== 'aprovada') throw recusa('peca-nao-aprovada', 'A peça não foi aprovada', 'Só a peça aprovada em Criativos vira campanha. Aprove a peça antes.', 'piece_id');
+    // A origem: a peça aprovada (na versão atual) com a foto ou o vídeo pronto de Fotos, ou o Reels (D-A4-46).
+    const reels = body.instagram_media_id ?? null;
+    let versaoDaPeca: number | null = null;
+    if (reels === null) {
+      const peca = (
+        await tx.execute<{ status: string; version: number }>(sql`
+          select status, version from liame.ad_piece where id = ${body.piece_id!} and tenant_id = ${quem.tenantId} and brand_id = ${body.brand_id}`)
+      ).rows[0];
+      if (!peca) throw recusa('peca-nao-encontrada', 'Peça não encontrada', 'A peça não está em Criativos desta marca.', 'piece_id');
+      if (peca.status !== 'aprovada') throw recusa('peca-nao-aprovada', 'A peça não foi aprovada', 'Só a peça aprovada em Criativos vira campanha. Aprove a peça antes.', 'piece_id');
+      versaoDaPeca = peca.version;
 
-    // A foto ou o vídeo pronto de Fotos (o vídeo só com a capa guardada: o anúncio de vídeo leva a capa).
-    const midia = (
-      await tx.execute<{ kind: string; has_cover: boolean | null }>(sql`
-        select kind, has_cover from liame.brand_photo
-         where id = ${body.media_id} and tenant_id = ${quem.tenantId} and brand_id = ${body.brand_id} and status = 'pronta' and removed_at is null`)
-    ).rows[0];
-    if (!midia) throw recusa('midia-fora-das-fotos', 'Mídia não encontrada', 'Escolha uma foto ou um vídeo pronto de Fotos desta marca.', 'media_id');
-    if (midia.kind === 'video' && !midia.has_cover) {
-      throw recusa('video-sem-capa', 'O vídeo não tem capa', 'O anúncio de vídeo leva a capa: escolha a capa do vídeo em Fotos, ou use outro vídeo.', 'media_id');
+      // O vídeo só com a capa guardada: o anúncio de vídeo leva a capa.
+      const midia = (
+        await tx.execute<{ kind: string; has_cover: boolean | null }>(sql`
+          select kind, has_cover from liame.brand_photo
+           where id = ${body.media_id!} and tenant_id = ${quem.tenantId} and brand_id = ${body.brand_id} and status = 'pronta' and removed_at is null`)
+      ).rows[0];
+      if (!midia) throw recusa('midia-fora-das-fotos', 'Mídia não encontrada', 'Escolha uma foto ou um vídeo pronto de Fotos desta marca.', 'media_id');
+      if (midia.kind === 'video' && !midia.has_cover) {
+        throw recusa('video-sem-capa', 'O vídeo não tem capa', 'O anúncio de vídeo leva a capa: escolha a capa do vídeo em Fotos, ou use outro vídeo.', 'media_id');
+      }
     }
 
     // A conta de anúncios da Meta e a Página da marca (D-A4-35): uma de cada.
@@ -176,6 +191,37 @@ export class CampanhasNovasService {
     const bloqueio = bloqueioDasContas(anuncios, paginas);
     if (bloqueio) throw bloqueio;
     const contaDeAnuncios = anuncios[0]!;
+
+    // O Reels do Instagram ligado à Página: o anúncio sai em nome dela e do Instagram dela, e a Meta só aceita o post
+    // desse perfil. Ele precisa estar na leitura de Fotos › Do seu Instagram.
+    if (reels !== null) {
+      const instagramDaPagina = paginas[0]!.instagram_id;
+      if (!instagramDaPagina) {
+        throw recusa(
+          'sem-instagram-na-pagina',
+          'A Página não tem o Instagram ligado',
+          'O anúncio de um Reels sai em nome do Instagram ligado à Página da marca. Ligue o Instagram à Página na Meta e conecte de novo em Contas conectadas.',
+          'instagram_media_id',
+        );
+      }
+      const doPerfil = (
+        await tx.execute<{ kind: string }>(sql`
+          select im.kind from liame.instagram_media im
+            join liame.connected_account ig on ig.id = im.connected_account_id and ig.tenant_id = im.tenant_id
+           where im.tenant_id = ${quem.tenantId} and im.brand_id = ${body.brand_id} and im.media_id = ${reels}
+             and ig.provider = 'instagram' and ig.external_id = ${instagramDaPagina} and ${contaConectada('ig')}
+           limit 1`)
+      ).rows[0];
+      if (!doPerfil) {
+        throw recusa(
+          'reels-nao-encontrado',
+          'Reels não encontrado',
+          'O Reels não está em Fotos › Do seu Instagram, no Instagram ligado à Página da marca.',
+          'instagram_media_id',
+        );
+      }
+      if (doPerfil.kind !== 'reels') throw recusa('nao-e-reels', 'Não é um Reels', 'Só o Reels vira campanha por aqui. Para a foto, use Criativos.', 'instagram_media_id');
+    }
     if (emMenorUnidade(body.daily_budget_micros, contaDeAnuncios.currency) === null) {
       throw recusa('verba-invalida', 'Verba inválida', 'A verba diária não pode ter fração de centavo.', 'daily_budget_micros');
     }
@@ -218,28 +264,32 @@ export class CampanhasNovasService {
 
     if (body.end_date && body.end_date <= hojeNoFuso(agora, timezone)) throw recusa('fim-no-passado', 'Data de fim', 'A data de fim precisa ser depois de hoje.', 'end_date');
 
-    // O pedido anterior com a mesma peça que já se encerrou em Aprovações (recusado, expirado, ou que falhou no meio) sai
-    // do caminho: a campanha nova dele fica cancelada (ou não criada, se já tinha começado na Meta).
+    // O pedido anterior com a mesma peça (ou o mesmo Reels) que já se encerrou em Aprovações (recusado, expirado, ou que
+    // falhou no meio) sai do caminho: a campanha nova dele fica cancelada (ou não criada, se já tinha começado na Meta).
+    const mesmaOrigem = reels === null ? sql`c.piece_id = ${body.piece_id!}` : sql`c.brand_id = ${body.brand_id} and c.instagram_media_id = ${reels}`;
     await tx.execute(sql`
       update liame.ad_campaign_new c
          set status = case when c.status = 'criando' then 'nao_criada' else 'cancelada' end,
              error = case when c.status = 'criando' then coalesce(left(r.status_reason, 2000), 'A criação parou antes do fim.') else c.error end,
              updated_at = now()
         from liame.action_request r
-       where c.tenant_id = ${quem.tenantId} and c.piece_id = ${body.piece_id} and c.status in ('pedida', 'criando')
+       where c.tenant_id = ${quem.tenantId} and ${mesmaOrigem} and c.status in ('pedida', 'criando')
          and r.id = c.action_id and r.tenant_id = c.tenant_id and r.status in ${ENCERRADOS}`);
 
-    // A campanha nova e o pedido. O segundo pedido com a mesma peça espera o primeiro (o índice único de peça em aberto).
+    // A campanha nova e o pedido. O segundo pedido com a mesma peça (ou o mesmo Reels) espera o primeiro (os índices
+    // únicos de peça e de Reels em aberto).
     const id = uuidv7();
     const nova = await tx.execute(sql`
-      insert into liame.ad_campaign_new (id, tenant_id, brand_id, ad_account_id, page_account_id, piece_id, piece_version, media_id, unit_id,
+      insert into liame.ad_campaign_new (id, tenant_id, brand_id, ad_account_id, page_account_id, piece_id, piece_version, media_id, instagram_media_id, unit_id,
                                          name, objective, radius_km, daily_budget_micros, end_date, link, created_by)
-      values (${id}, ${quem.tenantId}, ${body.brand_id}, ${contaDeAnuncios.id}, ${paginas[0]!.id}, ${body.piece_id}, ${peca.version}, ${body.media_id}, ${body.unit_id},
+      values (${id}, ${quem.tenantId}, ${body.brand_id}, ${contaDeAnuncios.id}, ${paginas[0]!.id}, ${body.piece_id ?? null}, ${versaoDaPeca}, ${body.media_id ?? null}, ${reels}, ${body.unit_id},
               ${body.name}, ${body.objective}, ${body.radius_km}, ${body.daily_budget_micros}, ${body.end_date ?? null}, ${link}, ${quem.userId})
       on conflict do nothing
       returning id`);
     if (!nova.rows[0]) {
-      throw conflito('ja-pedida', 'Já existe um pedido com esta peça', 'Já existe um pedido de campanha com esta peça esperando aprovação. Decida esse antes de pedir outro.');
+      throw reels === null
+        ? conflito('ja-pedida', 'Já existe um pedido com esta peça', 'Já existe um pedido de campanha com esta peça esperando aprovação. Decida esse antes de pedir outro.')
+        : conflito('ja-pedida', 'Já existe um pedido com este Reels', 'Já existe um pedido de campanha com este Reels esperando aprovação. Decida esse antes de pedir outro.');
     }
     const pedido = await this.actions.pedirPelaRota(auth, {
       tool: 'campanha_criar',
@@ -253,7 +303,19 @@ export class CampanhasNovasService {
     auditDetail({
       resourceId: id,
       before: null,
-      after: { brand_id: body.brand_id, piece_id: body.piece_id, piece_version: peca.version, media_id: body.media_id, unit_id: body.unit_id, objective: body.objective, radius_km: body.radius_km, daily_budget_micros: body.daily_budget_micros, end_date: body.end_date ?? null, action_id: pedido },
+      after: {
+        brand_id: body.brand_id,
+        piece_id: body.piece_id ?? null,
+        piece_version: versaoDaPeca,
+        media_id: body.media_id ?? null,
+        instagram_media_id: reels,
+        unit_id: body.unit_id,
+        objective: body.objective,
+        radius_km: body.radius_km,
+        daily_budget_micros: body.daily_budget_micros,
+        end_date: body.end_date ?? null,
+        action_id: pedido,
+      },
     });
     return this.obter(auth, id);
   }
@@ -301,12 +363,20 @@ export class CampanhasNovasService {
     });
 
     const { policies } = await this.policies.load(tx, quem.tenantId, query.brand_id);
+    type Ultima = { campaign_id: string; status: NewCampaignResponse['status']; active: boolean; action_id: string | null };
     const by_piece = (
-      await tx.execute<{ piece_id: string; campaign_id: string; status: NewCampaignResponse['status']; active: boolean; action_id: string | null }>(sql`
+      await tx.execute<Ultima & { piece_id: string }>(sql`
         select distinct on (piece_id) piece_id, id as campaign_id, status, active, action_id
           from liame.ad_campaign_new
-         where tenant_id = ${quem.tenantId} and brand_id = ${query.brand_id} and status <> 'cancelada'
+         where tenant_id = ${quem.tenantId} and brand_id = ${query.brand_id} and status <> 'cancelada' and piece_id is not null
          order by piece_id, created_at desc, id desc`)
+    ).rows;
+    const by_reels = (
+      await tx.execute<Ultima & { instagram_media_id: string }>(sql`
+        select distinct on (instagram_media_id) instagram_media_id, id as campaign_id, status, active, action_id
+          from liame.ad_campaign_new
+         where tenant_id = ${quem.tenantId} and brand_id = ${query.brand_id} and status <> 'cancelada' and instagram_media_id is not null
+         order by instagram_media_id, created_at desc, id desc`)
     ).rows;
 
     return {
@@ -318,6 +388,7 @@ export class CampanhasNovasService {
       units,
       campaign_cap_micros: tetoDaVerba(policies, 'meta_ads'),
       by_piece,
+      by_reels,
     };
   }
 
@@ -368,7 +439,9 @@ export class CampanhasNovasService {
     const quem = this.quem(auth);
     // O pedido que se encerrou em Aprovações sem criar: cancelada (ou não criada, se já tinha começado na Meta).
     const r = await currentTx().execute<LinhaDaCampanhaNova>(sql`
-      select c.id, c.brand_id, c.piece_id, c.piece_version, c.media_id, c.unit_id, c.name, c.objective, c.radius_km::text, c.daily_budget_micros::text,
+      select c.id, c.brand_id, c.piece_id, c.piece_version, c.media_id, c.instagram_media_id,
+             im.caption as reels_caption, im.permalink as reels_permalink, im.thumbnail_url as reels_thumbnail_url, im.published_at as reels_published_at,
+             c.unit_id, c.name, c.objective, c.radius_km::text, c.daily_budget_micros::text,
              c.end_date::text as end_date, c.link,
              case when c.status in ('pedida', 'criando') and r.status in ${ENCERRADOS}
                   then (case when c.status = 'criando' then 'nao_criada' else 'cancelada' end) else c.status end as status,
@@ -383,6 +456,11 @@ export class CampanhasNovasService {
                order by a.created_at desc limit 1) as pending_action_id
         from liame.ad_campaign_new c
         left join liame.action_request r on r.id = c.action_id and r.tenant_id = c.tenant_id
+        -- O Reels (D-A4-46) como a leitura do Instagram da marca guardou; o mais novo, se a marca tiver lido por duas contas.
+        left join lateral (
+          select x.caption, x.permalink, x.thumbnail_url, x.published_at from liame.instagram_media x
+           where c.instagram_media_id is not null and x.tenant_id = c.tenant_id and x.brand_id = c.brand_id and x.media_id = c.instagram_media_id
+           order by x.read_at desc limit 1) im on true
        where c.id = ${id} and c.tenant_id = ${quem.tenantId}`);
     const l = r.rows[0];
     if (!l) throw new AppProblem(404, 'nao-encontrado', 'Não encontramos', 'Esta campanha nova não está aqui.');

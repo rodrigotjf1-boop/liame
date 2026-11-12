@@ -1,8 +1,9 @@
-import { type PlanBudget, PlanContent, type PlanKind } from '@liame/contracts';
+import { MEDIA_STAGES, type MediaStage, type PlanBudget, PlanContent, type PlanKind } from '@liame/contracts';
 import { z } from 'zod';
 import { conferirTexto, normalizar, type RegraDeTexto } from '../../policy/texto.js';
 import { menosDias } from '../../results/fora-do-normal.js';
 import { conferirNumeros } from '../verificador-numeros.js';
+import { contasDaMidia, type LojaDaMidia, planoDeMidia, problemaDoFunil } from './midia.js';
 import { contasDaVerba, propostaDoPlano, textosDoPlano } from './plano.js';
 
 // O formato da resposta do Estrategista (A3, I11; protótipo P8): um schema por tipo de plano, o mais simples possível
@@ -33,13 +34,35 @@ export const OfertaDoEstrategista = z.strictObject({
 
 export const PautaDoEstrategista = z.strictObject({ ...Comum, dias: z.array(z.strictObject({ dia: z.string(), item: z.string() })) });
 
+/** O plano de mídia por região (R5): a parte de cada etapa do funil e o criativo dela. O resto é do código. */
+const MidiaDoEstrategista = z.strictObject({
+  etapas: z.array(z.strictObject({ etapa: z.enum(MEDIA_STAGES), parte: z.number(), criativo: z.string() })),
+});
+
 export const NoventaDiasDoEstrategista = z.strictObject({
   ...Comum,
   objetivos: z.array(z.strictObject({ objetivo: z.string(), como_saber: z.string() })),
   meses: z.array(z.strictObject({ mes: z.string(), plano: z.string() })),
   verba_proposta: z.strictObject({ meta: z.number(), google: z.number() }),
   datas: z.array(z.strictObject({ dia: z.string(), nome: z.string(), o_que_fazer: z.string() })),
+  /** Nulo sem o bloco "Plano de mídia por região" no contexto (marca sem loja no mapa ou com a função desligada). */
+  midia: MidiaDoEstrategista.nullable(),
 });
+
+/**
+ * As etapas na ordem do funil. A etapa que falta ou se repete devolve nulo (fora do formato); a soma e os limites são da
+ * conferência (`problemaDoFunil`), que vale também para a versão editada.
+ */
+function etapasDaResposta(etapas: Array<{ etapa: (typeof MEDIA_STAGES)[number]; parte: number; criativo: string }>): MediaStage[] | null {
+  if (etapas.length !== MEDIA_STAGES.length) return null;
+  const saida: MediaStage[] = [];
+  for (const stage of MEDIA_STAGES) {
+    const achadas = etapas.filter((e) => e.etapa === stage);
+    if (achadas.length !== 1) return null;
+    saida.push({ stage, share: achadas[0]!.parte, creative: achadas[0]!.criativo.trim() });
+  }
+  return saida;
+}
 
 /** O schema que vai ao modelo, pelo tipo do plano. */
 export const RESPOSTA_DO_TIPO = { oferta: OfertaDoEstrategista, pauta: PautaDoEstrategista, noventa_dias: NoventaDiasDoEstrategista } as const;
@@ -60,9 +83,16 @@ const comum = (r: Oferta | Pauta | NoventaDias) => ({
 
 /**
  * A resposta do modelo no formato do contrato. A verba de hoje é a do código, nunca a do modelo. Fora do formato (do
- * schema ou dos limites do contrato), volta o problema de cada campo, para o log.
+ * schema ou dos limites do contrato), volta o problema de cada campo, para o log. No plano de 90 dias com as lojas no
+ * mapa (`regiao`), o plano de mídia é obrigatório: os anéis, o dinheiro e os horários saem do código; da resposta, só a
+ * parte de cada etapa e o criativo. Sem as lojas, o que o modelo mandar em `midia` não entra.
  */
-export function conteudoDaResposta(kind: PlanKind, bruto: unknown, hoje: PlanBudget['today']): { ok: true; content: PlanContent } | { ok: false; detalhe: string[] } {
+export function conteudoDaResposta(
+  kind: PlanKind,
+  bruto: unknown,
+  hoje: PlanBudget['today'],
+  regiao: readonly LojaDaMidia[] | null = null,
+): { ok: true; content: PlanContent } | { ok: false; detalhe: string[] } {
   const problemas = (issues: Array<{ path: PropertyKey[]; code: string }>) => issues.slice(0, 8).map((i) => `${i.path.map(String).join('.') || '(raiz)'}: ${i.code}`);
   let candidato: unknown;
   if (kind === 'oferta') {
@@ -86,15 +116,28 @@ export function conteudoDaResposta(kind: PlanKind, bruto: unknown, hoje: PlanBud
     if (!r.success) return { ok: false, detalhe: problemas(r.error.issues) };
     candidato = { kind, ...comum(r.data), days: r.data.dias.map((d) => ({ day: limpo(d.dia), item: limpo(d.item) })) };
   } else {
-    const r = NoventaDiasDoEstrategista.safeParse(bruto);
+    // A resposta gravada antes do prompt v4 (os evals) não tem `midia`: vale como nula.
+    const entrada = bruto && typeof bruto === 'object' && !Array.isArray(bruto) && !('midia' in bruto) ? { ...bruto, midia: null } : bruto;
+    const r = NoventaDiasDoEstrategista.safeParse(entrada);
     if (!r.success) return { ok: false, detalhe: problemas(r.error.issues) };
+    const proposal = { meta: r.data.verba_proposta.meta, google: r.data.verba_proposta.google };
+    let media_plan: unknown;
+    if (regiao?.length) {
+      if (!r.data.midia) return { ok: false, detalhe: ['midia: veio nulo com as lojas no mapa'] };
+      const etapas = etapasDaResposta(r.data.midia.etapas);
+      if (!etapas) return { ok: false, detalhe: ['midia.etapas: falta etapa ou etapa repetida'] };
+      // A proposta fora do formato (fração, negativa) é recusada pelo contrato logo abaixo; a conta não roda com ela.
+      if (![proposal.meta, proposal.google].every((n) => Number.isInteger(n) && n >= 0)) return { ok: false, detalhe: ['verba_proposta: fora do formato'] };
+      media_plan = planoDeMidia(regiao, etapas, proposal);
+    }
     candidato = {
       kind,
       ...comum(r.data),
       goals: r.data.objetivos.map((o) => ({ goal: limpo(o.objetivo), how_to_know: limpo(o.como_saber) })),
       months: r.data.meses.map((m) => ({ month: limpo(m.mes), plan: limpo(m.plano) })),
-      budget: { today: hoje, proposal: { meta: r.data.verba_proposta.meta, google: r.data.verba_proposta.google } },
+      budget: { today: hoje, proposal },
       dates: r.data.datas.map((d) => ({ day: limpo(d.dia), name: limpo(d.nome), what: limpo(d.o_que_fazer) })),
+      ...(media_plan ? { media_plan } : {}),
     };
   }
   const c = PlanContent.safeParse(candidato);
@@ -127,6 +170,7 @@ export function respostaDoConteudo(c: PlanContent): Record<string, unknown> {
         meses: c.months.map((m) => ({ mes: m.month, plano: m.plan })),
         verba_proposta: c.budget.proposal,
         datas: c.dates.map((d) => ({ dia: d.day, nome: d.name, o_que_fazer: d.what })),
+        midia: c.media_plan ? { etapas: c.media_plan.stages.map((e) => ({ etapa: e.stage, parte: e.share, criativo: e.creative })) } : null,
       };
   }
 }
@@ -169,6 +213,8 @@ const igual = (a: string, b: string) => normalizar(a).trim() === normalizar(b).t
 function problemaDosCampos(c: PlanContent): string | null {
   if (c.kind === 'oferta' && c.ends_at <= c.starts_at) return 'a oferta termina antes de começar';
   if (c.kind === 'pauta' && c.days.some((d, i) => i > 0 && d.day <= c.days[i - 1]!.day)) return 'os dias da pauta fora de ordem ou repetidos';
+  // O funil (D-RG-28): vale para o que o Estrategista propõe e para a versão que uma pessoa editou.
+  if (c.kind === 'noventa_dias' && c.media_plan) return problemaDoFunil(c.media_plan.stages);
   return null;
 }
 
@@ -204,7 +250,7 @@ export function conferirPlano(c: PlanContent, p: PermitidosNoPlano): { recusa: R
   const regras = conferirTexto(textos, { ignorar: p.nomes, daMarca: p.daMarca });
   if (regras.length) return { recusa: 'compliance', detalhe: regras.map((x) => `${x.regra}: ${x.trecho}`), regras: [...new Set(regras.map((x) => x.regra))] };
   // O que o plano propõe nos campos e as contas da verba (feitas pelo código) também podem aparecer nos textos.
-  const doPlano = [propostaDoPlano(c), c.kind === 'noventa_dias' ? contasDaVerba(c.budget) : []];
+  const doPlano = [propostaDoPlano(c), c.kind === 'noventa_dias' ? contasDaVerba(c.budget) : [], c.kind === 'noventa_dias' && c.media_plan ? contasDaMidia(c.media_plan) : []];
   const numeros = conferirNumeros(textos, [p.emDia, doPlano]);
   if (!numeros.ok) {
     // O número está numa leitura com fonte atrasada: não é invenção, mas o Estrategista não planeja com dado velho.

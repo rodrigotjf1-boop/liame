@@ -49,7 +49,8 @@ describe('Social media: o registro (A6 · Z6)', () => {
     expect(PROMPTS).toContain(PROMPT_SOCIAL_RESPOSTA);
     expect(FUNCIONARIOS).toContain(SOCIAL);
     // Desde a v2 (A6, Z6, os posts), a tarefa dos posts vem junto (`social-post.spec.ts`); desde a v3 (A6, Z11), a dos
-    // comentários (`social-comentario.spec.ts`); desde a v4, a do tipo do comentário (`social-comentario-tipo.spec.ts`).
+    // comentários (`social-comentario.spec.ts`); desde a v4, a do tipo do comentário (`social-comentario-tipo.spec.ts`); desde a v5 (A6, Z15), a dos textos do vídeo
+    // (`ai-evals-social-video.spec.ts`).
     expect(SOCIAL).toMatchObject({
       key: 'social',
       name: 'Social media',
@@ -60,6 +61,7 @@ describe('Social media: o registro (A6 · Z6)', () => {
         { task: 'social_post', prompt: 'social.post' },
         { task: 'social_comentario', prompt: 'social.comentario' },
         { task: 'social_comentario_tipo', prompt: 'social.comentario_tipo' },
+        { task: 'social_video', prompt: 'social.video' },
       ],
     });
     expect(conferirRegistro(registroAtual())).toEqual([]);

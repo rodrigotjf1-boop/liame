@@ -435,3 +435,78 @@ describe('Planos em Aprovações: o plano desenhado', () => {
     expect(desenhar(plano(OFERTA, { can_decide: false }, { status: 'expirado' }), { podeDecidir: false })).not.toContain('Pedir nova análise');
   });
 });
+
+describe('o plano de mídia por região no plano de 90 dias (R5; revisão P45)', () => {
+  const COM_MIDIA: Noventa = {
+    ...NOVENTA,
+    media_plan: {
+      stages: [
+        { stage: 'reconhecimento', share: 15, creative: 'Vídeo curto do smash na chapa.' },
+        { stage: 'seguidores', share: 10, creative: 'Os bastidores da cozinha.' },
+        { stage: 'cardapio_conversa', share: 30, creative: 'O combo para dividir, com o botão do WhatsApp.' },
+        { stage: 'pedido', share: 45, creative: 'O cupom da campanha na sexta à noite.' },
+      ],
+      stores: [
+        {
+          unit_id: '0195f3a0-0000-7000-8000-000000000001',
+          store: 'Mister Burgers Tijuca',
+          district: 'Tijuca',
+          city: 'Rio de Janeiro',
+          radius_km: 3,
+          rings: [
+            { ring: 'nucleo', from_km: 0, to_km: 2, share: 60, meta: 1257, google: 252 },
+            { ring: 'expansao', from_km: 2, to_km: 3, share: 40, meta: 838, google: 168 },
+          ],
+          hours: { source: 'loja', days: [5, 6], from: '19:00', to: '23:00', ads_from: '18:00', days_share: 67, hours_share: 86, orders_from: '2026-10-15', orders_to: '2026-11-11' },
+        },
+        {
+          unit_id: '0195f3a0-0000-7000-8000-000000000002',
+          store: 'Mister Burgers Penha',
+          district: null,
+          city: 'Rio de Janeiro',
+          radius_km: 2,
+          rings: [{ ring: 'nucleo', from_km: 0, to_km: 2, share: 100, meta: 2095, google: 420 }],
+          hours: { source: 'setor', days: [5, 6, 0], from: '18:00', to: '22:00', ads_from: '17:00', days_share: null, hours_share: null, orders_from: null, orders_to: null },
+        },
+      ],
+    },
+  };
+
+  it('os caminhos do corpo trazem os criativos e as partes dos pedidos da loja que tem pedidos', () => {
+    const caminhos = caminhosDoCorpo(COM_MIDIA);
+    expect(caminhos.slice(-6)).toEqual([
+      'media_plan.stages.0.creative',
+      'media_plan.stages.1.creative',
+      'media_plan.stages.2.creative',
+      'media_plan.stages.3.creative',
+      'media_plan.stores.0.hours.days_share',
+      'media_plan.stores.0.hours.hours_share',
+    ]);
+    expect(caminhosDoCorpo(NOVENTA).some((c) => c.startsWith('media_plan.'))).toBe(false);
+  });
+
+  it('a tela mostra as etapas, os anéis com o dinheiro e os horários; a loja sem pedidos diz que é a referência do setor', () => {
+    const html = desenhar(
+      plano(COM_MIDIA, {
+        numbers: [{ value: '86%', sources: ['Regem · pedidos confirmados de 15/10/2026 a 11/11/2026 (as 4 semanas completas até ontem) · calculado pelo Liame'] }],
+        marked: [{ path: 'media_plan.stores.0.hours.hours_share', text: [t('86%', 0)] }],
+      }),
+    ).replace(/ /g, ' ');
+    expect(html).toContain('Plano de mídia por região');
+    expect(html).toContain('Reconhecimento · 15%');
+    expect(html).toContain('Reconhecimento e seguidores somam 25%');
+    expect(html).toContain('Bairro Tijuca, Rio de Janeiro · entrega até 3 km · R$ 2.515 por mês nesta loja');
+    expect(html).toContain('60% da verba');
+    expect(html).toContain('até 2 km da loja · Instagram e Facebook R$ 1.257, Google R$ 252 por mês');
+    expect(html).toContain('de 2 a 3 km');
+    expect(html).toContain('sexta e sábado:');
+    expect(html).toContain('Das 19h às 23h:');
+    expect(html).toContain('A verba de pedido começa às 18h, 1 hora antes.');
+    expect(html).toContain('Rio de Janeiro · entrega até 2 km');
+    expect(html).toContain('O raio de entrega cabe no núcleo');
+    expect(html).toContain('É a referência do setor (iFood, imprensa), não um número da loja.');
+    // O número com a fonte vira o botão do Explicar; o plano sem plano de mídia não mostra a seção.
+    expect(html).toMatch(/<button type="button" class="nf" title="Regem · pedidos confirmados de 15\/10\/2026 a 11\/11\/2026[^"]*">86%<span class="sr-only">, fonte: Regem/);
+    expect(desenhar(plano(NOVENTA))).not.toContain('Plano de mídia por região');
+  });
+});

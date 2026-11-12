@@ -70657,6 +70657,234 @@
                                 ],
                                 "additionalProperties": false
                               }
+                            },
+                            "media_plan": {
+                              "type": "object",
+                              "properties": {
+                                "stores": {
+                                  "minItems": 1,
+                                  "maxItems": 5,
+                                  "type": "array",
+                                  "items": {
+                                    "type": "object",
+                                    "properties": {
+                                      "unit_id": {
+                                        "type": "string",
+                                        "format": "uuid",
+                                        "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                                      },
+                                      "store": {
+                                        "type": "string",
+                                        "minLength": 1,
+                                        "maxLength": 120
+                                      },
+                                      "district": {
+                                        "type": [
+                                          "string",
+                                          "null"
+                                        ],
+                                        "minLength": 1,
+                                        "maxLength": 120
+                                      },
+                                      "city": {
+                                        "type": [
+                                          "string",
+                                          "null"
+                                        ],
+                                        "minLength": 1,
+                                        "maxLength": 120
+                                      },
+                                      "radius_km": {
+                                        "type": "number",
+                                        "minimum": 0,
+                                        "maximum": 15,
+                                        "multipleOf": 0.5
+                                      },
+                                      "rings": {
+                                        "minItems": 1,
+                                        "maxItems": 2,
+                                        "type": "array",
+                                        "items": {
+                                          "type": "object",
+                                          "properties": {
+                                            "ring": {
+                                              "type": "string",
+                                              "enum": [
+                                                "nucleo",
+                                                "expansao"
+                                              ]
+                                            },
+                                            "from_km": {
+                                              "type": "number",
+                                              "minimum": 0,
+                                              "maximum": 15,
+                                              "multipleOf": 0.5
+                                            },
+                                            "to_km": {
+                                              "type": "number",
+                                              "minimum": 0,
+                                              "maximum": 15,
+                                              "multipleOf": 0.5
+                                            },
+                                            "share": {
+                                              "type": "integer",
+                                              "minimum": 0,
+                                              "maximum": 100
+                                            },
+                                            "meta": {
+                                              "type": "integer",
+                                              "minimum": 0,
+                                              "maximum": 10000000
+                                            },
+                                            "google": {
+                                              "type": "integer",
+                                              "minimum": 0,
+                                              "maximum": 10000000
+                                            }
+                                          },
+                                          "required": [
+                                            "ring",
+                                            "from_km",
+                                            "to_km",
+                                            "share",
+                                            "meta",
+                                            "google"
+                                          ],
+                                          "additionalProperties": false
+                                        }
+                                      },
+                                      "hours": {
+                                        "type": "object",
+                                        "properties": {
+                                          "source": {
+                                            "type": "string",
+                                            "enum": [
+                                              "loja",
+                                              "setor"
+                                            ]
+                                          },
+                                          "days": {
+                                            "minItems": 1,
+                                            "maxItems": 7,
+                                            "type": "array",
+                                            "items": {
+                                              "type": "integer",
+                                              "minimum": 0,
+                                              "maximum": 6
+                                            }
+                                          },
+                                          "from": {
+                                            "type": "string",
+                                            "pattern": "^([01]\\d|2[0-3]):[0-5]\\d$"
+                                          },
+                                          "to": {
+                                            "type": "string",
+                                            "pattern": "^([01]\\d|2[0-3]):[0-5]\\d$"
+                                          },
+                                          "ads_from": {
+                                            "type": "string",
+                                            "pattern": "^([01]\\d|2[0-3]):[0-5]\\d$"
+                                          },
+                                          "days_share": {
+                                            "type": [
+                                              "integer",
+                                              "null"
+                                            ],
+                                            "minimum": 0,
+                                            "maximum": 100
+                                          },
+                                          "hours_share": {
+                                            "type": [
+                                              "integer",
+                                              "null"
+                                            ],
+                                            "minimum": 0,
+                                            "maximum": 100
+                                          },
+                                          "orders_from": {
+                                            "type": [
+                                              "string",
+                                              "null"
+                                            ],
+                                            "format": "date",
+                                            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+                                          },
+                                          "orders_to": {
+                                            "type": [
+                                              "string",
+                                              "null"
+                                            ],
+                                            "format": "date",
+                                            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+                                          }
+                                        },
+                                        "required": [
+                                          "source",
+                                          "days",
+                                          "from",
+                                          "to",
+                                          "ads_from",
+                                          "days_share",
+                                          "hours_share",
+                                          "orders_from",
+                                          "orders_to"
+                                        ],
+                                        "additionalProperties": false
+                                      }
+                                    },
+                                    "required": [
+                                      "unit_id",
+                                      "store",
+                                      "district",
+                                      "city",
+                                      "radius_km",
+                                      "rings",
+                                      "hours"
+                                    ],
+                                    "additionalProperties": false
+                                  }
+                                },
+                                "stages": {
+                                  "minItems": 4,
+                                  "maxItems": 4,
+                                  "type": "array",
+                                  "items": {
+                                    "type": "object",
+                                    "properties": {
+                                      "stage": {
+                                        "type": "string",
+                                        "enum": [
+                                          "reconhecimento",
+                                          "seguidores",
+                                          "cardapio_conversa",
+                                          "pedido"
+                                        ]
+                                      },
+                                      "share": {
+                                        "type": "integer",
+                                        "minimum": 0,
+                                        "maximum": 100
+                                      },
+                                      "creative": {
+                                        "type": "string",
+                                        "minLength": 1,
+                                        "maxLength": 240
+                                      }
+                                    },
+                                    "required": [
+                                      "stage",
+                                      "share",
+                                      "creative"
+                                    ],
+                                    "additionalProperties": false
+                                  }
+                                }
+                              },
+                              "required": [
+                                "stores",
+                                "stages"
+                              ],
+                              "additionalProperties": false
                             }
                           },
                           "required": [
@@ -71469,6 +71697,234 @@
                               ],
                               "additionalProperties": false
                             }
+                          },
+                          "media_plan": {
+                            "type": "object",
+                            "properties": {
+                              "stores": {
+                                "minItems": 1,
+                                "maxItems": 5,
+                                "type": "array",
+                                "items": {
+                                  "type": "object",
+                                  "properties": {
+                                    "unit_id": {
+                                      "type": "string",
+                                      "format": "uuid",
+                                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                                    },
+                                    "store": {
+                                      "type": "string",
+                                      "minLength": 1,
+                                      "maxLength": 120
+                                    },
+                                    "district": {
+                                      "type": [
+                                        "string",
+                                        "null"
+                                      ],
+                                      "minLength": 1,
+                                      "maxLength": 120
+                                    },
+                                    "city": {
+                                      "type": [
+                                        "string",
+                                        "null"
+                                      ],
+                                      "minLength": 1,
+                                      "maxLength": 120
+                                    },
+                                    "radius_km": {
+                                      "type": "number",
+                                      "minimum": 0,
+                                      "maximum": 15,
+                                      "multipleOf": 0.5
+                                    },
+                                    "rings": {
+                                      "minItems": 1,
+                                      "maxItems": 2,
+                                      "type": "array",
+                                      "items": {
+                                        "type": "object",
+                                        "properties": {
+                                          "ring": {
+                                            "type": "string",
+                                            "enum": [
+                                              "nucleo",
+                                              "expansao"
+                                            ]
+                                          },
+                                          "from_km": {
+                                            "type": "number",
+                                            "minimum": 0,
+                                            "maximum": 15,
+                                            "multipleOf": 0.5
+                                          },
+                                          "to_km": {
+                                            "type": "number",
+                                            "minimum": 0,
+                                            "maximum": 15,
+                                            "multipleOf": 0.5
+                                          },
+                                          "share": {
+                                            "type": "integer",
+                                            "minimum": 0,
+                                            "maximum": 100
+                                          },
+                                          "meta": {
+                                            "type": "integer",
+                                            "minimum": 0,
+                                            "maximum": 10000000
+                                          },
+                                          "google": {
+                                            "type": "integer",
+                                            "minimum": 0,
+                                            "maximum": 10000000
+                                          }
+                                        },
+                                        "required": [
+                                          "ring",
+                                          "from_km",
+                                          "to_km",
+                                          "share",
+                                          "meta",
+                                          "google"
+                                        ],
+                                        "additionalProperties": false
+                                      }
+                                    },
+                                    "hours": {
+                                      "type": "object",
+                                      "properties": {
+                                        "source": {
+                                          "type": "string",
+                                          "enum": [
+                                            "loja",
+                                            "setor"
+                                          ]
+                                        },
+                                        "days": {
+                                          "minItems": 1,
+                                          "maxItems": 7,
+                                          "type": "array",
+                                          "items": {
+                                            "type": "integer",
+                                            "minimum": 0,
+                                            "maximum": 6
+                                          }
+                                        },
+                                        "from": {
+                                          "type": "string",
+                                          "pattern": "^([01]\\d|2[0-3]):[0-5]\\d$"
+                                        },
+                                        "to": {
+                                          "type": "string",
+                                          "pattern": "^([01]\\d|2[0-3]):[0-5]\\d$"
+                                        },
+                                        "ads_from": {
+                                          "type": "string",
+                                          "pattern": "^([01]\\d|2[0-3]):[0-5]\\d$"
+                                        },
+                                        "days_share": {
+                                          "type": [
+                                            "integer",
+                                            "null"
+                                          ],
+                                          "minimum": 0,
+                                          "maximum": 100
+                                        },
+                                        "hours_share": {
+                                          "type": [
+                                            "integer",
+                                            "null"
+                                          ],
+                                          "minimum": 0,
+                                          "maximum": 100
+                                        },
+                                        "orders_from": {
+                                          "type": [
+                                            "string",
+                                            "null"
+                                          ],
+                                          "format": "date",
+                                          "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+                                        },
+                                        "orders_to": {
+                                          "type": [
+                                            "string",
+                                            "null"
+                                          ],
+                                          "format": "date",
+                                          "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+                                        }
+                                      },
+                                      "required": [
+                                        "source",
+                                        "days",
+                                        "from",
+                                        "to",
+                                        "ads_from",
+                                        "days_share",
+                                        "hours_share",
+                                        "orders_from",
+                                        "orders_to"
+                                      ],
+                                      "additionalProperties": false
+                                    }
+                                  },
+                                  "required": [
+                                    "unit_id",
+                                    "store",
+                                    "district",
+                                    "city",
+                                    "radius_km",
+                                    "rings",
+                                    "hours"
+                                  ],
+                                  "additionalProperties": false
+                                }
+                              },
+                              "stages": {
+                                "minItems": 4,
+                                "maxItems": 4,
+                                "type": "array",
+                                "items": {
+                                  "type": "object",
+                                  "properties": {
+                                    "stage": {
+                                      "type": "string",
+                                      "enum": [
+                                        "reconhecimento",
+                                        "seguidores",
+                                        "cardapio_conversa",
+                                        "pedido"
+                                      ]
+                                    },
+                                    "share": {
+                                      "type": "integer",
+                                      "minimum": 0,
+                                      "maximum": 100
+                                    },
+                                    "creative": {
+                                      "type": "string",
+                                      "minLength": 1,
+                                      "maxLength": 240
+                                    }
+                                  },
+                                  "required": [
+                                    "stage",
+                                    "share",
+                                    "creative"
+                                  ],
+                                  "additionalProperties": false
+                                }
+                              }
+                            },
+                            "required": [
+                              "stores",
+                              "stages"
+                            ],
+                            "additionalProperties": false
                           }
                         },
                         "required": [
@@ -71992,6 +72448,234 @@
                                 ],
                                 "additionalProperties": false
                               }
+                            },
+                            "media_plan": {
+                              "type": "object",
+                              "properties": {
+                                "stores": {
+                                  "minItems": 1,
+                                  "maxItems": 5,
+                                  "type": "array",
+                                  "items": {
+                                    "type": "object",
+                                    "properties": {
+                                      "unit_id": {
+                                        "type": "string",
+                                        "format": "uuid",
+                                        "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                                      },
+                                      "store": {
+                                        "type": "string",
+                                        "minLength": 1,
+                                        "maxLength": 120
+                                      },
+                                      "district": {
+                                        "type": [
+                                          "string",
+                                          "null"
+                                        ],
+                                        "minLength": 1,
+                                        "maxLength": 120
+                                      },
+                                      "city": {
+                                        "type": [
+                                          "string",
+                                          "null"
+                                        ],
+                                        "minLength": 1,
+                                        "maxLength": 120
+                                      },
+                                      "radius_km": {
+                                        "type": "number",
+                                        "minimum": 0,
+                                        "maximum": 15,
+                                        "multipleOf": 0.5
+                                      },
+                                      "rings": {
+                                        "minItems": 1,
+                                        "maxItems": 2,
+                                        "type": "array",
+                                        "items": {
+                                          "type": "object",
+                                          "properties": {
+                                            "ring": {
+                                              "type": "string",
+                                              "enum": [
+                                                "nucleo",
+                                                "expansao"
+                                              ]
+                                            },
+                                            "from_km": {
+                                              "type": "number",
+                                              "minimum": 0,
+                                              "maximum": 15,
+                                              "multipleOf": 0.5
+                                            },
+                                            "to_km": {
+                                              "type": "number",
+                                              "minimum": 0,
+                                              "maximum": 15,
+                                              "multipleOf": 0.5
+                                            },
+                                            "share": {
+                                              "type": "integer",
+                                              "minimum": 0,
+                                              "maximum": 100
+                                            },
+                                            "meta": {
+                                              "type": "integer",
+                                              "minimum": 0,
+                                              "maximum": 10000000
+                                            },
+                                            "google": {
+                                              "type": "integer",
+                                              "minimum": 0,
+                                              "maximum": 10000000
+                                            }
+                                          },
+                                          "required": [
+                                            "ring",
+                                            "from_km",
+                                            "to_km",
+                                            "share",
+                                            "meta",
+                                            "google"
+                                          ],
+                                          "additionalProperties": false
+                                        }
+                                      },
+                                      "hours": {
+                                        "type": "object",
+                                        "properties": {
+                                          "source": {
+                                            "type": "string",
+                                            "enum": [
+                                              "loja",
+                                              "setor"
+                                            ]
+                                          },
+                                          "days": {
+                                            "minItems": 1,
+                                            "maxItems": 7,
+                                            "type": "array",
+                                            "items": {
+                                              "type": "integer",
+                                              "minimum": 0,
+                                              "maximum": 6
+                                            }
+                                          },
+                                          "from": {
+                                            "type": "string",
+                                            "pattern": "^([01]\\d|2[0-3]):[0-5]\\d$"
+                                          },
+                                          "to": {
+                                            "type": "string",
+                                            "pattern": "^([01]\\d|2[0-3]):[0-5]\\d$"
+                                          },
+                                          "ads_from": {
+                                            "type": "string",
+                                            "pattern": "^([01]\\d|2[0-3]):[0-5]\\d$"
+                                          },
+                                          "days_share": {
+                                            "type": [
+                                              "integer",
+                                              "null"
+                                            ],
+                                            "minimum": 0,
+                                            "maximum": 100
+                                          },
+                                          "hours_share": {
+                                            "type": [
+                                              "integer",
+                                              "null"
+                                            ],
+                                            "minimum": 0,
+                                            "maximum": 100
+                                          },
+                                          "orders_from": {
+                                            "type": [
+                                              "string",
+                                              "null"
+                                            ],
+                                            "format": "date",
+                                            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+                                          },
+                                          "orders_to": {
+                                            "type": [
+                                              "string",
+                                              "null"
+                                            ],
+                                            "format": "date",
+                                            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+                                          }
+                                        },
+                                        "required": [
+                                          "source",
+                                          "days",
+                                          "from",
+                                          "to",
+                                          "ads_from",
+                                          "days_share",
+                                          "hours_share",
+                                          "orders_from",
+                                          "orders_to"
+                                        ],
+                                        "additionalProperties": false
+                                      }
+                                    },
+                                    "required": [
+                                      "unit_id",
+                                      "store",
+                                      "district",
+                                      "city",
+                                      "radius_km",
+                                      "rings",
+                                      "hours"
+                                    ],
+                                    "additionalProperties": false
+                                  }
+                                },
+                                "stages": {
+                                  "minItems": 4,
+                                  "maxItems": 4,
+                                  "type": "array",
+                                  "items": {
+                                    "type": "object",
+                                    "properties": {
+                                      "stage": {
+                                        "type": "string",
+                                        "enum": [
+                                          "reconhecimento",
+                                          "seguidores",
+                                          "cardapio_conversa",
+                                          "pedido"
+                                        ]
+                                      },
+                                      "share": {
+                                        "type": "integer",
+                                        "minimum": 0,
+                                        "maximum": 100
+                                      },
+                                      "creative": {
+                                        "type": "string",
+                                        "minLength": 1,
+                                        "maxLength": 240
+                                      }
+                                    },
+                                    "required": [
+                                      "stage",
+                                      "share",
+                                      "creative"
+                                    ],
+                                    "additionalProperties": false
+                                  }
+                                }
+                              },
+                              "required": [
+                                "stores",
+                                "stages"
+                              ],
+                              "additionalProperties": false
                             }
                           },
                           "required": [
@@ -73078,6 +73762,234 @@
                                 ],
                                 "additionalProperties": false
                               }
+                            },
+                            "media_plan": {
+                              "type": "object",
+                              "properties": {
+                                "stores": {
+                                  "minItems": 1,
+                                  "maxItems": 5,
+                                  "type": "array",
+                                  "items": {
+                                    "type": "object",
+                                    "properties": {
+                                      "unit_id": {
+                                        "type": "string",
+                                        "format": "uuid",
+                                        "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                                      },
+                                      "store": {
+                                        "type": "string",
+                                        "minLength": 1,
+                                        "maxLength": 120
+                                      },
+                                      "district": {
+                                        "type": [
+                                          "string",
+                                          "null"
+                                        ],
+                                        "minLength": 1,
+                                        "maxLength": 120
+                                      },
+                                      "city": {
+                                        "type": [
+                                          "string",
+                                          "null"
+                                        ],
+                                        "minLength": 1,
+                                        "maxLength": 120
+                                      },
+                                      "radius_km": {
+                                        "type": "number",
+                                        "minimum": 0,
+                                        "maximum": 15,
+                                        "multipleOf": 0.5
+                                      },
+                                      "rings": {
+                                        "minItems": 1,
+                                        "maxItems": 2,
+                                        "type": "array",
+                                        "items": {
+                                          "type": "object",
+                                          "properties": {
+                                            "ring": {
+                                              "type": "string",
+                                              "enum": [
+                                                "nucleo",
+                                                "expansao"
+                                              ]
+                                            },
+                                            "from_km": {
+                                              "type": "number",
+                                              "minimum": 0,
+                                              "maximum": 15,
+                                              "multipleOf": 0.5
+                                            },
+                                            "to_km": {
+                                              "type": "number",
+                                              "minimum": 0,
+                                              "maximum": 15,
+                                              "multipleOf": 0.5
+                                            },
+                                            "share": {
+                                              "type": "integer",
+                                              "minimum": 0,
+                                              "maximum": 100
+                                            },
+                                            "meta": {
+                                              "type": "integer",
+                                              "minimum": 0,
+                                              "maximum": 10000000
+                                            },
+                                            "google": {
+                                              "type": "integer",
+                                              "minimum": 0,
+                                              "maximum": 10000000
+                                            }
+                                          },
+                                          "required": [
+                                            "ring",
+                                            "from_km",
+                                            "to_km",
+                                            "share",
+                                            "meta",
+                                            "google"
+                                          ],
+                                          "additionalProperties": false
+                                        }
+                                      },
+                                      "hours": {
+                                        "type": "object",
+                                        "properties": {
+                                          "source": {
+                                            "type": "string",
+                                            "enum": [
+                                              "loja",
+                                              "setor"
+                                            ]
+                                          },
+                                          "days": {
+                                            "minItems": 1,
+                                            "maxItems": 7,
+                                            "type": "array",
+                                            "items": {
+                                              "type": "integer",
+                                              "minimum": 0,
+                                              "maximum": 6
+                                            }
+                                          },
+                                          "from": {
+                                            "type": "string",
+                                            "pattern": "^([01]\\d|2[0-3]):[0-5]\\d$"
+                                          },
+                                          "to": {
+                                            "type": "string",
+                                            "pattern": "^([01]\\d|2[0-3]):[0-5]\\d$"
+                                          },
+                                          "ads_from": {
+                                            "type": "string",
+                                            "pattern": "^([01]\\d|2[0-3]):[0-5]\\d$"
+                                          },
+                                          "days_share": {
+                                            "type": [
+                                              "integer",
+                                              "null"
+                                            ],
+                                            "minimum": 0,
+                                            "maximum": 100
+                                          },
+                                          "hours_share": {
+                                            "type": [
+                                              "integer",
+                                              "null"
+                                            ],
+                                            "minimum": 0,
+                                            "maximum": 100
+                                          },
+                                          "orders_from": {
+                                            "type": [
+                                              "string",
+                                              "null"
+                                            ],
+                                            "format": "date",
+                                            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+                                          },
+                                          "orders_to": {
+                                            "type": [
+                                              "string",
+                                              "null"
+                                            ],
+                                            "format": "date",
+                                            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+                                          }
+                                        },
+                                        "required": [
+                                          "source",
+                                          "days",
+                                          "from",
+                                          "to",
+                                          "ads_from",
+                                          "days_share",
+                                          "hours_share",
+                                          "orders_from",
+                                          "orders_to"
+                                        ],
+                                        "additionalProperties": false
+                                      }
+                                    },
+                                    "required": [
+                                      "unit_id",
+                                      "store",
+                                      "district",
+                                      "city",
+                                      "radius_km",
+                                      "rings",
+                                      "hours"
+                                    ],
+                                    "additionalProperties": false
+                                  }
+                                },
+                                "stages": {
+                                  "minItems": 4,
+                                  "maxItems": 4,
+                                  "type": "array",
+                                  "items": {
+                                    "type": "object",
+                                    "properties": {
+                                      "stage": {
+                                        "type": "string",
+                                        "enum": [
+                                          "reconhecimento",
+                                          "seguidores",
+                                          "cardapio_conversa",
+                                          "pedido"
+                                        ]
+                                      },
+                                      "share": {
+                                        "type": "integer",
+                                        "minimum": 0,
+                                        "maximum": 100
+                                      },
+                                      "creative": {
+                                        "type": "string",
+                                        "minLength": 1,
+                                        "maxLength": 240
+                                      }
+                                    },
+                                    "required": [
+                                      "stage",
+                                      "share",
+                                      "creative"
+                                    ],
+                                    "additionalProperties": false
+                                  }
+                                }
+                              },
+                              "required": [
+                                "stores",
+                                "stages"
+                              ],
+                              "additionalProperties": false
                             }
                           },
                           "required": [
@@ -74160,6 +75072,234 @@
                                 ],
                                 "additionalProperties": false
                               }
+                            },
+                            "media_plan": {
+                              "type": "object",
+                              "properties": {
+                                "stores": {
+                                  "minItems": 1,
+                                  "maxItems": 5,
+                                  "type": "array",
+                                  "items": {
+                                    "type": "object",
+                                    "properties": {
+                                      "unit_id": {
+                                        "type": "string",
+                                        "format": "uuid",
+                                        "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                                      },
+                                      "store": {
+                                        "type": "string",
+                                        "minLength": 1,
+                                        "maxLength": 120
+                                      },
+                                      "district": {
+                                        "type": [
+                                          "string",
+                                          "null"
+                                        ],
+                                        "minLength": 1,
+                                        "maxLength": 120
+                                      },
+                                      "city": {
+                                        "type": [
+                                          "string",
+                                          "null"
+                                        ],
+                                        "minLength": 1,
+                                        "maxLength": 120
+                                      },
+                                      "radius_km": {
+                                        "type": "number",
+                                        "minimum": 0,
+                                        "maximum": 15,
+                                        "multipleOf": 0.5
+                                      },
+                                      "rings": {
+                                        "minItems": 1,
+                                        "maxItems": 2,
+                                        "type": "array",
+                                        "items": {
+                                          "type": "object",
+                                          "properties": {
+                                            "ring": {
+                                              "type": "string",
+                                              "enum": [
+                                                "nucleo",
+                                                "expansao"
+                                              ]
+                                            },
+                                            "from_km": {
+                                              "type": "number",
+                                              "minimum": 0,
+                                              "maximum": 15,
+                                              "multipleOf": 0.5
+                                            },
+                                            "to_km": {
+                                              "type": "number",
+                                              "minimum": 0,
+                                              "maximum": 15,
+                                              "multipleOf": 0.5
+                                            },
+                                            "share": {
+                                              "type": "integer",
+                                              "minimum": 0,
+                                              "maximum": 100
+                                            },
+                                            "meta": {
+                                              "type": "integer",
+                                              "minimum": 0,
+                                              "maximum": 10000000
+                                            },
+                                            "google": {
+                                              "type": "integer",
+                                              "minimum": 0,
+                                              "maximum": 10000000
+                                            }
+                                          },
+                                          "required": [
+                                            "ring",
+                                            "from_km",
+                                            "to_km",
+                                            "share",
+                                            "meta",
+                                            "google"
+                                          ],
+                                          "additionalProperties": false
+                                        }
+                                      },
+                                      "hours": {
+                                        "type": "object",
+                                        "properties": {
+                                          "source": {
+                                            "type": "string",
+                                            "enum": [
+                                              "loja",
+                                              "setor"
+                                            ]
+                                          },
+                                          "days": {
+                                            "minItems": 1,
+                                            "maxItems": 7,
+                                            "type": "array",
+                                            "items": {
+                                              "type": "integer",
+                                              "minimum": 0,
+                                              "maximum": 6
+                                            }
+                                          },
+                                          "from": {
+                                            "type": "string",
+                                            "pattern": "^([01]\\d|2[0-3]):[0-5]\\d$"
+                                          },
+                                          "to": {
+                                            "type": "string",
+                                            "pattern": "^([01]\\d|2[0-3]):[0-5]\\d$"
+                                          },
+                                          "ads_from": {
+                                            "type": "string",
+                                            "pattern": "^([01]\\d|2[0-3]):[0-5]\\d$"
+                                          },
+                                          "days_share": {
+                                            "type": [
+                                              "integer",
+                                              "null"
+                                            ],
+                                            "minimum": 0,
+                                            "maximum": 100
+                                          },
+                                          "hours_share": {
+                                            "type": [
+                                              "integer",
+                                              "null"
+                                            ],
+                                            "minimum": 0,
+                                            "maximum": 100
+                                          },
+                                          "orders_from": {
+                                            "type": [
+                                              "string",
+                                              "null"
+                                            ],
+                                            "format": "date",
+                                            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+                                          },
+                                          "orders_to": {
+                                            "type": [
+                                              "string",
+                                              "null"
+                                            ],
+                                            "format": "date",
+                                            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+                                          }
+                                        },
+                                        "required": [
+                                          "source",
+                                          "days",
+                                          "from",
+                                          "to",
+                                          "ads_from",
+                                          "days_share",
+                                          "hours_share",
+                                          "orders_from",
+                                          "orders_to"
+                                        ],
+                                        "additionalProperties": false
+                                      }
+                                    },
+                                    "required": [
+                                      "unit_id",
+                                      "store",
+                                      "district",
+                                      "city",
+                                      "radius_km",
+                                      "rings",
+                                      "hours"
+                                    ],
+                                    "additionalProperties": false
+                                  }
+                                },
+                                "stages": {
+                                  "minItems": 4,
+                                  "maxItems": 4,
+                                  "type": "array",
+                                  "items": {
+                                    "type": "object",
+                                    "properties": {
+                                      "stage": {
+                                        "type": "string",
+                                        "enum": [
+                                          "reconhecimento",
+                                          "seguidores",
+                                          "cardapio_conversa",
+                                          "pedido"
+                                        ]
+                                      },
+                                      "share": {
+                                        "type": "integer",
+                                        "minimum": 0,
+                                        "maximum": 100
+                                      },
+                                      "creative": {
+                                        "type": "string",
+                                        "minLength": 1,
+                                        "maxLength": 240
+                                      }
+                                    },
+                                    "required": [
+                                      "stage",
+                                      "share",
+                                      "creative"
+                                    ],
+                                    "additionalProperties": false
+                                  }
+                                }
+                              },
+                              "required": [
+                                "stores",
+                                "stages"
+                              ],
+                              "additionalProperties": false
                             }
                           },
                           "required": [
@@ -75164,6 +76304,234 @@
                                 ],
                                 "additionalProperties": false
                               }
+                            },
+                            "media_plan": {
+                              "type": "object",
+                              "properties": {
+                                "stores": {
+                                  "minItems": 1,
+                                  "maxItems": 5,
+                                  "type": "array",
+                                  "items": {
+                                    "type": "object",
+                                    "properties": {
+                                      "unit_id": {
+                                        "type": "string",
+                                        "format": "uuid",
+                                        "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                                      },
+                                      "store": {
+                                        "type": "string",
+                                        "minLength": 1,
+                                        "maxLength": 120
+                                      },
+                                      "district": {
+                                        "type": [
+                                          "string",
+                                          "null"
+                                        ],
+                                        "minLength": 1,
+                                        "maxLength": 120
+                                      },
+                                      "city": {
+                                        "type": [
+                                          "string",
+                                          "null"
+                                        ],
+                                        "minLength": 1,
+                                        "maxLength": 120
+                                      },
+                                      "radius_km": {
+                                        "type": "number",
+                                        "minimum": 0,
+                                        "maximum": 15,
+                                        "multipleOf": 0.5
+                                      },
+                                      "rings": {
+                                        "minItems": 1,
+                                        "maxItems": 2,
+                                        "type": "array",
+                                        "items": {
+                                          "type": "object",
+                                          "properties": {
+                                            "ring": {
+                                              "type": "string",
+                                              "enum": [
+                                                "nucleo",
+                                                "expansao"
+                                              ]
+                                            },
+                                            "from_km": {
+                                              "type": "number",
+                                              "minimum": 0,
+                                              "maximum": 15,
+                                              "multipleOf": 0.5
+                                            },
+                                            "to_km": {
+                                              "type": "number",
+                                              "minimum": 0,
+                                              "maximum": 15,
+                                              "multipleOf": 0.5
+                                            },
+                                            "share": {
+                                              "type": "integer",
+                                              "minimum": 0,
+                                              "maximum": 100
+                                            },
+                                            "meta": {
+                                              "type": "integer",
+                                              "minimum": 0,
+                                              "maximum": 10000000
+                                            },
+                                            "google": {
+                                              "type": "integer",
+                                              "minimum": 0,
+                                              "maximum": 10000000
+                                            }
+                                          },
+                                          "required": [
+                                            "ring",
+                                            "from_km",
+                                            "to_km",
+                                            "share",
+                                            "meta",
+                                            "google"
+                                          ],
+                                          "additionalProperties": false
+                                        }
+                                      },
+                                      "hours": {
+                                        "type": "object",
+                                        "properties": {
+                                          "source": {
+                                            "type": "string",
+                                            "enum": [
+                                              "loja",
+                                              "setor"
+                                            ]
+                                          },
+                                          "days": {
+                                            "minItems": 1,
+                                            "maxItems": 7,
+                                            "type": "array",
+                                            "items": {
+                                              "type": "integer",
+                                              "minimum": 0,
+                                              "maximum": 6
+                                            }
+                                          },
+                                          "from": {
+                                            "type": "string",
+                                            "pattern": "^([01]\\d|2[0-3]):[0-5]\\d$"
+                                          },
+                                          "to": {
+                                            "type": "string",
+                                            "pattern": "^([01]\\d|2[0-3]):[0-5]\\d$"
+                                          },
+                                          "ads_from": {
+                                            "type": "string",
+                                            "pattern": "^([01]\\d|2[0-3]):[0-5]\\d$"
+                                          },
+                                          "days_share": {
+                                            "type": [
+                                              "integer",
+                                              "null"
+                                            ],
+                                            "minimum": 0,
+                                            "maximum": 100
+                                          },
+                                          "hours_share": {
+                                            "type": [
+                                              "integer",
+                                              "null"
+                                            ],
+                                            "minimum": 0,
+                                            "maximum": 100
+                                          },
+                                          "orders_from": {
+                                            "type": [
+                                              "string",
+                                              "null"
+                                            ],
+                                            "format": "date",
+                                            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+                                          },
+                                          "orders_to": {
+                                            "type": [
+                                              "string",
+                                              "null"
+                                            ],
+                                            "format": "date",
+                                            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+                                          }
+                                        },
+                                        "required": [
+                                          "source",
+                                          "days",
+                                          "from",
+                                          "to",
+                                          "ads_from",
+                                          "days_share",
+                                          "hours_share",
+                                          "orders_from",
+                                          "orders_to"
+                                        ],
+                                        "additionalProperties": false
+                                      }
+                                    },
+                                    "required": [
+                                      "unit_id",
+                                      "store",
+                                      "district",
+                                      "city",
+                                      "radius_km",
+                                      "rings",
+                                      "hours"
+                                    ],
+                                    "additionalProperties": false
+                                  }
+                                },
+                                "stages": {
+                                  "minItems": 4,
+                                  "maxItems": 4,
+                                  "type": "array",
+                                  "items": {
+                                    "type": "object",
+                                    "properties": {
+                                      "stage": {
+                                        "type": "string",
+                                        "enum": [
+                                          "reconhecimento",
+                                          "seguidores",
+                                          "cardapio_conversa",
+                                          "pedido"
+                                        ]
+                                      },
+                                      "share": {
+                                        "type": "integer",
+                                        "minimum": 0,
+                                        "maximum": 100
+                                      },
+                                      "creative": {
+                                        "type": "string",
+                                        "minLength": 1,
+                                        "maxLength": 240
+                                      }
+                                    },
+                                    "required": [
+                                      "stage",
+                                      "share",
+                                      "creative"
+                                    ],
+                                    "additionalProperties": false
+                                  }
+                                }
+                              },
+                              "required": [
+                                "stores",
+                                "stages"
+                              ],
+                              "additionalProperties": false
                             }
                           },
                           "required": [
@@ -106632,6 +108000,14 @@
                               "has_cover"
                             ],
                             "additionalProperties": false
+                          },
+                          "montage_id": {
+                            "type": [
+                              "string",
+                              "null"
+                            ],
+                            "format": "uuid",
+                            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
                           }
                         },
                         "required": [
@@ -107113,6 +108489,14 @@
                         "has_cover"
                       ],
                       "additionalProperties": false
+                    },
+                    "montage_id": {
+                      "type": [
+                        "string",
+                        "null"
+                      ],
+                      "format": "uuid",
+                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
                     }
                   },
                   "required": [
@@ -108651,6 +110035,14 @@
                         "has_cover"
                       ],
                       "additionalProperties": false
+                    },
+                    "montage_id": {
+                      "type": [
+                        "string",
+                        "null"
+                      ],
+                      "format": "uuid",
+                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
                     }
                   },
                   "required": [
@@ -109251,6 +110643,14 @@
                         "has_cover"
                       ],
                       "additionalProperties": false
+                    },
+                    "montage_id": {
+                      "type": [
+                        "string",
+                        "null"
+                      ],
+                      "format": "uuid",
+                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
                     }
                   },
                   "required": [
@@ -109980,6 +111380,14 @@
                         "has_cover"
                       ],
                       "additionalProperties": false
+                    },
+                    "montage_id": {
+                      "type": [
+                        "string",
+                        "null"
+                      ],
+                      "format": "uuid",
+                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
                     }
                   },
                   "required": [
@@ -124340,6 +125748,534 @@
                         "additionalProperties": false
                       }
                     },
+                    "store_demand_status": {
+                      "type": "string",
+                      "maxLength": 60,
+                      "pattern": "^[a-z0-9_]+$"
+                    },
+                    "store_demand": {
+                      "type": [
+                        "object",
+                        "null"
+                      ],
+                      "properties": {
+                        "status": {
+                          "type": "string",
+                          "maxLength": 60,
+                          "pattern": "^[a-z0-9_]+$"
+                        },
+                        "from": {
+                          "type": "string"
+                        },
+                        "to": {
+                          "type": "string"
+                        },
+                        "days": {
+                          "type": "integer",
+                          "minimum": -9007199254740991,
+                          "maximum": 9007199254740991
+                        },
+                        "minimum_orders": {
+                          "type": "integer",
+                          "minimum": -9007199254740991,
+                          "maximum": 9007199254740991
+                        },
+                        "orders": {
+                          "type": "integer",
+                          "minimum": -9007199254740991,
+                          "maximum": 9007199254740991
+                        },
+                        "revenue_micros": {
+                          "type": "string"
+                        },
+                        "ticket_micros": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "previous": {
+                          "type": "object",
+                          "properties": {
+                            "orders": {
+                              "type": "integer",
+                              "minimum": -9007199254740991,
+                              "maximum": 9007199254740991
+                            },
+                            "revenue_micros": {
+                              "type": "string"
+                            },
+                            "ticket_micros": {
+                              "type": [
+                                "string",
+                                "null"
+                              ]
+                            }
+                          },
+                          "required": [
+                            "orders",
+                            "revenue_micros",
+                            "ticket_micros"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "customers": {
+                          "type": "object",
+                          "properties": {
+                            "new": {
+                              "type": "integer",
+                              "minimum": -9007199254740991,
+                              "maximum": 9007199254740991
+                            },
+                            "returning": {
+                              "type": "integer",
+                              "minimum": -9007199254740991,
+                              "maximum": 9007199254740991
+                            },
+                            "unknown": {
+                              "type": "integer",
+                              "minimum": -9007199254740991,
+                              "maximum": 9007199254740991
+                            }
+                          },
+                          "required": [
+                            "new",
+                            "returning",
+                            "unknown"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "by_weekday": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "weekday": {
+                                "type": "integer",
+                                "minimum": -9007199254740991,
+                                "maximum": 9007199254740991
+                              },
+                              "orders": {
+                                "type": "integer",
+                                "minimum": -9007199254740991,
+                                "maximum": 9007199254740991
+                              },
+                              "revenue_micros": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "weekday",
+                              "orders",
+                              "revenue_micros"
+                            ],
+                            "additionalProperties": false
+                          }
+                        },
+                        "by_hour": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "hour": {
+                                "type": "integer",
+                                "minimum": -9007199254740991,
+                                "maximum": 9007199254740991
+                              },
+                              "orders": {
+                                "type": "integer",
+                                "minimum": -9007199254740991,
+                                "maximum": 9007199254740991
+                              }
+                            },
+                            "required": [
+                              "hour",
+                              "orders"
+                            ],
+                            "additionalProperties": false
+                          }
+                        },
+                        "peak": {
+                          "type": [
+                            "object",
+                            "null"
+                          ],
+                          "properties": {
+                            "weekday": {
+                              "type": "integer",
+                              "minimum": -9007199254740991,
+                              "maximum": 9007199254740991
+                            },
+                            "hour": {
+                              "type": "integer",
+                              "minimum": -9007199254740991,
+                              "maximum": 9007199254740991
+                            },
+                            "orders": {
+                              "type": "integer",
+                              "minimum": -9007199254740991,
+                              "maximum": 9007199254740991
+                            }
+                          },
+                          "required": [
+                            "weekday",
+                            "hour",
+                            "orders"
+                          ],
+                          "additionalProperties": false
+                        }
+                      },
+                      "required": [
+                        "status",
+                        "from",
+                        "to",
+                        "days",
+                        "minimum_orders",
+                        "orders",
+                        "revenue_micros",
+                        "ticket_micros",
+                        "previous",
+                        "customers",
+                        "by_weekday",
+                        "by_hour",
+                        "peak"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "paid_media_status": {
+                      "type": "string",
+                      "maxLength": 60,
+                      "pattern": "^[a-z0-9_]+$"
+                    },
+                    "paid_media": {
+                      "type": [
+                        "object",
+                        "null"
+                      ],
+                      "properties": {
+                        "from": {
+                          "type": "string"
+                        },
+                        "to": {
+                          "type": "string"
+                        },
+                        "accounts": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "provider": {
+                                "type": "string",
+                                "maxLength": 60,
+                                "pattern": "^[a-z0-9_]+$"
+                              },
+                              "name": {
+                                "type": "string"
+                              },
+                              "read_at": {
+                                "type": [
+                                  "string",
+                                  "null"
+                                ]
+                              }
+                            },
+                            "required": [
+                              "provider",
+                              "name",
+                              "read_at"
+                            ],
+                            "additionalProperties": false
+                          }
+                        },
+                        "clicks": {
+                          "type": "integer",
+                          "minimum": -9007199254740991,
+                          "maximum": 9007199254740991
+                        },
+                        "impressions": {
+                          "type": "integer",
+                          "minimum": -9007199254740991,
+                          "maximum": 9007199254740991
+                        },
+                        "by_hour": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "hour": {
+                                "type": "integer",
+                                "minimum": -9007199254740991,
+                                "maximum": 9007199254740991
+                              },
+                              "clicks": {
+                                "type": "integer",
+                                "minimum": -9007199254740991,
+                                "maximum": 9007199254740991
+                              },
+                              "impressions": {
+                                "type": "integer",
+                                "minimum": -9007199254740991,
+                                "maximum": 9007199254740991
+                              }
+                            },
+                            "required": [
+                              "hour",
+                              "clicks",
+                              "impressions"
+                            ],
+                            "additionalProperties": false
+                          }
+                        },
+                        "ad_block": {
+                          "type": [
+                            "object",
+                            "null"
+                          ],
+                          "properties": {
+                            "from_hour": {
+                              "type": "integer",
+                              "minimum": -9007199254740991,
+                              "maximum": 9007199254740991
+                            },
+                            "to_hour": {
+                              "type": "integer",
+                              "minimum": -9007199254740991,
+                              "maximum": 9007199254740991
+                            },
+                            "clicks_pct": {
+                              "type": "integer",
+                              "minimum": -9007199254740991,
+                              "maximum": 9007199254740991
+                            }
+                          },
+                          "required": [
+                            "from_hour",
+                            "to_hour",
+                            "clicks_pct"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "orders_block": {
+                          "type": [
+                            "object",
+                            "null"
+                          ],
+                          "properties": {
+                            "from_hour": {
+                              "type": "integer",
+                              "minimum": -9007199254740991,
+                              "maximum": 9007199254740991
+                            },
+                            "to_hour": {
+                              "type": "integer",
+                              "minimum": -9007199254740991,
+                              "maximum": 9007199254740991
+                            },
+                            "clicks_pct": {
+                              "type": "integer",
+                              "minimum": -9007199254740991,
+                              "maximum": 9007199254740991
+                            }
+                          },
+                          "required": [
+                            "from_hour",
+                            "to_hour",
+                            "clicks_pct"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "cities_status": {
+                          "type": "string",
+                          "maxLength": 60,
+                          "pattern": "^[a-z0-9_]+$"
+                        },
+                        "cities": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string"
+                              },
+                              "name": {
+                                "type": "string"
+                              },
+                              "full_name": {
+                                "type": "string"
+                              },
+                              "clicks": {
+                                "type": "integer",
+                                "minimum": -9007199254740991,
+                                "maximum": 9007199254740991
+                              },
+                              "impressions": {
+                                "type": "integer",
+                                "minimum": -9007199254740991,
+                                "maximum": 9007199254740991
+                              },
+                              "clicks_pct": {
+                                "type": "integer",
+                                "minimum": -9007199254740991,
+                                "maximum": 9007199254740991
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "name",
+                              "full_name",
+                              "clicks",
+                              "impressions",
+                              "clicks_pct"
+                            ],
+                            "additionalProperties": false
+                          }
+                        }
+                      },
+                      "required": [
+                        "from",
+                        "to",
+                        "accounts",
+                        "clicks",
+                        "impressions",
+                        "by_hour",
+                        "ad_block",
+                        "orders_block",
+                        "cities_status",
+                        "cities"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "order_districts_status": {
+                      "type": "string",
+                      "maxLength": 60,
+                      "pattern": "^[a-z0-9_]+$"
+                    },
+                    "order_districts": {
+                      "type": [
+                        "object",
+                        "null"
+                      ],
+                      "properties": {
+                        "from": {
+                          "type": "string"
+                        },
+                        "to": {
+                          "type": "string"
+                        },
+                        "minimum": {
+                          "type": "integer",
+                          "minimum": -9007199254740991,
+                          "maximum": 9007199254740991
+                        },
+                        "read_at": {
+                          "type": "string"
+                        },
+                        "comparable": {
+                          "type": "boolean"
+                        },
+                        "districts": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "name": {
+                                "type": "string"
+                              },
+                              "orders": {
+                                "type": [
+                                  "integer",
+                                  "null"
+                                ],
+                                "minimum": -9007199254740991,
+                                "maximum": 9007199254740991
+                              },
+                              "population": {
+                                "type": [
+                                  "integer",
+                                  "null"
+                                ],
+                                "minimum": -9007199254740991,
+                                "maximum": 9007199254740991
+                              },
+                              "per_1000": {
+                                "type": [
+                                  "number",
+                                  "null"
+                                ]
+                              },
+                              "role": {
+                                "type": [
+                                  "string",
+                                  "null"
+                                ],
+                                "maxLength": 60,
+                                "pattern": "^[a-z0-9_]+$"
+                              },
+                              "in_delivery_area": {
+                                "type": "boolean"
+                              }
+                            },
+                            "required": [
+                              "name",
+                              "orders",
+                              "population",
+                              "per_1000",
+                              "role",
+                              "in_delivery_area"
+                            ],
+                            "additionalProperties": false
+                          }
+                        },
+                        "others": {
+                          "type": "object",
+                          "properties": {
+                            "districts": {
+                              "type": "integer",
+                              "minimum": -9007199254740991,
+                              "maximum": 9007199254740991
+                            },
+                            "orders": {
+                              "type": "integer",
+                              "minimum": -9007199254740991,
+                              "maximum": 9007199254740991
+                            }
+                          },
+                          "required": [
+                            "districts",
+                            "orders"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "without_district": {
+                          "type": "integer",
+                          "minimum": -9007199254740991,
+                          "maximum": 9007199254740991
+                        },
+                        "pickup": {
+                          "type": "integer",
+                          "minimum": -9007199254740991,
+                          "maximum": 9007199254740991
+                        },
+                        "delivery_orders": {
+                          "type": "integer",
+                          "minimum": -9007199254740991,
+                          "maximum": 9007199254740991
+                        }
+                      },
+                      "required": [
+                        "from",
+                        "to",
+                        "minimum",
+                        "read_at",
+                        "comparable",
+                        "districts",
+                        "others",
+                        "without_district",
+                        "pickup",
+                        "delivery_orders"
+                      ],
+                      "additionalProperties": false
+                    },
                     "sources": {
                       "type": "array",
                       "items": {
@@ -124400,6 +126336,12 @@
                     "food_places",
                     "week_ahead",
                     "sector_references",
+                    "store_demand_status",
+                    "store_demand",
+                    "paid_media_status",
+                    "paid_media",
+                    "order_districts_status",
+                    "order_districts",
                     "sources",
                     "generated_at"
                   ],
@@ -126347,7 +128289,7 @@
     },
     "/v1/new-campaigns": {
       "post": {
-        "description": "A peça aprovada em Criativos, com a foto ou o vídeo pronto de Fotos, vira um pedido em Aprovações (a ferramenta `campanha_criar`): depois da aprovação com o código do app, o Liame cria na Meta a campanha, o conjunto (o raio em volta da loja, de 1 a 15 km, 18 anos ou mais, a verba diária e o fim, se houver) e o anúncio, todos pausados, em nome da Página da marca e com as melhorias automáticas da Meta desligadas. \"Pedidos pelo cardápio\" leva ao cardápio da loja, com o rastreio do Liame nos parâmetros de URL; \"conversas no WhatsApp\" abre a conversa no WhatsApp da Página. Ativar é outro pedido. Precisa da função `campanha_nova` (409 `funcao-desligada`); a escrita na Meta (`meta_write`) vale na execução. Conflitos (409): `sem-conta-de-anuncios`, `varias-contas-de-anuncios`, `sem-pagina`, `varias-paginas`, `ja-pedida` (a peça já tem um pedido em aberto). Recusas (422): `peca-nao-encontrada`, `peca-nao-aprovada`, `midia-fora-das-fotos`, `video-sem-capa`, `verba-invalida`, `loja-nao-encontrada`, `loja-sem-endereco` (o ponto da loja não está no endereço), `sem-cardapio`, `acima-do-teto` (a verba passa do teto por campanha) e `fim-no-passado`. O trilho também pode recusar (a política, a trava).",
+        "description": "A peça aprovada em Criativos, com a foto ou o vídeo pronto de Fotos (`piece_id` e `media_id`), ou um Reels já publicado no Instagram da Página (`instagram_media_id`, de Fotos › Do seu Instagram; o anúncio usa o post como está, o vídeo e a legenda, e antes de criar o Liame pergunta à Meta se ele pode virar anúncio), vira um pedido em Aprovações (a ferramenta `campanha_criar`): depois da aprovação com o código do app, o Liame cria na Meta a campanha, o conjunto (o raio em volta da loja, de 1 a 15 km, 18 anos ou mais, a verba diária e o fim, se houver) e o anúncio, todos pausados, em nome da Página da marca e com as melhorias automáticas da Meta desligadas. \"Pedidos pelo cardápio\" leva ao cardápio da loja, com o rastreio do Liame nos parâmetros de URL; \"conversas no WhatsApp\" abre a conversa no WhatsApp da Página. Ativar é outro pedido. Precisa da função `campanha_nova` (409 `funcao-desligada`); a escrita na Meta (`meta_write`) vale na execução. Conflitos (409): `sem-conta-de-anuncios`, `varias-contas-de-anuncios`, `sem-pagina`, `varias-paginas`, `ja-pedida` (a peça, ou o Reels, já tem um pedido em aberto). Recusas (422): `peca-nao-encontrada`, `peca-nao-aprovada`, `midia-fora-das-fotos`, `video-sem-capa`, `sem-instagram-na-pagina` (o Reels sem o Instagram ligado à Página), `reels-nao-encontrado` (fora de Fotos › Do seu Instagram, ou de outro perfil), `nao-e-reels`, `verba-invalida`, `loja-nao-encontrada`, `loja-sem-endereco` (o ponto da loja não está no endereço), `sem-cardapio`, `acima-do-teto` (a verba passa do teto por campanha) e `fim-no-passado`. O trilho também pode recusar (a política, a trava).",
         "operationId": "CampanhasNovasController_criar",
         "parameters": [],
         "requestBody": {
@@ -126371,6 +128313,10 @@
                     "type": "string",
                     "format": "uuid",
                     "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                  },
+                  "instagram_media_id": {
+                    "type": "string",
+                    "pattern": "^[0-9]{1,40}$"
                   },
                   "unit_id": {
                     "type": "string",
@@ -126407,8 +128353,6 @@
                 },
                 "required": [
                   "brand_id",
-                  "piece_id",
-                  "media_id",
                   "unit_id",
                   "name",
                   "objective",
@@ -126439,19 +128383,69 @@
                       "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
                     },
                     "piece_id": {
-                      "type": "string",
+                      "type": [
+                        "string",
+                        "null"
+                      ],
                       "format": "uuid",
                       "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
                     },
                     "piece_version": {
-                      "type": "integer",
+                      "type": [
+                        "integer",
+                        "null"
+                      ],
                       "minimum": 1,
                       "maximum": 9007199254740991
                     },
                     "media_id": {
-                      "type": "string",
+                      "type": [
+                        "string",
+                        "null"
+                      ],
                       "format": "uuid",
                       "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                    },
+                    "instagram_media_id": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "reels": {
+                      "type": [
+                        "object",
+                        "null"
+                      ],
+                      "properties": {
+                        "caption": {
+                          "type": "string"
+                        },
+                        "permalink": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "thumbnail_url": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "published_at": {
+                          "type": "string",
+                          "format": "date-time",
+                          "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+                        }
+                      },
+                      "required": [
+                        "caption",
+                        "permalink",
+                        "thumbnail_url",
+                        "published_at"
+                      ],
+                      "additionalProperties": false
                     },
                     "unit_id": {
                       "type": "string",
@@ -126595,6 +128589,8 @@
                     "piece_id",
                     "piece_version",
                     "media_id",
+                    "instagram_media_id",
+                    "reels",
                     "unit_id",
                     "name",
                     "objective",
@@ -126983,19 +128979,69 @@
                       "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
                     },
                     "piece_id": {
-                      "type": "string",
+                      "type": [
+                        "string",
+                        "null"
+                      ],
                       "format": "uuid",
                       "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
                     },
                     "piece_version": {
-                      "type": "integer",
+                      "type": [
+                        "integer",
+                        "null"
+                      ],
                       "minimum": 1,
                       "maximum": 9007199254740991
                     },
                     "media_id": {
-                      "type": "string",
+                      "type": [
+                        "string",
+                        "null"
+                      ],
                       "format": "uuid",
                       "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                    },
+                    "instagram_media_id": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "reels": {
+                      "type": [
+                        "object",
+                        "null"
+                      ],
+                      "properties": {
+                        "caption": {
+                          "type": "string"
+                        },
+                        "permalink": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "thumbnail_url": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "published_at": {
+                          "type": "string",
+                          "format": "date-time",
+                          "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+                        }
+                      },
+                      "required": [
+                        "caption",
+                        "permalink",
+                        "thumbnail_url",
+                        "published_at"
+                      ],
+                      "additionalProperties": false
                     },
                     "unit_id": {
                       "type": "string",
@@ -127139,6 +129185,8 @@
                     "piece_id",
                     "piece_version",
                     "media_id",
+                    "instagram_media_id",
+                    "reels",
                     "unit_id",
                     "name",
                     "objective",
@@ -127698,6 +129746,51 @@
                         ],
                         "additionalProperties": false
                       }
+                    },
+                    "by_reels": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "instagram_media_id": {
+                            "type": "string"
+                          },
+                          "campaign_id": {
+                            "type": "string",
+                            "format": "uuid",
+                            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                          },
+                          "status": {
+                            "type": "string",
+                            "enum": [
+                              "pedida",
+                              "criando",
+                              "criada",
+                              "nao_criada",
+                              "cancelada"
+                            ]
+                          },
+                          "active": {
+                            "type": "boolean"
+                          },
+                          "action_id": {
+                            "type": [
+                              "string",
+                              "null"
+                            ],
+                            "format": "uuid",
+                            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                          }
+                        },
+                        "required": [
+                          "instagram_media_id",
+                          "campaign_id",
+                          "status",
+                          "active",
+                          "action_id"
+                        ],
+                        "additionalProperties": false
+                      }
                     }
                   },
                   "required": [
@@ -127708,7 +129801,8 @@
                     "instagram",
                     "units",
                     "campaign_cap_micros",
-                    "by_piece"
+                    "by_piece",
+                    "by_reels"
                   ],
                   "additionalProperties": false
                 }
@@ -127954,19 +130048,69 @@
                       "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
                     },
                     "piece_id": {
-                      "type": "string",
+                      "type": [
+                        "string",
+                        "null"
+                      ],
                       "format": "uuid",
                       "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
                     },
                     "piece_version": {
-                      "type": "integer",
+                      "type": [
+                        "integer",
+                        "null"
+                      ],
                       "minimum": 1,
                       "maximum": 9007199254740991
                     },
                     "media_id": {
-                      "type": "string",
+                      "type": [
+                        "string",
+                        "null"
+                      ],
                       "format": "uuid",
                       "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                    },
+                    "instagram_media_id": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "reels": {
+                      "type": [
+                        "object",
+                        "null"
+                      ],
+                      "properties": {
+                        "caption": {
+                          "type": "string"
+                        },
+                        "permalink": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "thumbnail_url": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "published_at": {
+                          "type": "string",
+                          "format": "date-time",
+                          "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+                        }
+                      },
+                      "required": [
+                        "caption",
+                        "permalink",
+                        "thumbnail_url",
+                        "published_at"
+                      ],
+                      "additionalProperties": false
                     },
                     "unit_id": {
                       "type": "string",
@@ -128110,6 +130254,8 @@
                     "piece_id",
                     "piece_version",
                     "media_id",
+                    "instagram_media_id",
+                    "reels",
                     "unit_id",
                     "name",
                     "objective",
@@ -129875,7 +132021,7 @@
         ]
       },
       "post": {
-        "description": "Confere o pedido e o põe na fila: o modelo (`destaque`, uma foto; `combo`, de 2 a 4 fotos; `novidade`, uma foto ou um vídeo), as fotos ou o vídeo prontos de Fotos desta marca, na ordem (o vídeo montado não entra de novo), o formato, a duração (6, 10 ou 15 segundos), os textos (título até 40, linha do preço até 24, só nos modelos com preço, e chamada até 30), a logo de Minha marca e o som (o original só com vídeo). Os textos passam pelo Compliance, como nas peças: o preço só o de uma oferta em vigor em Minha marca, as regras do Liame e o que a marca não diz (422 `texto-barrado`, com cada trecho). Precisa da função `video_montado` (409 `funcao-desligada`). Recusas (422): `midia-repetida`, `midias-do-modelo`, `preco-no-modelo`, `midia-fora-das-fotos`, `midia-montada`, `video-no-modelo`, `som-sem-video`, `sem-logo`, `texto-barrado`. Conflito (409): `limite-do-dia`.",
+        "description": "Confere o pedido e o põe na fila: o modelo (`destaque`, uma foto; `combo`, de 2 a 4 fotos; `novidade`, uma foto ou um vídeo), as fotos ou o vídeo prontos de Fotos desta marca, na ordem (o vídeo montado não entra de novo), o formato, a duração (6, 10 ou 15 segundos; o vídeo precisa ter pelo menos ela), os textos (título até 40, linha do preço até 24, só nos modelos com preço, e chamada até 30), a logo de Minha marca e o som (o original só com o vídeo que tem som). Os textos passam pelo Compliance, como nas peças: o preço só o de uma oferta em vigor em Minha marca, as regras do Liame e o que a marca não diz (422 `texto-barrado`, com cada trecho). Precisa da função `video_montado` (409 `funcao-desligada`). Recusas (422): `midia-repetida`, `midias-do-modelo`, `preco-no-modelo`, `midia-fora-das-fotos`, `midia-montada`, `video-no-modelo`, `som-sem-video`, `video-curto`, `video-sem-som`, `sem-logo`, `texto-barrado`. Conflito (409): `limite-do-dia`.",
         "operationId": "VideoMontadoController_criar",
         "parameters": [],
         "requestBody": {
@@ -130460,6 +132606,488 @@
           }
         ],
         "summary": "Pedir um vídeo montado",
+        "tags": [
+          "video-montado"
+        ]
+      }
+    },
+    "/v1/video-montages/texts": {
+      "post": {
+        "description": "O Social media propõe o título, a linha do preço (só nos modelos com preço, e só o preço de uma oferta em vigor em Minha marca, que vem em `offer`) e a chamada, a partir do produto e da descrição das fotos ou do vídeo escolhidos. A proposta passa pelo Compliance antes de voltar (as regras do Liame e o que a marca não diz). Sem a IA, `origin` é `sem_ia`, com o motivo (`funcionario_desligado`, `ia_desligada`, `sem-rota`, `teto` com `retry_at`, `limite-usuario`, `travada`, `parada`, `indisponivel`, `entrada-grande`, `formato`, `barrado`), e a pessoa escreve os textos. Nada é gravado além do uso da IA. Precisa da função `video_montado` (409 `funcao-desligada`); as fotos de outra marca, apagadas ou montadas, 422 `midia-fora-das-fotos`.",
+        "operationId": "VideoMontadoController_textos",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "brand_id": {
+                    "type": "string",
+                    "format": "uuid",
+                    "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                  },
+                  "template": {
+                    "type": "string",
+                    "enum": [
+                      "destaque",
+                      "combo",
+                      "novidade"
+                    ]
+                  },
+                  "media_ids": {
+                    "minItems": 1,
+                    "maxItems": 4,
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "format": "uuid",
+                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                    }
+                  }
+                },
+                "required": [
+                  "brand_id",
+                  "template",
+                  "media_ids"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "origin": {
+                      "type": "string",
+                      "enum": [
+                        "ia",
+                        "sem_ia"
+                      ]
+                    },
+                    "reason": {
+                      "type": [
+                        "string",
+                        "null"
+                      ],
+                      "enum": [
+                        "funcao_desligada",
+                        "ia_desligada",
+                        "funcionario_desligado",
+                        "sem-rota",
+                        "teto",
+                        "limite-usuario",
+                        "travada",
+                        "parada",
+                        "indisponivel",
+                        "entrada-grande",
+                        "formato",
+                        "barrado",
+                        null
+                      ]
+                    },
+                    "texts": {
+                      "type": [
+                        "object",
+                        "null"
+                      ],
+                      "properties": {
+                        "title": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 40
+                        },
+                        "price_line": {
+                          "type": [
+                            "string",
+                            "null"
+                          ],
+                          "minLength": 1,
+                          "maxLength": 24
+                        },
+                        "cta": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 30
+                        }
+                      },
+                      "required": [
+                        "title",
+                        "price_line",
+                        "cta"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "offer": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "retry_at": {
+                      "type": [
+                        "string",
+                        "null"
+                      ],
+                      "format": "date-time",
+                      "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                    },
+                    "usage_id": {
+                      "type": [
+                        "string",
+                        "null"
+                      ],
+                      "format": "uuid",
+                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                    }
+                  },
+                  "required": [
+                    "origin",
+                    "reason",
+                    "texts",
+                    "offer",
+                    "retry_at",
+                    "usage_id"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string",
+                      "format": "uri"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "integer",
+                      "minimum": 400,
+                      "maximum": 599
+                    },
+                    "detail": {
+                      "type": "string"
+                    },
+                    "instance": {
+                      "type": "string"
+                    },
+                    "code": {
+                      "type": "string"
+                    },
+                    "trace_id": {
+                      "type": "string"
+                    },
+                    "errors": {
+                      "description": "Campos inválidos, quando o erro é de validação",
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "path": {
+                            "type": "string"
+                          },
+                          "message": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "path",
+                          "message"
+                        ],
+                        "additionalProperties": false
+                      }
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "title",
+                    "status",
+                    "code",
+                    "trace_id"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string",
+                      "format": "uri"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "integer",
+                      "minimum": 400,
+                      "maximum": 599
+                    },
+                    "detail": {
+                      "type": "string"
+                    },
+                    "instance": {
+                      "type": "string"
+                    },
+                    "code": {
+                      "type": "string"
+                    },
+                    "trace_id": {
+                      "type": "string"
+                    },
+                    "errors": {
+                      "description": "Campos inválidos, quando o erro é de validação",
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "path": {
+                            "type": "string"
+                          },
+                          "message": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "path",
+                          "message"
+                        ],
+                        "additionalProperties": false
+                      }
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "title",
+                    "status",
+                    "code",
+                    "trace_id"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string",
+                      "format": "uri"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "integer",
+                      "minimum": 400,
+                      "maximum": 599
+                    },
+                    "detail": {
+                      "type": "string"
+                    },
+                    "instance": {
+                      "type": "string"
+                    },
+                    "code": {
+                      "type": "string"
+                    },
+                    "trace_id": {
+                      "type": "string"
+                    },
+                    "errors": {
+                      "description": "Campos inválidos, quando o erro é de validação",
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "path": {
+                            "type": "string"
+                          },
+                          "message": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "path",
+                          "message"
+                        ],
+                        "additionalProperties": false
+                      }
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "title",
+                    "status",
+                    "code",
+                    "trace_id"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string",
+                      "format": "uri"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "integer",
+                      "minimum": 400,
+                      "maximum": 599
+                    },
+                    "detail": {
+                      "type": "string"
+                    },
+                    "instance": {
+                      "type": "string"
+                    },
+                    "code": {
+                      "type": "string"
+                    },
+                    "trace_id": {
+                      "type": "string"
+                    },
+                    "errors": {
+                      "description": "Campos inválidos, quando o erro é de validação",
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "path": {
+                            "type": "string"
+                          },
+                          "message": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "path",
+                          "message"
+                        ],
+                        "additionalProperties": false
+                      }
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "title",
+                    "status",
+                    "code",
+                    "trace_id"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string",
+                      "format": "uri"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "integer",
+                      "minimum": 400,
+                      "maximum": 599
+                    },
+                    "detail": {
+                      "type": "string"
+                    },
+                    "instance": {
+                      "type": "string"
+                    },
+                    "code": {
+                      "type": "string"
+                    },
+                    "trace_id": {
+                      "type": "string"
+                    },
+                    "errors": {
+                      "description": "Campos inválidos, quando o erro é de validação",
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "path": {
+                            "type": "string"
+                          },
+                          "message": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "path",
+                          "message"
+                        ],
+                        "additionalProperties": false
+                      }
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "title",
+                    "status",
+                    "code",
+                    "trace_id"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "liame_sessao": []
+          }
+        ],
+        "summary": "Pedir os textos do vídeo ao Social media",
         "tags": [
           "video-montado"
         ]

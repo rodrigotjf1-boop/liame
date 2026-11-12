@@ -3,7 +3,9 @@ import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 import { LinhaDaRegiaoVista } from '@/components/regiao/linha-da-regiao';
+import { BairrosDosPedidos } from '@/components/regiao/bairros-dos-pedidos';
 import { LojaNoMapa } from '@/components/regiao/loja-no-mapa';
+import { MidiaNaRegiao } from '@/components/regiao/midia-na-regiao';
 import {
   cepComHifen,
   cepDigitado,
@@ -29,14 +31,23 @@ import {
   inteiro,
   condicaoEmFrase,
   diaCurto,
+  diaDaSemanaCurto,
+  diaEMes,
   fontesQueFalharam,
+  fraseDoPico,
+  horasDoGrafico,
   iconeDoTempo,
+  parteEmPorcento,
+  reaisDeMicros,
   mesAno,
   movimentoDaContagem,
   quandoFoiLida,
   tipoDaData,
   pct,
   reais,
+  faixaDeHoras,
+  noBloco,
+  plataformasDaMidia,
   situacaoEmPalavras,
   tiposDaContagem,
   trimestre,
@@ -250,6 +261,12 @@ describe('Sua região (R2, parte 2)', () => {
       dates: [{ day: '2026-11-15', name: 'Proclamação da República', kind: 'feriado_nacional', source: 'Lei 662/1949' }],
     },
     sector_references: [],
+    store_demand_status: 'sem_regem',
+    store_demand: null,
+    paid_media_status: 'sem_conta',
+    paid_media: null,
+    order_districts_status: 'sem_regem',
+    order_districts: null,
     sources: [
       { source: 'ibge_censo_bairro', status: 'em_dia', read_at: '2026-11-11T09:10:00.000Z', next_try_at: null },
       { source: 'ibge_9528', status: 'falhou', read_at: null, next_try_at: '2026-11-11T18:00:00.000Z' },
@@ -269,6 +286,17 @@ describe('Sua região (R2, parte 2)', () => {
     expect(quandoFoiLida('2026-11-10T09:10:00.000Z', hoje)).toMatch(/^em 10\/11 às \d{2}:\d{2}$/);
     // A previsão que falhou fica na semana que vem, fora da faixa do IBGE.
     expect(fontesQueFalharam(retrato).map((f) => f.source)).toEqual(['ibge_9528']);
+  });
+
+  it('a demanda da loja (R3, parte 1): o dinheiro em micros, a porcentagem, o dia, o pico e as horas do gráfico', () => {
+    expect([reaisDeMicros('48900000'), reaisDeMicros('1050000000'), parteEmPorcento(181, 312), parteEmPorcento(1, 0), diaEMes('2026-10-15')]).toEqual(['R$ 48,90', 'R$ 1.050,00', '58%', '0%', '15/10']);
+    expect([diaDaSemanaCurto(0), diaDaSemanaCurto(5), diaDaSemanaCurto(6)]).toEqual(['dom', 'sex', 'sáb']);
+    expect(fraseDoPico({ weekday: 5, hour: 20, orders: 19 })).toEqual({ titulo: 'O pico é na sexta, das 20h às 21h:', resto: '19 pedidos nas 4 sextas.' });
+    expect(fraseDoPico({ weekday: 0, hour: 23, orders: 1 })).toEqual({ titulo: 'O pico é no domingo, das 23h às 0h:', resto: '1 pedido nos 4 domingos.' });
+    const porHora = Array.from({ length: 24 }, (_, hour) => ({ hour, orders: hour === 11 ? 3 : hour === 14 ? 0 : hour === 20 ? 9 : 0 }));
+    // Da primeira à última hora com pedido, com o vão no meio (o gráfico mostra que às 14h não houve pedido).
+    expect(horasDoGrafico(porHora).map((h) => h.hour)).toEqual([11, 12, 13, 14, 15, 16, 17, 18, 19, 20]);
+    expect(horasDoGrafico(porHora.map((h) => ({ ...h, orders: 0 })))).toEqual([]);
   });
 
   it('a resposta da LIA sobre a região (D-RG-18): Ver Sua região e Ver as fontes, na marca da conversa, sem pedir a análise', () => {
@@ -320,6 +348,73 @@ describe('Sua região (R2, parte 2)', () => {
     expect(fraseDaRenda({ ...retrato, district: null })).toBeNull();
     expect(fonteDoNumero(retrato.city!.restaurants!)).toBe('IBGE · Cadastro Central de Empresas, 2024');
     expect(fonteDoNumero(retrato.city!.population!)).toBe('IBGE · Censo 2022');
+  });
+
+  it('a mídia na região (R4): o bloco de horas, as plataformas e a seção desenhada, sem dinheiro', () => {
+    expect(faixaDeHoras(11, 15)).toBe('das 11h às 15h');
+    expect([noBloco(11, 11, 15), noBloco(14, 11, 15), noBloco(15, 11, 15), noBloco(23, 22, 2), noBloco(1, 22, 2), noBloco(2, 22, 2)]).toEqual([true, true, false, true, true, false]);
+    expect(plataformasDaMidia([{ provider: 'google_ads' }, { provider: 'meta_ads' }])).toBe('Meta e Google');
+    expect(plataformasDaMidia([{ provider: 'meta_ads' }])).toBe('Meta');
+    const horas = Array.from({ length: 24 }, (_, hour) => ({ hour, clicks: hour === 12 ? 200 : hour === 20 ? 160 : hour >= 10 && hour <= 23 ? 40 : 0, impressions: 1000 }));
+    const midia: NonNullable<RegionOverviewResponse['paid_media']> = {
+      from: '2026-10-15',
+      to: '2026-11-11',
+      accounts: [
+        { provider: 'meta_ads', name: 'Conta da Meta', read_at: '2026-11-12T09:00:00.000Z' },
+        { provider: 'google_ads', name: 'Conta do Google', read_at: '2026-11-12T09:00:00.000Z' },
+      ],
+      clicks: horas.reduce((t, h) => t + h.clicks, 0),
+      impressions: 24_000,
+      by_hour: horas,
+      ad_block: { from_hour: 11, to_hour: 15, clicks_pct: 41 },
+      orders_block: { from_hour: 19, to_hour: 23, clicks_pct: 34 },
+      cities_status: 'disponivel',
+      cities: [{ id: '1001773', name: 'Rio de Janeiro', full_name: 'Rio de Janeiro,State of Rio de Janeiro,Brazil', clicks: 412, impressions: 9000, clicks_pct: 78 }],
+    };
+    const html = renderToStaticMarkup(createElement(MidiaNaRegiao, { r: { ...retrato, paid_media_status: 'disponivel', paid_media: midia }, ids: 'x', mostraPro: false })).replace(/ /g, ' ');
+    expect(html).toContain('os anúncios da marca (Meta e Google), 4 semanas até ontem (11/11)');
+    expect(html).toContain('dos cliques caem das 11h às 15h, o bloco mais forte dos anúncios');
+    expect(html).toContain('dos cliques caem das 19h às 23h, o bloco mais forte dos pedidos da loja');
+    expect(html).toContain('Rio de Janeiro</b>');
+    expect(html).toContain('78% dos cliques do Google');
+    expect(html).not.toContain('R$');
+    // Só a Meta: sem a cidade, com o porquê; sem conta: o caminho para conectar; sem a permissão: o aviso.
+    const soMeta = renderToStaticMarkup(createElement(MidiaNaRegiao, { r: { ...retrato, paid_media_status: 'disponivel', paid_media: { ...midia, accounts: [midia.accounts[0]!], cities_status: 'sem_google', cities: [] } }, ids: 'x', mostraPro: false }));
+    expect(soMeta).toContain('a Meta só informa o estado');
+    expect(renderToStaticMarkup(createElement(MidiaNaRegiao, { r: { ...retrato, paid_media_status: 'sem_conta', paid_media: null }, ids: 'x', mostraPro: false }))).toContain('href="/contas"');
+    expect(renderToStaticMarkup(createElement(MidiaNaRegiao, { r: { ...retrato, paid_media_status: 'sem_permissao', paid_media: null }, ids: 'x', mostraPro: false }))).toContain('quem vê Resultados');
+  });
+
+  it('os bairros para atacar e para defender (R3, parte 2): o papel, os pedidos por mil moradores, o resto somado e os estados', () => {
+    const bairros: NonNullable<RegionOverviewResponse['order_districts']> = {
+      from: '2026-10-15',
+      to: '2026-11-11',
+      minimum: 5,
+      read_at: '2026-11-12T09:00:00.000Z',
+      comparable: true,
+      districts: [
+        { name: 'Praça da Bandeira', orders: 30, population: 8662, per_1000: 3.5, role: 'defender', in_delivery_area: true },
+        { name: 'Vila Isabel', orders: null, population: 86018, per_1000: 0, role: 'atacar', in_delivery_area: true },
+        { name: 'Tijuca', orders: 42, population: 142909, per_1000: 0.3, role: 'manter', in_delivery_area: true },
+      ],
+      others: { districts: 3, orders: 7 },
+      without_district: 4,
+      pickup: 11,
+      delivery_orders: 92,
+    };
+    const desenhar = (extra: Partial<RegionOverviewResponse>) =>
+      renderToStaticMarkup(createElement(BairrosDosPedidos, { r: { ...retrato, ...extra }, ids: 'x', mostraPro: false })).replace(/ /g, ' ');
+    const html = desenhar({ order_districts_status: 'disponivel', order_districts: bairros });
+    expect(html).toContain('pedidos de entrega do Regem, 4 semanas até ontem (11/11)');
+    expect(html).toContain('>Defender</span> 30 pedidos, 3,5 por mil moradores');
+    expect(html).toContain('>Atacar</span> menos de 5 pedidos');
+    expect(html).toContain('Dos 92 pedidos de entrega: 3 outros bairros somam 7 pedidos (cada um com menos de 5); 4 sem o bairro no endereço; 11 de retirada e balcão.');
+    expect(html).not.toContain('R$');
+    expect(desenhar({ order_districts_status: 'disponivel', order_districts: { ...bairros, comparable: false, districts: bairros.districts.map((d) => ({ ...d, role: null })) } })).toContain('são precisos pelo menos 3 bairros');
+    expect(desenhar({ order_districts_status: 'lendo', order_districts: null })).toContain('Lendo os pedidos por bairro do Regem');
+    expect(desenhar({ order_districts_status: 'sem_permissao', order_districts: null })).toContain('quem vê Resultados');
+    expect(desenhar({ order_districts_status: 'sem_regem', order_districts: null })).toContain('Com o Regem');
+    expect(desenhar({ order_districts_status: 'sem_endereco', order_districts: null })).toBe('');
   });
 
   it('o frescor e a situação de cada fonte em palavras', () => {

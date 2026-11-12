@@ -16,6 +16,7 @@ import {
 import { type Database, uuidv7 } from '@liame/database';
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import { sql } from 'drizzle-orm';
+import { LOJAS_NO_PLANO, type LojaDaMidia, RAIO_PADRAO_KM } from '../ai/estrategista/midia.js';
 import { naTransacaoDaEmpresa } from '../ai/na-empresa.js';
 import { APP_CONFIG, type AppConfig } from '../config.js';
 import { contaConectada } from '../connections/conectada.js';
@@ -33,6 +34,10 @@ import { buscarCep, cepNormalizado, type EnderecoDoCep } from './cep.js';
 import { FONTE_CENSO_BAIRRO } from './censo.js';
 import { type Coordenada, nomeComparavel, ProcuraDeCoordenada } from './coordenada.js';
 import { MUNICIPIOS_DO_IPCA, RMS_DO_IPCA } from './ibge.js';
+import { diaNoFuso } from '../results/fora-do-normal.js';
+import { BAIRROS_NA_SECAO, type BairroParaComparar, compararBairros } from './bairros.js';
+import { type DemandaDaLoja, demandaDaLoja, janelas, type LinhaDaDemanda } from './demanda.js';
+import { blocoMaisForte, CIDADES_NA_SECAO, DATASET_DA_MIDIA, janelaDaMidia, porcentoDe, somaDoBloco } from './midia-paga.js';
 import { type DataGuardada, datasDaSemana, diaEmBrasilia, REFERENCIAS_DO_SETOR } from './semana.js';
 import { DIAS_DA_PREVISAO } from './tempo.js';
 import {
@@ -383,6 +388,12 @@ export class RegiaoService {
       food_places: null,
       week_ahead: null,
       sector_references: [],
+      store_demand_status: 'sem_endereco',
+      store_demand: null,
+      paid_media_status: 'sem_endereco',
+      paid_media: null,
+      order_districts_status: 'sem_endereco',
+      order_districts: null,
       generated_at: agora.toISOString(),
     };
     if (!(await this.ligada(auth, brandId))) {
@@ -503,6 +514,13 @@ export class RegiaoService {
          where day between date_trunc('month', ${hoje}::date)::date and ${hoje}::date + 60 order by day, name`)
     ).rows;
 
+    // A demanda da loja (R3, parte 1): os pedidos do Regem, só para quem vê Resultados.
+    const demanda = await this.demandaDaLoja(auth.permissions.has('vendas.ver'), brandId, unitId, agora);
+    // A mídia na região (R4): os anúncios da marca por hora e, do Google, por cidade; a mesma régua da demanda.
+    const midia = await this.midiaNaRegiao(auth, brandId, unitId, agora, demanda.demanda);
+    // Os pedidos por bairro (R3, parte 2): o que o Regem manda somado, com a gente do Censo; a mesma régua da demanda.
+    const bairrosDosPedidos = await this.bairrosDosPedidos(auth.permissions.has('vendas.ver'), brandId, unitId, cidade, loja.address_city, areas);
+
     const noMunicipio = (indicador: string) => numeroMaisNovo(numeros, indicador, 'municipio', cidade);
     const populacao = noMunicipio('populacao');
     const estimada = noMunicipio('populacao_estimada');
@@ -565,8 +583,235 @@ export class RegiaoService {
       }),
       week_ahead: { weather: previsao.length ? { read_at: new Date(previsao[0]!.fetched_at).toISOString(), days: previsao.map((d) => ({ day: d.day, condition: d.condition, description: d.condition_desc, min: d.min_c, max: d.max_c })) } : null, dates: datasDaSemana(datas, hoje) },
       sector_references: REFERENCIAS_DO_SETOR.map((r) => ({ ...r })),
+      store_demand_status: demanda.status,
+      store_demand: demanda.demanda,
+      paid_media_status: midia.status,
+      paid_media: midia.midia,
+      order_districts_status: bairrosDosPedidos.status,
+      order_districts: bairrosDosPedidos.bairros,
       sources: fontes,
       generated_at: agora.toISOString(),
+    };
+  }
+
+  /**
+   * A demanda da loja (R3, parte 1): os pedidos confirmados das duas janelas de 4 semanas (a atual termina ontem, no
+   * fuso da loja), agrupados por dia da semana e hora em que o cliente pediu. Os números de venda vão só para quem vê
+   * Resultados (`vendas.ver`), como lá; sem o Regem ligado na marca, o Liame não tem os pedidos.
+   */
+  private async demandaDaLoja(podeVerVendas: boolean, brandId: string, unitId: string, agora: Date): Promise<{ status: string; demanda: DemandaDaLoja | null }> {
+    if (!podeVerVendas) return { status: 'sem_permissao', demanda: null };
+    if (!(await this.temRegem(brandId))) return { status: 'sem_regem', demanda: null };
+    const tx = currentTx();
+    const fuso = (await tx.execute<{ timezone: string }>(sql`select timezone from liame.unit where id = ${unitId}`)).rows[0]?.timezone ?? 'America/Sao_Paulo';
+    const hoje = diaNoFuso(agora, fuso);
+    const j = janelas(hoje);
+    // O índice (tenant_id, brand_id, confirmed_at) recorta pela confirmação, com folga; o dia exato é o do pedido no fuso.
+    const linhas = (
+      await tx.execute<LinhaDaDemanda>(sql`
+        with p as (
+          select (coalesce(o.placed_at, o.confirmed_at) at time zone ${fuso}) as local, o.revenue_micros - o.refunded_micros as liquido, o.is_new_customer
+            from liame.order_fact o
+           where o.brand_id = ${brandId} and o.unit_id = ${unitId} and o.status = 'confirmado'
+             and o.confirmed_at >= (${j.deAnterior}::date - 2)::timestamp at time zone ${fuso}
+             and o.confirmed_at < (${j.ate}::date + 3)::timestamp at time zone ${fuso}
+        )
+        select case when local::date >= ${j.de}::date then 'atual' else 'anterior' end as janela,
+               extract(dow from local)::int as dow, extract(hour from local)::int as hora,
+               count(*)::int as pedidos, coalesce(sum(liquido), 0)::text as receita,
+               count(*) filter (where is_new_customer)::int as novos,
+               count(*) filter (where is_new_customer = false)::int as de_volta
+          from p
+         where local::date between ${j.deAnterior}::date and ${j.ate}::date
+         group by 1, 2, 3`)
+    ).rows;
+    return { status: 'disponivel', demanda: demandaDaLoja(linhas, hoje) };
+  }
+
+  /**
+   * As lojas no mapa para o plano de mídia do Estrategista (R5): rotina do sistema, sem sessão de pessoa, dentro da
+   * transação da empresa que a rotina já abriu. Nulo com a função `regiao` desligada na marca; vazio sem loja no mapa.
+   * Só o nome, o bairro, o município, o raio e a demanda (D-RG-2: nada do endereço vai ao modelo). A demanda entra
+   * inteira porque o plano só abre para quem vê Resultados (`planos.ver` e `vendas.ver`, D-RG-24).
+   */
+  async lojasParaOPlano(tenantId: string, brandId: string, agora = new Date()): Promise<LojaDaMidia[] | null> {
+    if (!(await this.flags.isEnabled(FLAG_DA_REGIAO, this.flags.context({ tenantId, userId: null, brandId })))) return null;
+    const lojas = (
+      await currentTx().execute<{ id: string; name: string; address_district: string | null; address_city: string; delivery_radius_km: string | number | null }>(sql`
+        select id, name, address_district, address_city, delivery_radius_km from liame.unit
+         where brand_id = ${brandId} and address_postal_code is not null and address_city is not null
+           and address_state is not null and ibge_city_code is not null
+         order by created_at, id
+         limit ${LOJAS_NO_PLANO + 1}`)
+    ).rows;
+    const saida: LojaDaMidia[] = [];
+    for (const [i, l] of lojas.entries()) {
+      // A 6ª loja só avisa o modelo de que há mais lojas: a demanda dela não é lida.
+      const demanda = i < LOJAS_NO_PLANO ? (await this.demandaDaLoja(true, brandId, l.id, agora)).demanda : null;
+      saida.push({
+        unitId: l.id,
+        nome: l.name,
+        bairro: l.address_district,
+        municipio: l.address_city,
+        raioKm: l.delivery_radius_km === null ? RAIO_PADRAO_KM : Number(l.delivery_radius_km),
+        demanda,
+      });
+    }
+    return saida;
+  }
+
+  /**
+   * A mídia na região (R4; D-RG-32 a D-RG-35): os cliques e as impressões das contas de anúncio da marca nas 4 semanas
+   * completas até ontem, por hora (Meta e Google) e, do Google, por cidade, lidos pela rotina `regiao-midia`. Sem
+   * dinheiro (D-RG-33). Só para quem vê Resultados (D-RG-34), como a demanda.
+   */
+  private async midiaNaRegiao(
+    auth: AuthContext,
+    brandId: string,
+    unitId: string,
+    agora: Date,
+    demanda: DemandaDaLoja | null,
+  ): Promise<{ status: string; midia: RegionOverviewResponse['paid_media'] }> {
+    if (!auth.permissions.has('vendas.ver')) return { status: 'sem_permissao', midia: null };
+    const tx = currentTx();
+    const contas = (
+      await tx.execute<{ id: string; provider: string; name: string; read_at: Date | string | null }>(sql`
+        select a.id, a.provider, a.name, s.last_success_at as read_at
+          from liame.connected_account a
+          left join liame.sync_state s on s.connected_account_id = a.id and s.dataset = ${DATASET_DA_MIDIA}
+         where a.brand_id = ${brandId} and a.provider in ('meta_ads', 'google_ads') and ${contaConectada('a')}
+         order by a.provider, a.name, a.id`)
+    ).rows;
+    if (!contas.length) return { status: 'sem_conta', midia: null };
+    const fuso = (await tx.execute<{ timezone: string }>(sql`select timezone from liame.unit where id = ${unitId}`)).rows[0]?.timezone ?? 'America/Sao_Paulo';
+    const j = janelaDaMidia(diaNoFuso(agora, fuso));
+    const ids = contas.map((c) => c.id);
+    const porHora = (
+      await tx.execute<{ hour: number; clicks: string; impressions: string }>(sql`
+        select hour, sum(clicks)::text as clicks, sum(impressions)::text as impressions
+          from liame.ad_hour_daily
+         where brand_id = ${brandId} and connected_account_id in ${ids} and day between ${j.inicio}::date and ${j.fim}::date
+         group by hour`)
+    ).rows;
+    const horas = Array.from({ length: 24 }, (_, hour) => {
+      const l = porHora.find((x) => Number(x.hour) === hour);
+      return { hour, clicks: Number(l?.clicks ?? 0), impressions: Number(l?.impressions ?? 0) };
+    });
+    const cliques = horas.map((h) => h.clicks);
+    const total = cliques.reduce((t, n) => t + n, 0);
+    const bloco = blocoMaisForte(cliques);
+    const pedidos = demanda?.status === 'pronto' && demanda.by_hour.length === 24 ? blocoMaisForte(demanda.by_hour.map((h) => h.orders)) : null;
+    const google = contas.filter((c) => c.provider === 'google_ads');
+    const cidades = google.length
+      ? (
+          await tx.execute<{ id: string; name: string | null; full_name: string | null; clicks: string; impressions: string; total: string }>(sql`
+            select c.geo_target_id::text as id, g.name, g.canonical_name as full_name, sum(c.clicks)::text as clicks,
+                   sum(c.impressions)::text as impressions, sum(sum(c.clicks)) over ()::text as total
+              from liame.ad_city_daily c
+              left join liame.region_geo_target g on g.id = c.geo_target_id
+             where c.brand_id = ${brandId} and c.connected_account_id in ${google.map((c) => c.id)} and c.day between ${j.inicio}::date and ${j.fim}::date
+             group by c.geo_target_id, g.name, g.canonical_name
+             order by sum(c.clicks) desc, c.geo_target_id
+             limit ${CIDADES_NA_SECAO}`)
+        ).rows
+      : [];
+    const quando = (v: Date | string | null) => (v === null ? null : (v instanceof Date ? v : new Date(v)).toISOString());
+    return {
+      status: 'disponivel',
+      midia: {
+        from: j.inicio,
+        to: j.fim,
+        accounts: contas.map((c) => ({ provider: c.provider, name: c.name, read_at: quando(c.read_at) })),
+        clicks: total,
+        impressions: horas.reduce((t, h) => t + h.impressions, 0),
+        by_hour: horas,
+        ad_block: bloco ? { from_hour: bloco.de, to_hour: bloco.ate, clicks_pct: porcentoDe(bloco.soma, total) } : null,
+        orders_block: pedidos && total > 0 ? { from_hour: pedidos.de, to_hour: pedidos.ate, clicks_pct: porcentoDe(somaDoBloco(cliques, pedidos.de, pedidos.ate), total) } : null,
+        cities_status: !google.length ? 'sem_google' : google.every((c) => c.read_at === null) ? 'lendo' : 'disponivel',
+        cities: cidades.map((c) => ({
+          id: c.id,
+          name: c.name ?? `Lugar ${c.id}`,
+          full_name: c.full_name ?? c.name ?? `Lugar ${c.id}`,
+          clicks: Number(c.clicks),
+          impressions: Number(c.impressions),
+          clicks_pct: porcentoDe(Number(c.clicks), Number(c.total)),
+        })),
+      },
+    };
+  }
+
+  /**
+   * Os pedidos por bairro (R3, parte 2; D-RG-36 a D-RG-39): o que a leitura das vendas gravou do Regem para esta loja, os
+   * bairros do mesmo município casados com o Censo pelo nome (a gente e os pedidos por mil moradores) e os bairros da
+   * área de entrega que não chegaram ao mínimo de pedidos; a conta de atacar e defender é a de `bairros.ts`. Só para quem
+   * vê Resultados, como a demanda.
+   */
+  private async bairrosDosPedidos(
+    podeVerVendas: boolean,
+    brandId: string,
+    unitId: string,
+    cidade: string,
+    municipio: string | null,
+    areas: readonly string[],
+  ): Promise<{ status: string; bairros: RegionOverviewResponse['order_districts'] }> {
+    if (!podeVerVendas) return { status: 'sem_permissao', bairros: null };
+    if (!(await this.temRegem(brandId))) return { status: 'sem_regem', bairros: null };
+    const tx = currentTx();
+    const linhas = (
+      await tx.execute<{ kind: string; district: string | null; city: string | null; districts: number | null; orders: number; day_from: string; day_to: string; minimum: number; read_at: Date | string }>(sql`
+        select kind, district, city, districts, orders, day_from::text as day_from, day_to::text as day_to, minimum, read_at
+          from liame.region_order_district
+         where brand_id = ${brandId} and unit_id = ${unitId}
+         order by position`)
+    ).rows;
+    if (!linhas.length) return { status: 'lendo', bairros: null };
+    const doMunicipio = (c: string | null) => !c || !municipio || nomeComparavel(c) === nomeComparavel(municipio);
+    const lidos = linhas.filter((l) => l.kind === 'bairro' && l.district && doMunicipio(l.city));
+    const daEntrega = new Map<string, string>();
+    for (const a of areas) if (!daEntrega.has(nomeComparavel(a))) daEntrega.set(nomeComparavel(a), a);
+    const chaves = [...new Set([...lidos.map((l) => nomeComparavel(l.district!)), ...daEntrega.keys()])];
+    const gente = chaves.length
+      ? (
+          await tx.execute<{ name_key: string; name: string; population: number | null }>(sql`
+            select distinct on (name_key) name_key, name, population from liame.region_district
+             where city_code = ${cidade} and name_key = any(array(select jsonb_array_elements_text(${JSON.stringify(chaves)}::jsonb)))
+             order by name_key, population desc nulls last, district_code`)
+        ).rows
+      : [];
+    const doCenso = new Map(gente.map((g) => [g.name_key, g]));
+    const lista = new Map<string, BairroParaComparar>();
+    for (const l of lidos) {
+      const k = nomeComparavel(l.district!);
+      const antes = lista.get(k);
+      lista.set(k, { nome: antes?.nome ?? l.district!, pedidos: (antes?.pedidos ?? 0) + l.orders, populacao: doCenso.get(k)?.population ?? null, naEntrega: daEntrega.has(k) });
+    }
+    for (const [k, nome] of daEntrega) {
+      if (!lista.has(k)) lista.set(k, { nome: doCenso.get(k)?.name ?? nome, pedidos: null, populacao: doCenso.get(k)?.population ?? null, naEntrega: true });
+    }
+    const comparados = compararBairros([...lista.values()]);
+    const de = (tipo: string) => linhas.find((l) => l.kind === tipo);
+    const primeira = linhas[0]!;
+    return {
+      status: 'disponivel',
+      bairros: {
+        from: primeira.day_from,
+        to: primeira.day_to,
+        minimum: primeira.minimum,
+        read_at: (primeira.read_at instanceof Date ? primeira.read_at : new Date(primeira.read_at)).toISOString(),
+        comparable: comparados.some((b) => b.papel !== null),
+        districts: comparados.slice(0, BAIRROS_NA_SECAO).map((b) => ({
+          name: b.nome,
+          orders: b.pedidos,
+          population: b.populacao,
+          per_1000: b.porMil === null ? null : Math.round(b.porMil * 10) / 10,
+          role: b.papel,
+          in_delivery_area: b.naEntrega,
+        })),
+        others: { districts: de('outros')?.districts ?? 0, orders: de('outros')?.orders ?? 0 },
+        without_district: de('sem_bairro')?.orders ?? 0,
+        pickup: de('retirada')?.orders ?? 0,
+        delivery_orders: linhas.filter((l) => l.kind !== 'retirada').reduce((t, l) => t + l.orders, 0),
+      },
     };
   }
 

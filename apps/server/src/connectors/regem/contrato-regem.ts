@@ -212,6 +212,30 @@ export const UsoCupomRegem = z.object({
   removido: z.boolean().optional(),
 });
 
+/** Dinheiro em micros (a rota dos bairros): inteiro, como número ou texto de dígitos. */
+const Micros = z.union([z.number().int().min(0), z.string().regex(/^\d{1,20}$/)]).transform((v) => BigInt(v));
+
+/**
+ * Os pedidos de entrega da loja somados por bairro (`GET /pedidos/bairros`; plano da região do Liame, R3, parte 2;
+ * D-RG-8): a mesma régua de `/pedidos` (os confirmados, o dia pela hora do pedido no fuso da loja, a receita líquida sem
+ * a gorjeta). O bairro com menos de `minimo` pedidos vai somado em `outros`, sem o nome. Nunca vem cliente, telefone,
+ * rua, número nem CEP; a 99 só entra com `vendas.99food.ler` (o Liame não tem esse escopo).
+ */
+export const BairrosRegem = z.object({
+  loja_id: Id,
+  de: Data,
+  ate: Data,
+  fuso: Texto(60),
+  minimo: z.number().int().min(1).max(1000),
+  bairros: z
+    .array(z.object({ bairro: Texto(120).min(1), cidade: Texto(120).nullable(), uf: Texto(2).nullable(), pedidos: z.number().int().min(1), receita_micros: Micros }))
+    .max(2000),
+  outros: z.object({ bairros: z.number().int().min(0), pedidos: z.number().int().min(0), receita_micros: Micros }),
+  sem_bairro: z.object({ pedidos: z.number().int().min(0), receita_micros: Micros }),
+  retirada_e_balcao: z.object({ pedidos: z.number().int().min(0) }),
+});
+export type BairrosRegem = z.infer<typeof BairrosRegem>;
+
 /** Página com cursor (contrato de cupons §2). */
 export const pagina = <T extends z.ZodType>(item: T) =>
   z.object({

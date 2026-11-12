@@ -75,6 +75,9 @@ export function caminhosDoCorpo(c: PlanContent): string[] {
     'budget.today.meta',
     'budget.today.google',
     ...c.dates.map((_, i) => `dates.${i}.what`),
+    // O plano de mídia (R5): os criativos e, de cada loja com os horários dos pedidos dela, as partes dos pedidos.
+    ...(c.media_plan?.stages.map((_, i) => `media_plan.stages.${i}.creative`) ?? []),
+    ...(c.media_plan?.stores.flatMap((s, i) => (s.hours.source === 'loja' ? [`media_plan.stores.${i}.hours.days_share`, `media_plan.stores.${i}.hours.hours_share`] : [])) ?? []),
   ];
 }
 
@@ -162,6 +165,52 @@ export function tabelaDaVerba(b: Noventa['budget']): { linhas: Array<{ canal: st
   };
 }
 
+// ------------------------------------------------------------------ o plano de mídia por região (R5; revisão P45)
+
+type Midia = NonNullable<Noventa['media_plan']>;
+type LojaDaMidia = Midia['stores'][number];
+
+export const NOME_DA_ETAPA: Record<Midia['stages'][number]['stage'], string> = {
+  reconhecimento: 'Reconhecimento',
+  seguidores: 'Seguidores',
+  cardapio_conversa: 'Cardápio e conversa',
+  pedido: 'Pedido',
+};
+
+const DIA_DA_SEMANA = ['domingo', 'segunda', 'terça', 'quarta', 'quinta', 'sexta', 'sábado'];
+/** 2.5 → "2,5 km". */
+const km = (n: number) => `${String(n).replace('.', ',')} km`;
+/** "18:00" → "18h". */
+export const horaCurta = (hora: string) => `${Number(hora.slice(0, 2))}h`;
+
+/** "sexta, sábado e domingo". */
+export function nomesDosDias(dias: number[]): string {
+  const nomes = dias.map((d) => DIA_DA_SEMANA[d] ?? '');
+  return nomes.length > 1 ? `${nomes.slice(0, -1).join(', ')} e ${nomes[nomes.length - 1]}` : (nomes[0] ?? '');
+}
+
+/** "Bairro Tijuca, Rio de Janeiro · entrega até 3 km · R$ 1.400 por mês nesta loja". */
+export function linhaDaLoja(s: LojaDaMidia): string {
+  const onde = [s.district ? `Bairro ${s.district}` : null, s.city].filter(Boolean).join(', ');
+  const total = s.rings.reduce((t, r) => t + r.meta + r.google, 0);
+  return [onde, `entrega até ${km(s.radius_km)}`, `${reais(total)} por mês nesta loja`].filter(Boolean).join(' · ');
+}
+
+/** O anel: o nome, a distância e o dinheiro por canal (contas do sistema). */
+export function textoDoAnel(r: LojaDaMidia['rings'][number]): { nome: string; parte: string; resto: string } {
+  const distancia = r.ring === 'nucleo' ? `até ${km(r.to_km)} da loja` : `de ${km(r.from_km).replace(' km', '')} a ${km(r.to_km)}`;
+  return { nome: r.ring === 'nucleo' ? 'Núcleo' : 'Expansão', parte: `${r.share}% da verba`, resto: `${distancia} · Instagram e Facebook ${reais(r.meta)}, Google ${reais(r.google)} por mês` };
+}
+
+/** A nota dos anéis: um anel só (o raio até o núcleo) ou os dois. */
+export function notaDosAneis(s: LojaDaMidia): string {
+  return s.rings.length === 1
+    ? 'O raio de entrega cabe no núcleo: a verba da loja fica toda nele. A conta é do sistema; com a conta de anúncios (R6), os anéis passam a seguir o público estimado pela Meta.'
+    : 'O núcleo é onde o pedido chega mais rápido: fica com a maior parte. A conta é do sistema; com a conta de anúncios (R6), os anéis passam a seguir o público estimado pela Meta.';
+}
+
+/** O caminho do número dos horários (a parte dos pedidos), como o servidor marca. */
+export const caminhoDoHorario = (loja: number, campo: 'days_share' | 'hours_share') => `media_plan.stores.${loja}.hours.${campo}`;
 // ------------------------------------------------------------------ o que aconteceu com o plano
 
 const MOTIVO: Record<string, string> = {

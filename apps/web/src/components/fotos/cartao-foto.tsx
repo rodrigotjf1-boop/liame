@@ -69,6 +69,8 @@ export function CartaoFoto({ foto, agora, aberta, aoAbrir, aoFalhar }: Props) {
                   <Icone nome="video" pequeno />
                   Vídeo
                 </span>
+                {/* O vídeo montado pelo Liame (A6 · Z15, parte 4; P43). */}
+                {foto.montage_id && <span className="st st--espera">Montado pelo Liame</span>}
               </span>
               <span>
                 {ehDeitado ? 'deitado' : 'em pé'} · {dia(foto.uploaded_at, agora)}

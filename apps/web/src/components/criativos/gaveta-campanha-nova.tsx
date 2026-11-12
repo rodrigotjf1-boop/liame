@@ -1,6 +1,6 @@
 'use client';
 
-import type { AdPieceResponse, BrandPhoto, NewCampaignObjective, NewCampaignOptionsResponse, NewCampaignResponse } from '@liame/contracts';
+import type { AdPieceResponse, BrandPhoto, InstagramMedia, NewCampaignObjective, NewCampaignOptionsResponse, NewCampaignResponse } from '@liame/contracts';
 import Link from 'next/link';
 import { type FormEvent, type RefObject, useEffect, useId, useRef, useState } from 'react';
 import { videoNoTempo } from '@/components/agenda/video-do-post';
@@ -10,11 +10,13 @@ import { microsDeReais } from '@/components/links/cupons-textos';
 import { api, chamar } from '@/lib/api';
 import { disparar } from '@/lib/disparar';
 import { reaisDeMicros } from '@/lib/formato';
+import { BlocoDoReels, PreviaDoReels } from './campanha-do-reels';
 import {
   type CamposDaCampanha,
   type CampoComErro,
   conferirCampanha,
   destinoDoObjetivo,
+  diaDoReels,
   dicaDoObjetivo,
   dicaDoRaio,
   duracaoCurta,
@@ -22,21 +24,27 @@ import {
   ehVideo,
   erroDoPedido,
   type ErrosDaCampanha,
+  falaDoLinkDaBio,
+  NOTA_DA_ELEGIBILIDADE,
+  nomeDaCampanhaDoReels,
+  notaDoLinkDaBio,
   OBJETIVOS,
   raiosDaLoja,
   temCapa,
 } from './campanha-nova-textos';
 
-// A gaveta "Campanha nova, pausada" (A4, X5, parte 5; protótipo P42 aprovado em 11/11/2026, D-A4-42 a D-A4-46): a peça
-// de texto aprovada com a foto ou o vídeo de Fotos, o objetivo, o raio em volta da loja, a verba e o fim, quem assina e
-// para onde leva, e a prévia ao lado. "Pedir a criação" grava o pedido, que espera o código do app em Aprovações.
+// A gaveta "Campanha nova, pausada" (A4, X5, partes 5 e 6; protótipo P42 aprovado em 11/11/2026, D-A4-42 a D-A4-46): a
+// peça de texto aprovada com a foto ou o vídeo de Fotos (aberta em Criativos), ou um Reels já publicado, como está no
+// post (aberta em Fotos › Do seu Instagram); o objetivo, o raio em volta da loja, a verba e o fim, quem assina e para
+// onde leva, e a prévia ao lado. "Pedir a criação" grava o pedido, que espera o código do app em Aprovações.
+
+/** De onde a campanha sai: a peça com as fotos e os vídeos de Fotos (nulo quando Fotos não abriu), ou o Reels. */
+export type OrigemDaCampanha = { tipo: 'peca'; peca: AdPieceResponse; midias: BrandPhoto[] | null } | { tipo: 'reels'; reels: InstagramMedia };
 
 interface Props {
   brandId: string;
-  peca: AdPieceResponse;
+  origem: OrigemDaCampanha;
   opcoes: NewCampaignOptionsResponse;
-  /** As fotos e os vídeos prontos de Fotos; nulo quando Fotos não abriu ou está desligada. */
-  midias: BrandPhoto[] | null;
   /** Hoje no fuso da empresa (`AAAA-MM-DD`): o fim precisa ser depois. */
   hoje: string;
   /** Para onde o foco volta ao fechar quando o botão que abriu sumiu (a peça passou a "Espera a aprovação"). */
@@ -45,11 +53,14 @@ interface Props {
   aoCriado: (c: NewCampaignResponse) => void;
 }
 
-export function GavetaCampanhaNova({ brandId, peca, opcoes, midias, hoje, reserva, aoFechar, aoCriado }: Props) {
+export function GavetaCampanhaNova({ brandId, origem, opcoes, hoje, reserva, aoFechar, aoCriado }: Props) {
   const ids = useId();
   const titulo = useRef<HTMLHeadingElement>(null);
   const aviso = useRef<HTMLDivElement>(null);
   const { ref, fechar, devolverFoco } = useDialogo({ focoInicial: titulo, reserva });
+  const peca = origem.tipo === 'peca' ? origem.peca : null;
+  const reels = origem.tipo === 'reels' ? origem.reels : null;
+  const midias = origem.tipo === 'peca' ? origem.midias : null;
   // O vídeo sem capa aparece, marcado: escolhido, a conferência diz por que não serve.
   const prontas = midias ?? [];
   const lojas = opcoes.units;
@@ -57,7 +68,9 @@ export function GavetaCampanhaNova({ brandId, peca, opcoes, midias, hoje, reserv
   const [campos, setCampos] = useState<CamposDaCampanha>({
     midia: null,
     loja: lojaInicial?.id ?? null,
-    nome: `${peca.current.title} · ${new Intl.DateTimeFormat('pt-BR', { month: 'long' }).format(new Date(`${hoje}T12:00:00`))}`.slice(0, 80),
+    nome: reels
+      ? nomeDaCampanhaDoReels(reels.published_at, hoje)
+      : `${peca!.current.title} · ${new Intl.DateTimeFormat('pt-BR', { month: 'long' }).format(new Date(`${hoje}T12:00:00`))}`.slice(0, 80),
     objetivo: lojaInicial && !lojaInicial.menu_available ? 'whatsapp' : 'cardapio',
     raio: 5,
     verba: '30,00',
@@ -86,7 +99,16 @@ export function GavetaCampanhaNova({ brandId, peca, opcoes, midias, hoje, reserv
   const midia = prontas.find((m) => m.id === campos.midia) ?? null;
   const lista = prontas.filter((m) => (tipo === 'video') === ehVideo(m));
   const pagina = opcoes.page?.name ?? null;
-  const bloqueio = opcoes.blocks[0] ?? null;
+  // O Reels sai em nome do Instagram ligado à Página: sem ele, a Meta não aceita (a mesma recusa do servidor).
+  const semInstagram =
+    reels && opcoes.page && !opcoes.instagram
+      ? {
+          code: 'sem-instagram-na-pagina',
+          title: 'A Página não tem o Instagram ligado',
+          detail: 'O anúncio de um Reels sai em nome do Instagram ligado à Página da marca. Ligue o Instagram à Página na Meta e conecte de novo em Contas conectadas.',
+        }
+      : null;
+  const bloqueio = opcoes.blocks[0] ?? semInstagram;
   const semEndereco = loja !== null && !loja.has_address;
   const destino = destinoDoObjetivo(campos.objetivo, loja, pagina);
   const raios = raiosDaLoja(loja);
@@ -108,7 +130,7 @@ export function GavetaCampanhaNova({ brandId, peca, opcoes, midias, hoje, reserv
     if (enviando) return;
     // O que impede pedir (a conta, a Página, a loja sem o endereço): o aviso recebe o foco e é lido de novo.
     if (bloqueio || semEndereco) return aviso.current?.focus();
-    const e = conferirCampanha(campos, opcoes, prontas, hoje);
+    const e = conferirCampanha(campos, opcoes, prontas, hoje, reels !== null);
     setErros(e);
     if (Object.values(e).some(Boolean)) return focar(e);
     setEnviando(true);
@@ -116,8 +138,7 @@ export function GavetaCampanhaNova({ brandId, peca, opcoes, midias, hoje, reserv
       api.POST('/v1/new-campaigns', {
         body: {
           brand_id: brandId,
-          piece_id: peca.id,
-          media_id: campos.midia!,
+          ...(reels ? { instagram_media_id: reels.id } : { piece_id: peca!.id, media_id: campos.midia! }),
           unit_id: campos.loja!,
           name: campos.nome.trim(),
           objective: campos.objetivo,
@@ -152,7 +173,7 @@ export function GavetaCampanhaNova({ brandId, peca, opcoes, midias, hoje, reserv
       <div className="dlg-titulo">
         <p className="rotulo-marca">Campanha nova, pausada</p>
         <h2 id={`${ids}-t`} ref={titulo} tabIndex={-1}>
-          {criado ? 'Pedido criado' : peca.current.title}
+          {criado ? 'Pedido criado' : reels ? 'Campanha a partir de um Reels' : peca!.current.title}
         </h2>
       </div>
       <button className="btn btn--icon btn--ghost" type="button" onClick={fechar} aria-label="Fechar" disabled={enviando}>
@@ -236,16 +257,29 @@ export function GavetaCampanhaNova({ brandId, peca, opcoes, midias, hoje, reserv
                 <span>{erroGeral}</span>
               </p>
             )}
+            {reels && (
+              <p className="cn-origem">
+                <Icone nome="camera" pequeno />
+                <span>
+                  Aberta em <b>Fotos › Do seu Instagram</b>, no Reels de {diaDoReels(reels.published_at)}, pelo botão “Usar como base de um anúncio”.
+                </span>
+              </p>
+            )}
             <div className="cn-grade">
               <div className="cn-f1">
-                <div className="pd-bloco">
-                  <p className="rotulo-marca">A peça (o texto)</p>
-                  <div className="cn-peca">
-                    <b>{peca.current.title}</b>
-                    <p>{peca.current.body}</p>
-                    <small>Versão {peca.current.version} · aprovada em Criativos · texto feito com IA, conferido pelo Compliance</small>
+                {reels ? (
+                  <BlocoDoReels reels={reels} />
+                ) : (
+                  <div className="pd-bloco">
+                    <p className="rotulo-marca">A peça (o texto)</p>
+                    <div className="cn-peca">
+                      <b>{peca!.current.title}</b>
+                      <p>{peca!.current.body}</p>
+                      <small>Versão {peca!.current.version} · aprovada em Criativos · texto feito com IA, conferido pelo Compliance</small>
+                    </div>
                   </div>
-                </div>
+                )}
+                {!reels && (
                 <div className="campo" role="group" aria-labelledby={`${ids}-midia-t`} aria-describedby={descrito('midia', `${ids}-midia-d`)}>
                   <span className="rotulo" id={`${ids}-midia-t`}>
                     A foto ou o vídeo
@@ -308,24 +342,38 @@ export function GavetaCampanhaNova({ brandId, peca, opcoes, midias, hoje, reserv
                   )}
                   {erroDe('midia')}
                 </div>
+                )}
               </div>
 
               <section className="cn-lado" aria-labelledby={`${ids}-previa-t`}>
                 <h3 className="rotulo-marca" id={`${ids}-previa-t`}>
                   Como o anúncio aparece
                 </h3>
-                <div className="seg" role="group" aria-label="Ver como sai em">
-                  {(['instagram', 'facebook'] as const).map((a) => (
-                    <button key={a} type="button" aria-pressed={aba === a} onClick={() => setAba(a)}>
-                      {a === 'instagram' ? 'Instagram' : 'Facebook'}
-                    </button>
-                  ))}
-                </div>
-                <PreviaDoAnuncio peca={peca} midia={midia} objetivo={campos.objetivo} nome={aba === 'instagram' ? (opcoes.instagram?.name ?? pagina ?? '') : (pagina ?? '')} instagram={aba === 'instagram'} />
+                {reels ? (
+                  // O Reels é do Instagram: sem as abas.
+                  <PreviaDoReels reels={reels} objetivo={campos.objetivo} nome={opcoes.instagram?.name ?? pagina ?? ''} />
+                ) : (
+                  <>
+                    <div className="seg" role="group" aria-label="Ver como sai em">
+                      {(['instagram', 'facebook'] as const).map((a) => (
+                        <button key={a} type="button" aria-pressed={aba === a} onClick={() => setAba(a)}>
+                          {a === 'instagram' ? 'Instagram' : 'Facebook'}
+                        </button>
+                      ))}
+                    </div>
+                    <PreviaDoAnuncio peca={peca!} midia={midia} objetivo={campos.objetivo} nome={aba === 'instagram' ? (opcoes.instagram?.name ?? pagina ?? '') : (pagina ?? '')} instagram={aba === 'instagram'} />
+                  </>
+                )}
                 <p className="pd-nota">
                   <Icone nome="info" pequeno />
                   <span>É um desenho do Feed. Na Meta, cada posição mostra de um jeito: com a campanha criada, pausada, dá para ver o anúncio de verdade no Gerenciador de Anúncios antes de ativar.</span>
                 </p>
+                {reels && falaDoLinkDaBio(reels.caption) && (
+                  <p className="pd-nota">
+                    <Icone nome="camera" pequeno />
+                    <span>{notaDoLinkDaBio(campos.objetivo)}</span>
+                  </p>
+                )}
               </section>
 
               <div className="cn-f2">
@@ -493,7 +541,7 @@ export function GavetaCampanhaNova({ brandId, peca, opcoes, midias, hoje, reserv
                     <dt>No Instagram</dt>
                     <dd>
                       {opcoes.instagram?.name ?? 'Sem o Instagram ligado à Página'}
-                      <small>{opcoes.instagram ? 'a conta ligada à Página' : 'o anúncio sai no Instagram em nome da Página'}</small>
+                      <small>{opcoes.instagram ? (reels ? 'a conta ligada à Página, onde o Reels foi postado' : 'a conta ligada à Página') : 'o anúncio sai no Instagram em nome da Página'}</small>
                     </dd>
                   </dl>
                 </div>
@@ -518,7 +566,7 @@ export function GavetaCampanhaNova({ brandId, peca, opcoes, midias, hoje, reserv
                     <dt>Melhorias automáticas da Meta</dt>
                     <dd>
                       Desligadas
-                      <small>o anúncio vai como a peça e a mídia que você escolheu</small>
+                      <small>{reels ? 'o anúncio vai como o Reels está' : 'o anúncio vai como a peça e a mídia que você escolheu'}</small>
                     </dd>
                   </dl>
                 </div>
@@ -551,6 +599,7 @@ export function GavetaCampanhaNova({ brandId, peca, opcoes, midias, hoje, reserv
                     O pedido vai para Aprovações, com a prévia do anúncio. Depois da aprovação com o código do app, o Liame confere com a Meta e cria{' '}
                     {midia && ehVideo(midia) ? 'a campanha, o conjunto, o vídeo, o criativo e o anúncio' : 'a campanha, o conjunto, o criativo e o anúncio'}, tudo pausado.
                     {midia && ehVideo(midia) ? ' A Meta prepara o vídeo antes (até 15 minutos).' : ''}
+                    {reels ? ` ${NOTA_DA_ELEGIBILIDADE}` : ''}
                   </span>
                 </p>
               </div>

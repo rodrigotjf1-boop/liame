@@ -62,6 +62,9 @@ const WITHOUT_AUDIT = [
   // que muda a loja é o `PUT /v1/units/:id/location`, auditado com o antes e o depois.
   'POST /v1/region/address-lookup',
   'POST /v1/region/google-profile-address',
+  // Os textos do vídeo pelo Social media (A6 · Z15, parte 3b): como o Explicar, a proposta não muda dado (o uso fica em
+  // `ai_usage`, a recusa conta em Sua equipe); o que muda é o pedido do vídeo, auditado em `video_montado.pedir`.
+  'POST /v1/video-montages/texts',
 ];
 
 function mockServer(handler: (body: Buffer, contentType: string) => { status: number; body: Buffer | string }) {
