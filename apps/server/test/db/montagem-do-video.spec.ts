@@ -22,7 +22,7 @@ import { hasDb, OWNER_URL } from './env.js';
 // a montagem de verdade tem a fumaça no job `imagem` do CI): a fila de todas as marcas, na ordem de chegada; o pronto em
 // Fotos (`montage_id`, o MP4 e a capa no armazenamento, a auditoria) e que não entra de novo numa montagem; o que falha,
 // a foto que saiu antes, o pedido parado no meio, o devolvido à fila quando o serviço para; e o vídeo montado apagado em
-// Fotos, que a rotina tira sem travar (0146).
+// Fotos, que a rotina tira sem travar (0145).
 
 type Empresa = { cookie: string; tenantId: string; brandId: string; userId: string };
 
@@ -205,7 +205,7 @@ describe.skipIf(!hasDb)('o serviço de montagem do vídeo (Z15, parte 2b)', () =
     expect(await montagem.vez(escopo(e))).toEqual({ id: devolvido, situacao: 'pronto' });
   }, 120_000);
 
-  it('o vídeo montado apagado em Fotos: a rotina tira a linha e o pedido fica pronto, sem o vídeo (0146)', async () => {
+  it('o vídeo montado apagado em Fotos: a rotina tira a linha e o pedido fica pronto, sem o vídeo (0145)', async () => {
     const e = await empresa('Brasa Montagem Apagada');
     const f = await fotoGuardada(e, armazem, { largura: 1080, altura: 1080 });
     const id = await pedir(e, [f.id]);
