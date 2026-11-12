@@ -16,6 +16,8 @@ import {
   type OperacaoDoGoogle,
   operacoesDaCriacao,
   planoDaCampanhaGoogle,
+  planoDeAtivarNoGoogle,
+  planoDePausarNoGoogle,
   recortesDaFoto,
   recursoDaCampanhaGoogle,
 } from '../src/campanhas/campanha-google-plano.js';
@@ -101,6 +103,18 @@ describe('a campanha nova no Google (A5 · Y9, parte 2)', () => {
     expect(planoDaCampanhaGoogle(estado({ loja_no_google: { nome: 'Mister Burgers', logo: 'x', logo_lado: 96 } })).ok).toBe(false);
     expect(planoDaCampanhaGoogle(estado({ conta: { id: 'act_123', nome: 'x' } })).ok).toBe(false);
     expect(planoDaCampanhaGoogle({ qualquer: 1 }).ok).toBe(false);
+  });
+
+  it('ativar e pausar (parte 5a): só a criada; a ativa não ativa de novo; só a ativa pausa', () => {
+    const criada = estado({ situacao: 'criada' });
+    const a = planoDeAtivarNoGoogle(criada);
+    expect(a.ok && a.desejado.ativa).toBe(true);
+    expect(planoDeAtivarNoGoogle(estado()).ok).toBe(false);
+    expect(planoDeAtivarNoGoogle(estado({ situacao: 'criada', ativa: true }))).toEqual({ ok: false, motivo: 'Esta campanha nova já está ativa.' });
+    const p = planoDePausarNoGoogle(estado({ situacao: 'criada', ativa: true }));
+    expect(p.ok && p.desejado.ativa).toBe(false);
+    expect(planoDePausarNoGoogle(criada).ok).toBe(false);
+    expect(planoDeAtivarNoGoogle({ qualquer: 1 }).ok).toBe(false);
   });
 });
 

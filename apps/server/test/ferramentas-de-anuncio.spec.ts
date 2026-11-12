@@ -59,7 +59,7 @@ describe('ferramentas de anúncio (A4 · X2)', () => {
   it('no Google (A5 · Y3): só a campanha, com a verba do orçamento que é só dela; a verba dividida nunca vira pedido', () => {
     // As ferramentas que aceitam o Google: a verba e pausar e retomar a campanha, e a campanha nova (A5, Y9). Grupo de anúncios e
     // anúncio, não.
-    expect(Object.values(TOOLS).filter((t) => t.providers.includes('google_ads')).map((t) => t.name).sort()).toEqual(['campanha_google_criar', 'campanha_pausar', 'campanha_retomar', 'orcamento_ajustar']);
+    expect(Object.values(TOOLS).filter((t) => t.providers.includes('google_ads')).map((t) => t.name).sort()).toEqual(['campanha_google_ativar', 'campanha_google_criar', 'campanha_google_pausar', 'campanha_pausar', 'campanha_retomar', 'orcamento_ajustar']);
     // O estado de uma campanha do Google, como o conector entrega: os mesmos campos da Meta, mais o orçamento.
     const doGoogle = (over: Record<string, unknown> = {}) => ({
       ...objeto('campanha', { status_efetivo: 'ELIGIBLE' }),
@@ -184,7 +184,8 @@ describe('ferramentas de anúncio (A4 · X2)', () => {
     // A mensagem enviada não volta: a volta do envio é pausar o que ainda não saiu, e a pausa não tem volta pelo Liame.
     // A resposta automática a um comentário (A6, Z11, parte 2e-1) tem a mesma volta da resposta: apagar a resposta.
     // O envio pedido ao RegemCast (Hub DMS F5, parte D) tem a mesma volta do envio: pausar o que ainda não saiu.
-    const comVolta = ['mensagem_disparar', 'mensagem_pedir_ao_destino', 'avaliacao_responder', 'comentario_responder', 'comentario_responder_auto', 'comentario_ocultar'];
+    // Ativar a campanha nova no Google (A5, Y9, parte 5a) tem a volta de pausar, e a pausa a de ativar, como na Meta.
+    const comVolta = ['mensagem_disparar', 'mensagem_pedir_ao_destino', 'avaliacao_responder', 'comentario_responder', 'comentario_responder_auto', 'comentario_ocultar', 'campanha_google_ativar', 'campanha_google_pausar'];
     // A campanha nova (A4, X5; D-A4-31) é a exceção na Meta: a compensação é ela ficar pausada (não aparece e não gasta),
     // e apagar sempre escala para uma pessoa; o teste de banco (`campanha-nova.spec.ts`) prova que fica pausada.
     const semVoltaNaMeta = ['campanha_criar'];

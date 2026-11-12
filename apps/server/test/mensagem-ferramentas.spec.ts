@@ -69,6 +69,7 @@ describe('pedido de mensagem: as ferramentas e o plano (A5 · Y5)', () => {
       'campanha_criar',
       'campanha_nova_ativar',
       'campanha_google_criar',
+      'campanha_google_ativar',
       'mensagem_disparar',
       'avaliacao_responder',
       'post_publicar',

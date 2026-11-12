@@ -131,9 +131,10 @@ describe('avaliacao_responder: o registro e o conector (A6 · Z2)', () => {
     // Só as duas ferramentas de avaliação existem neste provedor, e só a de apagar nasce como volta (fora das avaliações,
     // só apagar o post das redes, A6, Z5d, parte 6).
     expect(Object.values(TOOLS).filter((t) => t.providers.includes('google_business')).map((t) => t.name)).toEqual(['avaliacao_responder', 'avaliacao_apagar_resposta']);
-    // A pausa da campanha nova (A4, X5, parte 3) só existe como a volta da ativação.
+    // A pausa da campanha nova (A4, X5, parte 3; e no Google, A5, Y9, parte 5a) só existe como a volta da ativação.
     expect(Object.values(TOOLS).filter((t) => t.onlyAsUndo).map((t) => t.name)).toEqual([
       'campanha_nova_pausar',
+      'campanha_google_pausar',
       'avaliacao_apagar_resposta',
       'post_apagar',
       'comentario_apagar_resposta',

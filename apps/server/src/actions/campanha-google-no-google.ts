@@ -35,8 +35,10 @@ import type { ResourceState } from './tools.js';
 //   "criando" fica gravada; na tentativa seguinte, antes de criar de novo, o Liame procura a campanha pelo nome (que
 //   termina na marca do Liame, única): a criação que deu certo e perdeu a resposta não sai em dobro;
 // - os ids do orçamento, da campanha e do grupo de recursos ficam na linha.
-// O token sai do cofre só na hora de chamar e nunca vai para log, estado ou auditoria. A função `campanha_google` nasce
-// desligada; ativar a campanha criada é outro pedido.
+// Ativar a campanha criada é outro pedido (`campanha_google_ativar`, parte 5a; D-A5-32), com a volta de pausar: a
+// campanha é lida no Google antes (a removida no Google Ads não volta) e a mudança da situação passa pela conferência
+// do Google. O token sai do cofre só na hora de chamar e nunca vai para log, estado ou auditoria. A função
+// `campanha_google` nasce desligada.
 
 const PROVIDER = 'google_ads';
 const FORA_DO_AMBIENTE = 'A criação de campanha no Google não está disponível neste ambiente: nada foi criado no Google.';
@@ -44,6 +46,8 @@ const SUMIU = 'Esta campanha nova não está mais aqui (a foto, a logo ou o pont
 const IMAGEM_SAIU = 'A foto ou a logo desta campanha não está mais no Liame: nada foi criado no Google. Escolha outra foto e peça de novo.';
 const IMAGEM_NAO_ABRE = 'A foto ou a logo desta campanha não abriu para o recorte: nada foi criado no Google. Escolha outra foto e peça de novo.';
 const SEM_IDS = 'O Google não devolveu o que criou: confira as campanhas da conta no Google Ads antes de pedir de novo.';
+const REMOVIDA_NO_GOOGLE = 'Esta campanha não está mais no Google (foi removida no Google Ads): nada foi mudado.';
+const SEM_CONFIRMACAO = 'O Google não confirmou a mudança. Nada foi dado como feito: confira a campanha no Google Ads.';
 
 /** Quanto a criação espera o Google: a requisição leva as imagens. */
 const TEMPO_DA_CRIACAO_MS = 90_000;
@@ -57,7 +61,7 @@ export type DependenciasDaCampanhaGoogle = {
   /** Troca o que está no cofre por um token de acesso curto (só na memória de quem vai chamar). */
   acesso: (refreshToken: string) => Promise<string>;
   /** A versão da API registrada para a capacidade (Capability Registry). */
-  versao: (capacidade: 'campanha_criar' | 'entity_state') => Promise<string>;
+  versao: (capacidade: 'campanha_criar' | 'entity_state' | 'entity_update') => Promise<string>;
   armazem: Pick<ArmazemDeImagens, 'ler'>;
 };
 
@@ -194,7 +198,16 @@ export class CampanhaGoogleConnector implements Connector {
     const lida = await lerCampanhaGoogle(tx, ref, true);
     if (!lida) return recusado(SUMIU);
     const { linha, estado } = lida;
-    if (linha.status === 'criada') return { ok: true, state: estado as unknown as ResourceState, version: linha.version };
+    // A campanha já criada: ativar ou pausar (parte 5a). Já como o pedido quer (a criação que terminou e a resposta se
+    // perdeu, a ativação repetida): nada a fazer.
+    if (linha.status === 'criada') {
+      const ativar = desired.ativa === true;
+      if (ativar === linha.active) return { ok: true, state: estado as unknown as ResourceState, version: linha.version };
+      if (linha.version !== expectedVersion) return { ok: false, reason: 'estado-mudou', current: { state: estado as unknown as ResourceState, version: linha.version } };
+      if (options.validateOnly) return { ok: true, state: desired, version: linha.version };
+      if (!this.deps) return recusado(FORA_DO_AMBIENTE);
+      return this.mudarSituacao(tx, ref, linha, estado, ativar, this.deps);
+    }
     if (linha.status === 'cancelada') return recusado('Esta campanha nova foi cancelada: nada foi criado no Google.');
     if (linha.status === 'nao_criada') return recusado(linha.error ?? 'Esta campanha nova não foi criada.');
     // Alguém mudou o pedido desde a aprovação: nada é criado com o que não foi aprovado.
@@ -225,6 +238,59 @@ export class CampanhaGoogleConnector implements Connector {
       // Passageiro: sobe para o executor adiar; a situação "criando" fica, para a procura da próxima tentativa.
       throw comEsperaDoLimiteDiario(err);
     }
+  }
+
+  /**
+   * Ativar ou pausar a campanha nova no Google (parte 5a; D-A5-32): antes, a campanha é lida no Google (a removida no
+   * Google Ads não volta: quem está no Google manda); depois, a mudança da situação passa pela conferência do Google
+   * (`validateOnly`) e vai de verdade. Na Performance Max, o grupo de recursos nasce ativo: a situação da campanha é o
+   * que liga e desliga. A versão da campanha nova sobe: a volta confere por ela que ninguém mexeu depois.
+   */
+  private async mudarSituacao(tx: Tx, ref: ResourceRef, linha: Linha, estado: EstadoDaCampanhaNovaNoGoogle, ativar: boolean, deps: DependenciasDaCampanhaGoogle): Promise<ApplyResult> {
+    const id = linha.google_campaign_id;
+    if (!id || !/^\d+$/.test(id)) return recusado('O Liame não guardou a campanha no Google: confira no Google Ads.');
+    const cliente = `customers/${estado.conta.id}`;
+    const recurso = `${cliente}/campaigns/${id}`;
+    try {
+      const g = await this.conexao(tx, ref, linha, deps);
+      const leitura = await deps.versao('entity_state');
+      const lida = await deps.cliente().requisitar<Array<{ results?: Array<{ campaign?: { id?: unknown; status?: unknown } }> }> | null>({
+        provider: PROVIDER,
+        conta: g.chave,
+        url: `${deps.googleAdsUrl}/${leitura}/${cliente}/googleAds:searchStream`,
+        metodo: 'POST',
+        corpo: { query: `SELECT campaign.id, campaign.status FROM campaign WHERE campaign.id = ${id}` },
+        endpoint: 'entity_state',
+        apiVersion: leitura,
+        cabecalhos: g.cabecalhos,
+      });
+      const linhaNoGoogle = (Array.isArray(lida.corpo) ? lida.corpo.flatMap((l) => l.results ?? []) : []).find((l) => String(l.campaign?.id ?? '') === id);
+      const situacao = linhaNoGoogle?.campaign?.status;
+      if (situacao !== 'ENABLED' && situacao !== 'PAUSED') return recusado(REMOVIDA_NO_GOOGLE);
+      const versao = await deps.versao('entity_update');
+      const mutar = (validar: boolean) =>
+        deps.cliente().requisitar<{ results?: Array<{ resourceName?: string }> } | null>({
+          provider: PROVIDER,
+          conta: g.chave,
+          url: `${deps.googleAdsUrl}/${versao}/${cliente}/campaigns:mutate`,
+          metodo: 'POST',
+          corpo: { operations: [{ updateMask: 'status', update: { resourceName: recurso, status: ativar ? 'ENABLED' : 'PAUSED' } }], validateOnly: validar },
+          endpoint: validar ? 'entity_update (validação)' : 'entity_update',
+          apiVersion: versao,
+          cabecalhos: g.cabecalhos,
+        });
+      await mutar(true);
+      if ((await mutar(false)).corpo?.results?.[0]?.resourceName !== recurso) return recusado(SEM_CONFIRMACAO);
+    } catch (err) {
+      const motivo = recusaDoGoogle(err);
+      if (motivo) return recusado(motivo);
+      throw comEsperaDoLimiteDiario(err);
+    }
+    await tx.execute(sql`
+      update liame.google_campaign_new
+         set active = ${ativar}, activated_at = case when ${ativar} then now() else activated_at end, version = version + 1, updated_at = now()
+       where id = ${linha.id}`);
+    return { ok: true, state: { ...estado, ativa: ativar } as unknown as ResourceState, version: linha.version + 1 };
   }
 
   /** O token curto (trocado a partir do cofre), os cabeçalhos com a conta gerente e a chave da cota da escrita. */

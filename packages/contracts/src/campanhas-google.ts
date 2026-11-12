@@ -63,6 +63,8 @@ export const GoogleCampaignResponse = z.strictObject({
   error: z.string().nullable(),
   active: z.boolean(),
   activated_at: z.iso.datetime({ offset: true }).nullable(),
+  /** O pedido de ativar (ou a volta, pausar) que ainda espera a decisão ou a execução, se houver. */
+  pending_action_id: z.uuid().nullable(),
   /** O que existe no Google (os ids) e a conta do Google Ads (para o link). A criação é uma só: ou os três, ou nenhum. */
   google: z.strictObject({
     account_id: z.string().nullable(),
