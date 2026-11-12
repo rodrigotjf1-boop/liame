@@ -36,6 +36,7 @@ import { type Coordenada, nomeComparavel, ProcuraDeCoordenada } from './coordena
 import { MUNICIPIOS_DO_IPCA, RMS_DO_IPCA } from './ibge.js';
 import { diaNoFuso } from '../results/fora-do-normal.js';
 import { type DemandaDaLoja, demandaDaLoja, janelas, type LinhaDaDemanda } from './demanda.js';
+import { blocoMaisForte, CIDADES_NA_SECAO, DATASET_DA_MIDIA, janelaDaMidia, porcentoDe, somaDoBloco } from './midia-paga.js';
 import { type DataGuardada, datasDaSemana, diaEmBrasilia, REFERENCIAS_DO_SETOR } from './semana.js';
 import { DIAS_DA_PREVISAO } from './tempo.js';
 import {
@@ -388,6 +389,8 @@ export class RegiaoService {
       sector_references: [],
       store_demand_status: 'sem_endereco',
       store_demand: null,
+      paid_media_status: 'sem_endereco',
+      paid_media: null,
       generated_at: agora.toISOString(),
     };
     if (!(await this.ligada(auth, brandId))) {
@@ -510,6 +513,8 @@ export class RegiaoService {
 
     // A demanda da loja (R3, parte 1): os pedidos do Regem, só para quem vê Resultados.
     const demanda = await this.demandaDaLoja(auth.permissions.has('vendas.ver'), brandId, unitId, agora);
+    // A mídia na região (R4): os anúncios da marca por hora e, do Google, por cidade; a mesma régua da demanda.
+    const midia = await this.midiaNaRegiao(auth, brandId, unitId, agora, demanda.demanda);
 
     const noMunicipio = (indicador: string) => numeroMaisNovo(numeros, indicador, 'municipio', cidade);
     const populacao = noMunicipio('populacao');
@@ -575,6 +580,8 @@ export class RegiaoService {
       sector_references: REFERENCIAS_DO_SETOR.map((r) => ({ ...r })),
       store_demand_status: demanda.status,
       store_demand: demanda.demanda,
+      paid_media_status: midia.status,
+      paid_media: midia.midia,
       sources: fontes,
       generated_at: agora.toISOString(),
     };
@@ -644,6 +651,86 @@ export class RegiaoService {
       });
     }
     return saida;
+  }
+
+  /**
+   * A mídia na região (R4; D-RG-32 a D-RG-35): os cliques e as impressões das contas de anúncio da marca nas 4 semanas
+   * completas até ontem, por hora (Meta e Google) e, do Google, por cidade, lidos pela rotina `regiao-midia`. Sem
+   * dinheiro (D-RG-33). Só para quem vê Resultados (D-RG-34), como a demanda.
+   */
+  private async midiaNaRegiao(
+    auth: AuthContext,
+    brandId: string,
+    unitId: string,
+    agora: Date,
+    demanda: DemandaDaLoja | null,
+  ): Promise<{ status: string; midia: RegionOverviewResponse['paid_media'] }> {
+    if (!auth.permissions.has('vendas.ver')) return { status: 'sem_permissao', midia: null };
+    const tx = currentTx();
+    const contas = (
+      await tx.execute<{ id: string; provider: string; name: string; read_at: Date | string | null }>(sql`
+        select a.id, a.provider, a.name, s.last_success_at as read_at
+          from liame.connected_account a
+          left join liame.sync_state s on s.connected_account_id = a.id and s.dataset = ${DATASET_DA_MIDIA}
+         where a.brand_id = ${brandId} and a.provider in ('meta_ads', 'google_ads') and ${contaConectada('a')}
+         order by a.provider, a.name, a.id`)
+    ).rows;
+    if (!contas.length) return { status: 'sem_conta', midia: null };
+    const fuso = (await tx.execute<{ timezone: string }>(sql`select timezone from liame.unit where id = ${unitId}`)).rows[0]?.timezone ?? 'America/Sao_Paulo';
+    const j = janelaDaMidia(diaNoFuso(agora, fuso));
+    const ids = contas.map((c) => c.id);
+    const porHora = (
+      await tx.execute<{ hour: number; clicks: string; impressions: string }>(sql`
+        select hour, sum(clicks)::text as clicks, sum(impressions)::text as impressions
+          from liame.ad_hour_daily
+         where brand_id = ${brandId} and connected_account_id in ${ids} and day between ${j.inicio}::date and ${j.fim}::date
+         group by hour`)
+    ).rows;
+    const horas = Array.from({ length: 24 }, (_, hour) => {
+      const l = porHora.find((x) => Number(x.hour) === hour);
+      return { hour, clicks: Number(l?.clicks ?? 0), impressions: Number(l?.impressions ?? 0) };
+    });
+    const cliques = horas.map((h) => h.clicks);
+    const total = cliques.reduce((t, n) => t + n, 0);
+    const bloco = blocoMaisForte(cliques);
+    const pedidos = demanda?.status === 'pronto' && demanda.by_hour.length === 24 ? blocoMaisForte(demanda.by_hour.map((h) => h.orders)) : null;
+    const google = contas.filter((c) => c.provider === 'google_ads');
+    const cidades = google.length
+      ? (
+          await tx.execute<{ id: string; name: string | null; full_name: string | null; clicks: string; impressions: string; total: string }>(sql`
+            select c.geo_target_id::text as id, g.name, g.canonical_name as full_name, sum(c.clicks)::text as clicks,
+                   sum(c.impressions)::text as impressions, sum(sum(c.clicks)) over ()::text as total
+              from liame.ad_city_daily c
+              left join liame.region_geo_target g on g.id = c.geo_target_id
+             where c.brand_id = ${brandId} and c.connected_account_id in ${google.map((c) => c.id)} and c.day between ${j.inicio}::date and ${j.fim}::date
+             group by c.geo_target_id, g.name, g.canonical_name
+             order by sum(c.clicks) desc, c.geo_target_id
+             limit ${CIDADES_NA_SECAO}`)
+        ).rows
+      : [];
+    const quando = (v: Date | string | null) => (v === null ? null : (v instanceof Date ? v : new Date(v)).toISOString());
+    return {
+      status: 'disponivel',
+      midia: {
+        from: j.inicio,
+        to: j.fim,
+        accounts: contas.map((c) => ({ provider: c.provider, name: c.name, read_at: quando(c.read_at) })),
+        clicks: total,
+        impressions: horas.reduce((t, h) => t + h.impressions, 0),
+        by_hour: horas,
+        ad_block: bloco ? { from_hour: bloco.de, to_hour: bloco.ate, clicks_pct: porcentoDe(bloco.soma, total) } : null,
+        orders_block: pedidos && total > 0 ? { from_hour: pedidos.de, to_hour: pedidos.ate, clicks_pct: porcentoDe(somaDoBloco(cliques, pedidos.de, pedidos.ate), total) } : null,
+        cities_status: !google.length ? 'sem_google' : google.every((c) => c.read_at === null) ? 'lendo' : 'disponivel',
+        cities: cidades.map((c) => ({
+          id: c.id,
+          name: c.name ?? `Lugar ${c.id}`,
+          full_name: c.full_name ?? c.name ?? `Lugar ${c.id}`,
+          clicks: Number(c.clicks),
+          impressions: Number(c.impressions),
+          clicks_pct: porcentoDe(Number(c.clicks), Number(c.total)),
+        })),
+      },
+    };
   }
 
   private async lojaSalva(unitId: string): Promise<StoreLocation> {

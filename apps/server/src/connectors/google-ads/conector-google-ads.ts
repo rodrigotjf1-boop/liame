@@ -2,6 +2,7 @@ import type { Db } from '@liame/database';
 import { Logger } from '@nestjs/common';
 import type { AppConfig } from '../../config.js';
 import type { PontoMetrica } from '../../media/metric-store.js';
+import { type CidadeLida, cidadesValidas, contagem, decimal, deMicros, type HoraLida, horasValidas, idDoLugar, LUGARES_POR_CONSULTA, type LugarLido } from '../../regiao/midia-paga.js';
 import { type ClienteConector, ErroConector } from '../cliente-http.js';
 import { dataValida, fatias } from '../janela.js';
 import {
@@ -321,6 +322,85 @@ export class ConectorGoogleAds implements ConectorLeitura {
       for (const l of porCampanha) if (l.campaign?.id !== undefined) pontos.push(...pontosDaLinha('campaign', String(l.campaign.id), l));
     }
     return pontos;
+  }
+
+  /**
+   * A hora em que o anúncio rendeu (plano da região, R4, parte 1; base §19.7): a conta por dia e por hora
+   * (`segments.hour` em `customer`), no fuso da conta. O Google não junta a hora com o lugar. Fatias de 30 dias.
+   */
+  async lerHoras(conta: ContextoConta, janela: { inicio: string; fim: string }): Promise<HoraLida[]> {
+    clienteValido(conta.externalId, 'cliente');
+    type Linha = { metrics?: Metricas; segments?: { date?: string; hour?: number | string } };
+    const horas: HoraLida[] = [];
+    for (const f of fatias(dataValida(this.provider, janela.inicio), dataValida(this.provider, janela.fim), 30)) {
+      const linhas = await this.consultar<Linha>(
+        conta.credencial,
+        conta.externalId,
+        conta.loginCustomerId,
+        `SELECT segments.date, segments.hour, metrics.impressions, metrics.clicks, metrics.cost_micros, metrics.conversions FROM customer WHERE segments.date BETWEEN '${dataValida(this.provider, f.since)}' AND '${dataValida(this.provider, f.until)}'`,
+      );
+      for (const l of linhas) {
+        const hora = Number(l.segments?.hour);
+        if (typeof l.segments?.date !== 'string' || !Number.isInteger(hora)) continue;
+        const m = l.metrics ?? {};
+        horas.push({ dia: l.segments.date, hora, impressoes: contagem(m.impressions), cliques: contagem(m.clicks), gasto: deMicros(m.costMicros), conversoes: decimal(m.conversions ?? 0) });
+      }
+    }
+    return horasValidas(horas);
+  }
+
+  /**
+   * De onde vêm as pessoas que viram e clicaram (R4, parte 1): a cidade da localização física (`user_location_view`,
+   * `segments.geo_target_city`), por dia. O nome sai de `lerLugares`. Fatias de 30 dias.
+   */
+  async lerCidades(conta: ContextoConta, janela: { inicio: string; fim: string }): Promise<CidadeLida[]> {
+    clienteValido(conta.externalId, 'cliente');
+    type Linha = { metrics?: Metricas; segments?: { date?: string; geoTargetCity?: string } };
+    const cidades: CidadeLida[] = [];
+    for (const f of fatias(dataValida(this.provider, janela.inicio), dataValida(this.provider, janela.fim), 30)) {
+      const linhas = await this.consultar<Linha>(
+        conta.credencial,
+        conta.externalId,
+        conta.loginCustomerId,
+        `SELECT segments.date, segments.geo_target_city, metrics.impressions, metrics.clicks, metrics.cost_micros, metrics.conversions FROM user_location_view WHERE segments.date BETWEEN '${dataValida(this.provider, f.since)}' AND '${dataValida(this.provider, f.until)}'`,
+      );
+      for (const l of linhas) {
+        const lugar = idDoLugar(l.segments?.geoTargetCity);
+        if (typeof l.segments?.date !== 'string' || !lugar) continue;
+        const m = l.metrics ?? {};
+        cidades.push({ dia: l.segments.date, lugar, impressoes: contagem(m.impressions), cliques: contagem(m.clicks), gasto: deMicros(m.costMicros), conversoes: decimal(m.conversions ?? 0) });
+      }
+    }
+    return cidadesValidas(cidades);
+  }
+
+  /** O nome dos lugares do Google pelos ids (`geo_target_constant`), em lotes; o id fora do formato não vai na consulta. */
+  async lerLugares(conta: ContextoConta, ids: readonly string[]): Promise<LugarLido[]> {
+    clienteValido(conta.externalId, 'cliente');
+    type Linha = { geoTargetConstant?: { id?: string | number; name?: string; canonicalName?: string; targetType?: string; countryCode?: string } };
+    const validos = [...new Set(ids.map((i) => idDoLugar(i)).filter((i): i is string => i !== null))];
+    const lugares: LugarLido[] = [];
+    for (let i = 0; i < validos.length; i += LUGARES_POR_CONSULTA) {
+      const lote = validos.slice(i, i + LUGARES_POR_CONSULTA).map((id) => `'geoTargetConstants/${id}'`);
+      const linhas = await this.consultar<Linha>(
+        conta.credencial,
+        conta.externalId,
+        conta.loginCustomerId,
+        `SELECT geo_target_constant.id, geo_target_constant.name, geo_target_constant.canonical_name, geo_target_constant.target_type, geo_target_constant.country_code FROM geo_target_constant WHERE geo_target_constant.resource_name IN (${lote.join(', ')})`,
+      );
+      for (const { geoTargetConstant: g } of linhas) {
+        const id = idDoLugar(g?.id === undefined ? undefined : String(g.id));
+        if (!g || !id || typeof g.name !== 'string' || !g.name.trim()) continue;
+        lugares.push({
+          id,
+          nome: g.name.trim().slice(0, 200),
+          nomeCompleto: (typeof g.canonicalName === 'string' && g.canonicalName.trim() ? g.canonicalName : g.name).trim().slice(0, 400),
+          tipo: typeof g.targetType === 'string' && g.targetType ? g.targetType.slice(0, 60) : 'desconhecido',
+          pais: typeof g.countryCode === 'string' && g.countryCode.length === 2 ? g.countryCode : null,
+        });
+      }
+    }
+    return lugares;
   }
 
   /**

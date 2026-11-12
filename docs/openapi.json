@@ -125363,6 +125363,209 @@
                       ],
                       "additionalProperties": false
                     },
+                    "paid_media_status": {
+                      "type": "string",
+                      "maxLength": 60,
+                      "pattern": "^[a-z0-9_]+$"
+                    },
+                    "paid_media": {
+                      "type": [
+                        "object",
+                        "null"
+                      ],
+                      "properties": {
+                        "from": {
+                          "type": "string"
+                        },
+                        "to": {
+                          "type": "string"
+                        },
+                        "accounts": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "provider": {
+                                "type": "string",
+                                "maxLength": 60,
+                                "pattern": "^[a-z0-9_]+$"
+                              },
+                              "name": {
+                                "type": "string"
+                              },
+                              "read_at": {
+                                "type": [
+                                  "string",
+                                  "null"
+                                ]
+                              }
+                            },
+                            "required": [
+                              "provider",
+                              "name",
+                              "read_at"
+                            ],
+                            "additionalProperties": false
+                          }
+                        },
+                        "clicks": {
+                          "type": "integer",
+                          "minimum": -9007199254740991,
+                          "maximum": 9007199254740991
+                        },
+                        "impressions": {
+                          "type": "integer",
+                          "minimum": -9007199254740991,
+                          "maximum": 9007199254740991
+                        },
+                        "by_hour": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "hour": {
+                                "type": "integer",
+                                "minimum": -9007199254740991,
+                                "maximum": 9007199254740991
+                              },
+                              "clicks": {
+                                "type": "integer",
+                                "minimum": -9007199254740991,
+                                "maximum": 9007199254740991
+                              },
+                              "impressions": {
+                                "type": "integer",
+                                "minimum": -9007199254740991,
+                                "maximum": 9007199254740991
+                              }
+                            },
+                            "required": [
+                              "hour",
+                              "clicks",
+                              "impressions"
+                            ],
+                            "additionalProperties": false
+                          }
+                        },
+                        "ad_block": {
+                          "type": [
+                            "object",
+                            "null"
+                          ],
+                          "properties": {
+                            "from_hour": {
+                              "type": "integer",
+                              "minimum": -9007199254740991,
+                              "maximum": 9007199254740991
+                            },
+                            "to_hour": {
+                              "type": "integer",
+                              "minimum": -9007199254740991,
+                              "maximum": 9007199254740991
+                            },
+                            "clicks_pct": {
+                              "type": "integer",
+                              "minimum": -9007199254740991,
+                              "maximum": 9007199254740991
+                            }
+                          },
+                          "required": [
+                            "from_hour",
+                            "to_hour",
+                            "clicks_pct"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "orders_block": {
+                          "type": [
+                            "object",
+                            "null"
+                          ],
+                          "properties": {
+                            "from_hour": {
+                              "type": "integer",
+                              "minimum": -9007199254740991,
+                              "maximum": 9007199254740991
+                            },
+                            "to_hour": {
+                              "type": "integer",
+                              "minimum": -9007199254740991,
+                              "maximum": 9007199254740991
+                            },
+                            "clicks_pct": {
+                              "type": "integer",
+                              "minimum": -9007199254740991,
+                              "maximum": 9007199254740991
+                            }
+                          },
+                          "required": [
+                            "from_hour",
+                            "to_hour",
+                            "clicks_pct"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "cities_status": {
+                          "type": "string",
+                          "maxLength": 60,
+                          "pattern": "^[a-z0-9_]+$"
+                        },
+                        "cities": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string"
+                              },
+                              "name": {
+                                "type": "string"
+                              },
+                              "full_name": {
+                                "type": "string"
+                              },
+                              "clicks": {
+                                "type": "integer",
+                                "minimum": -9007199254740991,
+                                "maximum": 9007199254740991
+                              },
+                              "impressions": {
+                                "type": "integer",
+                                "minimum": -9007199254740991,
+                                "maximum": 9007199254740991
+                              },
+                              "clicks_pct": {
+                                "type": "integer",
+                                "minimum": -9007199254740991,
+                                "maximum": 9007199254740991
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "name",
+                              "full_name",
+                              "clicks",
+                              "impressions",
+                              "clicks_pct"
+                            ],
+                            "additionalProperties": false
+                          }
+                        }
+                      },
+                      "required": [
+                        "from",
+                        "to",
+                        "accounts",
+                        "clicks",
+                        "impressions",
+                        "by_hour",
+                        "ad_block",
+                        "orders_block",
+                        "cities_status",
+                        "cities"
+                      ],
+                      "additionalProperties": false
+                    },
                     "sources": {
                       "type": "array",
                       "items": {
@@ -125425,6 +125628,8 @@
                     "sector_references",
                     "store_demand_status",
                     "store_demand",
+                    "paid_media_status",
+                    "paid_media",
                     "sources",
                     "generated_at"
                   ],

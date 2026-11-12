@@ -4,6 +4,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 import { LinhaDaRegiaoVista } from '@/components/regiao/linha-da-regiao';
 import { LojaNoMapa } from '@/components/regiao/loja-no-mapa';
+import { MidiaNaRegiao } from '@/components/regiao/midia-na-regiao';
 import {
   cepComHifen,
   cepDigitado,
@@ -43,6 +44,9 @@ import {
   tipoDaData,
   pct,
   reais,
+  faixaDeHoras,
+  noBloco,
+  plataformasDaMidia,
   situacaoEmPalavras,
   tiposDaContagem,
   trimestre,
@@ -258,6 +262,8 @@ describe('Sua região (R2, parte 2)', () => {
     sector_references: [],
     store_demand_status: 'sem_regem',
     store_demand: null,
+    paid_media_status: 'sem_conta',
+    paid_media: null,
     sources: [
       { source: 'ibge_censo_bairro', status: 'em_dia', read_at: '2026-11-11T09:10:00.000Z', next_try_at: null },
       { source: 'ibge_9528', status: 'falhou', read_at: null, next_try_at: '2026-11-11T18:00:00.000Z' },
@@ -339,6 +345,41 @@ describe('Sua região (R2, parte 2)', () => {
     expect(fraseDaRenda({ ...retrato, district: null })).toBeNull();
     expect(fonteDoNumero(retrato.city!.restaurants!)).toBe('IBGE · Cadastro Central de Empresas, 2024');
     expect(fonteDoNumero(retrato.city!.population!)).toBe('IBGE · Censo 2022');
+  });
+
+  it('a mídia na região (R4): o bloco de horas, as plataformas e a seção desenhada, sem dinheiro', () => {
+    expect(faixaDeHoras(11, 15)).toBe('das 11h às 15h');
+    expect([noBloco(11, 11, 15), noBloco(14, 11, 15), noBloco(15, 11, 15), noBloco(23, 22, 2), noBloco(1, 22, 2), noBloco(2, 22, 2)]).toEqual([true, true, false, true, true, false]);
+    expect(plataformasDaMidia([{ provider: 'google_ads' }, { provider: 'meta_ads' }])).toBe('Meta e Google');
+    expect(plataformasDaMidia([{ provider: 'meta_ads' }])).toBe('Meta');
+    const horas = Array.from({ length: 24 }, (_, hour) => ({ hour, clicks: hour === 12 ? 200 : hour === 20 ? 160 : hour >= 10 && hour <= 23 ? 40 : 0, impressions: 1000 }));
+    const midia: NonNullable<RegionOverviewResponse['paid_media']> = {
+      from: '2026-10-15',
+      to: '2026-11-11',
+      accounts: [
+        { provider: 'meta_ads', name: 'Conta da Meta', read_at: '2026-11-12T09:00:00.000Z' },
+        { provider: 'google_ads', name: 'Conta do Google', read_at: '2026-11-12T09:00:00.000Z' },
+      ],
+      clicks: horas.reduce((t, h) => t + h.clicks, 0),
+      impressions: 24_000,
+      by_hour: horas,
+      ad_block: { from_hour: 11, to_hour: 15, clicks_pct: 41 },
+      orders_block: { from_hour: 19, to_hour: 23, clicks_pct: 34 },
+      cities_status: 'disponivel',
+      cities: [{ id: '1001773', name: 'Rio de Janeiro', full_name: 'Rio de Janeiro,State of Rio de Janeiro,Brazil', clicks: 412, impressions: 9000, clicks_pct: 78 }],
+    };
+    const html = renderToStaticMarkup(createElement(MidiaNaRegiao, { r: { ...retrato, paid_media_status: 'disponivel', paid_media: midia }, ids: 'x', mostraPro: false })).replace(/ /g, ' ');
+    expect(html).toContain('os anúncios da marca (Meta e Google), 4 semanas até ontem (11/11)');
+    expect(html).toContain('dos cliques caem das 11h às 15h, o bloco mais forte dos anúncios');
+    expect(html).toContain('dos cliques caem das 19h às 23h, o bloco mais forte dos pedidos da loja');
+    expect(html).toContain('Rio de Janeiro</b>');
+    expect(html).toContain('78% dos cliques do Google');
+    expect(html).not.toContain('R$');
+    // Só a Meta: sem a cidade, com o porquê; sem conta: o caminho para conectar; sem a permissão: o aviso.
+    const soMeta = renderToStaticMarkup(createElement(MidiaNaRegiao, { r: { ...retrato, paid_media_status: 'disponivel', paid_media: { ...midia, accounts: [midia.accounts[0]!], cities_status: 'sem_google', cities: [] } }, ids: 'x', mostraPro: false }));
+    expect(soMeta).toContain('a Meta só informa o estado');
+    expect(renderToStaticMarkup(createElement(MidiaNaRegiao, { r: { ...retrato, paid_media_status: 'sem_conta', paid_media: null }, ids: 'x', mostraPro: false }))).toContain('href="/contas"');
+    expect(renderToStaticMarkup(createElement(MidiaNaRegiao, { r: { ...retrato, paid_media_status: 'sem_permissao', paid_media: null }, ids: 'x', mostraPro: false }))).toContain('quem vê Resultados');
   });
 
   it('o frescor e a situação de cada fonte em palavras', () => {
