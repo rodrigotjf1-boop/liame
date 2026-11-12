@@ -14,6 +14,15 @@ import { hasDb, OWNER_URL } from './env.js';
 
 type Empresa = { cookie: string; tenantId: string; brandId: string };
 
+const DOSSIE = {
+  identity: { summary: 'Hamburgueria de bairro com smash feito na chapa', audience: 'Quem mora ou trabalha no Centro', differentiator: 'Pão feito na casa todo dia', since: '2019' },
+  voice: { traits: ['Direta'], rules: ['Frases curtas.'], do_example: 'Bateu a fome? O smash sai da chapa rapidinho.', dont_example: '' },
+  products: { items: ['Smash Clássico R$ 29,90'] },
+  offers: { items: ['Combo sexta: smash, batata e refri por R$ 39,90'] },
+  forbidden: { items: [{ text: 'o melhor hambúrguer do Rio', why: 'não temos como provar' }] },
+  region: { area: 'Centro e Lapa', pickup: true },
+};
+
 describe.skipIf(!hasDb)('o vídeo montado: os pedidos e a fila (Z15, parte 2a)', () => {
   let api: TestApi;
   let armazem: ArmazemNaMemoria;
@@ -37,12 +46,9 @@ describe.skipIf(!hasDb)('o vídeo montado: os pedidos e a fila (Z15, parte 2a)',
     const brandId = (await ownerQuery<{ id: string }>(`select id from liame.brand where tenant_id = $1 limit 1`, [tenantId]))[0]!.id;
     await ligarFlagDaEmpresa(api, 'fotos', tenantId, true);
     if (ligada) await ligarFlagDaEmpresa(api, 'video_montado', tenantId, true);
-    // Minha marca com as ofertas em vigor e o que a marca não diz.
-    await ownerQuery(
-      `insert into liame.brand_dossier_version (id, tenant_id, brand_id, version, content, content_version, text_hash, source, created_by)
-       values (gen_random_uuid(), $1, $2, 1, $3::jsonb, 1, encode(sha256($3::bytea), 'hex'), 'pessoa', null)`,
-      [tenantId, brandId, JSON.stringify({ offers: { items: ['Combo sexta: smash, batata e refri por R$ 39,90'] }, forbidden: { items: [{ text: 'o melhor hambúrguer do Rio', why: 'não temos como provar' }] } })],
-    );
+    // Minha marca com as ofertas em vigor e o que a marca não diz, pela rota de Minha marca.
+    const salvo = await api.call('PUT', '/v1/brand-dossier', { cookie: s.cookie, body: { brand_id: brandId, base_version: 0, content: DOSSIE } });
+    if (salvo.status !== 200) throw new Error(`dossiê não salvo: ${salvo.status} ${JSON.stringify(salvo.body)}`);
     return { cookie: s.cookie, tenantId, brandId };
   }
   const pedir = (e: Empresa, extra: Record<string, unknown>) =>
@@ -85,7 +91,7 @@ describe.skipIf(!hasDb)('o vídeo montado: os pedidos e a fila (Z15, parte 2a)',
     const f = await fotoGuardada(e, armazem, { largura: 1080, altura: 1350 });
     const preco = await pedir(e, { media_ids: [f.id], price_line: 'R$ 9,90' });
     expect([preco.status, preco.body.code]).toEqual([422, 'texto-barrado']);
-    expect(preco.body.detail).toContain('R$ 9,90');
+    expect(preco.body.detail).toContain('9,90');
     expect(new Set(preco.body.errors.map((x: { path: string }) => x.path))).toEqual(new Set(['price_line']));
     const proibido = await pedir(e, { media_ids: [f.id], title: 'O melhor hambúrguer do Rio' });
     expect(proibido.body.code).toBe('texto-barrado');

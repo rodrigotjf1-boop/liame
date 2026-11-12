@@ -5,7 +5,7 @@ import {
   type VideoMontageListResponse,
   type VideoMontageResponse,
 } from '@liame/contracts';
-import { type Database, uuidv7, withSystem } from '@liame/database';
+import { type Database, uuidv7 } from '@liame/database';
 import { Inject, Injectable } from '@nestjs/common';
 import { sql } from 'drizzle-orm';
 import { baseDoPedido } from '../ai/criativo/contexto.js';
@@ -15,6 +15,7 @@ import { marcaDoCriativo } from '../criativo/base.js';
 import { DATABASE } from '../database/database.module.js';
 import { AppProblem } from '../errors/problems.js';
 import { FlagService } from '../flags/flag.service.js';
+import { contarNaFrente } from '../worker/fila-do-video.js';
 
 // O vídeo montado pelo Liame (A6 · Z15, parte 2a; P43 aprovado em 11/11/2026; D-A6-133 a D-A6-138): os pedidos e a
 // fila. A rota confere tudo antes de pôr na fila: a função ligada, as fotos ou o vídeo de Fotos que o modelo aceita
@@ -46,10 +47,12 @@ type Linha = {
   created_at: Date | string;
   started_at: Date | string | null;
   finished_at: Date | string | null;
+  /** O `created_at` com os microssegundos (o texto do banco): a chave da fila, com o id. */
+  chave_da_fila: string;
 };
 
 const iso = (v: Date | string): string => (v instanceof Date ? v : new Date(v)).toISOString();
-const COLUNAS = sql`id, brand_id, template, format, duration_s, media_ids, title, price_line, cta, with_logo, sound, status, progress, error, photo_id, created_at, started_at, finished_at`;
+const COLUNAS = sql`id, brand_id, template, format, duration_s, media_ids, title, price_line, cta, with_logo, sound, status, progress, error, photo_id, created_at, started_at, finished_at, created_at::text as chave_da_fila`;
 
 function recusa(code: string, title: string, detail: string, path?: string, errors?: { path: string; message: string }[]): AppProblem {
   return new AppProblem(422, code, title, detail, {}, errors ?? (path ? [{ path, message: detail }] : undefined));
@@ -97,18 +100,10 @@ export class VideoMontadoService {
   }
 
   /** Quantos estão na frente de cada pedido da fila, de todas as marcas (a fila é uma só no serviço de montagem). */
-  private async naFrente(ids: string[]): Promise<Map<string, number>> {
-    const saida = new Map<string, number>();
-    if (!ids.length || !this.database) return saida;
-    const r = await withSystem(this.database.db, (tx) =>
-      tx.execute<{ id: string; frente: number }>(sql`
-        select v.id, (select count(*)::int from liame.video_montage o
-                       where o.status in ('na_fila', 'montando') and (o.created_at, o.id) < (v.created_at, v.id)) as frente
-          from liame.video_montage v
-         where v.id in ${ids} and v.status = 'na_fila'`),
-    );
-    for (const l of r.rows) saida.set(l.id, Number(l.frente));
-    return saida;
+  private async naFrente(linhas: Linha[]): Promise<Map<string, number>> {
+    const naFila = linhas.filter((l) => l.status === 'na_fila');
+    if (!naFila.length || !this.database) return new Map();
+    return contarNaFrente(this.database, naFila.map((l) => ({ id: l.id, chave: l.chave_da_fila })));
   }
 
   private resposta(l: Linha, frente: Map<string, number>): VideoMontageResponse {
@@ -141,7 +136,7 @@ export class VideoMontadoService {
     await this.marca(quem, brandId);
     const tx = currentTx();
     const linhas = (await tx.execute<Linha>(sql`select ${COLUNAS} from liame.video_montage where brand_id = ${brandId} order by created_at desc, id desc limit 20`)).rows;
-    const frente = await this.naFrente(linhas.filter((l) => l.status === 'na_fila').map((l) => l.id));
+    const frente = await this.naFrente(linhas);
     const logo = await tx.execute(sql`select 1 from liame.brand where id = ${brandId} and logo_id is not null`);
     const hoje = await this.hoje(quem, brandId);
     return {
@@ -157,7 +152,7 @@ export class VideoMontadoService {
     const quem = this.quem(auth);
     const l = (await currentTx().execute<Linha>(sql`select ${COLUNAS} from liame.video_montage where id = ${id} and tenant_id = ${quem.tenantId}`)).rows[0];
     if (!l) throw new AppProblem(404, 'nao-encontrado', 'Não encontramos', 'Este vídeo não está aqui.');
-    return this.resposta(l, await this.naFrente(l.status === 'na_fila' ? [l.id] : []));
+    return this.resposta(l, await this.naFrente([l]));
   }
 
   /** Confere o pedido e o põe na fila. */

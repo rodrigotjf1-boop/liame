@@ -1,8 +1,11 @@
--- 0144 · O vídeo montado pelo Liame: os pedidos e a fila (A6 · Z15, parte 2a; P43 aprovado em 11/11/2026; D-A6-133 a
+-- 0143 · O vídeo montado pelo Liame: os pedidos e a fila (A6 · Z15, parte 2a; P43 aprovado em 11/11/2026; D-A6-133 a
 -- D-A6-138). A pessoa escolhe o modelo, as fotos ou o vídeo de Fotos, o formato, os textos (conferidos pelo Compliance), a
 -- logo, a duração e o som; o pedido entra na fila (esta tabela) e o serviço de montagem (`liame-render`, parte 2b) pega
 -- um por vez, o mais antigo primeiro, monta o vídeo e o põe em Fotos. Até 10 por marca por dia; o que não deu não conta.
 -- A função `video_montado` nasce desligada. Das empresas. Idempotente; uma transação por arquivo (ADR-018).
+
+-- As sementes gravam em tabelas com RLS forçada (V20).
+select set_config('app.scope', 'sistema', true);
 
 -- ------------------------------------------------------------ (1) a função
 
@@ -62,16 +65,16 @@ grant select, insert, update on liame.video_montage to liame_app;
 
 do $$ begin
   if not exists (select 1 from liame.feature_flag where key = 'video_montado' and default_value = 'false'::jsonb and not is_write) then
-    raise exception '0144: a função video_montado não entrou desligada';
+    raise exception '0143: a função video_montado não entrou desligada';
   end if;
   if not exists (select 1 from pg_class c join pg_namespace n on n.oid = c.relnamespace
                   where n.nspname = 'liame' and c.relname = 'video_montage' and c.relrowsecurity and c.relforcerowsecurity) then
-    raise exception '0144: a tabela video_montage não entrou com a RLS forçada';
+    raise exception '0143: a tabela video_montage não entrou com a RLS forçada';
   end if;
   if not exists (select 1 from information_schema.columns where table_schema = 'liame' and table_name = 'brand_photo' and column_name = 'montage_id') then
-    raise exception '0144: a coluna montage_id das Fotos não entrou';
+    raise exception '0143: a coluna montage_id das Fotos não entrou';
   end if;
   if (select count(*) from pg_indexes where schemaname = 'liame' and indexname in ('video_montage_fila', 'video_montage_marca')) <> 2 then
-    raise exception '0144: os índices da fila não entraram';
+    raise exception '0143: os índices da fila não entraram';
   end if;
 end $$;
