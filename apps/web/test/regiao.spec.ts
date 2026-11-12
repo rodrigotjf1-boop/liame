@@ -6,6 +6,7 @@ import { LinhaDaRegiaoVista } from '@/components/regiao/linha-da-regiao';
 import { BairrosDosPedidos } from '@/components/regiao/bairros-dos-pedidos';
 import { LojaNoMapa } from '@/components/regiao/loja-no-mapa';
 import { MidiaNaRegiao } from '@/components/regiao/midia-na-regiao';
+import { PublicoNasRedes } from '@/components/regiao/publico-nas-redes';
 import {
   cepComHifen,
   cepDigitado,
@@ -267,6 +268,8 @@ describe('Sua região (R2, parte 2)', () => {
     paid_media: null,
     order_districts_status: 'sem_regem',
     order_districts: null,
+    social_audience_status: 'sem_redes',
+    social_audience: null,
     sources: [
       { source: 'ibge_censo_bairro', status: 'em_dia', read_at: '2026-11-11T09:10:00.000Z', next_try_at: null },
       { source: 'ibge_9528', status: 'falhou', read_at: null, next_try_at: '2026-11-11T18:00:00.000Z' },
@@ -415,6 +418,51 @@ describe('Sua região (R2, parte 2)', () => {
     expect(desenhar({ order_districts_status: 'sem_permissao', order_districts: null })).toContain('quem vê Resultados');
     expect(desenhar({ order_districts_status: 'sem_regem', order_districts: null })).toContain('Com o Regem');
     expect(desenhar({ order_districts_status: 'sem_endereco', order_districts: null })).toBe('');
+  });
+
+  it('o público nas redes (R4, parte 3; D-RG-40 a D-RG-43): os seguidores e a mudança, os toques, a Página e as cidades com o município da loja', () => {
+    const publico: NonNullable<RegionOverviewResponse['social_audience']> = {
+      from: '2026-10-15',
+      to: '2026-11-11',
+      instagram: {
+        name: '@misterburgers',
+        read_at: '2026-11-12T10:00:00.000Z',
+        followers: 4812,
+        follows: 287,
+        unfollows: 73,
+        followers_change: 214,
+        taps: { total: 146, directions: 98, call: 31, message: 17, other: 0 },
+        cities_status: 'disponivel',
+        cities: [
+          { name: 'Rio de Janeiro', full_name: 'Rio de Janeiro, Rio de Janeiro', followers: 3417, followers_pct: 71, store_city: true },
+          { name: 'Duque de Caxias', full_name: 'Duque de Caxias, Rio de Janeiro', followers: 289, followers_pct: 6, store_city: false },
+        ],
+      },
+      page: { name: 'Mister Burgers', read_at: '2026-11-12T10:00:00.000Z', followers: 2356, follows: 25, unfollows: 7, followers_change: 18, views: 1204 },
+    };
+    const desenhar = (extra: Partial<RegionOverviewResponse>) =>
+      renderToStaticMarkup(createElement(PublicoNasRedes, { r: { ...retrato, ...extra }, ids: 'x', mostraPro: false })).replace(/\u00a0/g, ' ');
+    const html = desenhar({ social_audience_status: 'disponivel', social_audience: publico });
+    expect(html).toContain('o Instagram e a Página da marca, 4 semanas até ontem (11/11)');
+    expect(html).toContain('4.812 <small>seguidores no Instagram</small>');
+    expect(html).toContain('+214 em 4 semanas (287 seguiram, 73 deixaram de seguir)');
+    expect(html).toContain('98 em “como chegar”, 31 em “ligar” e 17 em “mensagem”');
+    expect(html).toContain('+18 em 4 semanas; 1.204 visitas à Página');
+    expect(html).toContain('<b>Rio de Janeiro</b><small>o município da loja</small>');
+    expect(html).toContain('71% dos seguidores');
+    expect(html).toContain('nenhum seguidor aparece por nome');
+    // Com menos de 100 seguidores, sem quem seguiu: a mudança pela série; a cidade não vem.
+    const poucos = desenhar({
+      social_audience_status: 'disponivel',
+      social_audience: { ...publico, page: null, instagram: { ...publico.instagram!, followers: 86, follows: null, unfollows: null, followers_change: 9, cities_status: 'poucos_seguidores', cities: [] } },
+    });
+    expect(poucos).toContain('o Instagram da marca, 4 semanas até ontem');
+    expect(poucos).toContain('+9 em 4 semanas');
+    expect(poucos).toContain('a partir de 100 seguidores');
+    expect(poucos).not.toContain('seguidores na Página');
+    expect(desenhar({ social_audience_status: 'sem_redes', social_audience: null })).toContain('href="/contas"');
+    expect(desenhar({ social_audience_status: 'lendo', social_audience: null })).toContain('Lendo o Instagram e a Página');
+    expect(desenhar({ social_audience_status: 'sem_endereco', social_audience: null })).toBe('');
   });
 
   it('o frescor e a situação de cada fonte em palavras', () => {

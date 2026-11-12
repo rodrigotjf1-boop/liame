@@ -84,6 +84,7 @@ import { RegiaoService } from '../regiao/regiao.service.js';
 import { RegiaoCnpjService } from './regiao-cnpj.service.js';
 import { RegiaoFontesService } from './regiao-fontes.service.js';
 import { RegiaoMidiaLoop } from './regiao-midia.service.js';
+import { RegiaoPublicoLoop } from './regiao-publico.service.js';
 import { ComparacaoDmsIdLoop } from './comparacao-dms-id.js';
 import { RotinaDoCrmService } from './rotina-do-crm.service.js';
 import { SugestoesDeRespostaLoop } from './sugestoes-de-resposta-loop.js';
@@ -166,6 +167,8 @@ import { WebhookDeliverer } from './webhook-deliverer.js';
     RegiaoCnpjService,
     // A mídia por região e por hora (R4, parte 1): a hora dos anúncios da Meta e do Google e a cidade dos cliques do Google.
     RegiaoMidiaLoop,
+    // O público nas redes (R4, parte 3): os números da conta do Instagram e da Página.
+    RegiaoPublicoLoop,
     // Hub DMS (F2, A3): compara as leituras do RegemCast pelas duas credenciais; só com a função `comparacao_dms_id` ligada.
     ComparacaoDmsIdLoop,
     // Fotos dos produtos (A6, Z4): tira do armazenamento o arquivo da foto apagada (e do envio que não terminou), e depois a linha.
