@@ -691,6 +691,7 @@ export {
   VIDEO_RENDER_FPS,
   VIDEO_RENDER_SIZES,
   VIDEO_TEMPLATE_RULES,
+  VIDEO_TEXTS_NO_AI_REASONS,
   VIDEO_TEMPLATES,
   VideoFormat,
   VideoMontageListQuery,
@@ -698,5 +699,7 @@ export {
   VideoMontageResponse,
   VideoMontageStatus,
   type VideoRenderProps,
+  VideoTextsRequest,
+  VideoTextsResponse,
   VideoTemplate,
 } from './video-montado.js';

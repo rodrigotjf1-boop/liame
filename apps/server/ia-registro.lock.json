@@ -185,6 +185,10 @@
     "social.resposta": {
       "version": 3,
       "hash": "d172e7b3de49a407fea592d2b2d89d95c2f8b96455db275b05aaff08ee126c59"
+    },
+    "social.video": {
+      "version": 1,
+      "hash": "e3702c89dd2951530384bd1ee262bf7005a7324ba4585063e1e8801426d92244"
     }
   },
   "funcionarios": {
@@ -213,8 +217,8 @@
       "hash": "53f2fd3448fcda22b2f51a40c4619017b4a1c1883d28b9a668acd766c96a77a6"
     },
     "social": {
-      "version": 4,
-      "hash": "659f18885e4ca387def54ad5f6f45da25ff37adb7b14a40657e9d71a37a26111"
+      "version": 5,
+      "hash": "54b6300919230f7dad3efadce65b39ed6af90bf281e5543ed556b5698d505327"
     }
   }
 }

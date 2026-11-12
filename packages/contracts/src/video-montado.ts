@@ -93,6 +93,54 @@ export const VideoMontageListResponse = z.strictObject({
 });
 export type VideoMontageListResponse = z.infer<typeof VideoMontageListResponse>;
 
+/** O pedido dos textos ao Social media (A6 · Z15, parte 3b; D-A6-135): o modelo e as fotos ou o vídeo escolhidos. */
+export const VideoTextsRequest = z.strictObject({
+  brand_id: z.uuid(),
+  template: VideoTemplate,
+  /** As fotos ou o vídeo de Fotos desta marca, na ordem do vídeo: o produto e a descrição de cada um vão ao Social media. */
+  media_ids: z.array(z.uuid()).min(1).max(4),
+});
+export type VideoTextsRequest = z.infer<typeof VideoTextsRequest>;
+
+export const VIDEO_TEXTS_NO_AI_REASONS = [
+  'funcao_desligada',
+  'ia_desligada',
+  'funcionario_desligado',
+  'sem-rota',
+  'teto',
+  'limite-usuario',
+  'travada',
+  'parada',
+  'indisponivel',
+  'entrada-grande',
+  'formato',
+  'barrado',
+] as const;
+
+/**
+ * A proposta do Social media, já conferida pelo Compliance (o preço só o de uma oferta em vigor, as regras do Liame e o
+ * que a marca não diz). Sem a IA (desligada, sem rota, no teto, fora do ar ou com a proposta barrada), `origin` é
+ * `sem_ia`, com o motivo, e a pessoa escreve os textos.
+ */
+export const VideoTextsResponse = z.strictObject({
+  origin: z.enum(['ia', 'sem_ia']),
+  reason: z.enum(VIDEO_TEXTS_NO_AI_REASONS).nullable(),
+  texts: z
+    .strictObject({
+      title: z.string().min(1).max(VIDEO_MONTAGE_LIMITS.title),
+      price_line: z.string().min(1).max(VIDEO_MONTAGE_LIMITS.priceLine).nullable(),
+      cta: z.string().min(1).max(VIDEO_MONTAGE_LIMITS.cta),
+    })
+    .nullable(),
+  /** A oferta de Minha marca de onde veio o preço, como está escrita; nula sem preço. */
+  offer: z.string().nullable(),
+  /** No teto de custo: quando a IA volta. */
+  retry_at: z.iso.datetime({ offset: true }).nullable(),
+  /** A chamada em `ai_usage` (para o retorno da pessoa); nula sem a IA. */
+  usage_id: z.uuid().nullable(),
+});
+export type VideoTextsResponse = z.infer<typeof VideoTextsResponse>;
+
 /**
  * O que o serviço de montagem (`liame-render`, A6 · Z15 parte 2b; D-A6-139) passa ao modelo do Remotion
  * (`packages/video-modelos`). Interno: não sai na API. As fotos, o vídeo e a logo vão por endereços de leitura assinados
