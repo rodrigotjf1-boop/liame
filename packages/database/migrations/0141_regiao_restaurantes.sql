@@ -1,4 +1,4 @@
--- 0140 · Os restaurantes ativos por município, bairro e CEP (plano da região, R2, parte 4; base de conhecimento §19.5).
+-- 0141 · Os restaurantes ativos por município, bairro e CEP (plano da região, R2, parte 4; base de conhecimento §19.5).
 -- A fonte é o cadastro aberto de CNPJ da Receita Federal (os arquivos `Estabelecimentos0..9.zip` de cada mês). Esses
 -- arquivos trazem dado pessoal (nome fantasia, endereço de MEI, telefone, e-mail): a rotina do worker lê em fluxo e
 -- aqui entram SÓ contagens (quantos estabelecimentos por lugar e tipo). Nenhum nome, endereço, telefone, e-mail ou
@@ -89,15 +89,15 @@ grant select, insert, update, delete on liame.region_food_part to liame_app;
 do $$ begin
   if (select count(*) from information_schema.tables
        where table_schema = 'liame' and table_name in ('region_food_count', 'region_food_part')) <> 2 then
-    raise exception '0140: as tabelas dos restaurantes não entraram';
+    raise exception '0141: as tabelas dos restaurantes não entraram';
   end if;
   if (select count(*) from pg_policies where schemaname = 'liame'
        and tablename in ('region_food_count', 'region_food_part')) <> 4 then
-    raise exception '0140: as regras de acesso dos restaurantes não entraram';
+    raise exception '0141: as regras de acesso dos restaurantes não entraram';
   end if;
   if exists (select 1 from pg_class c join pg_namespace n on n.oid = c.relnamespace
               where n.nspname = 'liame' and c.relname in ('region_food_count', 'region_food_part')
                 and not (c.relrowsecurity and c.relforcerowsecurity)) then
-    raise exception '0140: a RLS dos restaurantes não está forçada';
+    raise exception '0141: a RLS dos restaurantes não está forçada';
   end if;
 end $$;
