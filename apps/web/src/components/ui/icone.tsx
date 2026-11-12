@@ -346,6 +346,14 @@ const DESENHOS = {
     </>
   ),
   stop: <rect width="12" height="12" x="6" y="6" rx="2" />,
+  // O som do vídeo original no vídeo montado (A6 · Z15; P43, o mesmo desenho do protótipo).
+  volume: (
+    <>
+      <path d="M11 5 6 9H2v6h4l5 4V5z" />
+      <path d="M15.5 8.5a5 5 0 0 1 0 7" />
+      <path d="M19 5a10 10 0 0 1 0 14" />
+    </>
+  ),
   image: (
     <>
       <rect width="18" height="18" x="3" y="3" rx="2" />

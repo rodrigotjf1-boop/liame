@@ -155,6 +155,12 @@ export const BrandPhoto = z.strictObject({
     })
     .nullable()
     .optional(),
+  /**
+   * O vídeo montado pelo Liame (A6 · Z15, parte 4; D-A6-136): o pedido de onde ele saiu (`GET /v1/video-montages/{id}`);
+   * a tela põe a etiqueta "Montado pelo Liame". Nulo no que a loja enviou. Opcional: a resposta de antes de 12/11/2026 não
+   * traz.
+   */
+  montage_id: z.uuid().nullable().optional(),
 });
 export type BrandPhoto = z.infer<typeof BrandPhoto>;
 

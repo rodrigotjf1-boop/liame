@@ -295,11 +295,13 @@ export const NOTA_DEITADO =
 export const entrouOVideo = (ms: number) => `Entrou: ${duracaoPorExtenso(ms)}, em pé.`;
 
 /** O nome do vídeo na grade para quem usa leitor de tela (P37). */
-export function rotuloDoVideo(f: Pick<BrandPhoto, 'product' | 'uploaded_at' | 'width' | 'height' | 'video'>, agora: Date): string {
+export function rotuloDoVideo(f: Pick<BrandPhoto, 'product' | 'uploaded_at' | 'width' | 'height' | 'video' | 'montage_id'>, agora: Date): string {
   const d = dia(f.uploaded_at, agora);
   const ehDeitado = deitado(f);
   const duracao = f.video ? `, ${duracaoPorExtenso(f.video.duration_ms)}` : '';
-  return `Vídeo: ${nomeDoProduto(f.product)}${duracao}, ${ehDeitado ? 'deitado' : 'em pé'}, enviado ${d === 'hoje' ? 'hoje' : `em ${d}`}${ehDeitado ? ', deitado para o Reels' : ''}`;
+  // O vídeo montado pelo Liame (A6 · Z15, parte 4): o rótulo diz quem fez.
+  const quem = f.montage_id ? `montado pelo Liame ${d === 'hoje' ? 'hoje' : `em ${d}`}` : `enviado ${d === 'hoje' ? 'hoje' : `em ${d}`}`;
+  return `Vídeo${f.montage_id ? ' montado' : ''}: ${nomeDoProduto(f.product)}${duracao}, ${ehDeitado ? 'deitado' : 'em pé'}, ${quem}${ehDeitado ? ', deitado para o Reels' : ''}`;
 }
 
 /** As medidas do vídeo como a loja gravou (as do bloco `video`; sem ele, as do Reels). */

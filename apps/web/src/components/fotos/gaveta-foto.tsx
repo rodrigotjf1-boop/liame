@@ -142,6 +142,12 @@ export function GavetaFoto({ foto, produtos, podeMudar, apagando, agora, reserva
           ) : (
             <img className="ft-ver" src={foto.url} alt={foto.description || `Foto do produto: ${nome}`} referrerPolicy="no-referrer" onError={aoFalharImagem} />
           )}
+          {foto.montage_id && (
+            <p className="ft-nota">
+              <Icone nome="video" pequeno />
+              <span>Montado pelo Liame a partir das Fotos da marca. Dali, vai para um post (Reels), um Story ou uma campanha nova, com a aprovação de sempre.</span>
+            </p>
+          )}
           {ehDeitado && (
             <p className="ft-nota ft-nota--aviso">
               <Icone nome="alert" pequeno />

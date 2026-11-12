@@ -129,6 +129,9 @@ describe.skipIf(!hasDb)('o serviço de montagem do vídeo (Z15, parte 2b)', () =
     // Em Fotos, como vídeo da marca; e a auditoria do sistema.
     const fotos = await api.call('GET', `/v1/brand-photos?brand_id=${a.brandId}`, { cookie: a.cookie });
     expect(fotos.body.items.map((i: { id: string }) => i.id)).toContain(pronto.photo_id);
+    // A lista de Fotos diz de qual pedido o vídeo saiu (a etiqueta "Montado pelo Liame", parte 4); a foto da loja, nulo.
+    const naLista = (id: string) => fotos.body.items.find((i: { id: string }) => i.id === id) as { montage_id: string | null };
+    expect([naLista(pronto.photo_id as string).montage_id, naLista(fa.id).montage_id]).toEqual([a1, null]);
     const [auditoria] = await ownerQuery<{ n: number }>(
       `select count(*)::int as n from liame.audit_event where tenant_id = $1 and action = 'video_montado.pronto' and resource_id = $2 and actor_type = 'system'`,
       [a.tenantId, a1],
