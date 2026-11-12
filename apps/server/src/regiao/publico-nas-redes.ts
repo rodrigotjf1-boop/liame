@@ -103,11 +103,16 @@ export function somaDaPagina(corpo: unknown, nome: string): number | null {
   return soma;
 }
 
-/** O deslocamento do fuso, em minutos, num instante ("GMT-03:00" → -180). */
+const doisDigitos = (s: string): number | null => (s.length === 2 && [...s].every((c) => c >= '0' && c <= '9') ? Number(s) : null);
+
+/** O deslocamento do fuso, em minutos, num instante ("GMT-03:00" → -180; "GMT", o UTC, → 0). Lido por posição, sem regex. */
 function deslocamentoMin(instante: Date, fuso: string): number {
   const parte = new Intl.DateTimeFormat('en-US', { timeZone: fuso, timeZoneName: 'longOffset' }).formatToParts(instante).find((p) => p.type === 'timeZoneName')?.value ?? 'GMT';
-  const m = /GMT([+-])(\d{2}):(\d{2})/.exec(parte);
-  return m ? (m[1] === '-' ? -1 : 1) * (Number(m[2]) * 60 + Number(m[3])) : 0;
+  if (parte.length !== 9 || !parte.startsWith('GMT') || parte.charAt(6) !== ':') return 0;
+  const sinal = parte.charAt(3) === '-' ? -1 : parte.charAt(3) === '+' ? 1 : 0;
+  const horas = doisDigitos(parte.slice(4, 6));
+  const minutos = doisDigitos(parte.slice(7, 9));
+  return sinal && horas !== null && minutos !== null ? sinal * (horas * 60 + minutos) : 0;
 }
 
 /** O começo do dia "AAAA-MM-DD" no fuso, em segundos Unix (o `since`/`until` da Graph API). */

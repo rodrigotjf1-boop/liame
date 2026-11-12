@@ -79,6 +79,8 @@ describe('a janela e a cidade', () => {
   it('o começo do dia no fuso, em segundos (Brasília, -3 h)', () => {
     expect(inicioDoDiaEmSegundos('2026-10-15', 'America/Sao_Paulo')).toBe(Date.parse('2026-10-15T03:00:00Z') / 1000);
     expect(inicioDoDiaEmSegundos('2026-10-15', 'UTC')).toBe(Date.parse('2026-10-15T00:00:00Z') / 1000);
+    // Deslocamento positivo e com minutos (+05:30).
+    expect(inicioDoDiaEmSegundos('2026-10-15', 'Asia/Kolkata')).toBe(Date.parse('2026-10-14T18:30:00Z') / 1000);
     // As 4 semanas de 15/10 a 11/11: até o começo de 12/11.
     expect(janelaEmSegundos({ inicio: '2026-10-15', fim: '2026-11-11' }, 'America/Sao_Paulo')).toEqual({
       since: Date.parse('2026-10-15T03:00:00Z') / 1000,
