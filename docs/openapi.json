@@ -127617,7 +127617,7 @@
     },
     "/v1/new-campaigns": {
       "post": {
-        "description": "A peça aprovada em Criativos, com a foto ou o vídeo pronto de Fotos, vira um pedido em Aprovações (a ferramenta `campanha_criar`): depois da aprovação com o código do app, o Liame cria na Meta a campanha, o conjunto (o raio em volta da loja, de 1 a 15 km, 18 anos ou mais, a verba diária e o fim, se houver) e o anúncio, todos pausados, em nome da Página da marca e com as melhorias automáticas da Meta desligadas. \"Pedidos pelo cardápio\" leva ao cardápio da loja, com o rastreio do Liame nos parâmetros de URL; \"conversas no WhatsApp\" abre a conversa no WhatsApp da Página. Ativar é outro pedido. Precisa da função `campanha_nova` (409 `funcao-desligada`); a escrita na Meta (`meta_write`) vale na execução. Conflitos (409): `sem-conta-de-anuncios`, `varias-contas-de-anuncios`, `sem-pagina`, `varias-paginas`, `ja-pedida` (a peça já tem um pedido em aberto). Recusas (422): `peca-nao-encontrada`, `peca-nao-aprovada`, `midia-fora-das-fotos`, `video-sem-capa`, `verba-invalida`, `loja-nao-encontrada`, `loja-sem-endereco` (o ponto da loja não está no endereço), `sem-cardapio`, `acima-do-teto` (a verba passa do teto por campanha) e `fim-no-passado`. O trilho também pode recusar (a política, a trava).",
+        "description": "A peça aprovada em Criativos, com a foto ou o vídeo pronto de Fotos (`piece_id` e `media_id`), ou um Reels já publicado no Instagram da Página (`instagram_media_id`, de Fotos › Do seu Instagram; o anúncio usa o post como está, o vídeo e a legenda, e antes de criar o Liame pergunta à Meta se ele pode virar anúncio), vira um pedido em Aprovações (a ferramenta `campanha_criar`): depois da aprovação com o código do app, o Liame cria na Meta a campanha, o conjunto (o raio em volta da loja, de 1 a 15 km, 18 anos ou mais, a verba diária e o fim, se houver) e o anúncio, todos pausados, em nome da Página da marca e com as melhorias automáticas da Meta desligadas. \"Pedidos pelo cardápio\" leva ao cardápio da loja, com o rastreio do Liame nos parâmetros de URL; \"conversas no WhatsApp\" abre a conversa no WhatsApp da Página. Ativar é outro pedido. Precisa da função `campanha_nova` (409 `funcao-desligada`); a escrita na Meta (`meta_write`) vale na execução. Conflitos (409): `sem-conta-de-anuncios`, `varias-contas-de-anuncios`, `sem-pagina`, `varias-paginas`, `ja-pedida` (a peça, ou o Reels, já tem um pedido em aberto). Recusas (422): `peca-nao-encontrada`, `peca-nao-aprovada`, `midia-fora-das-fotos`, `video-sem-capa`, `sem-instagram-na-pagina` (o Reels sem o Instagram ligado à Página), `reels-nao-encontrado` (fora de Fotos › Do seu Instagram, ou de outro perfil), `nao-e-reels`, `verba-invalida`, `loja-nao-encontrada`, `loja-sem-endereco` (o ponto da loja não está no endereço), `sem-cardapio`, `acima-do-teto` (a verba passa do teto por campanha) e `fim-no-passado`. O trilho também pode recusar (a política, a trava).",
         "operationId": "CampanhasNovasController_criar",
         "parameters": [],
         "requestBody": {
@@ -127641,6 +127641,10 @@
                     "type": "string",
                     "format": "uuid",
                     "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                  },
+                  "instagram_media_id": {
+                    "type": "string",
+                    "pattern": "^[0-9]{1,40}$"
                   },
                   "unit_id": {
                     "type": "string",
@@ -127677,8 +127681,6 @@
                 },
                 "required": [
                   "brand_id",
-                  "piece_id",
-                  "media_id",
                   "unit_id",
                   "name",
                   "objective",
@@ -127709,19 +127711,69 @@
                       "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
                     },
                     "piece_id": {
-                      "type": "string",
+                      "type": [
+                        "string",
+                        "null"
+                      ],
                       "format": "uuid",
                       "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
                     },
                     "piece_version": {
-                      "type": "integer",
+                      "type": [
+                        "integer",
+                        "null"
+                      ],
                       "minimum": 1,
                       "maximum": 9007199254740991
                     },
                     "media_id": {
-                      "type": "string",
+                      "type": [
+                        "string",
+                        "null"
+                      ],
                       "format": "uuid",
                       "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                    },
+                    "instagram_media_id": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "reels": {
+                      "type": [
+                        "object",
+                        "null"
+                      ],
+                      "properties": {
+                        "caption": {
+                          "type": "string"
+                        },
+                        "permalink": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "thumbnail_url": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "published_at": {
+                          "type": "string",
+                          "format": "date-time",
+                          "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+                        }
+                      },
+                      "required": [
+                        "caption",
+                        "permalink",
+                        "thumbnail_url",
+                        "published_at"
+                      ],
+                      "additionalProperties": false
                     },
                     "unit_id": {
                       "type": "string",
@@ -127865,6 +127917,8 @@
                     "piece_id",
                     "piece_version",
                     "media_id",
+                    "instagram_media_id",
+                    "reels",
                     "unit_id",
                     "name",
                     "objective",
@@ -128253,19 +128307,69 @@
                       "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
                     },
                     "piece_id": {
-                      "type": "string",
+                      "type": [
+                        "string",
+                        "null"
+                      ],
                       "format": "uuid",
                       "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
                     },
                     "piece_version": {
-                      "type": "integer",
+                      "type": [
+                        "integer",
+                        "null"
+                      ],
                       "minimum": 1,
                       "maximum": 9007199254740991
                     },
                     "media_id": {
-                      "type": "string",
+                      "type": [
+                        "string",
+                        "null"
+                      ],
                       "format": "uuid",
                       "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                    },
+                    "instagram_media_id": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "reels": {
+                      "type": [
+                        "object",
+                        "null"
+                      ],
+                      "properties": {
+                        "caption": {
+                          "type": "string"
+                        },
+                        "permalink": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "thumbnail_url": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "published_at": {
+                          "type": "string",
+                          "format": "date-time",
+                          "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+                        }
+                      },
+                      "required": [
+                        "caption",
+                        "permalink",
+                        "thumbnail_url",
+                        "published_at"
+                      ],
+                      "additionalProperties": false
                     },
                     "unit_id": {
                       "type": "string",
@@ -128409,6 +128513,8 @@
                     "piece_id",
                     "piece_version",
                     "media_id",
+                    "instagram_media_id",
+                    "reels",
                     "unit_id",
                     "name",
                     "objective",
@@ -128968,6 +129074,51 @@
                         ],
                         "additionalProperties": false
                       }
+                    },
+                    "by_reels": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "instagram_media_id": {
+                            "type": "string"
+                          },
+                          "campaign_id": {
+                            "type": "string",
+                            "format": "uuid",
+                            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                          },
+                          "status": {
+                            "type": "string",
+                            "enum": [
+                              "pedida",
+                              "criando",
+                              "criada",
+                              "nao_criada",
+                              "cancelada"
+                            ]
+                          },
+                          "active": {
+                            "type": "boolean"
+                          },
+                          "action_id": {
+                            "type": [
+                              "string",
+                              "null"
+                            ],
+                            "format": "uuid",
+                            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                          }
+                        },
+                        "required": [
+                          "instagram_media_id",
+                          "campaign_id",
+                          "status",
+                          "active",
+                          "action_id"
+                        ],
+                        "additionalProperties": false
+                      }
                     }
                   },
                   "required": [
@@ -128978,7 +129129,8 @@
                     "instagram",
                     "units",
                     "campaign_cap_micros",
-                    "by_piece"
+                    "by_piece",
+                    "by_reels"
                   ],
                   "additionalProperties": false
                 }
@@ -129224,19 +129376,69 @@
                       "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
                     },
                     "piece_id": {
-                      "type": "string",
+                      "type": [
+                        "string",
+                        "null"
+                      ],
                       "format": "uuid",
                       "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
                     },
                     "piece_version": {
-                      "type": "integer",
+                      "type": [
+                        "integer",
+                        "null"
+                      ],
                       "minimum": 1,
                       "maximum": 9007199254740991
                     },
                     "media_id": {
-                      "type": "string",
+                      "type": [
+                        "string",
+                        "null"
+                      ],
                       "format": "uuid",
                       "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                    },
+                    "instagram_media_id": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "reels": {
+                      "type": [
+                        "object",
+                        "null"
+                      ],
+                      "properties": {
+                        "caption": {
+                          "type": "string"
+                        },
+                        "permalink": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "thumbnail_url": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "published_at": {
+                          "type": "string",
+                          "format": "date-time",
+                          "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+                        }
+                      },
+                      "required": [
+                        "caption",
+                        "permalink",
+                        "thumbnail_url",
+                        "published_at"
+                      ],
+                      "additionalProperties": false
                     },
                     "unit_id": {
                       "type": "string",
@@ -129380,6 +129582,8 @@
                     "piece_id",
                     "piece_version",
                     "media_id",
+                    "instagram_media_id",
+                    "reels",
                     "unit_id",
                     "name",
                     "objective",

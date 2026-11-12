@@ -1,6 +1,6 @@
 'use client';
 
-import type { BrandPhoto, BrandPhotosResponse, BrandResponse, InstagramMedia, VideoMontageListResponse, VideoMontageResponse } from '@liame/contracts';
+import type { BrandPhoto, BrandPhotosResponse, BrandResponse, InstagramMedia, NewCampaignOptionsResponse, VideoMontageListResponse, VideoMontageResponse } from '@liame/contracts';
 import { type DragEvent, useCallback, useEffect, useRef, useState } from 'react';
 import { useAvisar } from '@/components/ui/avisos';
 import { Estado } from '@/components/ui/estado';
@@ -14,6 +14,7 @@ import { AbaDoInstagram } from './aba-do-instagram';
 import { CartaoFoto } from './cartao-foto';
 import { DialogoApagarFoto } from './dialogo-apagar-foto';
 import { type AbaDasFotos, ROTULOS_DAS_ABAS } from './do-seu-instagram';
+import { GavetaCampanhaNova } from '@/components/criativos/gaveta-campanha-nova';
 import { GavetaDoInstagram } from './gaveta-do-instagram';
 import { concluirOVideo, enviarCapa, enviarFoto, hashDoArquivo, medirImagem, medirVideo, pedirEnvioDoVideo, quadroDoMeio, subirOVideo } from './enviar';
 import { FilaDoEnvio, type ItemDoEnvio } from './fila-do-envio';
@@ -99,6 +100,10 @@ export function FotosTela() {
   const [montagens, setMontagens] = useState<VideoMontageListResponse | null>(null);
   const [montar, setMontar] = useState<{ pedido: VideoMontageResponse | null } | null>(null);
   const [falhaVista, setFalhaVista] = useState<string | null>(null);
+  // A campanha nova a partir de um Reels (A4, X5, parte 6; P42): as opções da gaveta (lidas ao abrir a aba do Instagram)
+  // e o Reels da gaveta aberta por cima da gaveta do Instagram.
+  const [opcoesDaCampanha, setOpcoesDaCampanha] = useState<{ marca: string; dados: NewCampaignOptionsResponse } | null>(null);
+  const [campanhaDoReels, setCampanhaDoReels] = useState<InstagramMedia | null>(null);
   const agora = useAgora(60_000, carga);
   const secao = useRef<HTMLElement>(null);
   const seq = useRef(0);
@@ -459,6 +464,21 @@ export function FotosTela() {
     };
   }, []);
   const comArquivos = (e: DragEvent) => [...e.dataTransfer.types].includes('Files');
+
+  // As opções da campanha nova (X5, parte 6): na aba do Instagram, uma vez por marca, e de novo depois de um pedido.
+  // Sem elas (a função desligada, ou sem a permissão de ver campanhas), a gaveta do Reels só não mostra o bloco.
+  const lerOpcoesDaCampanha = useCallback(async (m: string) => {
+    const r = await chamar(() => api.GET('/v1/new-campaigns/options', { params: { query: { brand_id: m } } }));
+    if (montada.current && r.ok) setOpcoesDaCampanha({ marca: m, dados: r.data });
+  }, []);
+  const precisaDasOpcoes = naAbaDoInstagram && marca !== null && opcoesDaCampanha?.marca !== marca;
+  useEffect(() => {
+    if (precisaDasOpcoes && marca) disparar(lerOpcoesDaCampanha(marca));
+  }, [precisaDasOpcoes, marca, lerOpcoesDaCampanha]);
+  useEffect(() => {
+    setCampanhaDoReels(null);
+  }, [marca]);
+  const opcoesDaMarca = opcoesDaCampanha && opcoesDaCampanha.marca === marca ? opcoesDaCampanha.dados : null;
 
   if (!podeVer) {
     return (
@@ -823,7 +843,35 @@ export function FotosTela() {
         />
       )}
       {naAbaDoInstagram && publicacao && (
-        <GavetaDoInstagram key={`ig-${publicacao.id}`} publicacao={publicacao} agora={agora} reserva={titulo} aoFechar={() => setPublicacao((p) => (p?.id === publicacao.id ? null : p))} />
+        <GavetaDoInstagram
+          key={`ig-${publicacao.id}`}
+          publicacao={publicacao}
+          agora={agora}
+          reserva={titulo}
+          campanha={
+            opcoesDaMarca?.enabled
+              ? {
+                  atual: opcoesDaMarca.by_reels.find((x) => x.instagram_media_id === publicacao.id) ?? null,
+                  podePedir: pode('campanhas.operar'),
+                  aoUsar: () => setCampanhaDoReels(publicacao),
+                }
+              : null
+          }
+          aoFechar={() => setPublicacao((p) => (p?.id === publicacao.id ? null : p))}
+        />
+      )}
+      {/* Por cima da gaveta do Instagram: fechar volta para ela. */}
+      {naAbaDoInstagram && campanhaDoReels && marca && opcoesDaMarca && (
+        <GavetaCampanhaNova
+          key={`cn-${campanhaDoReels.id}`}
+          brandId={marca}
+          origem={{ tipo: 'reels', reels: campanhaDoReels }}
+          opcoes={opcoesDaMarca}
+          hoje={new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Sao_Paulo', year: 'numeric', month: '2-digit', day: '2-digit' }).format(agora)}
+          reserva={titulo}
+          aoFechar={() => setCampanhaDoReels(null)}
+          aoCriado={() => disparar(lerOpcoesDaCampanha(marca))}
+        />
       )}
       {apagar && (
         <DialogoApagarFoto

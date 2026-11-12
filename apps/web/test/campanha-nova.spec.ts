@@ -3,10 +3,14 @@ import { describe, expect, it } from 'vitest';
 import {
   type CamposDaCampanha,
   conferirCampanha,
+  diaDoReels,
   efeitoDaCampanha,
   erroDoPedido,
+  falaDoLinkDaBio,
   idDaCampanhaNova,
   linkDoGerenciador,
+  nomeDaCampanhaDoReels,
+  notaDoLinkDaBio,
   passosDaCriacao,
   raiosDaLoja,
   situacaoDaCampanha,
@@ -29,6 +33,7 @@ const opcoes = (o: Partial<NewCampaignOptionsResponse> = {}): NewCampaignOptions
   ],
   campaign_cap_micros: 50_000_000,
   by_piece: [],
+  by_reels: [],
   ...o,
 });
 const midia = (o: Partial<BrandPhoto> = {}): BrandPhoto =>
@@ -48,6 +53,24 @@ describe('campanha nova: a conferência da gaveta', () => {
     expect(conferirCampanha(campos({ verba: '60' }), opcoes(), [midia()], '2026-11-11').verba).toMatch(/^A verba diária passa do teto por campanha, que é de R\$\s50,00 por dia/);
     expect(conferirCampanha(campos({ fim: '2026-11-11' }), opcoes(), [midia()], '2026-11-11').fim).toBe('A data de fim precisa ser depois de hoje.');
     expect(conferirCampanha(campos({ nome: '  ' }), opcoes(), [midia()], '2026-11-11').nome).toBe('Dê um nome à campanha.');
+  });
+
+  it('o Reels (X5, parte 6): a mídia é o próprio post, não há o que escolher em Fotos; o resto confere igual', () => {
+    expect(conferirCampanha(campos({ midia: null }), opcoes(), [], '2026-11-11', true)).toEqual({});
+    expect(conferirCampanha(campos({ midia: null, loja: OUTRA }), opcoes(), [], '2026-11-11', true).loja).toMatch(/^A campanha mostra o anúncio em volta da loja/);
+    // Sem o Reels, a mesma lista vazia pede a foto ou o vídeo.
+    expect(conferirCampanha(campos({ midia: null }), opcoes(), [], '2026-11-11').midia).toBe('Escolha uma foto ou um vídeo de Fotos.');
+  });
+
+  it('o Reels: o nome sugerido, o dia no fuso da loja e a nota do link da bio', () => {
+    // 01:30 em UTC do dia 19 ainda é o dia 18 em São Paulo.
+    expect(diaDoReels('2026-09-19T01:30:00Z')).toBe('18/09');
+    expect(nomeDaCampanhaDoReels('2026-09-19T01:30:00Z', '2026-11-11')).toBe('Reels de 18/09 · novembro');
+    expect(falaDoLinkDaBio('Smash duplo saindo da chapa 🔥 Peça pelo link da bio.')).toBe(true);
+    expect(falaDoLinkDaBio('Link na bio!')).toBe(true);
+    expect(falaDoLinkDaBio('Peça pelo cardápio')).toBe(false);
+    expect(notaDoLinkDaBio('cardapio')).toBe('A legenda fala do link da bio, porque é a do post. No anúncio, o botão “Pedir agora” já leva ao cardápio.');
+    expect(notaDoLinkDaBio('whatsapp')).toMatch(/“Enviar mensagem” já leva à conversa\.$/);
   });
 
   it('a recusa do servidor: o código diz o campo; o resto vai no erro geral', () => {

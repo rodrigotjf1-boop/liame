@@ -19,36 +19,63 @@ export const NEW_CAMPAIGN_STATUSES = ['pedida', 'criando', 'criada', 'nao_criada
 export const NewCampaignStatus = z.enum(NEW_CAMPAIGN_STATUSES);
 export type NewCampaignStatus = z.infer<typeof NewCampaignStatus>;
 
-export const CreateNewCampaignRequest = z.strictObject({
-  brand_id: z.uuid(),
-  /** Uma peça aprovada em Criativos; vai a versão atual dela. */
-  piece_id: z.uuid(),
-  /** Uma foto ou um vídeo pronto de Fotos, da marca. */
-  media_id: z.uuid(),
-  /** A loja do raio: o ponto dela precisa estar no endereço (D-A4-41; D-RG-14). */
-  unit_id: z.uuid(),
-  /** O nome da campanha na Meta e em Resultados. */
-  name: z.string().trim().min(1).max(80),
-  objective: NewCampaignObjective,
-  /** O raio em volta da loja, de 1 a 15 km, em passos de 0,5 km. */
-  radius_km: z
-    .number()
-    .min(1)
-    .max(15)
-    .refine((v) => Number.isInteger(v * 2), 'o raio vai em passos de 0,5 km'),
-  /** A verba diária, em micros da moeda da conta de anúncios (R$ 30,00 = 30000000), sem fração de centavo. */
-  daily_budget_micros: z.int().min(10_000).max(100_000_000_000),
-  /** O último dia, no fuso da empresa; ausente, a campanha não tem data de fim. */
-  end_date: z.iso.date().optional(),
-});
+/** O id de uma publicação no Instagram (só algarismos). */
+const InstagramMediaId = z.string().regex(/^[0-9]{1,40}$/, 'o id da publicação no Instagram tem só algarismos');
+
+/**
+ * A campanha nova sai de uma de duas origens, nunca das duas: a peça aprovada em Criativos com uma foto ou um vídeo de
+ * Fotos (`piece_id` e `media_id`), ou um Reels já publicado no Instagram da Página (`instagram_media_id`; A4, X5, parte
+ * 6; D-A4-46), que vai como está no post: o vídeo e a legenda; o Liame põe o botão e o rastreio.
+ */
+export const CreateNewCampaignRequest = z
+  .strictObject({
+    brand_id: z.uuid(),
+    /** Uma peça aprovada em Criativos; vai a versão atual dela. Junto com `media_id`. */
+    piece_id: z.uuid().optional(),
+    /** Uma foto ou um vídeo pronto de Fotos, da marca. Junto com `piece_id`. */
+    media_id: z.uuid().optional(),
+    /** Um Reels de Fotos › Do seu Instagram, do Instagram ligado à Página da marca. Sem `piece_id` e `media_id`. */
+    instagram_media_id: InstagramMediaId.optional(),
+    /** A loja do raio: o ponto dela precisa estar no endereço (D-A4-41; D-RG-14). */
+    unit_id: z.uuid(),
+    /** O nome da campanha na Meta e em Resultados. */
+    name: z.string().trim().min(1).max(80),
+    objective: NewCampaignObjective,
+    /** O raio em volta da loja, de 1 a 15 km, em passos de 0,5 km. */
+    radius_km: z
+      .number()
+      .min(1)
+      .max(15)
+      .refine((v) => Number.isInteger(v * 2), 'o raio vai em passos de 0,5 km'),
+    /** A verba diária, em micros da moeda da conta de anúncios (R$ 30,00 = 30000000), sem fração de centavo. */
+    daily_budget_micros: z.int().min(10_000).max(100_000_000_000),
+    /** O último dia, no fuso da empresa; ausente, a campanha não tem data de fim. */
+    end_date: z.iso.date().optional(),
+  })
+  .refine(
+    (b) =>
+      b.instagram_media_id === undefined ? b.piece_id !== undefined && b.media_id !== undefined : b.piece_id === undefined && b.media_id === undefined,
+    { error: 'Mande a peça com a foto ou o vídeo de Fotos, ou o Reels do Instagram: um dos dois.' },
+  );
 export type CreateNewCampaignRequest = z.infer<typeof CreateNewCampaignRequest>;
 
 export const NewCampaignResponse = z.strictObject({
   id: z.uuid(),
   brand_id: z.uuid(),
-  piece_id: z.uuid(),
-  piece_version: z.int().min(1),
-  media_id: z.uuid(),
+  /** A peça e a versão dela; nulas na campanha a partir de um Reels. */
+  piece_id: z.uuid().nullable(),
+  piece_version: z.int().min(1).nullable(),
+  /** A foto ou o vídeo de Fotos; nulo na campanha a partir de um Reels. */
+  media_id: z.uuid().nullable(),
+  /** O Reels de onde a campanha saiu (D-A4-46); nulo na campanha com a peça. */
+  instagram_media_id: z.string().nullable(),
+  /**
+   * O Reels como o Liame leu do Instagram (a legenda, o link, a miniatura e o dia); nulo na campanha com a peça, ou
+   * quando o post saiu da leitura do Instagram da marca.
+   */
+  reels: z
+    .strictObject({ caption: z.string(), permalink: z.string().nullable(), thumbnail_url: z.string().nullable(), published_at: z.iso.datetime() })
+    .nullable(),
   unit_id: z.uuid(),
   name: z.string(),
   objective: NewCampaignObjective,
@@ -119,6 +146,10 @@ export const NewCampaignOptionsResponse = z.strictObject({
   /** A campanha nova mais recente de cada peça da marca (a cancelada fica fora): a tela mostra em que pé ela está. */
   by_piece: z.array(
     z.strictObject({ piece_id: z.uuid(), campaign_id: z.uuid(), status: NewCampaignStatus, active: z.boolean(), action_id: z.uuid().nullable() }),
+  ),
+  /** O mesmo para cada Reels da marca que virou campanha nova (A4, X5, parte 6). */
+  by_reels: z.array(
+    z.strictObject({ instagram_media_id: z.string(), campaign_id: z.uuid(), status: NewCampaignStatus, active: z.boolean(), action_id: z.uuid().nullable() }),
   ),
 });
 export type NewCampaignOptionsResponse = z.infer<typeof NewCampaignOptionsResponse>;
