@@ -1,0 +1,162 @@
+import { randomInt } from 'node:crypto';
+import { resolve } from 'node:path';
+import { type Database, runMigrations } from '@liame/database';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { APP_CONFIG, type AppConfig } from '../../src/config.js';
+import { DATABASE } from '../../src/database/database.module.js';
+import { FlagService } from '../../src/flags/flag.service.js';
+import { VaultService } from '../../src/vault/vault.service.js';
+import { RegiaoMidiaLoop } from '../../src/worker/regiao-midia.service.js';
+import { ownerQuery, startApi, type TestApi } from '../helpers/api.js';
+import { type ChamadaAoGoogle, type EmpresaComGoogle, empresaComGoogle, GoogleDeMentira } from '../helpers/google-de-mentira.js';
+import { ligarFlagDaEmpresa } from '../helpers/meta-de-mentira.js';
+import { hasDb, OWNER_URL } from './env.js';
+
+// A mídia por região e por hora (plano da região, R4, parte 1): a rotina `regiao-midia` do worker contra uma Google
+// Ads API local. Só com a função `regiao` ligada; as 4 semanas completas até ontem no fuso da conta, por hora e por
+// cidade, com o nome dos lugares novos; a janela lida substitui a guardada; a cidade que falha não derruba a hora; a
+// falta de permissão espera um dia; a conta desligada leva junto o que foi lido dela. O lugar é novo a cada rodada (a
+// tabela dos nomes é do sistema e o banco de teste é dividido, ERR-215).
+
+/** Quinta-feira, 12/11/2026, 12h em Brasília: a janela vai de 15/10 a 11/11. */
+const AGORA = new Date('2026-11-12T15:00:00Z');
+
+describe.skipIf(!hasDb)('a mídia por região e por hora, pela rotina do worker (R4, parte 1)', () => {
+  const google = new GoogleDeMentira();
+  const anterior: Record<string, string | undefined> = {};
+  let api: TestApi;
+  let database: Database;
+  let rotina: RegiaoMidiaLoop;
+  let e: EmpresaComGoogle;
+  const LUGAR = String(randomInt(900_000_000, 999_999_999));
+  let cidadesFalham = false;
+  let semPermissao = false;
+
+  const consulta = (c: ChamadaAoGoogle) => String(c.corpo.query ?? '');
+  /** A Google Ads API das consultas da R4, pela conta desta empresa. */
+  const responder = (c: ChamadaAoGoogle) => {
+    if (c.recurso !== 'searchStream') return null;
+    const q = consulta(c);
+    if (semPermissao) return { status: 403, corpo: { error: { code: 403, status: 'PERMISSION_DENIED', message: 'The caller does not have permission' } } };
+    if (q.includes('segments.hour,') && q.includes(' FROM customer WHERE ')) {
+      return {
+        status: 200,
+        corpo: [
+          {
+            results: [
+              { segments: { date: '2026-11-10', hour: 20 }, metrics: { impressions: '900', clicks: '30', costMicros: '15000000', conversions: 3 } },
+              { segments: { date: '2026-11-11', hour: 12 }, metrics: { impressions: '100', clicks: '2', costMicros: '1000000' } },
+              // Fora da janela (a plataforma devolveu a mais): não entra.
+              { segments: { date: '2026-10-01', hour: 20 }, metrics: { impressions: '1', clicks: '1', costMicros: '1' } },
+            ],
+          },
+        ],
+      };
+    }
+    if (q.includes('FROM user_location_view')) {
+      if (cidadesFalham) return { status: 400, corpo: { error: { code: 400, status: 'INVALID_ARGUMENT', message: 'Request contains an invalid argument.' } } };
+      return { status: 200, corpo: [{ results: [{ segments: { date: '2026-11-10', geoTargetCity: `geoTargetConstants/${LUGAR}` }, metrics: { impressions: '700', clicks: '25', costMicros: '12000000', conversions: 2 } }] }] };
+    }
+    if (q.includes('FROM geo_target_constant')) {
+      return { status: 200, corpo: [{ results: [{ geoTargetConstant: { id: LUGAR, name: 'Rio de Janeiro', canonicalName: 'Rio de Janeiro,State of Rio de Janeiro,Brazil', targetType: 'City', countryCode: 'BR' } }] }] };
+    }
+    return null;
+  };
+  const rodar = (quando = AGORA) => rotina.executarLote(5, { tenantIds: [e.tenantId] }, quando);
+  const consultasFeitas = () => google.chamadas.filter((c) => c.cliente === e.cliente && c.recurso === 'searchStream').map(consulta);
+  const horas = () =>
+    ownerQuery<{ day: string; hour: number; impressions: string; clicks: string; spend: string; conversions: string | null }>(
+      `select day::text as day, hour, impressions::text, clicks::text, spend::text, conversions::text from liame.ad_hour_daily where connected_account_id = $1 order by day, hour`,
+      [e.conta],
+    );
+  const cidades = () =>
+    ownerQuery<{ day: string; geo_target_id: string; clicks: string; spend: string }>(
+      `select day::text as day, geo_target_id::text, clicks::text, spend::text from liame.ad_city_daily where connected_account_id = $1 order by day`,
+      [e.conta],
+    );
+  const cursor = async () =>
+    (await ownerQuery<{ cursor: Record<string, unknown>; last_error: string | null }>(`select cursor, last_error from liame.sync_state where connected_account_id = $1 and dataset = 'regiao_midia'`, [e.conta]))[0];
+
+  beforeAll(async () => {
+    await runMigrations({ connectionString: OWNER_URL, dir: resolve(process.cwd(), '../../packages/database/migrations') });
+    await google.subir();
+    const ambiente = google.ambiente();
+    for (const k of Object.keys(ambiente)) anterior[k] = process.env[k];
+    Object.assign(process.env, ambiente);
+    api = await startApi();
+    database = api.app.get(DATABASE);
+    rotina = new RegiaoMidiaLoop(database, api.app.get<AppConfig>(APP_CONFIG), api.app.get(VaultService), api.app.get(FlagService));
+    e = await empresaComGoogle(api, database, { nome: 'Hamburgueria da Região' });
+    google.defeitos.set(e.cliente, responder);
+  }, 120_000);
+  afterAll(async () => {
+    await api?.close();
+    await google.fechar();
+    for (const [k, v] of Object.entries(anterior)) {
+      if (v === undefined) delete process.env[k];
+      else process.env[k] = v;
+    }
+  });
+
+  it('com a função `regiao` desligada, a conta espera um dia sem chamar o Google', async () => {
+    expect(await rodar()).toEqual([{ conta: e.conta, status: 'desligada' }]);
+    expect(consultasFeitas()).toEqual([]);
+    expect((await cursor())!.cursor.proxima).toBe(new Date(AGORA.getTime() + 24 * 3_600_000).toISOString());
+    // Na mesma volta, nada é devido.
+    expect(await rodar()).toEqual([]);
+  });
+
+  it('com a função ligada: a hora e a cidade das 4 semanas até ontem, e o nome do lugar novo; o que veio fora da janela fica de fora', async () => {
+    await ligarFlagDaEmpresa(api, 'regiao', e.tenantId, true);
+    await ownerQuery(`update liame.sync_state set cursor = '{}'::jsonb where connected_account_id = $1 and dataset = 'regiao_midia'`, [e.conta]);
+    expect(await rodar()).toEqual([{ conta: e.conta, status: 'ok', horas: 3, cidades: 1 }]);
+    const feitas = consultasFeitas();
+    expect(feitas[0]).toContain("BETWEEN '2026-10-15' AND '2026-11-11'");
+    expect(feitas.some((q) => q.includes(`'geoTargetConstants/${LUGAR}'`))).toBe(true);
+    expect(await horas()).toEqual([
+      { day: '2026-11-10', hour: 20, impressions: '900', clicks: '30', spend: '15.000000', conversions: '3.000000' },
+      { day: '2026-11-11', hour: 12, impressions: '100', clicks: '2', spend: '1.000000', conversions: '0.000000' },
+    ]);
+    expect(await cidades()).toEqual([{ day: '2026-11-10', geo_target_id: LUGAR, clicks: '25', spend: '12.000000' }]);
+    expect(await ownerQuery(`select name, target_type, country_code from liame.region_geo_target where id = $1`, [LUGAR])).toEqual([{ name: 'Rio de Janeiro', target_type: 'City', country_code: 'BR' }]);
+    expect(await cursor()).toMatchObject({ last_error: null, cursor: { proxima: new Date(AGORA.getTime() + 24 * 3_600_000).toISOString(), falhas_seguidas: 0 } });
+  });
+
+  it('no dia seguinte: o lugar já conhecido não é traduzido de novo; a cidade que falha não derruba a hora e deixa a de antes', async () => {
+    google.chamadas.length = 0;
+    cidadesFalham = true;
+    const amanha = new Date(AGORA.getTime() + 25 * 3_600_000);
+    try {
+      expect(await rodar(amanha)).toEqual([{ conta: e.conta, status: 'ok', horas: 3 }]);
+    } finally {
+      cidadesFalham = false;
+    }
+    expect(consultasFeitas().some((q) => q.includes('geo_target_constant'))).toBe(false);
+    // A janela andou um dia (de 16/10 a 12/11) e substituiu a guardada; a cidade é a de antes.
+    expect((await horas()).map((h) => [h.day, h.hour])).toEqual([
+      ['2026-11-10', 20],
+      ['2026-11-11', 12],
+    ]);
+    expect(await cidades()).toHaveLength(1);
+    expect((await cursor())!.cursor).toMatchObject({ cidades: 'falhou', falhas_seguidas: 0 });
+  });
+
+  it('sem permissão, a conta espera um dia e o que já foi lido fica; a conta desligada leva junto o que foi lido dela', async () => {
+    semPermissao = true;
+    const depois = new Date(AGORA.getTime() + 50 * 3_600_000);
+    try {
+      expect(await rodar(depois)).toMatchObject([{ conta: e.conta, status: 'sem_permissao' }]);
+    } finally {
+      semPermissao = false;
+    }
+    const c = await cursor();
+    expect(c!.cursor).toMatchObject({ falha: 'permissao', falhas_seguidas: 1, proxima: new Date(depois.getTime() + 24 * 3_600_000).toISOString() });
+    expect(c!.last_error).toMatch(/^permissao: /);
+    expect(await horas()).toHaveLength(2);
+
+    await ownerQuery(`update liame.connected_account set disconnected_at = now() where id = $1`, [e.conta]);
+    expect(await rodar(depois)).toEqual([]);
+    expect(await horas()).toEqual([]);
+    expect(await cidades()).toEqual([]);
+  });
+});

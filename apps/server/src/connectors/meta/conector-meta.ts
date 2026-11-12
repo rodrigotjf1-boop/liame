@@ -4,6 +4,7 @@ import type { Db } from '@liame/database';
 import { Logger } from '@nestjs/common';
 import type { AppConfig } from '../../config.js';
 import type { PontoMetrica } from '../../media/metric-store.js';
+import { contagem, decimal, type HoraLida, horaDaMeta, horasValidas } from '../../regiao/midia-paga.js';
 import { faixaDaLinha, faixasDoAlcance, METRICAS_DE_PERIODO } from '../alcance-do-periodo.js';
 import { type ClienteConector, ErroConector } from '../cliente-http.js';
 import { dataValida, diasNaJanela, fatias } from '../janela.js';
@@ -318,6 +319,41 @@ export class ConectorMeta implements ConectorLeitura {
         ...(criativos.completo ? { providerAttributes: { rastreio: rastreioMeta(c) } } : {}),
       })),
     };
+  }
+
+  /**
+   * A hora em que o anúncio rendeu (plano da região, R4, parte 1; base §19.7): impressões, cliques e gasto da conta por
+   * dia e por hora, no fuso da conta (`hourly_stats_aggregated_by_advertiser_time_zone`). A Meta não dá alcance por hora
+   * (volta 0) e guarda 13 meses; a cidade não existe nas quebras dela, só o estado, que o Liame não lê. Fatias de 7 dias.
+   */
+  async lerHoras(conta: ContextoConta, janela: { inicio: string; fim: string }): Promise<HoraLida[]> {
+    contaValida(conta.externalId);
+    dataValida(this.provider, janela.inicio);
+    dataValida(this.provider, janela.fim);
+    type LinhaDaHora = { date_start?: string; hourly_stats_aggregated_by_advertiser_time_zone?: string; spend?: string; impressions?: string; clicks?: string };
+    const horas: HoraLida[] = [];
+    for (const fatia of fatias(janela.inicio, janela.fim, 7)) {
+      const linhas = await this.paginas<LinhaDaHora>(
+        conta.credencial,
+        conta.externalId,
+        `${conta.externalId}/insights`,
+        {
+          level: 'account',
+          time_increment: '1',
+          time_range: JSON.stringify(fatia),
+          breakdowns: 'hourly_stats_aggregated_by_advertiser_time_zone',
+          fields: 'date_start,spend,impressions,clicks',
+          limit: '500',
+        },
+        'insights_hourly',
+      );
+      for (const l of linhas) {
+        const hora = horaDaMeta(l.hourly_stats_aggregated_by_advertiser_time_zone);
+        if (hora === null || typeof l.date_start !== 'string') continue;
+        horas.push({ dia: l.date_start, hora, impressoes: contagem(l.impressions), cliques: contagem(l.clicks), gasto: decimal(l.spend), conversoes: null });
+      }
+    }
+    return horasValidas(horas);
   }
 
   async lerMetricas(conta: ContextoConta, janela: { inicio: string; fim: string }): Promise<PontoMetrica[]> {

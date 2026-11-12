@@ -81,6 +81,24 @@ describe.skipIf(!hasDb)('conector da Meta (leitura, v26.0)', () => {
         relatorios.set(id, { timeRange: JSON.parse(url.searchParams.get('time_range')!), consultas: 0, falha: no === 'act_9990000002' });
         return { status: 200, corpo: { report_run_id: id } };
       }
+      // A hora (R4, parte 1): duas horas por dia da faixa pedida; uma linha com a faixa fora do formato fica de fora.
+      if (aresta === 'insights' && url.searchParams.get('breakdowns') === 'hourly_stats_aggregated_by_advertiser_time_zone') {
+        const faixa = JSON.parse(url.searchParams.get('time_range')!) as { since: string; until: string };
+        const dias: string[] = [];
+        for (let d = faixa.since; d <= faixa.until; d = new Date(new Date(`${d}T12:00:00Z`).getTime() + 86_400_000).toISOString().slice(0, 10)) dias.push(d);
+        return {
+          status: 200,
+          corpo: {
+            data: [
+              ...dias.flatMap((d) => [
+                { date_start: d, date_stop: d, hourly_stats_aggregated_by_advertiser_time_zone: '19:00:00 - 19:59:59', spend: '12.5', impressions: '800', clicks: '21' },
+                { date_start: d, date_stop: d, hourly_stats_aggregated_by_advertiser_time_zone: '20:00:00 - 20:59:59', spend: '20.25', impressions: '1200', clicks: '35' },
+              ]),
+              { date_start: faixa.since, date_stop: faixa.since, hourly_stats_aggregated_by_advertiser_time_zone: 'sem hora', spend: '1', impressions: '1', clicks: '1' },
+            ],
+          },
+        };
+      }
       if (aresta === 'insights' && url.searchParams.has('time_ranges')) {
         // Conta em que só a consulta do alcance do período falha (a Meta fora do ar nela): os números do dia seguem.
         if (no === 'act_9990000005') return { status: 503, corpo: { error: { code: 2, type: 'OAuthException', message: 'An unexpected error has occurred. Please retry your request later.' } } };
@@ -130,6 +148,21 @@ describe.skipIf(!hasDb)('conector da Meta (leitura, v26.0)', () => {
   const diarios = (pontos: PontoMetrica[]) => pontos.filter((p) => !(METRICAS_DE_PERIODO as readonly string[]).includes(p.metricName));
   /** As consultas dos números de cada dia (as do alcance do período vão com `time_ranges`). */
   const doDia = (p: Pedido) => p.caminho.endsWith('/insights') && p.query.has('time_range');
+
+  it('a hora dos anúncios (R4, parte 1): a conta por dia e hora no fuso dela, em fatias de 7 dias, só com o que tem hora', async () => {
+    const antes = pedidos.length;
+    const horas = await conector().lerHoras(conta(), { inicio: '2026-10-01', fim: '2026-10-10' });
+    const daHora = pedidos.slice(antes).filter((p) => p.query.get('breakdowns') === 'hourly_stats_aggregated_by_advertiser_time_zone');
+    expect(daHora.map((p) => [p.query.get('level'), p.query.get('time_increment'), p.query.get('time_range')])).toEqual([
+      ['account', '1', JSON.stringify({ since: '2026-10-01', until: '2026-10-07' })],
+      ['account', '1', JSON.stringify({ since: '2026-10-08', until: '2026-10-10' })],
+    ]);
+    // O token só no cabeçalho, com a prova do segredo do app.
+    expect(daHora.every((p) => p.autorizacao === `Bearer ${TOKEN}` && p.query.has('appsecret_proof') && !p.urlCompleta.includes(TOKEN))).toBe(true);
+    expect(horas).toHaveLength(20);
+    expect(horas.find((h) => h.dia === '2026-10-03' && h.hora === 20)).toEqual({ dia: '2026-10-03', hora: 20, impressoes: 1200, cliques: 35, gasto: '20.25', conversoes: null });
+    await expect(conector().lerHoras(conta('act_x'), { inicio: '2026-10-01', fim: '2026-10-02' })).rejects.toThrow();
+  });
 
   it('versão do Capability Registry; token só no cabeçalho, com appsecret_proof', async () => {
     const c = await criarConectorMeta(database.db, cliente(), plataformas());

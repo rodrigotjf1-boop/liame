@@ -35,6 +35,7 @@ import { RevisaoSemanalLoop } from './revisao-semanal-loop.js';
 import { SearchConsoleLoop } from './search-console-loop.js';
 import { RegiaoCnpjService } from './regiao-cnpj.service.js';
 import { RegiaoFontesService } from './regiao-fontes.service.js';
+import { RegiaoMidiaLoop } from './regiao-midia.service.js';
 import { RotinaDoCrmLoop } from './rotina-do-crm-loop.js';
 import { SincronizacaoLoop } from './sincronizacao-loop.js';
 import { SombraLoop } from './sombra-loop.js';
@@ -89,6 +90,7 @@ export class EventsLoopService implements OnApplicationBootstrap, OnApplicationS
     private readonly searchConsole: SearchConsoleLoop,
     private readonly regiaoFontes: RegiaoFontesService,
     private readonly regiaoCnpj: RegiaoCnpjService,
+    private readonly regiaoMidia: RegiaoMidiaLoop,
     private readonly comparacao: ComparacaoDmsIdLoop,
     private readonly fotos: FotosLoop,
     private readonly numerosDosPosts: PostsNumerosLoop,
@@ -171,6 +173,9 @@ export class EventsLoopService implements OnApplicationBootstrap, OnApplicationS
       // Os restaurantes ativos pelo CNPJ da Receita (R2, parte 4): um arquivo do mês por volta (horas cada mês, em fluxo);
       // arquivo lido emenda o seguinte, o mês em dia confere de novo em 12 horas; a fila é olhada de 10 em 10 minutos.
       this.loop('regiao-cnpj', 1, 600_000, async () => ((await this.regiaoCnpj.executar()).situacao === 'arquivo_lido' ? 1 : 0)),
+      // A mídia por região e por hora (R4, parte 1): as 4 semanas de cada conta de anúncio por hora (Meta e Google) e por
+      // cidade (Google), uma vez por dia, só com a função `regiao` ligada; a fila é olhada de 5 em 5 minutos.
+      this.loop('regiao-midia', 3, 300_000, async (n) => (await this.regiaoMidia.executarLote(n)).length),
       // Hub DMS (F2, A3): as leituras do RegemCast pelas duas credenciais, comparadas; cada conta uma vez por hora, só
       // com a função `comparacao_dms_id` ligada e o aplicativo do Liame no DMS ID configurado; a fila é olhada de 5 em 5 minutos.
       this.loop('comparacao-dms-id', 2, 300_000, async (n) => (await this.comparacao.executarLote(n)).length),

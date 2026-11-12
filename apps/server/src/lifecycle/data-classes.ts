@@ -128,6 +128,12 @@ export const DATA_CLASSES: Record<string, TableClassification> = {
   region_food_count: { class: 'PUBLIC', retention: 'do produto (contagens de restaurantes do CNPJ aberto da Receita, só o mês mais novo; sem nome, endereço nem CNPJ)' },
   region_weather: { class: 'PUBLIC', retention: 'do produto (a previsão do tempo por dia do CPTEC, por município; os dias de mais de uma semana atrás saem)' },
   region_food_part: { class: 'INTERNAL', retention: 'até somar o mês (contagens de cada arquivo do CNPJ da Receita em leitura)' },
+  // A mídia por região e por hora (plano da região, R4, parte 1; migration 0146): as somas por dia e hora (Meta e
+  // Google) e por dia e cidade (Google) de cada conta de anúncio, sem pessoa; a janela lida substitui a guardada, e a
+  // conta desligada leva junto o que foi lido dela. O nome dos lugares do Google é dado público, do produto.
+  ad_hour_daily: { class: 'CONFIDENTIAL', retention: 'com a conta conectada (as 4 semanas mais novas de cada conta de anúncio)' },
+  ad_city_daily: { class: 'CONFIDENTIAL', retention: 'com a conta conectada (as 4 semanas mais novas de cada conta de anúncio)' },
+  region_geo_target: { class: 'PUBLIC', retention: 'do produto (o nome dos lugares do Google Ads, públicos)' },
   ai_usage: { class: 'PERSONAL', retention: 'com a empresa (registro técnico, sem conteúdo)' },
   ai_exchange: { class: 'CONFIDENTIAL', retention: '30 dias (o que foi enviado ao modelo e o que voltou)', purge: { job: 'conteudo_ia', days: 30 } },
   // O que a conferência recusou (A3, D-A3-15): o funcionário, o fluxo, o porquê e a regra; sem o texto e sem quem pediu.

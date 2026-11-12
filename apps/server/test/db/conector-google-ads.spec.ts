@@ -60,6 +60,35 @@ describe.skipIf(!hasDb)('conector do Google Ads (leitura, v25)', () => {
     if (/FROM campaign\b/.test(query)) return { status: 200, corpo: comData ? porData('metrics-campaign', query) : fixture('campaigns') };
     if (/FROM ad_group_ad\b/.test(query)) return { status: 200, corpo: comData ? porData('metrics-ad', query) : fixture('ads') };
     if (/FROM ad_group\b/.test(query)) return { status: 200, corpo: fixture('ad-groups') };
+    // A mídia por região e por hora (R4, parte 1): a hora pela conta, a cidade pela localização e o nome dos lugares.
+    const desde = query.match(/BETWEEN '(\d{4}-\d{2}-\d{2})'/)?.[1];
+    if (query.includes('segments.hour,') && query.includes(' FROM customer WHERE ') && desde) {
+      return {
+        status: 200,
+        corpo: [
+          {
+            results: [
+              { segments: { date: desde, hour: 19 }, metrics: { impressions: '500', clicks: '12', costMicros: '7500000', conversions: 2 } },
+              // O zero que o JSON do protobuf omite: as métricas ausentes valem zero.
+              { segments: { date: desde, hour: 3 } },
+            ],
+          },
+        ],
+      };
+    }
+    if (/FROM user_location_view WHERE/.test(query) && desde) {
+      return {
+        status: 200,
+        corpo: [
+          { results: [{ segments: { date: desde, geoTargetCity: 'geoTargetConstants/1001773' }, metrics: { impressions: '300', clicks: '9', costMicros: '4250000', conversions: 1.5 } }] },
+          // O mesmo lugar no mesmo dia em outro lote soma; o lugar fora do formato fica de fora.
+          { results: [{ segments: { date: desde, geoTargetCity: 'geoTargetConstants/1001773' }, metrics: { impressions: '100', clicks: '1', costMicros: '750000' } }, { segments: { date: desde, geoTargetCity: 'x' } }] },
+        ],
+      };
+    }
+    if (/FROM geo_target_constant WHERE geo_target_constant\.resource_name IN \('geoTargetConstants\/1001773'\)$/.test(query)) {
+      return { status: 200, corpo: [{ results: [{ geoTargetConstant: { resourceName: 'geoTargetConstants/1001773', id: '1001773', name: 'Rio de Janeiro', canonicalName: 'Rio de Janeiro,State of Rio de Janeiro,Brazil', targetType: 'City', countryCode: 'BR' } }] }] };
+    }
     return { status: 400, corpo: { error: { code: 400, status: 'INVALID_ARGUMENT', message: 'query' } } };
   }
 
@@ -97,6 +126,25 @@ describe.skipIf(!hasDb)('conector do Google Ads (leitura, v25)', () => {
 
   it('versão do Capability Registry', async () => {
     expect((await criarConectorGoogleAds(database.db, cliente(), plataformas())).apiVersion).toBe('v25');
+  });
+
+  it('a mídia por região e por hora (R4, parte 1): a hora pela conta, a cidade de quem viu e o nome dos lugares', async () => {
+    const antes = pedidos.length;
+    const horas = await conector().lerHoras(conta(), { inicio: '2026-10-01', fim: '2026-10-10' });
+    expect(horas).toEqual([
+      { dia: '2026-10-01', hora: 19, impressoes: 500, cliques: 12, gasto: '7.5', conversoes: '2' },
+      { dia: '2026-10-01', hora: 3, impressoes: 0, cliques: 0, gasto: '0', conversoes: '0' },
+    ]);
+    const cidades = await conector().lerCidades(conta(), { inicio: '2026-10-01', fim: '2026-10-10' });
+    expect(cidades).toEqual([{ dia: '2026-10-01', lugar: '1001773', impressoes: 400, cliques: 10, gasto: '5', conversoes: '1.5' }]);
+    // O id fora do formato não entra na consulta; os repetidos vão uma vez.
+    const lugares = await conector().lerLugares(conta(), ['1001773', 'geoTargetConstants/1001773', "1' OR 1=1"]);
+    expect(lugares).toEqual([{ id: '1001773', nome: 'Rio de Janeiro', nomeCompleto: 'Rio de Janeiro,State of Rio de Janeiro,Brazil', tipo: 'City', pais: 'BR' }]);
+    const consultas = pedidos.slice(antes).map((p) => p.query ?? '');
+    expect(consultas).toHaveLength(3);
+    expect(consultas[0]).toBe("SELECT segments.date, segments.hour, metrics.impressions, metrics.clicks, metrics.cost_micros, metrics.conversions FROM customer WHERE segments.date BETWEEN '2026-10-01' AND '2026-10-10'");
+    expect(consultas[1]).toContain('FROM user_location_view WHERE');
+    expect(pedidos.slice(antes).every((p) => p.cabecalhos['login-customer-id'] === GERENTE)).toBe(true);
   });
 
   it('descoberta: diretas e clientes das gerentes (com o nome da gerente), sem gerentes; acesso direto vence; sem developer token', async () => {
