@@ -2,6 +2,7 @@ import { randomInt, randomUUID } from 'node:crypto';
 import { createServer, type IncomingMessage, type Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { type Database, withTenant } from '@liame/database';
+import sharp from 'sharp';
 import { VaultService } from '../../src/vault/vault.service.js';
 import { enableMfa, ownerQuery, resetIpRateLimits, signupAndLogin, type TestApi } from './api.js';
 
@@ -10,6 +11,10 @@ import { enableMfa, ownerQuery, resetIpRateLimits, signupAndLogin, type TestApi 
 // `googleAds:searchStream` com a campanha e o orçamento dela, e com as outras campanhas de um orçamento dividido; `campaigns:mutate` e `campaignBudgets:mutate` com
 // `operations[].updateMask` em snake_case, o corpo em camelCase e `validateOnly` (não muda nada e só devolve erros);
 // erros com o `GoogleAdsFailure` dentro de `error.details`.
+// A criação da Performance Max (Y9, parte 3): `googleAds:mutate` com `mutateOperations` e os ids provisórios negativos,
+// conferida como a referência lida em 12/11/2026 descreve (a campanha pausada com as regras da marca, o nome da loja e a
+// logo na campanha, o grupo de recursos com os textos e as imagens nas quantidades, nos tamanhos e nas proporções; as
+// imagens medidas de verdade); tudo ou nada; e a procura da campanha criada pelo nome com a marca do Liame.
 
 export const ACESSO_DO_GOOGLE = 'acesso-de-teste-google';
 export const REFRESH_DO_GOOGLE = 'refresh-de-teste-google';
@@ -22,13 +27,23 @@ export type OrcamentoNoGoogle = { cliente: string; id: string; amountMicros: num
 export type ChamadaAoGoogle = {
   tipo: 'leitura' | 'validacao' | 'escrita';
   cliente: string;
-  /** `searchStream`, `campaigns` ou `campaignBudgets`. */
+  /** `searchStream`, `mutate` (a criação da Performance Max), `campaigns` ou `campaignBudgets`. */
   recurso: string;
   corpo: Record<string, unknown>;
   autorizacao: string | undefined;
   gerente: string | undefined;
 };
 type Resposta = { status: number; corpo: unknown };
+/** O grupo de recursos de uma Performance Max criada: o link e os recursos de cada papel (o texto, ou as medidas da imagem). */
+export type GrupoNoGoogle = {
+  cliente: string;
+  id: string;
+  campanha: string;
+  finalUrls: string[];
+  recursos: { papel: string; texto?: string; largura?: number; altura?: number }[];
+};
+/** O que a campanha criada leva além do que a lista de campanhas guarda: a marca, os critérios, a automação, o fim. */
+export type CriacaoNoGoogle = { campanha: string; corpoDaCampanha: Record<string, unknown>; criterios: Record<string, unknown>[]; daCampanha: { papel: string; texto?: string; largura?: number; altura?: number }[] };
 
 const numero = () => String(randomInt(1_000_000_000, 9_999_999_999));
 
@@ -39,6 +54,12 @@ export class GoogleDeMentira {
   readonly chamadas: ChamadaAoGoogle[] = [];
   /** Por conta (id do cliente): o que responder no lugar do normal. Devolver nulo segue o normal. */
   readonly defeitos = new Map<string, (c: ChamadaAoGoogle) => Resposta | null>();
+  /** Os grupos de recursos das Performance Max criadas, pelo id. */
+  readonly grupos = new Map<string, GrupoNoGoogle>();
+  /** O resto do que cada criação levou, pelo id da campanha. */
+  readonly criacoes = new Map<string, CriacaoNoGoogle>();
+  /** As contas em que a próxima criação de verdade acontece e a resposta se perde (o Google responde 503 depois de criar). */
+  readonly perderResposta = new Set<string>();
   renovacoes = 0;
   private servidor: Server | null = null;
 
@@ -47,9 +68,12 @@ export class GoogleDeMentira {
       let texto = '';
       req.on('data', (d: Buffer) => (texto += d.toString('utf8')));
       req.on('end', () => {
-        const r = this.responder(req, texto);
-        res.writeHead(r.status, { 'content-type': 'application/json' });
-        res.end(JSON.stringify(r.corpo));
+        void this.responder(req, texto)
+          .catch((err: unknown) => this.erro(500, 'INTERNAL', err instanceof Error ? err.message : 'erro'))
+          .then((r) => {
+            res.writeHead(r.status, { 'content-type': 'application/json' });
+            res.end(JSON.stringify(r.corpo));
+          });
       });
     });
     await new Promise<void>((ok) => this.servidor!.listen(0, '127.0.0.1', ok));
@@ -158,7 +182,169 @@ export class GoogleDeMentira {
     };
   }
 
-  private responder(req: IncomingMessage, texto: string): Resposta {
+  /** A recusa de um pedido de criação, como o Google responde (o `GoogleAdsFailure` com o código e o texto). */
+  private recusa(codigo: Record<string, string>, texto: string): Resposta {
+    return this.erro(400, 'INVALID_ARGUMENT', 'Request contains an invalid argument.', { codigo, texto });
+  }
+
+  /**
+   * A criação da Performance Max numa requisição (`googleAds:mutate`): confere cada operação, na ordem (o id provisório
+   * só vale depois de criado na mesma requisição), e as regras da Performance Max no fim; a validação para aí. A de
+   * verdade cria o orçamento, a campanha (pausada) e o grupo de recursos, e responde uma linha por operação.
+   */
+  private async criarPerformanceMax(chamada: ChamadaAoGoogle): Promise<Resposta> {
+    const cliente = chamada.cliente;
+    const ops = chamada.corpo.mutateOperations as Array<Record<string, { create?: Record<string, unknown> }>> | undefined;
+    if (!Array.isArray(ops) || !ops.length) return this.recusa({ requestError: 'REQUIRED_FIELD_MISSING' }, 'The required field was not present.');
+    type Recurso = { tipo: string; corpo: Record<string, unknown>; largura?: number; altura?: number };
+    const criados = new Map<string, Recurso>();
+    const provisorio = (nome: unknown, tipo: string) => typeof nome === 'string' && new RegExp(`^customers/${cliente}/${tipo}/-\\d+$`).test(nome);
+    const existe = (nome: unknown, tipo: string) => typeof nome === 'string' && criados.get(nome)?.tipo === tipo;
+    const naoAchou = () => this.recusa({ mutateError: 'RESOURCE_NOT_FOUND' }, 'Resource was not found.');
+    let campanha: Record<string, unknown> | null = null;
+    let grupo: Record<string, unknown> | null = null;
+    const criterios: Record<string, unknown>[] = [];
+    const daCampanha: { papel: string; asset: string }[] = [];
+    const doGrupo: { papel: string; asset: string }[] = [];
+    const respostas: Record<string, { resourceName: string }>[] = [];
+
+    for (const op of ops) {
+      const [chave, valor] = Object.entries(op)[0] ?? [];
+      const c = valor?.create;
+      if (!chave || !c || Object.keys(op).length !== 1) return this.recusa({ requestError: 'REQUIRED_FIELD_MISSING' }, 'The required field was not present.');
+      if (chave === 'campaignBudgetOperation') {
+        if (!provisorio(c.resourceName, 'campaignBudgets') || !/^\d+$/.test(String(c.amountMicros ?? '')) || c.explicitlyShared !== false || !c.name) {
+          return this.recusa({ campaignBudgetError: 'INVALID_BUDGET' }, 'The budget is invalid.');
+        }
+        criados.set(String(c.resourceName), { tipo: 'campaignBudgets', corpo: c });
+        respostas.push({ campaignBudgetResult: { resourceName: String(c.resourceName) } });
+      } else if (chave === 'campaignOperation') {
+        if (!provisorio(c.resourceName, 'campaigns') || !existe(c.campaignBudget, 'campaignBudgets')) return naoAchou();
+        if (c.advertisingChannelType !== 'PERFORMANCE_MAX' || c.status !== 'PAUSED' || typeof c.maximizeConversions !== 'object') {
+          return this.recusa({ campaignError: 'INVALID_CAMPAIGN' }, 'The campaign is invalid.');
+        }
+        if (!c.containsEuPoliticalAdvertising) return this.recusa({ campaignError: 'MISSING_EU_POLITICAL_ADVERTISING_SELF_DECLARATION' }, 'The EU political advertising declaration is missing.');
+        if ([...this.campanhas.values()].some((x) => x.cliente === cliente && x.status !== 'REMOVED' && x.name === c.name)) {
+          return this.recusa({ campaignError: 'DUPLICATE_CAMPAIGN_NAME' }, 'Campaign with the same name already exists.');
+        }
+        if (c.endDateTime !== undefined && !/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(String(c.endDateTime))) return this.recusa({ dateError: 'INVALID_STRING_DATE_TIME_SECONDS' }, 'The string date time is invalid.');
+        campanha = c;
+        criados.set(String(c.resourceName), { tipo: 'campaigns', corpo: c });
+        respostas.push({ campaignResult: { resourceName: String(c.resourceName) } });
+      } else if (chave === 'campaignCriterionOperation') {
+        if (!existe(c.campaign, 'campaigns')) return naoAchou();
+        criterios.push(c);
+        respostas.push({ campaignCriterionResult: { resourceName: `customers/${cliente}/campaignCriteria/${numero()}` } });
+      } else if (chave === 'assetOperation') {
+        if (!provisorio(c.resourceName, 'assets')) return naoAchou();
+        const textAsset = c.textAsset as { text?: unknown } | undefined;
+        const imageAsset = c.imageAsset as { data?: unknown } | undefined;
+        if (textAsset && typeof textAsset.text === 'string' && textAsset.text) {
+          criados.set(String(c.resourceName), { tipo: 'assets', corpo: c });
+        } else if (imageAsset && typeof imageAsset.data === 'string') {
+          let medidas: { width?: number; height?: number };
+          try {
+            medidas = await sharp(Buffer.from(imageAsset.data, 'base64'), { failOn: 'error' }).metadata();
+          } catch {
+            return this.recusa({ imageError: 'INVALID_IMAGE' }, 'The image is not valid.');
+          }
+          if (!c.name) return this.recusa({ assetError: 'REQUIRED_FIELD_MISSING' }, 'The asset name is missing.');
+          criados.set(String(c.resourceName), { tipo: 'assets', corpo: c, largura: medidas.width ?? 0, altura: medidas.height ?? 0 });
+        } else {
+          return this.recusa({ assetError: 'ASSET_TYPE_NOT_SUPPORTED' }, 'The asset type is not supported.');
+        }
+        respostas.push({ assetResult: { resourceName: String(c.resourceName) } });
+      } else if (chave === 'campaignAssetOperation') {
+        if (!existe(c.campaign, 'campaigns') || !existe(c.asset, 'assets')) return naoAchou();
+        daCampanha.push({ papel: String(c.fieldType), asset: String(c.asset) });
+        respostas.push({ campaignAssetResult: { resourceName: `customers/${cliente}/campaignAssets/${numero()}` } });
+      } else if (chave === 'assetGroupOperation') {
+        if (!provisorio(c.resourceName, 'assetGroups') || !existe(c.campaign, 'campaigns')) return naoAchou();
+        if (!Array.isArray(c.finalUrls) || !c.finalUrls.length || !c.name) return this.recusa({ assetGroupError: 'FINAL_URL_REQUIRED' }, 'The final URL is required.');
+        grupo = c;
+        criados.set(String(c.resourceName), { tipo: 'assetGroups', corpo: c });
+        respostas.push({ assetGroupResult: { resourceName: String(c.resourceName) } });
+      } else if (chave === 'assetGroupAssetOperation') {
+        if (!existe(c.assetGroup, 'assetGroups') || !existe(c.asset, 'assets')) return naoAchou();
+        doGrupo.push({ papel: String(c.fieldType), asset: String(c.asset) });
+        respostas.push({ assetGroupAssetResult: { resourceName: `customers/${cliente}/assetGroupAssets/${numero()}` } });
+      } else {
+        return this.recusa({ requestError: 'UNKNOWN_OPERATION' }, `Unsupported operation ${chave}.`);
+      }
+    }
+
+    // As regras da Performance Max, sobre o que a requisição inteira levou.
+    if (!campanha || !grupo) return this.recusa({ assetGroupError: 'ASSET_GROUP_REQUIRED' }, 'A Performance Max campaign needs an asset group.');
+    const recurso = (nome: string) => criados.get(nome)!;
+    const texto = (nome: string) => (recurso(nome).corpo.textAsset as { text?: string } | undefined)?.text;
+    const contar = (papel: string) => doGrupo.filter((d) => d.papel === papel);
+    const faixas: [string, number, number, number | null][] = [
+      ['HEADLINE', 3, 15, 30],
+      ['LONG_HEADLINE', 1, 5, 90],
+      ['DESCRIPTION', 2, 5, 90],
+      ['MARKETING_IMAGE', 1, 20, null],
+      ['SQUARE_MARKETING_IMAGE', 1, 20, null],
+      ['PORTRAIT_MARKETING_IMAGE', 0, 20, null],
+    ];
+    for (const [papel, min, max, letras] of faixas) {
+      const itens = contar(papel);
+      if (itens.length < min || itens.length > max) return this.recusa({ assetGroupError: `NOT_ENOUGH_${papel}_ASSET` }, `Not enough ${papel} assets.`);
+      if (letras && itens.some((d) => [...(texto(d.asset) ?? '')].length > letras)) return this.recusa({ assetError: 'TEXT_TOO_LONG' }, `A ${papel} is too long.`);
+    }
+    // A proporção de cada imagem (1% de folga) e o mínimo, como o Google confere ao ligar a imagem ao papel.
+    const proporcao: Record<string, [number, number, number]> = {
+      MARKETING_IMAGE: [1.91, 600, 314],
+      SQUARE_MARKETING_IMAGE: [1, 300, 300],
+      PORTRAIT_MARKETING_IMAGE: [0.8, 480, 600],
+      LOGO: [1, 128, 128],
+    };
+    for (const d of [...doGrupo, ...daCampanha]) {
+      const regra = proporcao[d.papel];
+      if (!regra) continue;
+      const { largura = 0, altura = 0 } = recurso(d.asset);
+      if (!largura || Math.abs(largura / altura - regra[0]) / regra[0] > 0.01) return this.recusa({ assetLinkError: 'ASPECT_RATIO_NOT_ALLOWED' }, `The image aspect ratio is not allowed for ${d.papel}.`);
+      if (largura < regra[1] || altura < regra[2]) return this.recusa({ imageError: 'IMAGE_TOO_SMALL' }, `The image is too small for ${d.papel}.`);
+    }
+    // As regras da marca: exatamente um nome da loja (texto, até 25) e ao menos uma logo, na campanha.
+    if (campanha.brandGuidelinesEnabled === true) {
+      const nomes = daCampanha.filter((d) => d.papel === 'BUSINESS_NAME');
+      if (nomes.length !== 1 || [...(texto(nomes[0]!.asset) ?? '')].length > 25 || !daCampanha.some((d) => d.papel === 'LOGO')) {
+        return this.recusa({ campaignError: 'BRAND_GUIDELINES_REQUIRED_ASSETS_MISSING' }, 'Brand guidelines require a business name and a logo on the campaign.');
+      }
+    }
+    if (chamada.tipo === 'validacao') return { status: 200, corpo: {} };
+
+    // A de verdade: tudo ou nada.
+    const orcamento = this.novoOrcamento(cliente, { amountMicros: Number(recurso(String(campanha.campaignBudget)).corpo.amountMicros) });
+    const nova = this.novaCampanha(cliente, { name: String(campanha.name), status: 'PAUSED', primaryStatus: 'PAUSED', orcamento: orcamento.id });
+    const g: GrupoNoGoogle = {
+      cliente,
+      id: numero(),
+      campanha: nova.id,
+      finalUrls: grupo.finalUrls as string[],
+      recursos: doGrupo.map((d) => ({ papel: d.papel, texto: texto(d.asset), largura: recurso(d.asset).largura, altura: recurso(d.asset).altura })),
+    };
+    this.grupos.set(g.id, g);
+    this.criacoes.set(nova.id, {
+      campanha: nova.id,
+      corpoDaCampanha: campanha,
+      criterios,
+      daCampanha: daCampanha.map((d) => ({ papel: d.papel, texto: texto(d.asset), largura: recurso(d.asset).largura, altura: recurso(d.asset).altura })),
+    });
+    if (this.perderResposta.delete(cliente)) return this.erro(503, 'UNAVAILABLE', 'The service is currently unavailable.');
+    const real: Record<string, string> = {
+      [String(campanha.resourceName)]: `customers/${cliente}/campaigns/${nova.id}`,
+      [String(campanha.campaignBudget)]: `customers/${cliente}/campaignBudgets/${orcamento.id}`,
+      [String(grupo.resourceName)]: `customers/${cliente}/assetGroups/${g.id}`,
+    };
+    const resultado = respostas.map((r) => {
+      const [campo, v] = Object.entries(r)[0]!;
+      return { [campo]: { resourceName: real[v.resourceName] ?? v.resourceName.replace(/\/-\d+$/, `/${numero()}`) } };
+    });
+    return { status: 200, corpo: { mutateOperationResponses: resultado } };
+  }
+
+  private async responder(req: IncomingMessage, texto: string): Promise<Resposta> {
     const url = new URL(req.url ?? '/', this.base);
     if (url.pathname === '/oauth/token') {
       this.renovacoes += 1;
@@ -166,7 +352,7 @@ export class GoogleDeMentira {
       if (pedido.get('refresh_token') === REFRESH_REVOGADO) return { status: 400, corpo: { error: 'invalid_grant', error_description: 'Token has been expired or revoked.' } };
       return { status: 200, corpo: { access_token: ACESSO_DO_GOOGLE, expires_in: 3599, token_type: 'Bearer' } };
     }
-    const m = url.pathname.match(/^\/ads\/v25\/customers\/(\d+)\/(googleAds:searchStream|campaigns:mutate|campaignBudgets:mutate)$/);
+    const m = url.pathname.match(/^\/ads\/v25\/customers\/(\d+)\/(googleAds:searchStream|googleAds:mutate|campaigns:mutate|campaignBudgets:mutate)$/);
     if (!m || req.method !== 'POST') return this.erro(404, 'NOT_FOUND', url.pathname);
     const cliente = m[1]!;
     const recurso = m[2]!.replace(/^googleAds:/, '').replace(/:mutate$/, '');
@@ -185,8 +371,22 @@ export class GoogleDeMentira {
     const defeito = this.defeitos.get(cliente)?.(chamada);
     if (defeito) return defeito;
 
+    if (recurso === 'mutate') return this.criarPerformanceMax(chamada);
     if (recurso === 'searchStream') {
       const consulta = String(corpo.query ?? '');
+      // A procura da campanha criada pelo nome com a marca do Liame (Y9, parte 3), com o grupo de recursos dela.
+      const criada = /^SELECT campaign\.id, campaign\.campaign_budget, asset_group\.id FROM asset_group WHERE campaign\.name LIKE '%(\(Liame [0-9a-f]{12}\))' AND campaign\.status != 'REMOVED'$/.exec(consulta);
+      if (criada) {
+        const linhas = [...this.grupos.values()]
+          .filter((g) => g.cliente === cliente)
+          .map((g) => ({ g, c: this.campanhas.get(g.campanha) }))
+          .filter(({ c }) => c && c.name.endsWith(criada[1]!) && c.status !== 'REMOVED')
+          .map(({ g, c }) => ({
+            campaign: { resourceName: `customers/${cliente}/campaigns/${c!.id}`, id: c!.id, campaignBudget: `customers/${cliente}/campaignBudgets/${c!.orcamento}` },
+            assetGroup: { resourceName: `customers/${cliente}/assetGroups/${g.id}`, id: g.id },
+          }));
+        return { status: 200, corpo: linhas.length ? [{ results: linhas, fieldMask: 'campaign.id,campaign.campaignBudget,assetGroup.id', requestId: 'leitura-de-teste' }] : [] };
+      }
       // Com quem a verba é dividida: as campanhas do orçamento, menos a que perguntou e as removidas, pelo nome.
       const dividida = /^SELECT campaign\.id, campaign\.name FROM campaign WHERE campaign\.campaign_budget = 'customers\/(\d+)\/campaignBudgets\/(\d+)' AND campaign\.status != 'REMOVED' AND campaign\.id != (\d+) ORDER BY campaign\.name LIMIT (\d+)$/.exec(consulta);
       if (dividida) {

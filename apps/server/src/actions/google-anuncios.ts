@@ -183,7 +183,7 @@ export function recusaDoGoogle(err: unknown, passo: 'leitura' | 'escrita' = 'esc
 }
 
 /** O limite DIÁRIO de operações do projeto no Google (`QuotaError.RESOURCE_EXHAUSTED`): não volta em um minuto. */
-function comEsperaDoLimiteDiario(err: unknown): unknown {
+export function comEsperaDoLimiteDiario(err: unknown): unknown {
   if (!(err instanceof ErroConector) || err.tipo !== 'limite' || err.subcodigo !== 'quotaError.RESOURCE_EXHAUSTED') return err;
   return new ErroConector('limite', err.provider, err.message, err.status, Math.max(err.esperarMs ?? 0, ESPERA_DO_LIMITE_DIARIO_MS), err.codigoProvider, { subcodigo: err.subcodigo, mensagemUsuario: err.mensagemUsuario });
 }

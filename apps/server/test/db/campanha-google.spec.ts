@@ -1,6 +1,7 @@
 import { randomBytes, randomUUID } from 'node:crypto';
 import { resolve } from 'node:path';
 import { createDatabase, type Database, runMigrations } from '@liame/database';
+import sharp from 'sharp';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { BudgetService } from '../../src/actions/budget.service.js';
 import { CONNECTORS } from '../../src/actions/connectors.js';
@@ -9,21 +10,28 @@ import { DATABASE } from '../../src/database/database.module.js';
 import { FlagService } from '../../src/flags/flag.service.js';
 import { ARMAZEM_DE_IMAGENS, type ArmazemNaMemoria } from '../../src/imagens/armazem.js';
 import { KillSwitchService } from '../../src/kill-switch/kill-switch.service.js';
+import { chaveDaLogoDaMarca } from '../../src/marca/logo-da-marca.service.js';
 import { ActionExecutor } from '../../src/worker/action-executor.js';
 import { ownerQuery, resetIpRateLimits, startApi, type TestApi } from '../helpers/api.js';
-import { type EmpresaComGoogle, empresaComGoogle } from '../helpers/google-de-mentira.js';
+import { ACESSO_DO_GOOGLE, type EmpresaComGoogle, empresaComGoogle, GoogleDeMentira } from '../helpers/google-de-mentira.js';
 import { ligarFlagDaEmpresa } from '../helpers/meta-de-mentira.js';
 import { fotoGuardada, lojaComCardapio } from '../helpers/posts-semeados.js';
 import { APP_URL, hasDb, OWNER_URL } from './env.js';
 
-// A5 · Y9, parte 2: o pedido da campanha nova no Google (P45; D-A5-21 a D-A5-26; migration 0150), contra Postgres. O que
-// se prova:
+// A5 · Y9, partes 2 e 3: o pedido da campanha nova no Google e a criação dela, uma Performance Max pausada (P45; D-A5-21
+// a D-A5-28; migration 0150), contra Postgres e o Google de mentira. O que se prova:
 //   - pedir: só com a função; a peça aprovada, os textos nos tamanhos do Google (no campo de cada um), o nome da loja, a
 //     foto (não o vídeo, grande o bastante para os recortes), a logo de Minha marca, a loja no endereço e o cardápio; o
 //     pedido `campanha_google_criar` espera o código do app, com o estado que a pessoa aprova; um pedido em aberto por
 //     peça, e o recusado libera a peça;
 //   - as opções da gaveta: o que impede (a função, a conta, a logo), o nome sugerido e a campanha de cada peça;
-//   - aprovado, a criação no Google ainda não existe (a parte 3): o pedido falha com o motivo, sem ir ao Google.
+//   - aprovado: a conferência do Google (`validateOnly`) e a criação, numa requisição só cada uma; a campanha pausada com
+//     o nome único, as regras da marca, a automação desligada, o raio em volta da loja e o português; os textos; os
+//     recortes da foto e a logo quadrada, medidos; o link; os ids na linha;
+//   - a recusa do Google na conferência: nada é criado, e o motivo do Google fica no pedido e na campanha nova;
+//   - a resposta da criação que se perde: a ação espera, e a tentativa seguinte acha a campanha pelo nome, sem criar de
+//     novo;
+//   - a foto que saiu do armazenamento: não criada, sem ir ao Google.
 
 const CARDAPIO = 'https://cardapio.exemplo.com.br/mister-centro';
 const TEXTOS = {
@@ -32,14 +40,20 @@ const TEXTOS = {
   descriptions: ['Peça o combo de sexta pelo cardápio online e receba em casa.', 'Smash, batata e refrigerante por R$ 34,90. Entrega no Centro ou retirada no balcão.'],
 };
 
-describe.skipIf(!hasDb)('a campanha nova no Google: o pedido (A5 · Y9, parte 2)', () => {
+describe.skipIf(!hasDb)('a campanha nova no Google: o pedido e a criação (A5 · Y9, partes 2 e 3)', () => {
   let api: TestApi;
   let database: Database;
   let armazem: ArmazemNaMemoria;
   let executor: ActionExecutor;
+  const google = new GoogleDeMentira();
+  const anterior: Record<string, string | undefined> = {};
 
   beforeAll(async () => {
     await runMigrations({ connectionString: OWNER_URL, dir: resolve(process.cwd(), '../../packages/database/migrations') });
+    await google.subir();
+    const ambiente = google.ambiente();
+    for (const k of Object.keys(ambiente)) anterior[k] = process.env[k];
+    Object.assign(process.env, ambiente);
     api = await startApi();
     database = createDatabase({ connectionString: APP_URL, max: 2, applicationName: 'liame-test' });
     armazem = api.app.get(ARMAZEM_DE_IMAGENS) as ArmazemNaMemoria;
@@ -50,14 +64,27 @@ describe.skipIf(!hasDb)('a campanha nova no Google: o pedido (A5 · Y9, parte 2)
   afterAll(async () => {
     await api?.close();
     await database?.close();
+    await google.fechar();
+    for (const [k, v] of Object.entries(anterior)) {
+      if (v === undefined) delete process.env[k];
+      else process.env[k] = v;
+    }
   });
 
-  type Cenario = EmpresaComGoogle & { unitId: string; peca: string; foto: string };
+  type Cenario = EmpresaComGoogle & { unitId: string; peca: string; foto: string; fotoChave: string };
+
+  /** A logo de Minha marca, de verdade no armazenamento (JPEG com fundo branco, como a tela grava), nas medidas dadas. */
+  async function logoDaMarca(e: Pick<EmpresaComGoogle, 'tenantId' | 'brandId'>, largura: number, altura: number): Promise<void> {
+    const logoId = randomUUID();
+    const bytes = await sharp({ create: { width: largura, height: altura, channels: 3, background: { r: 200, g: 40, b: 40 } } }).jpeg({ quality: 90 }).toBuffer();
+    await armazem.gravar(chaveDaLogoDaMarca(e.tenantId, e.brandId, logoId), bytes);
+    await ownerQuery(`update liame.brand set logo_id = $2, logo_width = $3, logo_height = $4, logo_updated_at = now() where id = $1`, [e.brandId, logoId, largura, altura]);
+  }
 
   /** A empresa com a conta do Google Ads, a logo em Minha marca, a loja no endereço com o cardápio, uma foto e uma peça aprovada. */
   async function cenario(nome: string, o: { ligada?: boolean } = {}): Promise<Cenario> {
     const e = await empresaComGoogle(api, database, { nome });
-    await ownerQuery(`update liame.brand set logo_id = $2, logo_width = 512, logo_height = 512, logo_updated_at = now() where id = $1`, [e.brandId, randomUUID()]);
+    await logoDaMarca(e, 512, 512);
     const { unitId } = await lojaComCardapio(e, 'Loja Centro', CARDAPIO);
     await ownerQuery(
       `update liame.unit set address_postal_code = '20040002', address_street = 'Rua da Assembleia', address_number = '10', address_district = 'Centro',
@@ -84,7 +111,7 @@ describe.skipIf(!hasDb)('a campanha nova no Google: o pedido (A5 · Y9, parte 2)
     const foto = await fotoGuardada(e, armazem, { largura: 1440, altura: 1800 });
     await ligarFlagDaEmpresa(api, 'google_write', e.tenantId, true);
     if (o.ligada ?? true) await ligarFlagDaEmpresa(api, 'campanha_google', e.tenantId, true);
-    return { ...e, unitId, peca, foto: foto.id };
+    return { ...e, unitId, peca, foto: foto.id, fotoChave: foto.chave };
   }
 
   const pedir = (e: Cenario, extra: Record<string, unknown> = {}) =>
@@ -176,19 +203,116 @@ describe.skipIf(!hasDb)('a campanha nova no Google: o pedido (A5 · Y9, parte 2)
     expect((await api.call('GET', `/v1/google-campaigns/options?brand_id=${e.brandId}`, { cookie: sem.cookie })).status).toBe(404);
   }, 180_000);
 
-  it('aprovado, a criação no Google é a parte 3: o pedido falha com o motivo, sem ir ao Google, e a campanha nova fica cancelada', async () => {
-    const e = await cenario('Brasa Google Aprova');
-    expect(CONNECTORS.google_ads?.writeFlag).toBe('google_write');
-    const r = await pedir(e);
+  /** Pede, aprova com o código do app e roda o executor uma vez. Devolve a campanha nova e o pedido. */
+  async function pedirEAprovar(e: Cenario, extra: Record<string, unknown> = {}): Promise<{ id: string; pedido: string }> {
+    const r = await pedir(e, extra);
+    expect(r.status, JSON.stringify(r.body)).toBe(201);
     const pedido = r.body.action_id as string;
     await ownerQuery(`update liame.app_user set totp_last_step = null where id = $1`, [e.userId]);
     const a = await api.call('POST', `/v1/actions/${pedido}/approve`, { cookie: e.cookie, body: { plan_hash: (await pedidoDe(pedido)).plan_hash, code: totpCode(e.secret, currentStep()) } });
     expect(a.status, JSON.stringify(a.body)).toBe(200);
     await executor.executeBatch(20, { tenantIds: [e.tenantId] });
+    return { id: r.body.id as string, pedido };
+  }
+  const lida = async (e: Cenario, id: string) => (await api.call('GET', `/v1/google-campaigns/${id}`, { cookie: e.cookie })).body;
+
+  it('aprovado: a conferência e a criação numa requisição só; a Performance Max pausada, com a marca, o raio, os textos, os recortes e a logo; os ids na linha', async () => {
+    const e = await cenario('Brasa Google Cria');
+    expect(CONNECTORS.google_ads?.writeFlag).toBe('google_write');
+    // A logo deitada (500 × 250; a de Minha marca tem até 512 de lado): vai inteira, num quadrado branco de 500.
+    await logoDaMarca(e, 500, 250);
+    google.chamadas.length = 0;
+    const { id, pedido } = await pedirEAprovar(e, { end_date: '2099-12-31' });
     const p = await pedidoDe(pedido);
-    expect(p.status).toBe('falhou');
-    expect(p.status_reason).toContain('A criação de campanha no Google ainda não está disponível no Liame');
-    const lida = await api.call('GET', `/v1/google-campaigns/${r.body.id}`, { cookie: e.cookie });
-    expect(lida.body).toMatchObject({ status: 'cancelada', google: { campaign_id: null, budget_id: null, asset_group_id: null } });
+    expect([p.status, p.status_reason], JSON.stringify(p)).toEqual(['executada', null]);
+
+    // A conferência e a criação, com o token curto e a conta gerente; nada de procura (é a primeira tentativa).
+    expect(google.resumo(e.cliente)).toEqual(['validacao:mutate', 'escrita:mutate']);
+    for (const c of google.chamadasDe(e.cliente)) expect([c.autorizacao, c.gerente]).toEqual([`Bearer ${ACESSO_DO_GOOGLE}`, e.gerente]);
+    const [validacao, escrita] = google.chamadasDe(e.cliente);
+    expect(validacao!.corpo.mutateOperations).toEqual(escrita!.corpo.mutateOperations);
+
+    const c = [...google.campanhas.values()].find((x) => x.cliente === e.cliente)!;
+    expect(c).toMatchObject({ name: `Combo sexta · Google · novembro (Liame ${id.replace(/-/g, '').slice(-12)})`, status: 'PAUSED' });
+    expect(google.orcamentos.get(c.orcamento!)).toMatchObject({ amountMicros: 30_000_000, explicitlyShared: false, period: 'DAILY' });
+    const criacao = google.criacoes.get(c.id)!;
+    expect(criacao.corpoDaCampanha).toMatchObject({
+      advertisingChannelType: 'PERFORMANCE_MAX',
+      status: 'PAUSED',
+      maximizeConversions: {},
+      brandGuidelinesEnabled: true,
+      containsEuPoliticalAdvertising: 'DOES_NOT_CONTAIN_EU_POLITICAL_ADVERTISING',
+      finalUrlSuffix: 'utm_source=google&utm_medium=cpc&campaign_id={campaignid}',
+      endDateTime: '2099-12-31 23:59:59',
+    });
+    expect(criacao.corpoDaCampanha.assetAutomationSettings).toEqual(
+      ['TEXT_ASSET_AUTOMATION', 'FINAL_URL_EXPANSION_TEXT_ASSET_AUTOMATION', 'GENERATE_IMAGE_ENHANCEMENT', 'GENERATE_ENHANCED_YOUTUBE_VIDEOS'].map((t) => ({ assetAutomationType: t, assetAutomationStatus: 'OPTED_OUT' })),
+    );
+    // O raio em volta da loja (no ponto do endereço) e o português.
+    expect(criacao.criterios.map((x) => ({ ...x, campaign: undefined }))).toEqual([
+      { proximity: { geoPoint: { latitudeInMicroDegrees: -22906847, longitudeInMicroDegrees: -43172897 }, radius: 5, radiusUnits: 'KILOMETERS' } },
+      { language: { languageConstant: 'languageConstants/1014' } },
+    ]);
+    // Na campanha, o nome da loja e a logo quadrada; no grupo, o cardápio, os textos aprovados e os três recortes da foto
+    // (1440 × 1800), no tamanho recomendado.
+    expect(criacao.daCampanha).toEqual([
+      { papel: 'BUSINESS_NAME', texto: 'Mister Burgers' },
+      { papel: 'LOGO', largura: 500, altura: 500 },
+    ]);
+    const grupo = [...google.grupos.values()].find((g) => g.campanha === c.id)!;
+    expect(grupo.finalUrls).toEqual([CARDAPIO]);
+    const textos = (papel: string) => grupo.recursos.filter((x) => x.papel === papel).map((x) => x.texto);
+    expect([textos('HEADLINE'), textos('LONG_HEADLINE'), textos('DESCRIPTION')]).toEqual([TEXTOS.headlines, TEXTOS.long_headlines, TEXTOS.descriptions]);
+    expect(grupo.recursos.filter((x) => x.largura).map(({ papel, largura, altura }) => [papel, largura, altura])).toEqual([
+      ['MARKETING_IMAGE', 1200, 628],
+      ['SQUARE_MARKETING_IMAGE', 1200, 1200],
+      ['PORTRAIT_MARKETING_IMAGE', 960, 1200],
+    ]);
+
+    expect(await lida(e, id)).toMatchObject({ status: 'criada', active: false, error: null, google: { account_id: e.cliente, campaign_id: c.id, budget_id: c.orcamento, asset_group_id: grupo.id } });
+  }, 180_000);
+
+  it('a recusa do Google na conferência: nada é criado, e o motivo do Google fica no pedido e na campanha nova', async () => {
+    const e = await cenario('Brasa Google Recusa');
+    google.defeitos.set(e.cliente, (c) =>
+      c.tipo === 'validacao' && c.recurso === 'mutate' ? google.erro(400, 'INVALID_ARGUMENT', 'Request contains an invalid argument.', { codigo: { criterionError: 'CANNOT_ADD_CRITERIA_TYPE' }, texto: 'Cannot add criteria of this type.' }) : null,
+    );
+    const { id, pedido } = await pedirEAprovar(e);
+    google.defeitos.delete(e.cliente);
+    const p = await pedidoDe(pedido);
+    expect([p.status, p.status_reason]).toEqual(['falhou', 'O Google recusou a mudança: Cannot add criteria of this type (criterionError.CANNOT_ADD_CRITERIA_TYPE).']);
+    expect(google.resumo(e.cliente)).toEqual(['validacao:mutate']);
+    expect([...google.campanhas.values()].filter((x) => x.cliente === e.cliente)).toEqual([]);
+    expect(await lida(e, id)).toMatchObject({ status: 'nao_criada', error: p.status_reason, google: { campaign_id: null, budget_id: null, asset_group_id: null } });
+  }, 180_000);
+
+  it('a resposta da criação se perde: a ação espera, e a tentativa seguinte acha a campanha pelo nome, sem criar de novo', async () => {
+    const e = await cenario('Brasa Google Perde');
+    google.perderResposta.add(e.cliente);
+    const { id, pedido } = await pedirEAprovar(e);
+    const adiado = await pedidoDe(pedido);
+    expect(adiado.status, JSON.stringify(adiado)).toBe('aprovada');
+    expect((await lida(e, id)).status).toBe('criando');
+    expect(google.resumo(e.cliente)).toEqual(['validacao:mutate', 'escrita:mutate']);
+
+    await ownerQuery(`update liame.action_request set next_attempt_at = now() - interval '1 second' where id = $1`, [pedido]);
+    await executor.executeBatch(20, { tenantIds: [e.tenantId] });
+    expect((await pedidoDe(pedido)).status).toBe('executada');
+    // Uma criação só: a segunda tentativa leu e achou.
+    expect(google.resumo(e.cliente)).toEqual(['validacao:mutate', 'escrita:mutate', 'leitura']);
+    const criadas = [...google.campanhas.values()].filter((x) => x.cliente === e.cliente);
+    expect(criadas).toHaveLength(1);
+    const grupo = [...google.grupos.values()].find((g) => g.campanha === criadas[0]!.id)!;
+    expect(await lida(e, id)).toMatchObject({ status: 'criada', google: { campaign_id: criadas[0]!.id, budget_id: criadas[0]!.orcamento, asset_group_id: grupo.id } });
+  }, 180_000);
+
+  it('a foto que saiu do armazenamento: a campanha nova não é criada, sem ir ao Google', async () => {
+    const e = await cenario('Brasa Google Sem Foto');
+    await armazem.apagar([e.fotoChave]);
+    const { id, pedido } = await pedirEAprovar(e);
+    const p = await pedidoDe(pedido);
+    expect([p.status, p.status_reason]).toEqual(['falhou', 'A foto ou a logo desta campanha não está mais no Liame: nada foi criado no Google. Escolha outra foto e peça de novo.']);
+    expect(google.chamadasDe(e.cliente)).toEqual([]);
+    expect((await lida(e, id)).status).toBe('nao_criada');
   }, 120_000);
 });

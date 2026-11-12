@@ -25,10 +25,24 @@
 
 **O rascunho no painel da Meta (submission 1441909268031807), em 12/11/2026:** 5 permissões configuradas, nada enviado —
 `read_insights`, `instagram_manage_insights`, `pages_read_engagement`, `instagram_basic` (o "Uso permitido" com os textos
-da seção 4, sem a frase da região, que ainda não está no ar; os quatro com o visto verde) e `pages_show_list`. **Faltam no
-rascunho:** os vídeos; o quadrinho "você concorda" de cada permissão (é o aceite do dono); "Tratamento de dados";
-"Instruções da análise"; e as permissões de comentários e de mensagens, que entram no **mesmo rascunho**. Ninguém clicou em
-"Enviar para análise".
+da seção 4, sem a frase da região, que ainda não está no ar; os quatro com o visto verde) e `pages_show_list`. Preenchido
+no mesmo dia pela sessão da região, a pedido do dono:
+- **Uso permitido:** o "você concorda" das 5 permissões novas, marcado. A aba "Renovação" pede ainda a certificação do
+  `ads_read` ("Certifico que todo e qualquer uso de ads_read está dentro do permitido"): fica para o dono, porque não
+  estava no pedido dele. A etapa segue aberta por ela e pelos vídeos.
+- **Tratamento de dados:** ✅, com as respostas que vieram do envio aprovado do `ads_read`, conferidas uma a uma: os
+  operadores (Anthropic, AWS, Cloudflare, Hostinger e Supabase), a responsável (a empresa do dono, no Brasil), nenhum
+  pedido de autoridade pública e as 4 políticas para esses pedidos marcadas.
+- **Instruções da análise:** ✅. O passo 8 dizia que a única permissão pedida era o `ads_read`: agora diz que o login pede
+  também a Página e o Instagram, e que o dono escolhe a Página e a conta do Instagram dela. Entrou a seção "WHERE THE PAGE
+  AND INSTAGRAM PERMISSIONS ARE USED", com os passos 11 a 14 (11: `pages_show_list`, a escolha da Página na conexão; 12:
+  `instagram_basic` e `instagram_manage_insights`, Fotos › Do seu Instagram; 13: `pages_read_engagement` e
+  `read_insights`, Agenda › o post publicado › "O que o post trouxe"; 14: só a conta da própria marca, nenhum seguidor por
+  nome). O bloco da conta de teste ficou como estava.
+
+**Faltam no rascunho:** os vídeos (o dono decidiu, em 12/11/2026, deixá-los para o fim do roadmap); a certificação do
+`ads_read` (o dono); e as permissões de comentários e de mensagens, que entram no **mesmo rascunho**, com a seção delas nas
+Instruções da análise a partir do passo 15. Ninguém clicou em "Enviar para análise".
 
 ## 2. As permissões
 
@@ -141,5 +155,8 @@ vivo no painel, da mesma conta, e o login da Meta no começo do vídeo**. Então
 1. A sessão da região completa a parte de Sua região (seção 2).
 2. Conferir a política de privacidade, os termos e a exclusão de dados no ar, e os links no painel do app.
 3. Somar as permissões de mensagens na configuração do login (o dono, guiado na hora) e conectar a Meta de novo.
-4. Ligar as funções na empresa de testes e conferir cada tela no ar.
-5. Gravar os vídeos (o dono) e enviar (o dono).
+4. Pôr no rascunho as permissões de comentários e de mensagens, com a seção delas nas Instruções da análise (do passo 15
+   em diante).
+5. A certificação do `ads_read` na aba "Renovação" (o dono).
+6. Ligar as funções na empresa de testes e conferir cada tela no ar.
+7. Gravar os vídeos (o dono, no fim do roadmap, como decidiu em 12/11/2026) e enviar (o dono).
