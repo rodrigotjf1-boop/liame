@@ -166,8 +166,8 @@ describe('o registro (A6, Z11)', () => {
     expect(texto).toContain('As três começam reconhecendo o que a pessoa conta, com "desculpa", "sentimos" ou "obrigado pelo aviso"');
     expect(texto).toContain('numa reclamação, nada de propaganda');
     expect(texto).toContain('Não escreva essas palavras nem para negar ou dizer que não há');
-    expect(SOCIAL.version).toBe(4);
-    expect(SOCIAL.tarefas.map((t) => t.task)).toEqual(['social_resposta', 'social_post', 'social_comentario', 'social_comentario_tipo']);
+    expect(SOCIAL.version).toBe(5);
+    expect(SOCIAL.tarefas.map((t) => t.task)).toEqual(['social_resposta', 'social_post', 'social_comentario', 'social_comentario_tipo', 'social_video']);
     expect(SOCIAL.ferramentas).toEqual([]);
     expect(conferirRegistro(registroAtual())).toEqual([]);
   });
