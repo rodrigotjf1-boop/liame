@@ -315,4 +315,61 @@ describe.skipIf(!hasDb)('a campanha nova no Google: o pedido e a criação (A5 �
     expect(google.chamadasDe(e.cliente)).toEqual([]);
     expect((await lida(e, id)).status).toBe('nao_criada');
   }, 120_000);
+
+  /** Aprova um pedido com o código do app e roda o executor uma vez. */
+  async function aprovarEExecutar(e: Cenario, pedido: string): Promise<void> {
+    await ownerQuery(`update liame.app_user set totp_last_step = null where id = $1`, [e.userId]);
+    const a = await api.call('POST', `/v1/actions/${pedido}/approve`, { cookie: e.cookie, body: { plan_hash: (await pedidoDe(pedido)).plan_hash, code: totpCode(e.secret, currentStep()) } });
+    expect(a.status, JSON.stringify(a.body)).toBe(200);
+    await executor.executeBatch(20, { tenantIds: [e.tenantId] });
+  }
+
+  it('ativar e a volta (parte 5a): lê no Google, confere e muda a situação; um pedido em aberto; a removida no Google Ads não volta', async () => {
+    const e = await cenario('Brasa Google Ativa');
+    const ativar = (id: string) => api.call('POST', `/v1/google-campaigns/${id}/activate`, { cookie: e.cookie });
+    const r = await pedir(e);
+    const id = r.body.id as string;
+    // Antes de criada, não ativa.
+    expect((await ativar(id)).body.code).toBe('ainda-nao-criada');
+    await aprovarEExecutar(e, r.body.action_id as string);
+    const criada = await lida(e, id);
+    expect(criada).toMatchObject({ status: 'criada', active: false, pending_action_id: null });
+    const campanha = google.campanhas.get(criada.google.campaign_id as string)!;
+    // Os limites da empresa: o teto do mês e o por campanha (ativar volta a gastar).
+    await ownerQuery(`update liame.app_user set totp_last_step = null where id = $1`, [e.userId]);
+    expect((await api.call('PUT', '/v1/budget/limits', { cookie: e.cookie, body: { month_micros: 3_000_000_000, campaign_daily_micros: 50_000_000 } })).status).toBe(200);
+
+    const pedido = await ativar(id);
+    expect(pedido.status, JSON.stringify(pedido.body)).toBe(201);
+    expect(pedido.body).toMatchObject({ active: false, pending_action_id: expect.any(String) });
+    const ativacao = pedido.body.pending_action_id as string;
+    expect(await pedidoDe(ativacao)).toMatchObject({ status: 'aguardando_aprovacao', tool: 'campanha_google_ativar', provider: 'google_ads' });
+    expect((await ativar(id)).body.code).toBe('pedido-em-aberto');
+    google.chamadas.length = 0;
+    await aprovarEExecutar(e, ativacao);
+    expect((await pedidoDe(ativacao)).status).toBe('executada');
+    // Lê a campanha no Google, confere a mudança e muda: a campanha passa a rodar.
+    expect(google.resumo(e.cliente)).toEqual(['leitura', 'validacao:campaigns', 'escrita:campaigns']);
+    expect(campanha.status).toBe('ENABLED');
+    expect(await lida(e, id)).toMatchObject({ active: true, activated_at: expect.any(String), pending_action_id: null });
+    expect((await ativar(id)).body.code).toBe('ja-ativa');
+
+    // A volta: pausar, com o código do app.
+    const volta = await api.call('POST', `/v1/actions/${ativacao}/undo`, { cookie: e.cookie });
+    expect(volta.status, JSON.stringify(volta.body)).toBe(201);
+    expect(volta.body).toMatchObject({ tool: 'campanha_google_pausar', status: 'aguardando_aprovacao' });
+    await aprovarEExecutar(e, volta.body.id as string);
+    expect((await pedidoDe(volta.body.id as string)).status).toBe('executada');
+    expect(campanha.status).toBe('PAUSED');
+    expect((await lida(e, id)).active).toBe(false);
+
+    // Removida no Google Ads depois: ativar de novo não a traz de volta.
+    campanha.status = 'REMOVED';
+    const outra = await ativar(id);
+    expect(outra.status, JSON.stringify(outra.body)).toBe(201);
+    await aprovarEExecutar(e, outra.body.pending_action_id as string);
+    const recusada = await pedidoDe(outra.body.pending_action_id as string);
+    expect([recusada.status, recusada.status_reason]).toEqual(['falhou', 'Esta campanha não está mais no Google (foi removida no Google Ads): nada foi mudado.']);
+    expect((await lida(e, id)).active).toBe(false);
+  }, 180_000);
 });

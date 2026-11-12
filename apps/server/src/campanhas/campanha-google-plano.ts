@@ -137,6 +137,28 @@ export function planoDaCampanhaGoogle(before: unknown): PlanoDaCampanhaGoogle {
   return { ok: true, desejado: { ...e, situacao: 'criada' } };
 }
 
+/**
+ * O plano de ativar a campanha nova no Google (Y9, parte 5a; D-A5-32): a criada e pausada passa a rodar e a gastar a
+ * verba diária. Só a criada; a ativa não é ativada de novo. Função pura.
+ */
+export function planoDeAtivarNoGoogle(before: unknown): PlanoDaCampanhaGoogle {
+  const lido = EstadoDaCampanhaNovaNoGoogle.safeParse(before);
+  if (!lido.success) return { ok: false, motivo: 'Esta ferramenta é para uma campanha nova do Liame no Google.' };
+  const e = lido.data;
+  if (e.situacao !== 'criada') return { ok: false, motivo: 'A campanha nova ainda não foi criada no Google: ative depois que ela existir, pausada.' };
+  if (e.ativa) return { ok: false, motivo: 'Esta campanha nova já está ativa.' };
+  return { ok: true, desejado: { ...e, ativa: true } };
+}
+
+/** O plano de pausar (a volta de ativar): a campanha nova ativa para de rodar e de gastar. Função pura. */
+export function planoDePausarNoGoogle(before: unknown): PlanoDaCampanhaGoogle {
+  const lido = EstadoDaCampanhaNovaNoGoogle.safeParse(before);
+  if (!lido.success) return { ok: false, motivo: 'Esta ferramenta é para uma campanha nova do Liame no Google.' };
+  const e = lido.data;
+  if (e.situacao !== 'criada' || !e.ativa) return { ok: false, motivo: 'Esta campanha nova não está ativa: não há o que pausar.' };
+  return { ok: true, desejado: { ...e, ativa: false } };
+}
+
 // ------------------------------------------------------------------ a criação no Google (Y9, parte 3; D-A5-27, D-A5-28)
 
 /** A marca do Liame no nome da campanha: `(Liame 0123456789ab)`, com os 12 últimos dígitos do id (a parte aleatória). */

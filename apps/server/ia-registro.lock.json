@@ -28,9 +28,17 @@
       "version": 1,
       "hash": "6d98ffed714e06bcf39c8f8a6a4d376ebca7496732dae967c1ac3d0d1312f5aa"
     },
+    "campanha_google_ativar": {
+      "version": 1,
+      "hash": "ffad8b49296c65ded7b07f1a02fc270b930691c3e53dd7681c0fcd8c7b37c226"
+    },
     "campanha_google_criar": {
       "version": 1,
       "hash": "f39a099744bf96f81917301b865a7b246614fc0ebafba141a21bb0069c78bec0"
+    },
+    "campanha_google_pausar": {
+      "version": 1,
+      "hash": "832bca63f9b423f44e872bf16ae01a2a22a844fa713c44b429eefeaf87c5b8bd"
     },
     "campanha_nova_ativar": {
       "version": 1,

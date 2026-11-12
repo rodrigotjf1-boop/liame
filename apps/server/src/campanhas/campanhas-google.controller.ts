@@ -56,6 +56,25 @@ export class CampanhasGoogleController {
     return this.campanhas.criar(auth, body);
   }
 
+  @Post(':id/activate')
+  @HttpCode(201)
+  @Permissao('campanhas.operar')
+  @Auditar('campanha_google.ativar', { recurso: 'google_campaign_new' })
+  @ApiOperation({
+    summary: 'Pedir para ativar a campanha nova no Google',
+    description:
+      'A Performance Max criada e pausada passa a rodar: um pedido em Aprovações (a ferramenta `campanha_google_ativar`) que espera o código do app e, por voltar a gastar, pede os limites da empresa e cabe na verba do mês. Aprovado, o Liame lê a campanha no Google (a removida no Google Ads não volta), confere a mudança com o Google (`validateOnly`) e põe a campanha em ativo; o Google revisa os recursos antes de mostrar. A volta é pausar (`POST /v1/actions/{id}/undo`). `pending_action_id` traz o pedido. Precisa da função `campanha_google` (409 `funcao-desligada`). Conflitos (409): `ainda-nao-criada`, `ja-ativa`, `pedido-em-aberto`. Recusa (422): `acima-do-teto`. O trilho também pode recusar (os limites, a política, a trava).',
+  })
+  @ApiCreatedResponse({ standardSchema: GoogleCampaignResponse })
+  @ApiBadRequestResponse({ standardSchema: ProblemDetails })
+  @ApiForbiddenResponse({ standardSchema: ProblemDetails })
+  @ApiNotFoundResponse({ standardSchema: ProblemDetails })
+  @ApiConflictResponse({ standardSchema: ProblemDetails })
+  @ApiUnprocessableEntityResponse({ standardSchema: ProblemDetails })
+  ativar(@Auth() auth: AuthContext, @Param('id', { schema: ResourceId }) id: string): Promise<GoogleCampaignResponse> {
+    return this.campanhas.ativar(auth, id);
+  }
+
   @Post('texts')
   @HttpCode(200)
   @Permissao('campanhas.operar')

@@ -22,7 +22,7 @@ import {
   planoDaRespostaNoDirect,
 } from './direct-plano.js';
 import { EstadoDaMensagem, faseDaMensagem, impedimentoDaMensagem } from './mensagem-plano.js';
-import { planoDaCampanhaGoogle } from '../campanhas/campanha-google-plano.js';
+import { planoDaCampanhaGoogle, planoDeAtivarNoGoogle, planoDePausarNoGoogle } from '../campanhas/campanha-google-plano.js';
 import { planoDaCampanhaNova, planoDeAtivar, planoDePausar } from '../campanhas/campanha-nova-plano.js';
 import { EstadoDoPost, planoDeApagarOPost, planoDeTentarDeNovo, planoDoPost, quandoSai } from '../posts/post-plano.js';
 import { motivoDoCompartilhado, orcamentoCompartilhado } from './orcamento-compartilhado.js';
@@ -456,6 +456,49 @@ export const TOOLS: Record<string, ToolDefinition> = {
       // Nasce pausada: não gasta nada até ser ativada, então nada a reservar no envelope do mês.
       return { action: 'campanha.criar', budgetImpact: 'none', valueMicros: null, currentValueMicros: null, reserveMicros: 0, desiredState: plano.desejado as unknown as ResourceState };
     },
+  },
+  // Ativar a campanha nova no Google (A5, Y9, parte 5a; D-A5-32): a Performance Max criada pausada passa a rodar e a gastar
+  // a verba diária, depois da revisão do Google. Volta a gastar: os limites da empresa e a verba do mês valem, como em
+  // retomar. Só pela rota da campanha nova no Google (`POST /v1/google-campaigns/{id}/activate`); a volta é pausar.
+  campanha_google_ativar: {
+    name: 'campanha_google_ativar',
+    version: 1,
+    owner: 'midia',
+    description:
+      'Ativa no Google a campanha Performance Max que o Liame criou pausada: ela passa a rodar e a gastar a verba diária, depois da revisão do Google. A volta é pausar.',
+    risk: 'R2',
+    providers: ['google_ads'],
+    compensation: 'pausar_se_inalterado',
+    alwaysApproval: true,
+    onlyByRoute: true,
+    flag: 'campanha_google',
+    params: NoParams,
+    plan(before) {
+      const plano = planoDeAtivarNoGoogle(before);
+      if (!plano.ok) throw new PlanoRecusado(plano.motivo);
+      const verba = plano.desejado.verba_diaria_micros;
+      return { action: 'campanha.ativar', budgetImpact: 'new_spend', valueMicros: verba, currentValueMicros: null, reserveMicros: verba, desiredState: plano.desejado as unknown as ResourceState };
+    },
+    undo: () => ({ tool: 'campanha_google_pausar', params: {} }),
+  },
+  // A volta de ativar: a campanha nova no Google para de rodar e de gastar.
+  campanha_google_pausar: {
+    name: 'campanha_google_pausar',
+    version: 1,
+    owner: 'midia',
+    description: 'Pausa no Google a campanha Performance Max que o Liame ativou: ela para de aparecer e de gastar (reversível).',
+    risk: 'R1',
+    providers: ['google_ads'],
+    compensation: 'reativar_se_inalterado',
+    onlyAsUndo: true,
+    flag: 'campanha_google',
+    params: NoParams,
+    plan(before) {
+      const plano = planoDePausarNoGoogle(before);
+      if (!plano.ok) throw new PlanoRecusado(plano.motivo);
+      return { action: 'campanha.pausar', budgetImpact: 'decrease', valueMicros: null, currentValueMicros: null, reserveMicros: 0, desiredState: plano.desejado as unknown as ResourceState };
+    },
+    undo: () => ({ tool: 'campanha_google_ativar', params: {} }),
   },
   regem_cupom_criar: {
     name: 'regem_cupom_criar',
