@@ -116,6 +116,8 @@ describe('A1-4: toda rota declara o acesso e nega sem sessão', () => {
     // As duas da loja no mapa (plano da região, R1): conferem a marca e a função numa transação curta e depois chamam o
     // ViaCEP, o OpenStreetMap (uma consulta por segundo) e, numa delas, o Google, sem transação aberta; não gravam nada.
     // `PUT /v1/brands/:id/logo` (A6 · Z15, parte 1): o caminho do logo da agência, para a logo do restaurante.
+    // `POST /v1/video-montages/texts` (A6 · Z15, parte 3b): o caminho do Explicar, para os textos do vídeo pelo Social
+    // media (a leitura numa transação curta, a IA sem transação aberta, a recusa noutra).
     expect(semTransacao).toEqual([
       'GET /v1/actions/options',
       'GET /v1/agency-logos/:arquivo',
@@ -135,6 +137,7 @@ describe('A1-4: toda rota declara o acesso e nega sem sessão', () => {
       'POST /v1/conversations/messages',
       'POST /v1/region/address-lookup',
       'POST /v1/region/google-profile-address',
+      'POST /v1/video-montages/texts',
       'PUT /v1/agency/brand/logo',
       'PUT /v1/brand-photos/:id/cover',
       'PUT /v1/brands/:id/logo',

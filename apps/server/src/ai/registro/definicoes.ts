@@ -12,6 +12,7 @@ import { ANALISTA, PROMPT_EXPLICAR_RESULTADOS } from '../explicar/prompt.js';
 import { PESQUISADOR, PROMPT_PESQUISADOR } from '../pesquisador/prompt.js';
 import { PROMPT_REVISOR } from '../revisor/prompt.js';
 import { PROMPT_SOCIAL_COMENTARIO, PROMPT_SOCIAL_COMENTARIO_TIPO, PROMPT_SOCIAL_POST, PROMPT_SOCIAL_RESPOSTA, SOCIAL } from '../social/prompt.js';
+import { PROMPT_SOCIAL_VIDEO } from '../social/video.js';
 import { LEITURAS } from './leituras.defs.js';
 
 // Registros da IA (arquitetura §3, `ai-architecture.md` §1 e §8): ferramenta, prompt e funcionário são
@@ -83,6 +84,7 @@ export const PROMPTS: PromptDef[] = [
   PROMPT_SOCIAL_POST,
   PROMPT_SOCIAL_COMENTARIO,
   PROMPT_SOCIAL_COMENTARIO_TIPO,
+  PROMPT_SOCIAL_VIDEO,
 ];
 export const FUNCIONARIOS: FuncionarioDef[] = [ANALISTA, LIA, ESTRATEGISTA, PESQUISADOR, CRIATIVO, CRM, SOCIAL];
 

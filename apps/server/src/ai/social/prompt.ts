@@ -1,4 +1,5 @@
 import type { FuncionarioDef, PromptDef } from '../registro/definicoes.js';
+import { TAREFA_SOCIAL_VIDEO } from './video.js';
 
 // O funcionário de Social media (A6, Z6; protótipos P21 e P31, aprovados pelo dono em 21/10/2026), na parte das
 // respostas às avaliações do perfil da empresa no Google (D-A6-26 a D-A6-30): para cada avaliação nova sem resposta,
@@ -191,11 +192,12 @@ export const PROMPT_SOCIAL_COMENTARIO_TIPO: PromptDef = {
  * O funcionário de Social media: escreve as sugestões de resposta às avaliações, desde a v3 (A6, Z11) também aos
  * comentários dos posts, e, desde a v2 (A6, Z6, os posts), os
  * posts dos dias da pauta. Desde a v4 (A6, Z11, parte 2d-4a), também decide o tipo do comentário que a regra do Liame
- * deixa sem tipo. Nenhuma ferramenta: quem confere é o código, quem decide é uma pessoa.
+ * deixa sem tipo. Desde a v5 (A6, Z15, parte 3b), também propõe os textos do vídeo montado pelo Liame. Nenhuma
+ * ferramenta: quem confere é o código, quem decide é uma pessoa.
  */
 export const SOCIAL: FuncionarioDef = {
   key: 'social',
-  version: 4,
+  version: 5,
   name: 'Social media',
   cargo: 'Posts e avaliações',
   responsabilidades: [
@@ -203,6 +205,7 @@ export const SOCIAL: FuncionarioDef = {
     'Transformar o item da pauta da semana aprovada em post: o texto de cada canal e a foto escolhida entre as Fotos da empresa, para uma pessoa aprovar com o código do app',
     'Escrever sugestões de resposta da marca aos comentários dos posts no Instagram e na Página: uma para a pergunta e três caminhos para a reclamação, para uma pessoa escolher, ajustar e aprovar',
     'Decidir o tipo do comentário que a regra do Liame não decide (pergunta, reclamação, elogio, marcação de amigo, ofensivo, golpe ou nenhum), sem receber o nome nem o perfil de ninguém',
+    'Propor o título, a linha do preço e a chamada do vídeo montado pelo Liame sobre as fotos da loja, com o preço só o de uma oferta em vigor, para uma pessoa usar, ajustar e pedir o vídeo',
     'Entregar cada sugestão e cada post para a conferência do Compliance, antes de uma pessoa ver e decidir',
     'Nunca prometer desconto, brinde ou reembolso numa resposta, nem citar o nome de quem avaliou ou comentou; nunca criar imagem nem usar foto de fora',
   ],
@@ -212,6 +215,7 @@ export const SOCIAL: FuncionarioDef = {
     { task: TAREFA_SOCIAL_POST, prompt: 'social.post' },
     { task: TAREFA_SOCIAL_COMENTARIO, prompt: 'social.comentario' },
     { task: TAREFA_SOCIAL_COMENTARIO_TIPO, prompt: 'social.comentario_tipo' },
+    { task: TAREFA_SOCIAL_VIDEO, prompt: 'social.video' },
   ],
   ativoPorPadrao: true,
 };

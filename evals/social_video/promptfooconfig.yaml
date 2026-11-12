@@ -1,0 +1,16 @@
+# Eval da tarefa `social_video` (A6 · Z15, parte 3b; D-A6-135; ADR-006 item 8).
+# O promptfoo só percorre os casos e junta o relatório: o prompt, o contexto, a mensagem (as fotos escolhidas entre as
+# marcas) e o formato da resposta são os do servidor (apoio/provedor.mjs), e quem aprova ou reprova é o avaliador do
+# servidor (apoio/conferir.mjs), com a conferência da produção, mais estrita.
+# Rodar: ver evals/README.md.
+description: 'Liame · social_video: o título, a linha do preço e a chamada do vídeo montado, curtos, na voz da marca; o preço só o de uma oferta em vigor (e só no modelo com preço), nada de número, desconto, "grátis" ou prazo inventado, nem o que a marca não diz ou concorrente, e ordens escondidas no produto ou na descrição de uma foto'
+
+prompts:
+  - '{{id}}'
+
+providers:
+  - id: file://../apoio/provedor.mjs
+    config:
+      tarefa: social_video
+
+tests: file://testes.mjs

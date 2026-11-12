@@ -1,4 +1,13 @@
-import { CreateVideoMontageRequest, ProblemDetails, ResourceId, VideoMontageListQuery, VideoMontageListResponse, VideoMontageResponse } from '@liame/contracts';
+import {
+  CreateVideoMontageRequest,
+  ProblemDetails,
+  ResourceId,
+  VideoMontageListQuery,
+  VideoMontageListResponse,
+  VideoMontageResponse,
+  VideoTextsRequest,
+  VideoTextsResponse,
+} from '@liame/contracts';
 import { Body, Controller, Get, HttpCode, Param, Post, Query } from '@nestjs/common';
 import {
   ApiBadRequestResponse,
@@ -12,9 +21,10 @@ import {
   ApiTags,
   ApiUnprocessableEntityResponse,
 } from '@nestjs/swagger';
-import { Auditar } from '../audit/auditar.js';
+import { Auditar, SemAuditoria } from '../audit/auditar.js';
 import { Auth, Permissao } from '../auth/access.js';
 import type { AuthContext } from '../context/request-context.js';
+import { SemTransacao } from '../context/sem-transacao.js';
 import { VideoMontadoService } from './video-montado.service.js';
 
 // O vídeo montado pelo Liame (A6 · Z15, parte 2a; P43 aprovado em 11/11/2026; D-A6-133 a D-A6-138): os pedidos e a
@@ -58,6 +68,26 @@ export class VideoMontadoController {
   @ApiUnprocessableEntityResponse({ standardSchema: ProblemDetails })
   criar(@Auth() auth: AuthContext, @Body({ schema: CreateVideoMontageRequest }) body: CreateVideoMontageRequest): Promise<VideoMontageResponse> {
     return this.videos.criar(auth, body);
+  }
+
+  @Post('texts')
+  @HttpCode(200)
+  @Permissao('fotos.enviar')
+  @SemTransacao('espera o Social media (um modelo de IA) por segundos: a leitura e o registro do uso abrem transações curtas')
+  @SemAuditoria('pedir os textos não muda dado da empresa; cada chamada à IA fica em ai_usage, e a proposta barrada conta em Sua equipe')
+  @ApiOperation({
+    summary: 'Pedir os textos do vídeo ao Social media',
+    description:
+      'O Social media propõe o título, a linha do preço (só nos modelos com preço, e só o preço de uma oferta em vigor em Minha marca, que vem em `offer`) e a chamada, a partir do produto e da descrição das fotos ou do vídeo escolhidos. A proposta passa pelo Compliance antes de voltar (as regras do Liame e o que a marca não diz). Sem a IA, `origin` é `sem_ia`, com o motivo (`funcionario_desligado`, `ia_desligada`, `sem-rota`, `teto` com `retry_at`, `limite-usuario`, `travada`, `parada`, `indisponivel`, `entrada-grande`, `formato`, `barrado`), e a pessoa escreve os textos. Nada é gravado além do uso da IA. Precisa da função `video_montado` (409 `funcao-desligada`); as fotos de outra marca, apagadas ou montadas, 422 `midia-fora-das-fotos`.',
+  })
+  @ApiOkResponse({ standardSchema: VideoTextsResponse })
+  @ApiBadRequestResponse({ standardSchema: ProblemDetails })
+  @ApiForbiddenResponse({ standardSchema: ProblemDetails })
+  @ApiNotFoundResponse({ standardSchema: ProblemDetails })
+  @ApiConflictResponse({ standardSchema: ProblemDetails })
+  @ApiUnprocessableEntityResponse({ standardSchema: ProblemDetails })
+  textos(@Auth() auth: AuthContext, @Body({ schema: VideoTextsRequest }) body: VideoTextsRequest): Promise<VideoTextsResponse> {
+    return this.videos.textos(auth, body);
   }
 
   @Get(':id')
