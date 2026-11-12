@@ -684,6 +684,12 @@ export {
   NewCampaignUnitOption,
 } from './campanhas-novas.js';
 export {
+  CreateGoogleCampaignRequest,
+  GoogleCampaignOptionsQuery,
+  GoogleCampaignOptionsResponse,
+  GoogleCampaignResponse,
+} from './campanhas-google.js';
+export {
   CreateVideoMontageRequest,
   VIDEO_FORMATS,
   VIDEO_MONTAGE_LIMITS,

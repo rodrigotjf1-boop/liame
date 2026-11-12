@@ -62,12 +62,13 @@ describe('pedido de mensagem: as ferramentas e o plano (A5 · Y5)', () => {
     // A aprovação no destino: só esta ferramenta, sempre com a flag da parte D.
     expect(Object.values(TOOLS).filter((t) => t.aprovacaoNoDestino).map((t) => [t.name, t.flag])).toEqual([['mensagem_pedir_ao_destino', 'regemcast_pede_ao_destino']]);
     expect(TOOLS.mensagem_disparar!.undo!({})).toEqual({ tool: 'mensagem_pausar', params: {} });
-    // Fora das mensagens, só a campanha nova na Meta (A4, X5), a resposta a uma avaliação do Google (A6, Z2), o post da
-    // marca (A6, Z5b) e apagar o post das redes (A6, Z5d, parte 6: o P19 pede o código do app) têm a trava; e as duas das
-    // mensagens não aceitam parâmetro.
+    // Fora das mensagens, só a campanha nova na Meta (A4, X5) e no Google (A5, Y9), a resposta a uma avaliação do Google
+    // (A6, Z2), o post da marca (A6, Z5b) e apagar o post das redes (A6, Z5d, parte 6: o P19 pede o código do app) têm a
+    // trava; e as duas das mensagens não aceitam parâmetro.
     expect(Object.values(TOOLS).filter((t) => t.alwaysApproval).map((t) => t.name)).toEqual([
       'campanha_criar',
       'campanha_nova_ativar',
+      'campanha_google_criar',
       'mensagem_disparar',
       'avaliacao_responder',
       'post_publicar',
