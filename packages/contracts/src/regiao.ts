@@ -355,6 +355,32 @@ export const RegionOverviewResponse = z.strictObject({
       peak: z.strictObject({ weekday: z.number().int(), hour: z.number().int(), orders: z.number().int() }).nullable(),
     })
     .nullable(),
+  /**
+   * A mídia na região (R4; D-RG-32 a D-RG-35): `disponivel`, `sem_conta` (a marca sem conta de anúncio da Meta ou do
+   * Google conectada) ou `sem_permissao` (quem pergunta não vê Resultados, `vendas.ver`).
+   */
+  paid_media_status: Slug,
+  /**
+   * Os anúncios da marca nas 4 semanas completas até ontem (no fuso de cada conta), sem dinheiro (D-RG-33): os cliques e
+   * as impressões por hora (Meta e Google somados), o bloco de até 4 horas com mais cliques e quanto dos cliques cai no
+   * bloco mais forte dos pedidos da loja (nulo sem a demanda pronta), e, só do Google, as cidades com mais cliques (até 8;
+   * a Meta só informa o estado, que o Liame não lê). `accounts`: as contas que entram, com a última leitura (nula: ainda
+   * lendo). `cities_status`: `disponivel`, `sem_google` ou `lendo`. Nula fora de `disponivel`.
+   */
+  paid_media: z
+    .strictObject({
+      from: z.string(),
+      to: z.string(),
+      accounts: z.array(z.strictObject({ provider: Slug, name: z.string(), read_at: z.string().nullable() })),
+      clicks: z.number().int(),
+      impressions: z.number().int(),
+      by_hour: z.array(z.strictObject({ hour: z.number().int(), clicks: z.number().int(), impressions: z.number().int() })),
+      ad_block: z.strictObject({ from_hour: z.number().int(), to_hour: z.number().int(), clicks_pct: z.number().int() }).nullable(),
+      orders_block: z.strictObject({ from_hour: z.number().int(), to_hour: z.number().int(), clicks_pct: z.number().int() }).nullable(),
+      cities_status: Slug,
+      cities: z.array(z.strictObject({ id: z.string(), name: z.string(), full_name: z.string(), clicks: z.number().int(), impressions: z.number().int(), clicks_pct: z.number().int() })),
+    })
+    .nullable(),
   sources: z.array(RegionSourceStatus),
   generated_at: z.iso.datetime(),
 });

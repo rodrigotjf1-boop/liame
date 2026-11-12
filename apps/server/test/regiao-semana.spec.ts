@@ -167,6 +167,8 @@ describe('a LIA por regra: "como é a minha região?" (D-RG-18)', () => {
     sector_references: [],
     store_demand_status: 'sem_regem',
     store_demand: null,
+    paid_media_status: 'sem_conta',
+    paid_media: null,
     sources: [],
     generated_at: '2026-11-12T15:00:00.000Z',
   };

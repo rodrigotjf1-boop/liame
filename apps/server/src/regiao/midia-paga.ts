@@ -100,6 +100,44 @@ export function cidadesValidas(linhas: readonly CidadeLida[]): CidadeLida[] {
   return [...porChave.values()];
 }
 
+/** As horas do bloco mais forte: até 4 seguidas (pode passar da meia-noite). */
+export const HORAS_NO_BLOCO = 4;
+/** As cidades que a seção mostra (D-RG-33). */
+export const CIDADES_NA_SECAO = 8;
+
+/** A parte inteira de `n` sobre o total, em porcento, arredondada. */
+export const porcentoDe = (n: number, total: number): number => (total > 0 ? Math.round((n * 100) / total) : 0);
+
+/**
+ * O bloco de até 4 horas seguidas com mais, numa série de 24 horas (0 a 23), passando da meia-noite; as pontas zeradas
+ * saem. `ate` é a hora em que o bloco acaba (exclusiva, 0 a 23). Nulo com a série zerada. No empate, o que começa antes.
+ */
+export function blocoMaisForte(porHora: readonly number[]): { de: number; ate: number; soma: number } | null {
+  if (porHora.length !== 24 || porHora.every((n) => n <= 0)) return null;
+  const em = (h: number) => porHora[((h % 24) + 24) % 24] ?? 0;
+  let inicio = 0;
+  let melhor = -1;
+  for (let s = 0; s < 24; s++) {
+    let soma = 0;
+    for (let k = 0; k < HORAS_NO_BLOCO; k++) soma += em(s + k);
+    if (soma > melhor) {
+      melhor = soma;
+      inicio = s;
+    }
+  }
+  let fim = inicio + HORAS_NO_BLOCO - 1;
+  while (inicio < fim && em(inicio) === 0) inicio++;
+  while (fim > inicio && em(fim) === 0) fim--;
+  return { de: inicio % 24, ate: (fim + 1) % 24, soma: melhor };
+}
+
+/** A soma das horas de `de` até antes de `ate` (passando da meia-noite quando `ate` <= `de`). */
+export function somaDoBloco(porHora: readonly number[], de: number, ate: number): number {
+  let soma = 0;
+  for (let h = de, n = 0; n < 24 && (n === 0 || h !== ate); h = (h + 1) % 24, n++) soma += porHora[h] ?? 0;
+  return soma;
+}
+
 /** A espera depois de uma falha, pelo tipo (a mesma régua das outras leituras da Meta e do Google). */
 export function esperaDaFalhaDaMidia(tipo: string, esperarMs: number | null): number {
   const HORA = 3_600_000;

@@ -11,6 +11,7 @@ import { disparar } from '@/lib/disparar';
 import { useDetalhes } from '@/lib/modo';
 import { DemandaDaLoja } from './demanda-da-loja';
 import { GavetaFontes } from './gaveta-fontes';
+import { MidiaNaRegiao } from './midia-na-regiao';
 import { Numero } from './numero';
 import {
   comparaDensidade,
@@ -465,6 +466,7 @@ export function SuaRegiao({ brandId, lojas }: { brandId: string; lojas: StoreLoc
           </section>
 
           <DemandaDaLoja r={r} lojaNome={loja.unit_name} ids={ids} mostraPro={mostraPro} />
+          <MidiaNaRegiao r={r} ids={ids} mostraPro={mostraPro} />
 
           {c?.pix && (
             <section className="rg-grupo" aria-labelledby={`${ids}-pulso`}>

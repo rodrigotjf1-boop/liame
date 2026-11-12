@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Região P40</title>
 <!--
-@prototipo Liame · Região · P40 · A loja no mapa (R1) e Sua região (R2) (APROVADO PELO DONO em 11/11/2026, com as D-RG-11 a D-RG-20 como recomendadas) · REVISÃO de 12/11/2026, APROVADA PELO DONO em 12/11/2026: a demanda da loja (R3, parte 1; estados 19 a 22; D-RG-21 a D-RG-25 como recomendadas)
+@prototipo Liame · Região · P40 · A loja no mapa (R1) e Sua região (R2) (APROVADO PELO DONO em 11/11/2026, com as D-RG-11 a D-RG-20 como recomendadas) · REVISÃO de 12/11/2026, APROVADA PELO DONO em 12/11/2026: a demanda da loja (R3, parte 1; estados 19 a 22; D-RG-21 a D-RG-25 como recomendadas) · REVISÃO R4 de 12/11/2026: a mídia na região (estados 23 a 25; D-RG-32 a D-RG-35 como recomendadas), aprovada pelo dono antecipadamente pela autorização geral da noite de 12/11/2026
 pedido: o plano "tráfego pela região" (docs/plano-regiao.md), aprovado pelo dono em 11/11/2026 com as decisões D-RG-1 a
       D-RG-10 na recomendação. Cada entrega tem protótipo aprovado antes de tela nova: este é o das duas primeiras, R1
       (a loja no mapa) e R2 (o raio-x da região). Acréscimo do mesmo dia: a marca sem loja (sem o Regem), vários Perfis
@@ -1162,6 +1162,14 @@ window.P40_DECISOES_R3 = [
   { id: 'D-RG-25', titulo: 'Onde a demanda mora', texto: 'Em Sua região, depois da Concorrência (a sua loja ao lado dos vizinhos); o item "Pedidos por hora e tíquete médio" sai do "Ainda não". A LIA passa a dizer o total, o tíquete e o pico na resposta "como é a minha região?" (D-RG-18). Os pedidos por bairro continuam no "Ainda não" (a parte 2 da R3, pela trilha C, D-RG-8).', rec: 'em Sua região, depois da Concorrência.', porque: 'É o número da loja que a região explica: o bolso e a concorrência dizem o que é possível; a demanda diz o que a loja já faz. O plano de mídia (R5) usa os dois juntos.' },
 ];
 
+/* A revisão R4 de 12/11/2026 (a mídia na região), aprovada pelo dono antecipadamente pela autorização da noite, como recomendada. */
+window.P40_DECISOES_R4 = [
+  { id: 'D-RG-32', titulo: 'De onde vem a cidade', texto: 'A cidade de quem viu e clicou vem só do Google (a localização física, `user_location_view`). Nos resultados de anúncio, a Meta só informa o estado, e sem as conversões de fora dela; o Liame não lê esse estado. A seção diz isso com todas as letras.', rec: 'só o Google; a Meta, na hora.', porque: 'O estado não ajuda um restaurante com 3 km de raio; mostrar o estado como se fosse região levaria a uma decisão errada.' },
+  { id: 'D-RG-33', titulo: 'O que a seção mostra', texto: 'Os cliques e as impressões, sem dinheiro: os cliques por hora (Meta e Google somados) com o bloco mais forte, quanto dos cliques cai no bloco mais forte dos pedidos da loja (R3) e, do Google, as cidades com mais cliques (até 8) e a parte de cada uma. A janela é a da demanda: as 4 semanas completas até ontem.', rec: 'cliques e impressões; o dinheiro fica em Resultados.', porque: 'Contas em moedas diferentes não se somam, e o gasto já está em Resultados; aqui a pergunta é "na hora e no lugar certos?".' },
+  { id: 'D-RG-34', titulo: 'Quem vê', texto: 'A mesma régua da demanda (D-RG-24): só quem vê Resultados (a permissão de ver vendas); os outros veem a seção com o aviso.', rec: 'a mesma permissão de Resultados.', porque: 'São números das campanhas da empresa, que já ficam em Resultados com essa regra.' },
+  { id: 'D-RG-35', titulo: 'A leitura', texto: 'Uma vez por dia, para cada conta de anúncio da marca com a região ligada, as 4 semanas até ontem; a leitura nova substitui a anterior (os números de anúncio mudam por até 28 dias). A conta desligada leva junto o que foi lido dela. Os números da conta do Instagram e da Página (seguidores, a cidade do público) ficam para depois das permissões aprovadas pela Meta para clientes de fora.', rec: 'assim.', porque: 'É o ritmo dos outros números de anúncio do Liame; ler mais vezes não muda a decisão do dia e gasta a cota.' },
+];
+
 /* ---------- os dados de exemplo (o CEP e os números da região são reais) ---------- */
 const P40_PERFIS = {
   tijuca: { id: 'tijuca', nome: 'Mister Burgers Tijuca', end: { rua: 'Rua Conde de Bonfim', numero: '450', compl: '', bairro: 'Tijuca', municipio: 'Rio de Janeiro', uf: 'RJ', cep: '20520-054', ibge: '3304557' }, areas: ['Tijuca', 'Maracanã', 'Vila Isabel', 'Praça da Bandeira', 'Andaraí', 'Grajaú', 'Rio Comprido'] },
@@ -1210,6 +1218,9 @@ const P40_ESTADOS = {
   'demanda-poucos': '20 · R3: A demanda com poucos pedidos (menos de 20 nas 4 semanas)',
   'demanda-sem-regem': '21 · R3: A marca sem o Regem (a demanda não aparece)',
   'demanda-sem-permissao': '22 · R3: Quem não vê Resultados (sem os números de venda)',
+  midia: '23 · R4: A mídia na região (a hora dos cliques e as cidades do Google)',
+  'midia-sem-google': '24 · R4: Só a Meta conectada (a hora, sem a cidade)',
+  'midia-sem-conta': '25 · R4: Sem conta de anúncio conectada',
 };
 
 const km = (v) => numero(v, Number.isInteger(v) ? 0 : 1);
@@ -1234,6 +1245,8 @@ function p40Base() {
     raiox: { tijuca: 'lido' }, quando: 'hoje às 06:10', g: null, seq: 0, timer: 0,
     // R3, parte 1: a demanda da loja (`pronto` ou `poucos`) e se quem vê pode ver Resultados (`vendas.ver`).
     demanda: 'pronto', vendas: true,
+    // R4: as contas de anúncio conectadas (`meta`, `google`).
+    anuncios: ['meta', 'google'],
   };
 }
 const p40Loja = (id) => p40.lojas.find((l) => l.id === id) || null;
@@ -1397,6 +1410,47 @@ function p40Demanda(loja) {
   </section>`;
 }
 
+/* ---------- A mídia na região (R4; revisão aprovada antecipadamente pela autorização da noite de 12/11/2026, D-RG-32 a D-RG-35) ---------- */
+const P40_MIDIA = {
+  // Cliques por hora nas 4 semanas, Meta e Google somados (no fuso das contas).
+  horas: [[10, 40], [11, 95], [12, 210], [13, 200], [14, 90], [15, 60], [16, 55], [17, 70], [18, 110], [19, 150], [20, 160], [21, 120], [22, 70], [23, 30]],
+  // Do Google: a cidade, os cliques e a parte dos cliques do Google.
+  cidades: [['Rio de Janeiro', 412, 78], ['Duque de Caxias', 48, 9], ['Niterói', 31, 6], ['São Gonçalo', 22, 4], ['Nova Iguaçu', 15, 3]],
+};
+function p40Midia() {
+  const cab = (sub) => `<div class="p40-grupo-cab"><h3 id="g-midia">A mídia na região</h3><p>${sub}</p></div>`;
+  if (!p40.vendas) {
+    return `<section class="p40-grupo" aria-labelledby="g-midia">${cab('os anúncios da marca')}<p class="p40-nota">${ic('i-lock')}<span>Os números das campanhas ficam para quem vê Resultados. Peça ao dono a permissão, se precisar deles.</span></p></section>`;
+  }
+  if (!p40.anuncios.length) {
+    return `<section class="p40-grupo" aria-labelledby="g-midia">${cab('os anúncios da marca')}<p class="lite-frase">Com a conta de anúncios da Meta ou do Google conectada, esta parte mostra a hora em que os anúncios rendem cliques e, do Google, de que cidades vêm os cliques.</p><p><button class="btn btn--sm" type="button" data-fora-p40="Abre Contas conectadas.">Conectar a conta de anúncios</button></p></section>`;
+  }
+  const total = P40_MIDIA.horas.reduce((t, [, n]) => t + n, 0);
+  const max = Math.max(...P40_MIDIA.horas.map((h) => h[1]));
+  const horas = P40_MIDIA.horas
+    .map(([h, n]) => `<li class="p40-hora${h >= 11 && h <= 14 ? ' p40-hora--foco' : ''}"><span class="p40-hora-trilho" aria-hidden="true"><i style="--v:${(n / max) * 100}%"></i></span><span class="num">${h}h</span></li>`)
+    .join('');
+  const descricao = `Cliques por hora nas 4 semanas: ${P40_MIDIA.horas.map(([h, n]) => `${h}h, ${n}`).join('; ')}. O bloco mais forte é das 11h às 15h.`;
+  const google = p40.anuncios.includes('google');
+  const cidades = google
+    ? `<ul class="p40-ref">${P40_MIDIA.cidades.map(([c, n, p]) => `<li><span><b>${esc(c)}</b></span><span><b class="num">${numero(n, 0)}</b> cliques, ${p}% dos cliques do Google</span></li>`).join('')}</ul>
+       <p class="p40-nota">${ic('i-info')}<span>A cidade é a de onde a pessoa estava quando viu o anúncio, pelo Google. A Meta só informa o estado nos resultados, e o Liame não usa o estado.</span></p>`
+    : `<p class="lite-frase">A cidade dos cliques vem só do Google Ads: a Meta só informa o estado nos resultados de anúncio. Com o Google conectado, as cidades aparecem aqui.</p>`;
+  const contas = google ? 'Meta e Google' : 'Meta';
+  return `<section class="p40-grupo" aria-labelledby="g-midia">${cab(`os anúncios da marca (${contas}), 4 semanas até ontem (11/11)`)}
+    <div class="p40-nums">
+      ${p40Num(`${numero(total, 0)} <small>cliques</small>`, `de 15/10 a 11/11, nos anúncios da ${contas}`, `${contas} · cliques por hora, no fuso das contas`, { pro: 'ad_hour_daily · Meta: hourly_stats_aggregated_by_advertiser_time_zone · Google: segments.hour em customer' })}
+      ${p40Num('41%', 'dos cliques caem das 11h às 15h, o bloco mais forte dos anúncios', 'Conta do sistema com os cliques por hora', { pro: 'a janela de 4 horas seguidas com mais cliques' })}
+      ${p40Num('34%', 'dos cliques caem das 19h às 23h, o bloco mais forte dos pedidos da loja', 'Conta do sistema: os cliques por hora e os pedidos do Regem (A demanda da loja)', { pro: 'o bloco mais forte dos pedidos (R3) × os cliques das mesmas horas' })}
+    </div>
+    <div class="p40-duas">
+      <div><h4>Cliques por hora</h4><ul class="p40-horas" role="img" aria-label="${esc(descricao)}">${horas}</ul></div>
+      <div><h4>De onde vêm os cliques${google ? ' (Google)' : ''}</h4>${cidades}</div>
+    </div>
+    <p class="p40-pico">${ic('i-clock')}<span><b>Os anúncios rendem mais no almoço, e os pedidos vêm à noite.</b> O plano de mídia (R5) põe a verba de pedido 1 hora antes do bloco dos pedidos; o ritmo por horário (R7) vai propor a mudança na campanha.</span></p>
+  </section>`;
+}
+
 function p40Grupos(loja, falhou) {
   const b = loja.end.bairro;
   const gente = `<section class="p40-grupo" aria-labelledby="g-gente"><div class="p40-grupo-cab"><h3 id="g-gente">Gente</h3><p>no bairro da loja</p></div><div class="p40-nums">
@@ -1449,7 +1503,7 @@ function p40Grupos(loja, falhou) {
         <li><span class="st st--espera">Ainda não</span><span><b>Concorrentes no raio</b><small>Aparece com o servidor de mapas próprio (R8). Hoje, a conta é a do município.</small></span></li>
         <li><span class="st st--espera">Ainda não</span><span><b>Bairros para atacar e para defender</b><small>Pede os pedidos por bairro do Regem, somados e sem identificar ninguém (R3, D-RG-8).</small></span></li>
       </ul></section>`;
-  return `<div class="p40-grupos">${gente}${bolso}${conc}${p40Demanda(loja)}${preco}${semana}${ref}${ainda}</div>`;
+  return `<div class="p40-grupos">${gente}${bolso}${conc}${p40Demanda(loja)}${p40Midia()}${preco}${semana}${ref}${ainda}</div>`;
 }
 
 function p40Lendo(loja) {
@@ -1564,7 +1618,9 @@ function p40CardMk() {
 function p40Decisoes() {
   const lista = window.P40_DECISOES.map((d) => `<li class="p40-dec"><p class="p40-dec-cab"><code>${esc(d.id)}</code><b>${esc(d.titulo)}</b></p><p>${esc(d.texto)}</p>${d.porque ? `<p>Por quê: ${esc(d.porque)}</p>` : ''}<p class="rec">Recomendo: ${esc(d.rec)}</p></li>`).join('');
   const novas = window.P40_DECISOES_R3.map((d) => `<li class="p40-dec"><p class="p40-dec-cab"><code>${esc(d.id)}</code><b>${esc(d.titulo)}</b></p><p>${esc(d.texto)}</p>${d.porque ? `<p>Por quê: ${esc(d.porque)}</p>` : ''}<p class="rec">Recomendo: ${esc(d.rec)}</p></li>`).join('');
-  return `<section class="card p40-proto p40-decisoes" aria-labelledby="p40-dec-r3-t"><h2 id="p40-dec-r3-t">Revisão R3, parte 1: a demanda da loja (D-RG-21 a D-RG-25)</h2><p class="lite-frase">Aprovadas pelo dono em 12/11/2026, todas como recomendadas. Estados 19 a 22 do menu. A seção usa os pedidos que o Liame já lê do Regem; nada muda no Regem.</p><ul class="p40-dec-lista">${novas}</ul></section>
+  const r4 = window.P40_DECISOES_R4.map((d) => `<li class="p40-dec"><p class="p40-dec-cab"><code>${esc(d.id)}</code><b>${esc(d.titulo)}</b></p><p>${esc(d.texto)}</p>${d.porque ? `<p>Por quê: ${esc(d.porque)}</p>` : ''}<p class="rec">Recomendo: ${esc(d.rec)}</p></li>`).join('');
+  return `<section class="card p40-proto p40-decisoes" aria-labelledby="p40-dec-r4-t"><h2 id="p40-dec-r4-t">Revisão R4: a mídia na região (D-RG-32 a D-RG-35)</h2><p class="lite-frase">Aprovadas antecipadamente pelo dono pela autorização da noite de 12/11/2026, todas como recomendadas. Estados 23 a 25 do menu.</p><ul class="p40-dec-lista">${r4}</ul></section>
+  <section class="card p40-proto p40-decisoes" aria-labelledby="p40-dec-r3-t"><h2 id="p40-dec-r3-t">Revisão R3, parte 1: a demanda da loja (D-RG-21 a D-RG-25)</h2><p class="lite-frase">Aprovadas pelo dono em 12/11/2026, todas como recomendadas. Estados 19 a 22 do menu. A seção usa os pedidos que o Liame já lê do Regem; nada muda no Regem.</p><ul class="p40-dec-lista">${novas}</ul></section>
   <section class="card p40-proto p40-decisoes" aria-labelledby="p40-dec-t"><h2 id="p40-dec-t">Decisões do protótipo (D-RG-11 a D-RG-20)</h2><p class="lite-frase">Aprovadas pelo dono em 11/11/2026, todas como recomendadas, junto com o plano e as D-RG-1 a D-RG-10.</p><ul class="p40-dec-lista">${lista}</ul></section>`;
 }
 
@@ -1824,6 +1880,8 @@ function p40Aplicar(estado, { focar = false } = {}) {
     case 'demanda-poucos': s.demanda = 'poucos'; break;
     case 'demanda-sem-regem': s.marca = { nome: 'Mister Burgers', ini: 'MB', regem: false, pedidos: 'Brendi' }; break;
     case 'demanda-sem-permissao': s.vendas = false; s.podeEditar = false; s.pessoa = { nome: 'Camila', ini: 'C', papel: 'Aprovadora' }; break;
+    case 'midia-sem-google': s.anuncios = ['meta']; break;
+    case 'midia-sem-conta': s.anuncios = []; break;
     default: break;
   }
   const sel = $('#rev-p40'); if (sel && sel.value !== estado) sel.value = estado;

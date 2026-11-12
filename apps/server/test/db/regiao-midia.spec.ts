@@ -1,4 +1,4 @@
-import { randomInt } from 'node:crypto';
+import { randomInt, randomUUID } from 'node:crypto';
 import { resolve } from 'node:path';
 import { type Database, runMigrations } from '@liame/database';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -120,6 +120,31 @@ describe.skipIf(!hasDb)('a mídia por região e por hora, pela rotina do worker 
     expect(await cidades()).toEqual([{ day: '2026-11-10', geo_target_id: LUGAR, clicks: '25', spend: '12.000000' }]);
     expect(await ownerQuery(`select name, target_type, country_code from liame.region_geo_target where id = $1`, [LUGAR])).toEqual([{ name: 'Rio de Janeiro', target_type: 'City', country_code: 'BR' }]);
     expect(await cursor()).toMatchObject({ last_error: null, cursor: { proxima: new Date(AGORA.getTime() + 24 * 3_600_000).toISOString(), falhas_seguidas: 0 } });
+  });
+
+  it('o retrato de Sua região traz a mídia (R4, parte 2): os cliques por hora, o bloco mais forte e as cidades do Google, sem dinheiro', async () => {
+    const loja = randomUUID();
+    await ownerQuery(
+      `insert into liame.unit (id, tenant_id, brand_id, name, address_postal_code, address_district, address_city, address_state, ibge_city_code, location_source, delivery_radius_km)
+       values ($1, $2, $3, 'Loja da Região', '20520054', 'Tijuca', 'Rio de Janeiro', 'RJ', '3304557', 'cep', 3)`,
+      [loja, e.tenantId, e.brandId],
+    );
+    // A rota usa o relógio de verdade: as linhas lidas para 12/11/2026 só entram se a janela de hoje as cobrir.
+    const r = await api.call('GET', `/v1/region/overview?brand_id=${e.brandId}&unit_id=${loja}`, { cookie: e.cookie });
+    expect(r.status, JSON.stringify(r.body)).toBe(200);
+    expect(r.body.paid_media_status).toBe('disponivel');
+    const m = r.body.paid_media;
+    expect(m.accounts).toEqual([{ provider: 'google_ads', name: 'Hamburgueria Ads', read_at: AGORA.toISOString() }]);
+    expect(m.by_hour).toHaveLength(24);
+    expect(m.cities_status).toBe('disponivel');
+    expect(JSON.stringify(m)).not.toMatch(/spend|gasto|micros/);
+    const janelaCobre = m.from <= '2026-11-10' && m.to >= '2026-11-11';
+    if (janelaCobre) {
+      expect(m).toMatchObject({ clicks: 32, impressions: 1000, ad_block: { from_hour: 20, to_hour: 21, clicks_pct: 94 }, orders_block: null });
+      expect(m.cities).toEqual([{ id: LUGAR, name: 'Rio de Janeiro', full_name: 'Rio de Janeiro,State of Rio de Janeiro,Brazil', clicks: 25, impressions: 700, clicks_pct: 100 }]);
+    } else {
+      expect(m).toMatchObject({ clicks: 0, ad_block: null, cities: [] });
+    }
   });
 
   it('no dia seguinte: o lugar já conhecido não é traduzido de novo; a cidade que falha não derruba a hora e deixa a de antes', async () => {

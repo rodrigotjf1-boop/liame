@@ -131,6 +131,23 @@ export function horasDoGrafico(porHora: ReadonlyArray<{ hour: number; orders: nu
   return porHora.filter((h) => h.hour >= de && h.hour <= ate);
 }
 
+/** O bloco de horas em palavras: "das 11h às 15h" (o fim é a hora em que o bloco acaba). */
+export function faixaDeHoras(de: number, ate: number): string {
+  return `das ${de}h às ${ate}h`;
+}
+
+/** A hora está no bloco que começa em `de` e acaba em `ate` (passando da meia-noite quando `ate` <= `de`)? */
+export function noBloco(hora: number, de: number, ate: number): boolean {
+  return de < ate ? hora >= de && hora < ate : hora >= de || hora < ate;
+}
+
+/** As plataformas das contas de anúncio, em palavras: "Meta e Google", "Meta" ou "Google". */
+export function plataformasDaMidia(contas: ReadonlyArray<{ provider: string }>): string {
+  const meta = contas.some((c) => c.provider === 'meta_ads');
+  const google = contas.some((c) => c.provider === 'google_ads');
+  return [meta ? 'Meta' : null, google ? 'Google' : null].filter(Boolean).join(' e ');
+}
+
 /** O mês "2026-09" como a tela escreve: "set/2026". */
 export function mesAno(periodo: string): string {
   const m = Number(periodo.slice(5, 7));
