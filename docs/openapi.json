@@ -70118,6 +70118,234 @@
                                 ],
                                 "additionalProperties": false
                               }
+                            },
+                            "media_plan": {
+                              "type": "object",
+                              "properties": {
+                                "stores": {
+                                  "minItems": 1,
+                                  "maxItems": 5,
+                                  "type": "array",
+                                  "items": {
+                                    "type": "object",
+                                    "properties": {
+                                      "unit_id": {
+                                        "type": "string",
+                                        "format": "uuid",
+                                        "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                                      },
+                                      "store": {
+                                        "type": "string",
+                                        "minLength": 1,
+                                        "maxLength": 120
+                                      },
+                                      "district": {
+                                        "type": [
+                                          "string",
+                                          "null"
+                                        ],
+                                        "minLength": 1,
+                                        "maxLength": 120
+                                      },
+                                      "city": {
+                                        "type": [
+                                          "string",
+                                          "null"
+                                        ],
+                                        "minLength": 1,
+                                        "maxLength": 120
+                                      },
+                                      "radius_km": {
+                                        "type": "number",
+                                        "minimum": 0,
+                                        "maximum": 15,
+                                        "multipleOf": 0.5
+                                      },
+                                      "rings": {
+                                        "minItems": 1,
+                                        "maxItems": 2,
+                                        "type": "array",
+                                        "items": {
+                                          "type": "object",
+                                          "properties": {
+                                            "ring": {
+                                              "type": "string",
+                                              "enum": [
+                                                "nucleo",
+                                                "expansao"
+                                              ]
+                                            },
+                                            "from_km": {
+                                              "type": "number",
+                                              "minimum": 0,
+                                              "maximum": 15,
+                                              "multipleOf": 0.5
+                                            },
+                                            "to_km": {
+                                              "type": "number",
+                                              "minimum": 0,
+                                              "maximum": 15,
+                                              "multipleOf": 0.5
+                                            },
+                                            "share": {
+                                              "type": "integer",
+                                              "minimum": 0,
+                                              "maximum": 100
+                                            },
+                                            "meta": {
+                                              "type": "integer",
+                                              "minimum": 0,
+                                              "maximum": 10000000
+                                            },
+                                            "google": {
+                                              "type": "integer",
+                                              "minimum": 0,
+                                              "maximum": 10000000
+                                            }
+                                          },
+                                          "required": [
+                                            "ring",
+                                            "from_km",
+                                            "to_km",
+                                            "share",
+                                            "meta",
+                                            "google"
+                                          ],
+                                          "additionalProperties": false
+                                        }
+                                      },
+                                      "hours": {
+                                        "type": "object",
+                                        "properties": {
+                                          "source": {
+                                            "type": "string",
+                                            "enum": [
+                                              "loja",
+                                              "setor"
+                                            ]
+                                          },
+                                          "days": {
+                                            "minItems": 1,
+                                            "maxItems": 7,
+                                            "type": "array",
+                                            "items": {
+                                              "type": "integer",
+                                              "minimum": 0,
+                                              "maximum": 6
+                                            }
+                                          },
+                                          "from": {
+                                            "type": "string",
+                                            "pattern": "^([01]\\d|2[0-3]):[0-5]\\d$"
+                                          },
+                                          "to": {
+                                            "type": "string",
+                                            "pattern": "^([01]\\d|2[0-3]):[0-5]\\d$"
+                                          },
+                                          "ads_from": {
+                                            "type": "string",
+                                            "pattern": "^([01]\\d|2[0-3]):[0-5]\\d$"
+                                          },
+                                          "days_share": {
+                                            "type": [
+                                              "integer",
+                                              "null"
+                                            ],
+                                            "minimum": 0,
+                                            "maximum": 100
+                                          },
+                                          "hours_share": {
+                                            "type": [
+                                              "integer",
+                                              "null"
+                                            ],
+                                            "minimum": 0,
+                                            "maximum": 100
+                                          },
+                                          "orders_from": {
+                                            "type": [
+                                              "string",
+                                              "null"
+                                            ],
+                                            "format": "date",
+                                            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+                                          },
+                                          "orders_to": {
+                                            "type": [
+                                              "string",
+                                              "null"
+                                            ],
+                                            "format": "date",
+                                            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+                                          }
+                                        },
+                                        "required": [
+                                          "source",
+                                          "days",
+                                          "from",
+                                          "to",
+                                          "ads_from",
+                                          "days_share",
+                                          "hours_share",
+                                          "orders_from",
+                                          "orders_to"
+                                        ],
+                                        "additionalProperties": false
+                                      }
+                                    },
+                                    "required": [
+                                      "unit_id",
+                                      "store",
+                                      "district",
+                                      "city",
+                                      "radius_km",
+                                      "rings",
+                                      "hours"
+                                    ],
+                                    "additionalProperties": false
+                                  }
+                                },
+                                "stages": {
+                                  "minItems": 4,
+                                  "maxItems": 4,
+                                  "type": "array",
+                                  "items": {
+                                    "type": "object",
+                                    "properties": {
+                                      "stage": {
+                                        "type": "string",
+                                        "enum": [
+                                          "reconhecimento",
+                                          "seguidores",
+                                          "cardapio_conversa",
+                                          "pedido"
+                                        ]
+                                      },
+                                      "share": {
+                                        "type": "integer",
+                                        "minimum": 0,
+                                        "maximum": 100
+                                      },
+                                      "creative": {
+                                        "type": "string",
+                                        "minLength": 1,
+                                        "maxLength": 240
+                                      }
+                                    },
+                                    "required": [
+                                      "stage",
+                                      "share",
+                                      "creative"
+                                    ],
+                                    "additionalProperties": false
+                                  }
+                                }
+                              },
+                              "required": [
+                                "stores",
+                                "stages"
+                              ],
+                              "additionalProperties": false
                             }
                           },
                           "required": [
@@ -70930,6 +71158,234 @@
                               ],
                               "additionalProperties": false
                             }
+                          },
+                          "media_plan": {
+                            "type": "object",
+                            "properties": {
+                              "stores": {
+                                "minItems": 1,
+                                "maxItems": 5,
+                                "type": "array",
+                                "items": {
+                                  "type": "object",
+                                  "properties": {
+                                    "unit_id": {
+                                      "type": "string",
+                                      "format": "uuid",
+                                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                                    },
+                                    "store": {
+                                      "type": "string",
+                                      "minLength": 1,
+                                      "maxLength": 120
+                                    },
+                                    "district": {
+                                      "type": [
+                                        "string",
+                                        "null"
+                                      ],
+                                      "minLength": 1,
+                                      "maxLength": 120
+                                    },
+                                    "city": {
+                                      "type": [
+                                        "string",
+                                        "null"
+                                      ],
+                                      "minLength": 1,
+                                      "maxLength": 120
+                                    },
+                                    "radius_km": {
+                                      "type": "number",
+                                      "minimum": 0,
+                                      "maximum": 15,
+                                      "multipleOf": 0.5
+                                    },
+                                    "rings": {
+                                      "minItems": 1,
+                                      "maxItems": 2,
+                                      "type": "array",
+                                      "items": {
+                                        "type": "object",
+                                        "properties": {
+                                          "ring": {
+                                            "type": "string",
+                                            "enum": [
+                                              "nucleo",
+                                              "expansao"
+                                            ]
+                                          },
+                                          "from_km": {
+                                            "type": "number",
+                                            "minimum": 0,
+                                            "maximum": 15,
+                                            "multipleOf": 0.5
+                                          },
+                                          "to_km": {
+                                            "type": "number",
+                                            "minimum": 0,
+                                            "maximum": 15,
+                                            "multipleOf": 0.5
+                                          },
+                                          "share": {
+                                            "type": "integer",
+                                            "minimum": 0,
+                                            "maximum": 100
+                                          },
+                                          "meta": {
+                                            "type": "integer",
+                                            "minimum": 0,
+                                            "maximum": 10000000
+                                          },
+                                          "google": {
+                                            "type": "integer",
+                                            "minimum": 0,
+                                            "maximum": 10000000
+                                          }
+                                        },
+                                        "required": [
+                                          "ring",
+                                          "from_km",
+                                          "to_km",
+                                          "share",
+                                          "meta",
+                                          "google"
+                                        ],
+                                        "additionalProperties": false
+                                      }
+                                    },
+                                    "hours": {
+                                      "type": "object",
+                                      "properties": {
+                                        "source": {
+                                          "type": "string",
+                                          "enum": [
+                                            "loja",
+                                            "setor"
+                                          ]
+                                        },
+                                        "days": {
+                                          "minItems": 1,
+                                          "maxItems": 7,
+                                          "type": "array",
+                                          "items": {
+                                            "type": "integer",
+                                            "minimum": 0,
+                                            "maximum": 6
+                                          }
+                                        },
+                                        "from": {
+                                          "type": "string",
+                                          "pattern": "^([01]\\d|2[0-3]):[0-5]\\d$"
+                                        },
+                                        "to": {
+                                          "type": "string",
+                                          "pattern": "^([01]\\d|2[0-3]):[0-5]\\d$"
+                                        },
+                                        "ads_from": {
+                                          "type": "string",
+                                          "pattern": "^([01]\\d|2[0-3]):[0-5]\\d$"
+                                        },
+                                        "days_share": {
+                                          "type": [
+                                            "integer",
+                                            "null"
+                                          ],
+                                          "minimum": 0,
+                                          "maximum": 100
+                                        },
+                                        "hours_share": {
+                                          "type": [
+                                            "integer",
+                                            "null"
+                                          ],
+                                          "minimum": 0,
+                                          "maximum": 100
+                                        },
+                                        "orders_from": {
+                                          "type": [
+                                            "string",
+                                            "null"
+                                          ],
+                                          "format": "date",
+                                          "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+                                        },
+                                        "orders_to": {
+                                          "type": [
+                                            "string",
+                                            "null"
+                                          ],
+                                          "format": "date",
+                                          "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+                                        }
+                                      },
+                                      "required": [
+                                        "source",
+                                        "days",
+                                        "from",
+                                        "to",
+                                        "ads_from",
+                                        "days_share",
+                                        "hours_share",
+                                        "orders_from",
+                                        "orders_to"
+                                      ],
+                                      "additionalProperties": false
+                                    }
+                                  },
+                                  "required": [
+                                    "unit_id",
+                                    "store",
+                                    "district",
+                                    "city",
+                                    "radius_km",
+                                    "rings",
+                                    "hours"
+                                  ],
+                                  "additionalProperties": false
+                                }
+                              },
+                              "stages": {
+                                "minItems": 4,
+                                "maxItems": 4,
+                                "type": "array",
+                                "items": {
+                                  "type": "object",
+                                  "properties": {
+                                    "stage": {
+                                      "type": "string",
+                                      "enum": [
+                                        "reconhecimento",
+                                        "seguidores",
+                                        "cardapio_conversa",
+                                        "pedido"
+                                      ]
+                                    },
+                                    "share": {
+                                      "type": "integer",
+                                      "minimum": 0,
+                                      "maximum": 100
+                                    },
+                                    "creative": {
+                                      "type": "string",
+                                      "minLength": 1,
+                                      "maxLength": 240
+                                    }
+                                  },
+                                  "required": [
+                                    "stage",
+                                    "share",
+                                    "creative"
+                                  ],
+                                  "additionalProperties": false
+                                }
+                              }
+                            },
+                            "required": [
+                              "stores",
+                              "stages"
+                            ],
+                            "additionalProperties": false
                           }
                         },
                         "required": [
@@ -71453,6 +71909,234 @@
                                 ],
                                 "additionalProperties": false
                               }
+                            },
+                            "media_plan": {
+                              "type": "object",
+                              "properties": {
+                                "stores": {
+                                  "minItems": 1,
+                                  "maxItems": 5,
+                                  "type": "array",
+                                  "items": {
+                                    "type": "object",
+                                    "properties": {
+                                      "unit_id": {
+                                        "type": "string",
+                                        "format": "uuid",
+                                        "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                                      },
+                                      "store": {
+                                        "type": "string",
+                                        "minLength": 1,
+                                        "maxLength": 120
+                                      },
+                                      "district": {
+                                        "type": [
+                                          "string",
+                                          "null"
+                                        ],
+                                        "minLength": 1,
+                                        "maxLength": 120
+                                      },
+                                      "city": {
+                                        "type": [
+                                          "string",
+                                          "null"
+                                        ],
+                                        "minLength": 1,
+                                        "maxLength": 120
+                                      },
+                                      "radius_km": {
+                                        "type": "number",
+                                        "minimum": 0,
+                                        "maximum": 15,
+                                        "multipleOf": 0.5
+                                      },
+                                      "rings": {
+                                        "minItems": 1,
+                                        "maxItems": 2,
+                                        "type": "array",
+                                        "items": {
+                                          "type": "object",
+                                          "properties": {
+                                            "ring": {
+                                              "type": "string",
+                                              "enum": [
+                                                "nucleo",
+                                                "expansao"
+                                              ]
+                                            },
+                                            "from_km": {
+                                              "type": "number",
+                                              "minimum": 0,
+                                              "maximum": 15,
+                                              "multipleOf": 0.5
+                                            },
+                                            "to_km": {
+                                              "type": "number",
+                                              "minimum": 0,
+                                              "maximum": 15,
+                                              "multipleOf": 0.5
+                                            },
+                                            "share": {
+                                              "type": "integer",
+                                              "minimum": 0,
+                                              "maximum": 100
+                                            },
+                                            "meta": {
+                                              "type": "integer",
+                                              "minimum": 0,
+                                              "maximum": 10000000
+                                            },
+                                            "google": {
+                                              "type": "integer",
+                                              "minimum": 0,
+                                              "maximum": 10000000
+                                            }
+                                          },
+                                          "required": [
+                                            "ring",
+                                            "from_km",
+                                            "to_km",
+                                            "share",
+                                            "meta",
+                                            "google"
+                                          ],
+                                          "additionalProperties": false
+                                        }
+                                      },
+                                      "hours": {
+                                        "type": "object",
+                                        "properties": {
+                                          "source": {
+                                            "type": "string",
+                                            "enum": [
+                                              "loja",
+                                              "setor"
+                                            ]
+                                          },
+                                          "days": {
+                                            "minItems": 1,
+                                            "maxItems": 7,
+                                            "type": "array",
+                                            "items": {
+                                              "type": "integer",
+                                              "minimum": 0,
+                                              "maximum": 6
+                                            }
+                                          },
+                                          "from": {
+                                            "type": "string",
+                                            "pattern": "^([01]\\d|2[0-3]):[0-5]\\d$"
+                                          },
+                                          "to": {
+                                            "type": "string",
+                                            "pattern": "^([01]\\d|2[0-3]):[0-5]\\d$"
+                                          },
+                                          "ads_from": {
+                                            "type": "string",
+                                            "pattern": "^([01]\\d|2[0-3]):[0-5]\\d$"
+                                          },
+                                          "days_share": {
+                                            "type": [
+                                              "integer",
+                                              "null"
+                                            ],
+                                            "minimum": 0,
+                                            "maximum": 100
+                                          },
+                                          "hours_share": {
+                                            "type": [
+                                              "integer",
+                                              "null"
+                                            ],
+                                            "minimum": 0,
+                                            "maximum": 100
+                                          },
+                                          "orders_from": {
+                                            "type": [
+                                              "string",
+                                              "null"
+                                            ],
+                                            "format": "date",
+                                            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+                                          },
+                                          "orders_to": {
+                                            "type": [
+                                              "string",
+                                              "null"
+                                            ],
+                                            "format": "date",
+                                            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+                                          }
+                                        },
+                                        "required": [
+                                          "source",
+                                          "days",
+                                          "from",
+                                          "to",
+                                          "ads_from",
+                                          "days_share",
+                                          "hours_share",
+                                          "orders_from",
+                                          "orders_to"
+                                        ],
+                                        "additionalProperties": false
+                                      }
+                                    },
+                                    "required": [
+                                      "unit_id",
+                                      "store",
+                                      "district",
+                                      "city",
+                                      "radius_km",
+                                      "rings",
+                                      "hours"
+                                    ],
+                                    "additionalProperties": false
+                                  }
+                                },
+                                "stages": {
+                                  "minItems": 4,
+                                  "maxItems": 4,
+                                  "type": "array",
+                                  "items": {
+                                    "type": "object",
+                                    "properties": {
+                                      "stage": {
+                                        "type": "string",
+                                        "enum": [
+                                          "reconhecimento",
+                                          "seguidores",
+                                          "cardapio_conversa",
+                                          "pedido"
+                                        ]
+                                      },
+                                      "share": {
+                                        "type": "integer",
+                                        "minimum": 0,
+                                        "maximum": 100
+                                      },
+                                      "creative": {
+                                        "type": "string",
+                                        "minLength": 1,
+                                        "maxLength": 240
+                                      }
+                                    },
+                                    "required": [
+                                      "stage",
+                                      "share",
+                                      "creative"
+                                    ],
+                                    "additionalProperties": false
+                                  }
+                                }
+                              },
+                              "required": [
+                                "stores",
+                                "stages"
+                              ],
+                              "additionalProperties": false
                             }
                           },
                           "required": [
@@ -72539,6 +73223,234 @@
                                 ],
                                 "additionalProperties": false
                               }
+                            },
+                            "media_plan": {
+                              "type": "object",
+                              "properties": {
+                                "stores": {
+                                  "minItems": 1,
+                                  "maxItems": 5,
+                                  "type": "array",
+                                  "items": {
+                                    "type": "object",
+                                    "properties": {
+                                      "unit_id": {
+                                        "type": "string",
+                                        "format": "uuid",
+                                        "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                                      },
+                                      "store": {
+                                        "type": "string",
+                                        "minLength": 1,
+                                        "maxLength": 120
+                                      },
+                                      "district": {
+                                        "type": [
+                                          "string",
+                                          "null"
+                                        ],
+                                        "minLength": 1,
+                                        "maxLength": 120
+                                      },
+                                      "city": {
+                                        "type": [
+                                          "string",
+                                          "null"
+                                        ],
+                                        "minLength": 1,
+                                        "maxLength": 120
+                                      },
+                                      "radius_km": {
+                                        "type": "number",
+                                        "minimum": 0,
+                                        "maximum": 15,
+                                        "multipleOf": 0.5
+                                      },
+                                      "rings": {
+                                        "minItems": 1,
+                                        "maxItems": 2,
+                                        "type": "array",
+                                        "items": {
+                                          "type": "object",
+                                          "properties": {
+                                            "ring": {
+                                              "type": "string",
+                                              "enum": [
+                                                "nucleo",
+                                                "expansao"
+                                              ]
+                                            },
+                                            "from_km": {
+                                              "type": "number",
+                                              "minimum": 0,
+                                              "maximum": 15,
+                                              "multipleOf": 0.5
+                                            },
+                                            "to_km": {
+                                              "type": "number",
+                                              "minimum": 0,
+                                              "maximum": 15,
+                                              "multipleOf": 0.5
+                                            },
+                                            "share": {
+                                              "type": "integer",
+                                              "minimum": 0,
+                                              "maximum": 100
+                                            },
+                                            "meta": {
+                                              "type": "integer",
+                                              "minimum": 0,
+                                              "maximum": 10000000
+                                            },
+                                            "google": {
+                                              "type": "integer",
+                                              "minimum": 0,
+                                              "maximum": 10000000
+                                            }
+                                          },
+                                          "required": [
+                                            "ring",
+                                            "from_km",
+                                            "to_km",
+                                            "share",
+                                            "meta",
+                                            "google"
+                                          ],
+                                          "additionalProperties": false
+                                        }
+                                      },
+                                      "hours": {
+                                        "type": "object",
+                                        "properties": {
+                                          "source": {
+                                            "type": "string",
+                                            "enum": [
+                                              "loja",
+                                              "setor"
+                                            ]
+                                          },
+                                          "days": {
+                                            "minItems": 1,
+                                            "maxItems": 7,
+                                            "type": "array",
+                                            "items": {
+                                              "type": "integer",
+                                              "minimum": 0,
+                                              "maximum": 6
+                                            }
+                                          },
+                                          "from": {
+                                            "type": "string",
+                                            "pattern": "^([01]\\d|2[0-3]):[0-5]\\d$"
+                                          },
+                                          "to": {
+                                            "type": "string",
+                                            "pattern": "^([01]\\d|2[0-3]):[0-5]\\d$"
+                                          },
+                                          "ads_from": {
+                                            "type": "string",
+                                            "pattern": "^([01]\\d|2[0-3]):[0-5]\\d$"
+                                          },
+                                          "days_share": {
+                                            "type": [
+                                              "integer",
+                                              "null"
+                                            ],
+                                            "minimum": 0,
+                                            "maximum": 100
+                                          },
+                                          "hours_share": {
+                                            "type": [
+                                              "integer",
+                                              "null"
+                                            ],
+                                            "minimum": 0,
+                                            "maximum": 100
+                                          },
+                                          "orders_from": {
+                                            "type": [
+                                              "string",
+                                              "null"
+                                            ],
+                                            "format": "date",
+                                            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+                                          },
+                                          "orders_to": {
+                                            "type": [
+                                              "string",
+                                              "null"
+                                            ],
+                                            "format": "date",
+                                            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+                                          }
+                                        },
+                                        "required": [
+                                          "source",
+                                          "days",
+                                          "from",
+                                          "to",
+                                          "ads_from",
+                                          "days_share",
+                                          "hours_share",
+                                          "orders_from",
+                                          "orders_to"
+                                        ],
+                                        "additionalProperties": false
+                                      }
+                                    },
+                                    "required": [
+                                      "unit_id",
+                                      "store",
+                                      "district",
+                                      "city",
+                                      "radius_km",
+                                      "rings",
+                                      "hours"
+                                    ],
+                                    "additionalProperties": false
+                                  }
+                                },
+                                "stages": {
+                                  "minItems": 4,
+                                  "maxItems": 4,
+                                  "type": "array",
+                                  "items": {
+                                    "type": "object",
+                                    "properties": {
+                                      "stage": {
+                                        "type": "string",
+                                        "enum": [
+                                          "reconhecimento",
+                                          "seguidores",
+                                          "cardapio_conversa",
+                                          "pedido"
+                                        ]
+                                      },
+                                      "share": {
+                                        "type": "integer",
+                                        "minimum": 0,
+                                        "maximum": 100
+                                      },
+                                      "creative": {
+                                        "type": "string",
+                                        "minLength": 1,
+                                        "maxLength": 240
+                                      }
+                                    },
+                                    "required": [
+                                      "stage",
+                                      "share",
+                                      "creative"
+                                    ],
+                                    "additionalProperties": false
+                                  }
+                                }
+                              },
+                              "required": [
+                                "stores",
+                                "stages"
+                              ],
+                              "additionalProperties": false
                             }
                           },
                           "required": [
@@ -73621,6 +74533,234 @@
                                 ],
                                 "additionalProperties": false
                               }
+                            },
+                            "media_plan": {
+                              "type": "object",
+                              "properties": {
+                                "stores": {
+                                  "minItems": 1,
+                                  "maxItems": 5,
+                                  "type": "array",
+                                  "items": {
+                                    "type": "object",
+                                    "properties": {
+                                      "unit_id": {
+                                        "type": "string",
+                                        "format": "uuid",
+                                        "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                                      },
+                                      "store": {
+                                        "type": "string",
+                                        "minLength": 1,
+                                        "maxLength": 120
+                                      },
+                                      "district": {
+                                        "type": [
+                                          "string",
+                                          "null"
+                                        ],
+                                        "minLength": 1,
+                                        "maxLength": 120
+                                      },
+                                      "city": {
+                                        "type": [
+                                          "string",
+                                          "null"
+                                        ],
+                                        "minLength": 1,
+                                        "maxLength": 120
+                                      },
+                                      "radius_km": {
+                                        "type": "number",
+                                        "minimum": 0,
+                                        "maximum": 15,
+                                        "multipleOf": 0.5
+                                      },
+                                      "rings": {
+                                        "minItems": 1,
+                                        "maxItems": 2,
+                                        "type": "array",
+                                        "items": {
+                                          "type": "object",
+                                          "properties": {
+                                            "ring": {
+                                              "type": "string",
+                                              "enum": [
+                                                "nucleo",
+                                                "expansao"
+                                              ]
+                                            },
+                                            "from_km": {
+                                              "type": "number",
+                                              "minimum": 0,
+                                              "maximum": 15,
+                                              "multipleOf": 0.5
+                                            },
+                                            "to_km": {
+                                              "type": "number",
+                                              "minimum": 0,
+                                              "maximum": 15,
+                                              "multipleOf": 0.5
+                                            },
+                                            "share": {
+                                              "type": "integer",
+                                              "minimum": 0,
+                                              "maximum": 100
+                                            },
+                                            "meta": {
+                                              "type": "integer",
+                                              "minimum": 0,
+                                              "maximum": 10000000
+                                            },
+                                            "google": {
+                                              "type": "integer",
+                                              "minimum": 0,
+                                              "maximum": 10000000
+                                            }
+                                          },
+                                          "required": [
+                                            "ring",
+                                            "from_km",
+                                            "to_km",
+                                            "share",
+                                            "meta",
+                                            "google"
+                                          ],
+                                          "additionalProperties": false
+                                        }
+                                      },
+                                      "hours": {
+                                        "type": "object",
+                                        "properties": {
+                                          "source": {
+                                            "type": "string",
+                                            "enum": [
+                                              "loja",
+                                              "setor"
+                                            ]
+                                          },
+                                          "days": {
+                                            "minItems": 1,
+                                            "maxItems": 7,
+                                            "type": "array",
+                                            "items": {
+                                              "type": "integer",
+                                              "minimum": 0,
+                                              "maximum": 6
+                                            }
+                                          },
+                                          "from": {
+                                            "type": "string",
+                                            "pattern": "^([01]\\d|2[0-3]):[0-5]\\d$"
+                                          },
+                                          "to": {
+                                            "type": "string",
+                                            "pattern": "^([01]\\d|2[0-3]):[0-5]\\d$"
+                                          },
+                                          "ads_from": {
+                                            "type": "string",
+                                            "pattern": "^([01]\\d|2[0-3]):[0-5]\\d$"
+                                          },
+                                          "days_share": {
+                                            "type": [
+                                              "integer",
+                                              "null"
+                                            ],
+                                            "minimum": 0,
+                                            "maximum": 100
+                                          },
+                                          "hours_share": {
+                                            "type": [
+                                              "integer",
+                                              "null"
+                                            ],
+                                            "minimum": 0,
+                                            "maximum": 100
+                                          },
+                                          "orders_from": {
+                                            "type": [
+                                              "string",
+                                              "null"
+                                            ],
+                                            "format": "date",
+                                            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+                                          },
+                                          "orders_to": {
+                                            "type": [
+                                              "string",
+                                              "null"
+                                            ],
+                                            "format": "date",
+                                            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+                                          }
+                                        },
+                                        "required": [
+                                          "source",
+                                          "days",
+                                          "from",
+                                          "to",
+                                          "ads_from",
+                                          "days_share",
+                                          "hours_share",
+                                          "orders_from",
+                                          "orders_to"
+                                        ],
+                                        "additionalProperties": false
+                                      }
+                                    },
+                                    "required": [
+                                      "unit_id",
+                                      "store",
+                                      "district",
+                                      "city",
+                                      "radius_km",
+                                      "rings",
+                                      "hours"
+                                    ],
+                                    "additionalProperties": false
+                                  }
+                                },
+                                "stages": {
+                                  "minItems": 4,
+                                  "maxItems": 4,
+                                  "type": "array",
+                                  "items": {
+                                    "type": "object",
+                                    "properties": {
+                                      "stage": {
+                                        "type": "string",
+                                        "enum": [
+                                          "reconhecimento",
+                                          "seguidores",
+                                          "cardapio_conversa",
+                                          "pedido"
+                                        ]
+                                      },
+                                      "share": {
+                                        "type": "integer",
+                                        "minimum": 0,
+                                        "maximum": 100
+                                      },
+                                      "creative": {
+                                        "type": "string",
+                                        "minLength": 1,
+                                        "maxLength": 240
+                                      }
+                                    },
+                                    "required": [
+                                      "stage",
+                                      "share",
+                                      "creative"
+                                    ],
+                                    "additionalProperties": false
+                                  }
+                                }
+                              },
+                              "required": [
+                                "stores",
+                                "stages"
+                              ],
+                              "additionalProperties": false
                             }
                           },
                           "required": [
@@ -74625,6 +75765,234 @@
                                 ],
                                 "additionalProperties": false
                               }
+                            },
+                            "media_plan": {
+                              "type": "object",
+                              "properties": {
+                                "stores": {
+                                  "minItems": 1,
+                                  "maxItems": 5,
+                                  "type": "array",
+                                  "items": {
+                                    "type": "object",
+                                    "properties": {
+                                      "unit_id": {
+                                        "type": "string",
+                                        "format": "uuid",
+                                        "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                                      },
+                                      "store": {
+                                        "type": "string",
+                                        "minLength": 1,
+                                        "maxLength": 120
+                                      },
+                                      "district": {
+                                        "type": [
+                                          "string",
+                                          "null"
+                                        ],
+                                        "minLength": 1,
+                                        "maxLength": 120
+                                      },
+                                      "city": {
+                                        "type": [
+                                          "string",
+                                          "null"
+                                        ],
+                                        "minLength": 1,
+                                        "maxLength": 120
+                                      },
+                                      "radius_km": {
+                                        "type": "number",
+                                        "minimum": 0,
+                                        "maximum": 15,
+                                        "multipleOf": 0.5
+                                      },
+                                      "rings": {
+                                        "minItems": 1,
+                                        "maxItems": 2,
+                                        "type": "array",
+                                        "items": {
+                                          "type": "object",
+                                          "properties": {
+                                            "ring": {
+                                              "type": "string",
+                                              "enum": [
+                                                "nucleo",
+                                                "expansao"
+                                              ]
+                                            },
+                                            "from_km": {
+                                              "type": "number",
+                                              "minimum": 0,
+                                              "maximum": 15,
+                                              "multipleOf": 0.5
+                                            },
+                                            "to_km": {
+                                              "type": "number",
+                                              "minimum": 0,
+                                              "maximum": 15,
+                                              "multipleOf": 0.5
+                                            },
+                                            "share": {
+                                              "type": "integer",
+                                              "minimum": 0,
+                                              "maximum": 100
+                                            },
+                                            "meta": {
+                                              "type": "integer",
+                                              "minimum": 0,
+                                              "maximum": 10000000
+                                            },
+                                            "google": {
+                                              "type": "integer",
+                                              "minimum": 0,
+                                              "maximum": 10000000
+                                            }
+                                          },
+                                          "required": [
+                                            "ring",
+                                            "from_km",
+                                            "to_km",
+                                            "share",
+                                            "meta",
+                                            "google"
+                                          ],
+                                          "additionalProperties": false
+                                        }
+                                      },
+                                      "hours": {
+                                        "type": "object",
+                                        "properties": {
+                                          "source": {
+                                            "type": "string",
+                                            "enum": [
+                                              "loja",
+                                              "setor"
+                                            ]
+                                          },
+                                          "days": {
+                                            "minItems": 1,
+                                            "maxItems": 7,
+                                            "type": "array",
+                                            "items": {
+                                              "type": "integer",
+                                              "minimum": 0,
+                                              "maximum": 6
+                                            }
+                                          },
+                                          "from": {
+                                            "type": "string",
+                                            "pattern": "^([01]\\d|2[0-3]):[0-5]\\d$"
+                                          },
+                                          "to": {
+                                            "type": "string",
+                                            "pattern": "^([01]\\d|2[0-3]):[0-5]\\d$"
+                                          },
+                                          "ads_from": {
+                                            "type": "string",
+                                            "pattern": "^([01]\\d|2[0-3]):[0-5]\\d$"
+                                          },
+                                          "days_share": {
+                                            "type": [
+                                              "integer",
+                                              "null"
+                                            ],
+                                            "minimum": 0,
+                                            "maximum": 100
+                                          },
+                                          "hours_share": {
+                                            "type": [
+                                              "integer",
+                                              "null"
+                                            ],
+                                            "minimum": 0,
+                                            "maximum": 100
+                                          },
+                                          "orders_from": {
+                                            "type": [
+                                              "string",
+                                              "null"
+                                            ],
+                                            "format": "date",
+                                            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+                                          },
+                                          "orders_to": {
+                                            "type": [
+                                              "string",
+                                              "null"
+                                            ],
+                                            "format": "date",
+                                            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+                                          }
+                                        },
+                                        "required": [
+                                          "source",
+                                          "days",
+                                          "from",
+                                          "to",
+                                          "ads_from",
+                                          "days_share",
+                                          "hours_share",
+                                          "orders_from",
+                                          "orders_to"
+                                        ],
+                                        "additionalProperties": false
+                                      }
+                                    },
+                                    "required": [
+                                      "unit_id",
+                                      "store",
+                                      "district",
+                                      "city",
+                                      "radius_km",
+                                      "rings",
+                                      "hours"
+                                    ],
+                                    "additionalProperties": false
+                                  }
+                                },
+                                "stages": {
+                                  "minItems": 4,
+                                  "maxItems": 4,
+                                  "type": "array",
+                                  "items": {
+                                    "type": "object",
+                                    "properties": {
+                                      "stage": {
+                                        "type": "string",
+                                        "enum": [
+                                          "reconhecimento",
+                                          "seguidores",
+                                          "cardapio_conversa",
+                                          "pedido"
+                                        ]
+                                      },
+                                      "share": {
+                                        "type": "integer",
+                                        "minimum": 0,
+                                        "maximum": 100
+                                      },
+                                      "creative": {
+                                        "type": "string",
+                                        "minLength": 1,
+                                        "maxLength": 240
+                                      }
+                                    },
+                                    "required": [
+                                      "stage",
+                                      "share",
+                                      "creative"
+                                    ],
+                                    "additionalProperties": false
+                                  }
+                                }
+                              },
+                              "required": [
+                                "stores",
+                                "stages"
+                              ],
+                              "additionalProperties": false
                             }
                           },
                           "required": [
