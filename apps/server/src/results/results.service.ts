@@ -9,9 +9,11 @@ import type {
   PostResult,
   SourceFreshness,
 } from '@liame/contracts';
-import { Injectable } from '@nestjs/common';
+import { Inject, Injectable } from '@nestjs/common';
 import { sql } from 'drizzle-orm';
 import { MODELO_PADRAO } from '../attribution/motor.js';
+import { ARMAZEM_DE_IMAGENS, type ArmazemDeImagens } from '../imagens/armazem.js';
+import { anunciosQueMaisGastaram } from './anuncio-da-campanha.js';
 import { currentTx } from '../context/request-context.js';
 import { AppProblem } from '../errors/problems.js';
 import { frescor } from '../media/frescor.js';
@@ -102,6 +104,8 @@ function resultadoConfirmado(c: Confirmado, spend: bigint) {
 
 @Injectable()
 export class ResultsService {
+  constructor(@Inject(ARMAZEM_DE_IMAGENS) private readonly armazem: ArmazemDeImagens) {}
+
   async closedLoop(q: ClosedLoopQuery, agora = new Date()): Promise<ClosedLoopResponse> {
     const tx = currentTx();
     const { fuso, modelo } = await this.contexto(q);
@@ -282,6 +286,8 @@ export class ResultsService {
         ).rows
       : [];
     const gastoTotal = [...porProvider.values()].reduce((s, a) => s + a.spend, 0n);
+    // O anúncio que mais gastou em cada campanha, com a imagem para reconhecê-la (A3 · I14; P44).
+    const anuncios = await anunciosQueMaisGastaram(tx, this.armazem, q.brand_id, q.from, q.to, campanhas.map((c) => c.id));
     const itensCampanha: CampaignResult[] = campanhas
       .map((c) => ({
         campaign_id: c.id,
@@ -290,6 +296,7 @@ export class ResultsService {
         status: c.status,
         platform: relatorioDaPlataforma(c.provider, porCampanha.get(c.id)),
         confirmed: resultadoConfirmado(confirmadoPorCampanha.get(c.id) ?? zeroConfirmado(), porCampanha.get(c.id)?.spend ?? 0n),
+        top_ad: anuncios.get(c.id) ?? null,
       }))
       .sort((a, b) => Number(BigInt(b.platform.spend_micros) - BigInt(a.platform.spend_micros)) || a.name.localeCompare(b.name, 'pt-BR'));
 

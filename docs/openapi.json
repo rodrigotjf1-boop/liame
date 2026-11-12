@@ -49760,6 +49760,69 @@
                               "verdict"
                             ],
                             "additionalProperties": false
+                          },
+                          "top_ad": {
+                            "type": [
+                              "object",
+                              "null"
+                            ],
+                            "properties": {
+                              "name": {
+                                "type": "string"
+                              },
+                              "kind": {
+                                "type": "string",
+                                "enum": [
+                                  "imagem",
+                                  "video",
+                                  "texto"
+                                ]
+                              },
+                              "off_air": {
+                                "type": "boolean"
+                              },
+                              "image": {
+                                "type": [
+                                  "object",
+                                  "null"
+                                ],
+                                "properties": {
+                                  "url": {
+                                    "type": "string"
+                                  },
+                                  "width": {
+                                    "type": "integer",
+                                    "minimum": 1,
+                                    "maximum": 9007199254740991
+                                  },
+                                  "height": {
+                                    "type": "integer",
+                                    "minimum": 1,
+                                    "maximum": 9007199254740991
+                                  }
+                                },
+                                "required": [
+                                  "url",
+                                  "width",
+                                  "height"
+                                ],
+                                "additionalProperties": false
+                              },
+                              "manager_url": {
+                                "type": [
+                                  "string",
+                                  "null"
+                                ]
+                              }
+                            },
+                            "required": [
+                              "name",
+                              "kind",
+                              "off_air",
+                              "image",
+                              "manager_url"
+                            ],
+                            "additionalProperties": false
                           }
                         },
                         "required": [

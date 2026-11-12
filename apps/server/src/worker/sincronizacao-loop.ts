@@ -1,9 +1,11 @@
 import { type Database, withSystem } from '@liame/database';
-import { Inject, Injectable, Logger } from '@nestjs/common';
+import { Inject, Injectable, Logger, Optional } from '@nestjs/common';
 import { sql } from 'drizzle-orm';
 import { APP_CONFIG, type AppConfig } from '../config.js';
 import { contaConectada } from '../connections/conectada.js';
 import { DATABASE } from '../database/database.module.js';
+import { ARMAZEM_DE_IMAGENS, type ArmazemDeImagens } from '../imagens/armazem.js';
+import { copiarMiniaturas } from '../media/miniaturas.js';
 import { INTERVALO_MIN, type ResultadoSincronizacao, Sincronizador } from '../media/sincronizador.js';
 import { VaultService } from '../vault/vault.service.js';
 import { type JobScope, tenantFilter } from './outbox-publisher.js';
@@ -24,6 +26,8 @@ export class SincronizacaoLoop {
     @Inject(DATABASE) private readonly database: Database | null,
     @Inject(APP_CONFIG) private readonly config: AppConfig,
     private readonly vault: VaultService,
+    /** Para a cópia das miniaturas dos anúncios (A3 · I14); sem ele (os testes que montam o laço à mão), não copia. */
+    @Optional() @Inject(ARMAZEM_DE_IMAGENS) private readonly armazem: ArmazemDeImagens | null = null,
   ) {}
 
   async executarLote(limite = 3, scope: JobScope = {}, agora?: Date): Promise<ResultadoSincronizacao[]> {
@@ -68,7 +72,14 @@ export class SincronizacaoLoop {
     const resultados: ResultadoSincronizacao[] = [];
     for (const c of reservadas) {
       try {
-        resultados.push(await sincronizador.sincronizar(c.id, c.tenant_id, agora));
+        const r = await sincronizador.sincronizar(c.id, c.tenant_id, agora);
+        resultados.push(r);
+        // Depois da leitura que deu certo, as miniaturas que faltam (A3 · I14; D-A3-30). Nunca derruba a sincronização.
+        if (r.status === 'ok' && this.armazem) {
+          await copiarMiniaturas({ db, armazem: this.armazem, contaId: c.id, tenantId: c.tenant_id, agora }).catch((err: unknown) => {
+            this.logger.warn(`conta ${c.id}: as miniaturas ficaram para a próxima (${err instanceof Error ? err.message : String(err)})`);
+          });
+        }
       } catch (err) {
         // Falha fora do previsto (banco): a reserva vence e a conta volta para a fila (LIC-001).
         this.logger.error(`conta ${c.id}: ${err instanceof Error ? err.message : String(err)}`);

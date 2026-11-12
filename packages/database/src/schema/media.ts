@@ -70,6 +70,13 @@ export const creative = liame.table('creative', {
   name: text('name'),
   kind: text('kind'),
   thumbnailUrl: text('thumbnail_url'),
+  // A cópia da miniatura no armazenamento (0142; A3 · I14, parte 1; D-A3-30): a chave, de onde veio (o endereço sem a
+  // assinatura), as medidas e quando.
+  thumbnailKey: text('thumbnail_key'),
+  thumbnailSource: text('thumbnail_source'),
+  thumbnailWidth: integer('thumbnail_width'),
+  thumbnailHeight: integer('thumbnail_height'),
+  thumbnailCopiedAt: ts('thumbnail_copied_at'),
 });
 
 export const ad = liame.table('ad', {
