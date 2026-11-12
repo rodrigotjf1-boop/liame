@@ -47,6 +47,9 @@ const WITHOUT_AUDIT = [
   // O Direct (A6, Z12, parte 2): marcar a conversa como lida só tira o "não lida" da lista do Liame quando alguém a
   // abre; nada muda na Meta nem no que a conversa diz (mandar, concluir e o atendimento são auditados).
   'POST /v1/direct/conversations/:id/read',
+  // Os textos do Google pelo Criativo (A5 · Y9, parte 4): como os do vídeo, a proposta não muda dado (o uso fica em
+  // `ai_usage`, o texto barrado conta em Sua equipe); o que muda é o pedido da campanha, auditado em `campanha_google.pedir`.
+  'POST /v1/google-campaigns/texts',
   'POST /v1/inbox/:provider',
   'POST /v1/inbox/:provider/:connectionId',
   'POST /v1/invitations/preview',

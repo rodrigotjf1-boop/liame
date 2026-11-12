@@ -1,4 +1,13 @@
-import { CreateGoogleCampaignRequest, GoogleCampaignOptionsQuery, GoogleCampaignOptionsResponse, GoogleCampaignResponse, ProblemDetails, ResourceId } from '@liame/contracts';
+import {
+  CreateGoogleCampaignRequest,
+  GoogleCampaignOptionsQuery,
+  GoogleCampaignOptionsResponse,
+  GoogleCampaignResponse,
+  GoogleCampaignTextsRequest,
+  GoogleCampaignTextsResponse,
+  ProblemDetails,
+  ResourceId,
+} from '@liame/contracts';
 import { Body, Controller, Get, HttpCode, Param, Post, Query } from '@nestjs/common';
 import {
   ApiBadRequestResponse,
@@ -12,14 +21,15 @@ import {
   ApiTags,
   ApiUnprocessableEntityResponse,
 } from '@nestjs/swagger';
-import { Auditar } from '../audit/auditar.js';
+import { Auditar, SemAuditoria } from '../audit/auditar.js';
 import { Auth, Permissao } from '../auth/access.js';
 import type { AuthContext } from '../context/request-context.js';
+import { SemTransacao } from '../context/sem-transacao.js';
 import { CampanhasGoogleService } from './campanhas-google.service.js';
 
-// A campanha nova no Google, criada pausada (A5, Y9, parte 2; P45 pré-aprovado em 12/11/2026; D-A5-21 a D-A5-26). Sem
-// tela ainda (a tela é a parte 5): a rota grava o pedido, que espera o código do app em Aprovações, e a leitura diz em
-// que pé a criação está. A criação no Google é a parte 3.
+// A campanha nova no Google, criada pausada (A5, Y9, partes 2 a 4; P45 pré-aprovado em 12/11/2026; D-A5-21 a D-A5-30).
+// Sem tela ainda (a tela é a parte 5): a rota grava o pedido, que espera o código do app em Aprovações, a leitura diz em
+// que pé a criação está, e os textos podem ser pedidos ao Criativo (parte 4). A criação no Google é a parte 3.
 
 @ApiTags('campanhas-google')
 @ApiCookieAuth('liame_sessao')
@@ -44,6 +54,26 @@ export class CampanhasGoogleController {
   @ApiUnprocessableEntityResponse({ standardSchema: ProblemDetails })
   criar(@Auth() auth: AuthContext, @Body({ schema: CreateGoogleCampaignRequest }) body: CreateGoogleCampaignRequest): Promise<GoogleCampaignResponse> {
     return this.campanhas.criar(auth, body);
+  }
+
+  @Post('texts')
+  @HttpCode(200)
+  @Permissao('campanhas.operar')
+  @SemTransacao('espera o Criativo (um modelo de IA) por segundos: a leitura e o registro do uso abrem transações curtas')
+  @SemAuditoria('pedir os textos não muda dado da empresa; cada chamada à IA fica em ai_usage, e a proposta barrada conta em Sua equipe')
+  @ApiOperation({
+    summary: 'Pedir os textos do Google ao Criativo',
+    description:
+      'O Criativo propõe, a partir da peça aprovada (o título e o texto principal), da oferta do pedido da peça e de Minha marca, os textos da campanha nova no Google: 5 títulos, 1 título longo e 3 descrições, nos tamanhos do Google (P45, "Pedir ao Criativo"). Cada texto passa pela conferência das peças antes de voltar (o preço só o da oferta, os números só os da oferta e do dossiê, as regras do Liame e o que a marca não diz); o que não passa sai da proposta (`dropped` conta), e ela só volta com o mínimo do Google (3 títulos, 1 título longo, 2 descrições). Sem a IA, `origin` é `sem_ia`, com o motivo (`funcionario_desligado`, `ia_desligada`, `sem-rota`, `teto` com `retry_at`, `limite-usuario`, `travada`, `parada`, `indisponivel`, `entrada-grande`, `formato`, `barrado`, `recusa` quando a peça é de um assunto que o Criativo não escreve), e a pessoa fica com os textos da gaveta. Nada é gravado além do uso da IA. Precisa da função `campanha_google` (409 `funcao-desligada`); a peça de outra marca ou não aprovada, 422 `peca-nao-encontrada` e `peca-nao-aprovada`.',
+  })
+  @ApiOkResponse({ standardSchema: GoogleCampaignTextsResponse })
+  @ApiBadRequestResponse({ standardSchema: ProblemDetails })
+  @ApiForbiddenResponse({ standardSchema: ProblemDetails })
+  @ApiNotFoundResponse({ standardSchema: ProblemDetails })
+  @ApiConflictResponse({ standardSchema: ProblemDetails })
+  @ApiUnprocessableEntityResponse({ standardSchema: ProblemDetails })
+  textos(@Auth() auth: AuthContext, @Body({ schema: GoogleCampaignTextsRequest }) body: GoogleCampaignTextsRequest): Promise<GoogleCampaignTextsResponse> {
+    return this.campanhas.textos(auth, body);
   }
 
   @Get('options')

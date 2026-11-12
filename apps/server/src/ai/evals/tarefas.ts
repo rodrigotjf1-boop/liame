@@ -3,12 +3,14 @@ import { type Avaliacao, avaliarExplicacao } from './avaliar.js';
 import { type CasoDeEval, carregarCasos } from './casos.js';
 import { avaliarConversa, type CasoDaConversa, carregarCasosDaConversa } from './conversa.js';
 import { avaliarPecas, type CasoDoCriativo, carregarCasosDoCriativo } from './criativo.js';
+import { avaliarTextosDoGoogle, type CasoDoGoogle, carregarCasosDoGoogle } from './criativo-google.js';
 import { avaliarMensagem, type CasoDoCrm, carregarCasosDoCrm } from './crm.js';
 import { avaliarLeitura, type CasoDaPagina, carregarCasosDaPagina } from './pagina.js';
 import { avaliarPlano, type CasoDoPlano, carregarCasosDoPlano } from './plano.js';
 import { type AlvoDoEval, type RespostaDoEval, responderExplicacao } from './responder.js';
 import { responderConversa } from './responder-conversa.js';
 import { responderPecas } from './responder-criativo.js';
+import { responderTextosDoGoogle } from './responder-criativo-google.js';
 import { responderMensagem } from './responder-crm.js';
 import { responderLeitura } from './responder-pagina.js';
 import { responderPlano } from './responder-plano.js';
@@ -25,7 +27,7 @@ import { avaliarPost, type CasoDoPost, carregarCasosDoPost } from './social-post
 import { responderTextosDoVideo } from './responder-social-video.js';
 import { avaliarTextosDoVideo, type CasoDoVideo, carregarCasosDoVideo } from './social-video.js';
 
-// As tarefas com eval (A3, I3, I9, I10c, I11c e I12b; A4, X6; A5, Y6; A6, Z6, as respostas e os posts; A6, Z11, os comentários): como ler os casos, qual é a saída gravada (a boa ou a primeira ruim), como
+// As tarefas com eval (A3, I3, I9, I10c, I11c e I12b; A4, X6; A5, Y6 e Y9, os textos do Google; A6, Z6, as respostas e os posts; A6, Z11, os comentários): como ler os casos, qual é a saída gravada (a boa ou a primeira ruim), como
 // avaliar e como chamar um modelo de verdade. Os arquivos do promptfoo (`evals/apoio`) escolhem pelo nome da tarefa.
 
 export interface TarefaDeEval<C extends { id: string; grupo: string }> {
@@ -112,6 +114,13 @@ const socialVideo: TarefaDeEval<CasoDoVideo> = {
   responder: responderTextosDoVideo,
 };
 
+const criativoGoogle: TarefaDeEval<CasoDoGoogle> = {
+  carregar: carregarCasosDoGoogle,
+  gravada: (caso, qual) => (qual === 'ruim' ? (caso.gravadas.ruins[0]?.resposta ?? caso.gravadas.boa) : caso.gravadas.boa),
+  avaliar: avaliarTextosDoGoogle,
+  responder: responderTextosDoGoogle,
+};
+
 const socialComentario: TarefaDeEval<CasoDoComentario> = {
   carregar: carregarCasosDoComentario,
   gravada: (caso, qual) => (qual === 'ruim' ? (caso.gravadas.ruins[0]?.resposta ?? caso.gravadas.boa) : caso.gravadas.boa),
@@ -133,6 +142,7 @@ export const TAREFAS: Record<string, TarefaDeEval<{ id: string; grupo: string }>
   pesquisador_pagina: pagina as unknown as TarefaDeEval<{ id: string; grupo: string }>,
   compliance_revisao: revisor as unknown as TarefaDeEval<{ id: string; grupo: string }>,
   criativo_texto: criativo as unknown as TarefaDeEval<{ id: string; grupo: string }>,
+  criativo_google: criativoGoogle as unknown as TarefaDeEval<{ id: string; grupo: string }>,
   crm_mensagem: crm as unknown as TarefaDeEval<{ id: string; grupo: string }>,
   social_resposta: social as unknown as TarefaDeEval<{ id: string; grupo: string }>,
   social_post: socialPost as unknown as TarefaDeEval<{ id: string; grupo: string }>,

@@ -382,7 +382,12 @@ describe('o Criativo no registro', () => {
     expect(conferirRegistro(registroAtual())).toEqual([]);
     expect(registroAtual().funcionarios.map((f) => f.key)).toContain('criativo');
     expect(CRIATIVO.ferramentas).toEqual([]);
-    expect(CRIATIVO.tarefas).toEqual([{ task: TAREFA_CRIATIVO_TEXTO, prompt: PROMPT_CRIATIVO_TEXTO.key }]);
+    // Desde a v2 (A5, Y9, parte 4), também os textos da campanha nova no Google.
+    expect(CRIATIVO.version).toBe(2);
+    expect(CRIATIVO.tarefas).toEqual([
+      { task: TAREFA_CRIATIVO_TEXTO, prompt: PROMPT_CRIATIVO_TEXTO.key },
+      { task: 'criativo_google', prompt: 'criativo.google' },
+    ]);
     expect(PROMPT_CRIATIVO_TEXTO).toMatchObject({ key: 'criativo.texto', task: 'criativo_texto' });
   });
 
