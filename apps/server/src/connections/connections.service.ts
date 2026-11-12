@@ -42,8 +42,8 @@ import {
   recursoDoRegem,
 } from '../connectors/regem/acesso-da-loja.js';
 import { pedirAutorizacaoAoRegem, revogarNoRegem } from '../connectors/regem/conector-regem.js';
-import { type ContaQuePede, PERMISSOES_DO_CLIQUE, pedirAutorizacao, revogarNoRegemcast } from '../connectors/regemcast/conector-regemcast.js';
-import { comAcessoDaConta, type CredencialDaConta, credenciaisDaConexao, credencialDaConta } from '../connectors/regemcast/credencial-da-conta.js';
+import { type ContaQuePede, OPCIONAIS_DE_ESCRITA_DO_CLIQUE, PERMISSOES_DO_CLIQUE, pedirAutorizacao, revogarNoRegemcast } from '../connectors/regemcast/conector-regemcast.js';
+import { comAcessoDaConta, type CredencialDaConta, credenciaisDaConexao, credencialDaConta, FLAG_DO_PEDIDO_AO_DESTINO } from '../connectors/regemcast/credencial-da-conta.js';
 import { FLAG_CONVERSOES_GOOGLE } from '../conversoes/conversoes-google.js';
 import { DATABASE } from '../database/database.module.js';
 import {
@@ -394,6 +394,10 @@ export class ConnectionsService {
     const clientId = this.config.dmsId!.aplicativo;
     const cliente = new ClienteConector(this.banco().db, { enderecos: enderecosDasPlataformas(this.config.plataformas, this.config.produtos), tentativas: 1, tempoLimiteMs: 10_000 });
     const ctx = { cliente, apiUrl: regemcast.apiUrl };
+    // Hub DMS F5, parte D: com a flag, o pedido traz também as opcionais de gravar (rascunho e pedido de disparo), que o
+    // dono liga ou não na página do RegemCast. O token do DMS ID desta chamada segue o das leituras.
+    const pedeAoDestino = await this.flags.isEnabled(FLAG_DO_PEDIDO_AO_DESTINO, this.flags.context({ tenantId, brandId: inicio.brandId }));
+    const permissoes = pedeAoDestino ? [...PERMISSOES_DO_CLIQUE, ...OPCIONAIS_DE_ESCRITA_DO_CLIQUE] : [...PERMISSOES_DO_CLIQUE];
     try {
       const r = await comTokenDoDmsId(this.dmsId(), recursoDoRegemcast(regemcast.apiUrl), PERMISSOES_DO_CLIQUE, (tokenDmsId) =>
         pedirAutorizacao(ctx, {
@@ -404,6 +408,7 @@ export class ConnectionsService {
           estado: inicio.estado,
           desafio: desafioPkce(inicio.verificador!),
           conta: inicio.contaQuePede!,
+          permissoes,
         }),
       );
       return r.request_uri;

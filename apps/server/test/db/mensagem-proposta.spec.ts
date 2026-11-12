@@ -2,10 +2,13 @@ import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import { createServer, type Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { resolve } from 'node:path';
-import type { Database } from '@liame/database';
+import { type Database, withSystem } from '@liame/database';
+import { webhookHeaders } from '../../src/events/standard-webhooks.js';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import type { PedidoDeMensagemService, Proponente } from '../../src/mensageria/pedido-de-mensagem.service.js';
 import type { ActionExecutor } from '../../src/worker/action-executor.js';
+import type { InboxRow } from '../../src/worker/inbox-processor.js';
+import type { avisoDoRegemcast as AvisoDoRegemcast, PedidosNoDestino } from '../../src/worker/pedidos-no-destino.js';
 import type { TestApi } from '../helpers/api.js';
 import { APP_URL, hasDb, OWNER_URL } from './env.js';
 
@@ -40,6 +43,8 @@ describe.skipIf(!hasDb)('montar o pedido de mensagem a partir da proposta e envi
   let deps: Parameters<typeof import('../../src/connections/distribuicao.js').registrarConexaoDaDistribuicao>[0];
   let invalidarFlags: () => void;
   let executor: ActionExecutor;
+  let noDestino: PedidosNoDestino;
+  let avisoDoRegemcast: typeof AvisoDoRegemcast;
   let codigoDoApp: (segredo: string) => string;
   /** O que saiu para fora, na ordem: `cupom:CODIGO` (criado no Regem) e `disparo:<campanha>` (aceito pelo RegemCast). */
   const ordem: string[] = [];
@@ -50,6 +55,12 @@ describe.skipIf(!hasDb)('montar o pedido de mensagem a partir da proposta e envi
   const campanhas = new Map<string, Campanha>();
   const chaves = new Map<string, { pedido: string; resposta: unknown }>();
   const chamadas: Chamada[] = [];
+  /** O pedido de disparo que uma pessoa aprova no RegemCast (Hub DMS F5, parte D): id → o pedido, a conta e o que veio. */
+  const pedidosNoDestino = new Map<string, Record<string, unknown> & { conta: string; argumentos: Record<string, unknown> }>();
+  /** O aviso assinado registrado no RegemCast (`aviso_registrar`, RegemCast #131): a conta, o endereço e o segredo. */
+  const avisosRegistrados: { conta: string; url: string; segredo: string }[] = [];
+  /** O endereço público da API do Liame (o do aviso): https, como em produção. */
+  const API_PUBLICA = 'https://api.liame.test';
   /** O modelo aprovado, o que ainda está em análise e o que tem variável no título. */
   const MODELOS = [
     { id: 'm1', nome: 'combo_domingo_v2', idioma: 'pt_BR', categoria: 'marketing', situacao: 'aprovado', podeDisparar: true, qualidade: 'alta', variaveis: 2, cabecalho: null, corpo: 'Oi, {{1}}! Domingo tem combo família por R$ 89,90. Peça com o cupom {{2}} e ganhe 10% de desconto.', rodape: 'Responda SAIR para não receber mais.', botoes: ['Ver o cardápio'], alertas: [] },
@@ -149,6 +160,35 @@ describe.skipIf(!hasDb)('montar o pedido de mensagem a partir da proposta e envi
       chaves.set(chave, { pedido: JSON.stringify(args), resposta });
       return { status: 200, corpo: comId(resposta) };
     }
+    // Hub DMS F5, parte D: o pedido de disparo (RegemCast #129) e a leitura dele, com o formato de lá.
+    if (nome === 'campanha_disparo_pedir') {
+      if (!perfil.permissoes.includes('campanhas.disparar')) return semFerramenta;
+      const c = campanhas.get(String(args.id));
+      if (!c || c.conta !== perfil.contaId) return { status: 200, corpo: comId(recusada('Campanha não encontrada.')) };
+      const chave = `pedido:${perfil.contaId}:${String(args.chaveIdempotencia)}`;
+      const guardada = chaves.get(chave);
+      if (guardada) return { status: 200, corpo: comId(guardada.resposta as object) };
+      if (c.nome.includes('NAOPEDE')) return { status: 200, corpo: comId(recusada('A conta do WhatsApp está com restrição na Meta.')) };
+      if (c.situacao !== 'rascunho' || args.confirmacao !== confirmacaoDe(c)) return { status: 200, corpo: comId(recusada('O plano mudou desde a confirmação. Peça um plano novo com campanha_disparo_planejar.')) };
+      const id = randomUUID();
+      const pedido = { id, acao: 'campanhas_disparar', situacao: 'aguardando', criado_em: new Date().toISOString(), vence_em: new Date(Date.now() + 24 * 3_600_000).toISOString(), tela: `https://cast.exemplo.test/para-aprovar/${id}` };
+      pedidosNoDestino.set(id, { ...pedido, conta: perfil.contaId, argumentos: args });
+      ordem.push(`pedido:${c.id}`);
+      const resposta = resultado({ pedido, proximoPasso: 'Uma pessoa da conta aprova no RegemCast.' });
+      chaves.set(chave, { pedido: JSON.stringify(args), resposta });
+      return { status: 200, corpo: comId(resposta) };
+    }
+    if (nome === 'aviso_registrar') {
+      avisosRegistrados.push({ conta: perfil.contaId, url: String(args.url), segredo: String(args.segredo) });
+      return ok({ registrado: true, url: args.url, pausado: false });
+    }
+    if (nome === 'acao_pedido_ler') {
+      if (!perfil.permissoes.includes('campanhas.disparar')) return semFerramenta;
+      const p = pedidosNoDestino.get(String(args.id));
+      if (!p || p.conta !== perfil.contaId) return { status: 200, corpo: comId(recusada('Pedido não encontrado.')) };
+      const { conta: _conta, argumentos: _argumentos, ...pedido } = p;
+      return ok({ pedido, proximoPasso: 'Acompanhe o pedido.' });
+    }
     return semFerramenta;
   }
 
@@ -193,6 +233,17 @@ describe.skipIf(!hasDb)('montar o pedido de mensagem a partir da proposta e envi
     }
     porChaveDoRegem.set(chave, resposta);
     return resposta;
+  }
+  /** O cupom desativado pela integração (`POST /cupons/{id}/desativar`, a compensação; Hub DMS F5-5): os ids, na ordem. */
+  const desativacoes: string[] = [];
+  function desativarCupomNoRegem(loja: { escopos: string[] }, chave: string, id: string): { status: number; corpo: unknown } {
+    if (!chave) return { status: 400, corpo: { type: `${PROBLEMA}requisicao-invalida`, title: 'Falta Idempotency-Key', status: 400 } };
+    if (!loja.escopos.includes('cupons.criar')) return { status: 403, corpo: { type: `${PROBLEMA}escopo-insuficiente`, title: 'Escopo insuficiente', status: 403 } };
+    const cupom = [...cuponsDoRegem.values()].find((c) => c.id === id);
+    if (!cupom) return { status: 404, corpo: { type: `${PROBLEMA}nao-encontrado`, title: 'Não encontrado', status: 404 } };
+    if (cupom.ativo) desativacoes.push(id);
+    cupom.ativo = false;
+    return { status: 200, corpo: cupom };
   }
   const lojas: Record<string, { loja_id: string; loja_nome: string; escopos: string[] }> = {
     [TOKEN_DA_LOJA]: { loja_id: `loja-msg-${randomUUID().slice(0, 8)}`, loja_nome: 'Mister Burgers — Centro', escopos: ['pedidos.ler', 'cupons.ler', 'cupons.uso.ler', 'cupons.criar'] },
@@ -319,6 +370,7 @@ describe.skipIf(!hasDb)('montar o pedido de mensagem a partir da proposta e envi
         if (!loja) r = { status: 401, corpo: { type: `${PROBLEMA}token-invalido`, title: 'Token inválido', status: 401 } };
         else if (caminho === '/regem/loja') r = { status: 200, corpo: { ...loja, empresa_nome: 'Mister Burgers', fuso: 'America/Sao_Paulo', moeda: 'BRL' } };
         else if (caminho === '/regem/cupons' && req.method === 'POST') r = criarCupomNoRegem(token, loja, String(req.headers['idempotency-key'] ?? ''), JSON.parse(texto) as Record<string, unknown>);
+        else if (/^\/regem\/cupons\/[^/]+\/desativar$/.test(caminho) && req.method === 'POST') r = desativarCupomNoRegem(loja, String(req.headers['idempotency-key'] ?? ''), decodeURIComponent(caminho.split('/')[3]!));
         else r = { status: 404, corpo: { type: 'about:blank', title: 'Não encontrado', status: 404 } };
         res.writeHead(r.status, { 'content-type': r.status >= 400 ? 'application/problem+json' : 'application/json' });
         res.end(JSON.stringify(r.corpo));
@@ -328,8 +380,10 @@ describe.skipIf(!hasDb)('montar o pedido de mensagem a partir da proposta e envi
     await new Promise<void>((ok) => regem.listen(0, '127.0.0.1', ok));
     anterior.REGEMCAST_API_URL = process.env.REGEMCAST_API_URL;
     anterior.REGEM_API_URL = process.env.REGEM_API_URL;
+    anterior.API_URL = process.env.API_URL;
     process.env.REGEMCAST_API_URL = `http://127.0.0.1:${(regemcast.address() as AddressInfo).port}/cast`;
     process.env.REGEM_API_URL = `http://127.0.0.1:${(regem.address() as AddressInfo).port}/regem`;
+    process.env.API_URL = API_PUBLICA;
 
     ajuda = await import('../helpers/api.js');
     ({ ownerQuery, resetIpRateLimits } = ajuda);
@@ -351,6 +405,9 @@ describe.skipIf(!hasDb)('montar o pedido de mensagem a partir da proposta e envi
     invalidarFlags = () => flags.invalidate();
     codigoDoApp = (segredo) => totp.totpCode(segredo, totp.currentStep());
     executor = new Executor(api.app.get(DATABASE), api.app.get(BudgetService), api.app.get(KillSwitchService), flags);
+    const destino = await import('../../src/worker/pedidos-no-destino.js');
+    noDestino = new destino.PedidosNoDestino(api.app.get(DATABASE), loadConfig(), api.app.get(VaultService));
+    avisoDoRegemcast = destino.avisoDoRegemcast;
     servico = api.app.get(Servico);
     registrar = distribuicao.registrarConexaoDaDistribuicao;
     deps = { db: database.db, vault: api.app.get(VaultService), config: loadConfig() };
@@ -545,6 +602,8 @@ describe.skipIf(!hasDb)('montar o pedido de mensagem a partir da proposta e envi
     const seSairHoje = antes.message.coupon.valid_from as string;
     expect(antes.message, JSON.stringify(antes)).toEqual({
       campaign_id: feito.campaign_id,
+      // Aprovado no Liame: sem pedido no destino (Hub DMS F5, parte D).
+      destination: null,
       name: p.nome,
       template: { name: 'combo_domingo_v2', language: 'pt_BR', category: 'marketing', header: null, body: MODELOS[0]!.corpo, footer: 'Responda SAIR para não receber mais.', buttons: ['Ver o cardápio'] },
       variables: [{ origin: 'primeiro_nome', value: null }, { origin: 'fixo', value: 'SABADO10' }],
@@ -755,5 +814,114 @@ describe.skipIf(!hasDb)('montar o pedido de mensagem a partir da proposta e envi
     expect(doToken(e).length).toBe(chamadasAntesDoEnvio);
     expect(ordem.filter((o) => o.startsWith('disparo:')).length).toBe(disparosAntes);
     expect(campanhas.get(aprovada.campaign_id)!.situacao).toBe('rascunho');
+  });
+
+  describe('o pedido ao destino (Hub DMS F5, parte D; decisões F5-5, F5-7 e F5-9)', () => {
+    /** A mensagem guardada: o pedido no destino e o cupom. */
+    const noBanco = async (id: string) =>
+      (
+        await ownerQuery<{ destination_request_id: string | null; destination_status: string | null; destination_reason: string | null; coupon_id: string | null; coupon_deactivated_at: string | null; proxima: string | null }>(
+          `select destination_request_id, destination_status, destination_reason, coupon_id, coupon_deactivated_at::text, destination_next_check_at::text as proxima from liame.message_request where id = $1`,
+          [id],
+        )
+      )[0]!;
+    const agoraNaFila = (id: string) => ownerQuery(`update liame.message_request set destination_next_check_at = now() where id = $1`, [id]);
+
+    it('com a flag, o Liame não pede a própria aprovação: o cupom nasce, o pedido vai ao RegemCast como agente, e a mensagem espera o destino; recusado lá, o cupom é desativado no Regem', async () => {
+      const emp = await empresa({ comLojas: true });
+      await ligarFlag(emp, 'regemcast_pede_ao_destino', true);
+      const feito = await servico.propor(quem(emp), comCupom(emp, 'DESTINO10'));
+
+      // Sem aprovação no Liame (F5-9): o pedido nasce aprovado, pela ferramenta da aprovação no destino.
+      const antes = await ver(emp, feito.action_id);
+      expect([antes.tool, antes.status, antes.approvals]).toEqual(['mensagem_pedir_ao_destino', 'aprovada', []]);
+      await ciclo(emp);
+      const depois = await ver(emp, feito.action_id);
+      expect(depois.status, JSON.stringify(depois)).toBe('executada');
+
+      // O cupom nasceu ANTES do pedido; e o pedido foi ao RegemCast, nunca o disparo direto.
+      expect(ordem.filter((o) => o === 'cupom:DESTINO10' || o === `pedido:${feito.campaign_id}`)).toEqual(['cupom:DESTINO10', `pedido:${feito.campaign_id}`]);
+      expect(doToken(emp)).not.toContain('campanha_disparar');
+      const pedido = chamadas.find((c) => c.token === emp.token && c.ferramenta === 'campanha_disparo_pedir')!;
+      expect(pedido.argumentos).toMatchObject({ id: feito.campaign_id, pedidoPor: { tipo: 'agente' }, cupom: { codigo: 'DESTINO10' } });
+      expect(String(pedido.argumentos.chaveIdempotencia)).toMatch(/^liame:pedido:[0-9a-f]{48}$/);
+
+      // A mensagem espera o destino: a situação, o prazo e o link da tela de lá, na resposta do pedido.
+      expect(depois.message.destination).toMatchObject({ status: 'aguardando', url: expect.stringMatching(/^https:\/\/cast\.exemplo\.test\/para-aprovar\//), coupon_deactivated: false });
+      expect(depois.execution?.result_state ?? depois.message.destination).toBeTruthy();
+      const guardada = await noBanco(feito.id);
+      expect(guardada).toMatchObject({ destination_status: 'aguardando', coupon_deactivated_at: null });
+      expect(guardada.coupon_id).not.toBeNull();
+
+      // O aviso assinado ficou registrado no RegemCast antes do pedido: a caixa da conexão, com o segredo dela.
+      const [conexao] = await ownerQuery<{ connection_id: string }>(`select connection_id from liame.connected_account where id = $1`, [emp.conta]);
+      const registrado = avisosRegistrados.filter((a) => a.conta === emp.contaId).at(-1)!;
+      expect(registrado.url).toBe(`${API_PUBLICA}/v1/inbox/regemcast/${conexao!.connection_id}`);
+      expect(registrado.segredo).toMatch(/^whsec_/);
+
+      // O aviso do RegemCast chega assinado com esse segredo: a caixa aceita, e o processador deixa o pedido devido agora.
+      await ownerQuery(`update liame.message_request set destination_next_check_at = now() + interval '1 hour' where id = $1`, [feito.id]);
+      const corpoDoAviso = JSON.stringify({ tipo: 'acao.alterada', id: guardada.destination_request_id });
+      const idDoAviso = `msg_${randomUUID()}`;
+      const recebido = await fetch(`${api.base}/v1/inbox/regemcast/${conexao!.connection_id}`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', ...webhookHeaders(registrado.segredo, idDoAviso, corpoDoAviso) },
+        body: corpoDoAviso,
+      });
+      expect(recebido.status).toBe(202);
+      const [evento] = await ownerQuery<InboxRow>(`select id, provider, external_event_id, tenant_id, connection_id, type, body::text as body, attempts from liame.inbox_event where provider = 'regemcast' and external_event_id = $1`, [idDoAviso]);
+      expect(evento).toMatchObject({ tenant_id: emp.tenantId, connection_id: conexao!.connection_id });
+      await withSystem(database.db, (tx) => avisoDoRegemcast(tx, evento!));
+      const [devido] = await ownerQuery<{ devido: boolean }>(`select destination_next_check_at <= now() as devido from liame.message_request where id = $1`, [feito.id]);
+      expect(devido!.devido).toBe(true);
+      // Assinado com outro segredo: a caixa recusa.
+      const torto = await fetch(`${api.base}/v1/inbox/regemcast/${conexao!.connection_id}`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', ...webhookHeaders(`whsec_${randomBytes(32).toString('base64')}`, `msg_${randomUUID()}`, corpoDoAviso) },
+        body: corpoDoAviso,
+      });
+      expect(torto.status).not.toBe(202);
+
+      // A rotina lê o pedido: ainda aberto, só a próxima leitura anda.
+      await agoraNaFila(feito.id);
+      expect(await noDestino.executarLote(20, { tenantIds: [emp.tenantId] })).toEqual([{ tenantId: emp.tenantId, id: feito.id, situacao: 'aguardando', cupomDesativado: false, problema: null }]);
+      expect(await noDestino.executarLote(20, { tenantIds: [emp.tenantId] })).toEqual([]);
+
+      // Recusado lá, com o motivo: a rotina guarda, desativa o cupom no Regem (F5-5) e não lê mais.
+      const noRegemcast = pedidosNoDestino.get(guardada.destination_request_id!)!;
+      noRegemcast.situacao = 'recusado';
+      noRegemcast.motivo_da_recusa = 'Agora não é a hora.';
+      const cupomNoRegem = cuponsDoRegem.get('DESTINO10')!;
+      await agoraNaFila(feito.id);
+      expect(await noDestino.executarLote(20, { tenantIds: [emp.tenantId] })).toEqual([{ tenantId: emp.tenantId, id: feito.id, situacao: 'recusado', cupomDesativado: true, problema: null }]);
+      expect(desativacoes).toContain(cupomNoRegem.id);
+      expect(cupomNoRegem.ativo).toBe(false);
+      expect(await noBanco(feito.id)).toMatchObject({ destination_status: 'recusado', destination_reason: 'Agora não é a hora.', proxima: null });
+      expect((await ver(emp, feito.action_id)).message.destination).toMatchObject({ status: 'recusado', reason: 'Agora não é a hora.', coupon_deactivated: true });
+      await agoraNaFila(feito.id);
+      expect(await noDestino.executarLote(20, { tenantIds: [emp.tenantId] })).toEqual([]);
+    });
+
+    it('o RegemCast recusa o pedido na hora: a ação falha com a frase de lá, e o cupom que nasceu é desativado no Regem', async () => {
+      const emp = await empresa({ comLojas: true });
+      await ligarFlag(emp, 'regemcast_pede_ao_destino', true);
+      const feito = await servico.propor(quem(emp), comCupom(emp, 'NAOPEDE10', { nome: `NAOPEDE ${randomUUID().slice(0, 6)}` }));
+      await ciclo(emp);
+      const r = await ver(emp, feito.action_id);
+      expect([r.status, r.status_reason]).toEqual([
+        'falhou',
+        'O RegemCast recusou o pedido de envio: A conta do WhatsApp está com restrição na Meta. Nada foi enviado. O cupom NAOPEDE10, que tinha sido criado, foi desativado no Regem.',
+      ]);
+      expect(cuponsDoRegem.get('NAOPEDE10')!.ativo).toBe(false);
+      expect(await noBanco(feito.id)).toMatchObject({ destination_request_id: null, destination_status: null });
+      expect((await noBanco(feito.id)).coupon_deactivated_at).not.toBeNull();
+    });
+
+    it('sem a flag, nada muda: o envio espera a aprovação de uma pessoa no Liame, com o código do app', async () => {
+      const emp = await empresa({ comLojas: true });
+      const feito = await servico.propor(quem(emp), comCupom(emp, 'SEMFLAG10'));
+      const r = await ver(emp, feito.action_id);
+      expect([r.tool, r.status, r.message.destination]).toEqual(['mensagem_disparar', 'aguardando_aprovacao', null]);
+    });
   });
 });

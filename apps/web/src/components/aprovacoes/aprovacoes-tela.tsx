@@ -61,7 +61,7 @@ const chaveDoRascunho = (avaliacaoId: string) => `r:${avaliacaoId}`;
 /** O pedido da campanha nova na Meta (A4, X5; P42): criar pausada, ativar e a volta, pausar. */
 const ehPedidoDeCampanhaNova = (a: { tool: string }) => (FERRAMENTAS_DA_CAMPANHA_NOVA as readonly string[]).includes(a.tool);
 
-const GRUPOS: Grupo[] = ['pendente', 'auto', 'feito'];
+const GRUPOS: Grupo[] = ['pendente', 'destino', 'auto', 'feito'];
 /** A fila anda sozinha: outra pessoa pode decidir, o worker executa, o Estrategista manda a versão nova, o prazo vence. */
 const ATUALIZAR_MS = 30_000;
 /** Enquanto o Social media escreve as outras sugestões (P31), o pedido aberto é relido neste intervalo. */

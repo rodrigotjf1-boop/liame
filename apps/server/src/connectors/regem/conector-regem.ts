@@ -227,6 +227,25 @@ export async function criarCupomNoRegem(ctx: Contexto, a: AcessoAoRegem, p: { re
   return r.corpo;
 }
 
+/**
+ * Desativa um cupom que a integração criou (`POST /cupons/{id}/desativar`, a compensação; permissão `cupons.criar`). Já
+ * inativo: 200 sem mudança; cupom de outro: 404. Exige `Idempotency-Key`. Hub DMS F5, parte D (decisão F5-5): o cupom
+ * da mensagem cujo pedido de disparo foi recusado, venceu ou foi cancelado no RegemCast.
+ */
+export async function desativarCupomNoRegem(ctx: Contexto, a: AcessoAoRegem, p: { cupomId: string; chaveDeIdempotencia: string }): Promise<unknown> {
+  const r = await ctx.cliente.requisitar({
+    provider: 'regem',
+    conta: a.lojaChave,
+    url: `${ctx.apiUrl}/cupons/${encodeURIComponent(p.cupomId)}/desativar`,
+    metodo: 'POST',
+    corpo: {},
+    cabecalhos: { ...cabecalhosDoAcesso(a), 'idempotency-key': p.chaveDeIdempotencia },
+    endpoint: 'cupons.desativar',
+    apiVersion: VERSAO_CONTRATO_REGEM,
+  });
+  return r.corpo;
+}
+
 /** A resposta da criação conferida pelo contrato do cupom, ou nula se veio fora dele. */
 export function cupomCriado(corpo: unknown): CupomRegem | null {
   const lido = CupomRegem.safeParse(corpo);

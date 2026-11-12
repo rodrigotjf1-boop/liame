@@ -195,6 +195,13 @@ type LinhaDaMensagem = {
   coupon_created_at: Date | string | null;
   /** O dia em que as datas do cupom foram fixadas (o do envio); nulo enquanto o pedido espera. */
   coupon_dated_on: Date | string | null;
+  /** O pedido no destino (Hub DMS F5, parte D). */
+  destination_status: string | null;
+  destination_expires_at: Date | string | null;
+  destination_url: string | null;
+  destination_reason: string | null;
+  destination_checked_at: Date | string | null;
+  coupon_deactivated_at: Date | string | null;
   /** As datas que o cupom teria se a mensagem saísse hoje (nulas no pedido sem cupom). */
   se_sair_hoje_de: string | null;
   se_sair_hoje_ate: string | null;
@@ -205,9 +212,21 @@ const AINDA_PODE_SAIR: readonly ActionStatus[] = ['aguardando_aprovacao', 'aprov
 
 const variavelDaResposta = (v: VariavelGuardada) => ({ origin: v.origem, value: v.valor ?? null });
 
+const emIso = (d: Date | string | null): string | null => (d === null ? null : new Date(d).toISOString());
+
 function retratoDaMensagem(l: LinhaDaMensagem): RetratoDaMensagem {
   const regra = l.coupon_rule;
   return {
+    destination: l.destination_status
+      ? {
+          status: l.destination_status,
+          expires_at: emIso(l.destination_expires_at),
+          url: l.destination_url,
+          reason: l.destination_reason,
+          checked_at: emIso(l.destination_checked_at),
+          coupon_deactivated: l.coupon_deactivated_at !== null,
+        }
+      : null,
     name: l.name,
     template: { name: l.template_name, language: l.template_language, category: l.template_category, header: l.template_header, body: l.template_body, footer: l.template_footer, buttons: l.template_buttons },
     variables: l.variables.map(variavelDaResposta),
@@ -334,7 +353,8 @@ export class ActionService {
    * subida de autonomia nesta fase. `emNomeDe` é a pessoa em nome de quem o funcionário trabalha.
    */
   async pedirMensagemPeloFuncionario(alvo: { tenantId: string; agentKey: string; agentLabel: string; emNomeDe: string }, input: CreateActionRequest): Promise<string> {
-    if (input.tool !== 'mensagem_disparar') {
+    // `mensagem_pedir_ao_destino`: a conta ligada por clique com a flag da parte D (Hub DMS F5), aprovada no RegemCast.
+    if (input.tool !== 'mensagem_disparar' && input.tool !== 'mensagem_pedir_ao_destino') {
       throw new AppProblem(400, 'ferramenta-nao-e-de-mensagem', 'Não é um envio de mensagem', 'Por aqui o funcionário só pede o envio de uma mensagem.');
     }
     return this.pedirEmNomeDoFuncionario(alvo, input, {});
@@ -1487,10 +1507,13 @@ export class ActionService {
     mode: AutonomyMode,
     quem: Pick<Solicitante, 'tenantId' | 'userId' | 'ator'>,
     brandId: string | null,
-    tool?: Pick<ToolDefinition, 'alwaysApproval' | 'directByPerson' | 'atendimentoAutomatico'>,
+    tool?: Pick<ToolDefinition, 'alwaysApproval' | 'directByPerson' | 'atendimentoAutomatico' | 'aprovacaoNoDestino'>,
     automatico = false,
   ): Promise<{ mode: AutonomyMode; status: ActionStatus; reason: string | null }> {
     if (mode === 'SHADOW') return { mode, status: 'sombra', reason: 'modo sombra: registra, não executa' };
+    // A aprovação é de uma pessoa no destino (Hub DMS F5, parte D; decisão F5-9): uma aprovação por ação. O executor leva
+    // o pedido ao destino, e a pessoa aprova lá; o Liame não pede a própria (a flag da ferramenta segura o caminho).
+    if (tool?.aprovacaoNoDestino) return { mode, status: 'aprovada', reason: 'a aprovação é de uma pessoa no destino (o RegemCast), com o código do aplicativo autenticador' };
     if (mode === 'LIMITED_AUTO' || mode === 'AUTO') {
       if (tool?.alwaysApproval) return { mode: 'APPROVAL', status: 'aguardando_aprovacao', reason: `autonomia ${mode} pedida, mas esta ação sempre espera a aprovação de uma pessoa` };
       if (tool?.directByPerson && quem.ator === 'human') return { mode, status: 'aprovada', reason: 'pedida por uma pessoa: esta ação não espera aprovação' };
@@ -1725,7 +1748,8 @@ export class ActionService {
         select m.connected_account_id, m.campaign_id, m.name, m.template_name, m.template_language, m.template_category, m.template_header, m.template_body,
                m.template_footer, m.template_buttons, m.variables, m.header_variable, m.audience_name, m.audience_rule, m.people_can_receive,
                m.people_resting, m.rest_days, m.window_days, m.window_start, m.window_end, m.coupon_code, m.coupon_rule, m.coupon_created_at,
-               m.coupon_dated_on, ${DATAS_SE_SAIR_HOJE.de} as se_sair_hoje_de, ${DATAS_SE_SAIR_HOJE.ate} as se_sair_hoje_ate
+               m.coupon_dated_on, ${DATAS_SE_SAIR_HOJE.de} as se_sair_hoje_de, ${DATAS_SE_SAIR_HOJE.ate} as se_sair_hoje_ate,
+               m.destination_status, m.destination_expires_at, m.destination_url, m.destination_reason, m.destination_checked_at, m.coupon_deactivated_at
           from liame.message_request m
          where m.connected_account_id in ${[...new Set(deMensagem.map((r) => r.account_id))]}
            and m.campaign_id in ${[...new Set(deMensagem.map((r) => mensagemDoRecurso(r.resource_id)!))]}`);
@@ -1947,7 +1971,8 @@ function mensagemDaResposta(row: ActionRow, ap: Apresentacao): ActionMessage | n
   // O cupom vale por tantos dias, contando o dia do envio. Enquanto o envio ainda pode acontecer e as datas não foram
   // fixadas, a resposta mostra as que ele teria saindo hoje; depois do envio, as de verdade. No pedido que acabou sem
   // enviar, ficam as do dia em que foi montado.
-  const seSairHoje = row.tool === 'mensagem_disparar' && AINDA_PODE_SAIR.includes(row.status) ? ap.cuponsSemData.get(`${row.account_id}/${campanha}`) : undefined;
+  const envio = row.tool === 'mensagem_disparar' || row.tool === 'mensagem_pedir_ao_destino';
+  const seSairHoje = envio && AINDA_PODE_SAIR.includes(row.status) ? ap.cuponsSemData.get(`${row.account_id}/${campanha}`) : undefined;
   return {
     campaign_id: campanha,
     ...retrato,

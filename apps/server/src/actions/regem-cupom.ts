@@ -6,7 +6,7 @@ import { contaConectada } from '../connections/conectada.js';
 import type { CredencialGuardada } from '../connections/oauth.js';
 import { ClienteConector, ErroConector } from '../connectors/cliente-http.js';
 import { AcessoDaExecucao, credencialDaLoja, PERMISSOES_DA_ESCRITA, recusaDaLoja } from '../connectors/regem/acesso-da-loja.js';
-import { criarCupomNoRegem, cupomCriado } from '../connectors/regem/conector-regem.js';
+import { criarCupomNoRegem, cupomCriado, desativarCupomNoRegem } from '../connectors/regem/conector-regem.js';
 import type { CupomRegem } from '../connectors/regem/contrato-regem.js';
 import { campanhaDoVinculo, ligarCupom, travarCupom } from '../coupons/vinculo.js';
 import { AppProblem } from '../errors/problems.js';
@@ -175,19 +175,25 @@ export class RegemCupomConnector implements Connector {
    * campanha e para o cupom de uma mensagem. A chave de idempotência sai da loja e da regra: a mesma criação repetida
    * (o worker que caiu no meio) devolve o mesmo cupom. O que é passageiro (rede, 5xx, limite) sobe para quem chama.
    */
-  private async criarNoRegem(tx: Tx, conta: Conta, regra: RegraDoCupom): Promise<{ ok: true; criado: CupomRegem; cupomId: string | null } | { ok: false; mensagem: string }> {
-    const deps = this.deps;
-    if (!deps) return { ok: false, mensagem: SEM_ESCRITA };
+  /** O acesso de escrita da loja: o `rgm_it_` ou, com `REGEM_PELA_LIGACAO`, a ligação, com o token de reserva. Nulo sem credencial. */
+  private async acessoDeEscrita(tx: Tx, conta: Conta, deps: DependenciasDaEscritaRegem, oque: string): Promise<AcessoDaExecucao | null> {
     const pelaLigacao = deps.config.produtos.regemPelaLigacao;
     const guardada = conta.credential_secret_id ? await deps.lerSegredo(tx, conta.credential_secret_id) : null;
     // A ligação do Hub DMS só sai do cofre com a leitura pela ligação ligada.
     const ligacao = pelaLigacao && conta.ligacao_secret_id ? await deps.lerSegredo(tx, conta.ligacao_secret_id) : null;
     const credencial = credencialDaLoja(guardada ? (JSON.parse(guardada) as CredencialGuardada) : null, conta.external_id, ligacao, pelaLigacao);
-    if (!credencial) return { ok: false, mensagem: MENSAGEM['token-invalido']! };
+    if (!credencial) return null;
     // A ligação recusada fica no cofre: quem a tira é a leitura das vendas, fora desta transação, ou a comparação.
-    const acesso = new AcessoDaExecucao(credencial, deps.config, conta.external_id, PERMISSOES_DA_ESCRITA, async (err) => {
-      this.logger.warn(`loja ${conta.id}: o Regem recusou a ligação do Hub DMS na criação do cupom (${err.tipo}${err.codigoProvider ? `:${err.codigoProvider}` : ''}); repetida pelo token`);
+    return new AcessoDaExecucao(credencial, deps.config, conta.external_id, PERMISSOES_DA_ESCRITA, async (err) => {
+      this.logger.warn(`loja ${conta.id}: o Regem recusou a ligação do Hub DMS ${oque} (${err.tipo}${err.codigoProvider ? `:${err.codigoProvider}` : ''}); repetida pelo token`);
     });
+  }
+
+  private async criarNoRegem(tx: Tx, conta: Conta, regra: RegraDoCupom): Promise<{ ok: true; criado: CupomRegem; cupomId: string | null } | { ok: false; mensagem: string }> {
+    const deps = this.deps;
+    if (!deps) return { ok: false, mensagem: SEM_ESCRITA };
+    const acesso = await this.acessoDeEscrita(tx, conta, deps, 'na criação do cupom');
+    if (!acesso) return { ok: false, mensagem: MENSAGEM['token-invalido']! };
     // Loja + regra: a mesma criação repetida (worker que caiu no meio, ou a repetição pelo token) devolve o mesmo cupom.
     const chaveDeIdempotencia = `liame-${deps.sha256(JSON.stringify([conta.id, regra])).slice(0, 48)}`;
 
@@ -237,6 +243,37 @@ export class RegemCupomConnector implements Connector {
     if (!conta.pode_criar) return { ok: false, mensagem: MENSAGEM['escopo-insuficiente']! };
     const feito = await this.criarNoRegem(tx, conta, alvo.regra);
     return feito.ok ? { ok: true, cupomId: feito.cupomId } : feito;
+  }
+
+  /**
+   * Desativa no Regem o cupom de uma mensagem que não vai sair (Hub DMS F5, parte D; decisão F5-5: o pedido de disparo
+   * foi recusado, venceu ou foi cancelado no RegemCast). `cupomId` é o cupom na lista do Liame (`liame.coupon`). Já
+   * inativo, sai ok. A chave de idempotência sai da loja e do cupom: repetir não muda nada. O que é passageiro sobe.
+   */
+  async desativarCupomDaMensagem(tx: Tx, alvo: { tenantId: string; cupomId: string }): Promise<{ ok: true } | { ok: false; mensagem: string }> {
+    const deps = this.deps;
+    if (!deps) return { ok: false, mensagem: SEM_ESCRITA };
+    const c = await tx.execute<{ connected_account_id: string; external_id: string }>(sql`
+      select connected_account_id, external_id from liame.coupon where id = ${alvo.cupomId} and tenant_id = ${alvo.tenantId}`);
+    const cupom = c.rows[0];
+    if (!cupom) return { ok: false, mensagem: 'O cupom não está mais na lista do Liame.' };
+    const conta = await this.conta(tx, { tenantId: alvo.tenantId, accountId: cupom.connected_account_id, resourceId: '' });
+    if (!conta) return { ok: false, mensagem: 'A loja do cupom foi desconectada do Regem.' };
+    const acesso = await this.acessoDeEscrita(tx, conta, deps, 'ao desativar o cupom');
+    if (!acesso) return { ok: false, mensagem: MENSAGEM['token-invalido']! };
+    const chaveDeIdempotencia = `liame-desativar-${deps.sha256(JSON.stringify([conta.id, cupom.external_id])).slice(0, 40)}`;
+    try {
+      const corpo = await acesso.chamar((a) => desativarCupomNoRegem({ cliente: deps.cliente(), apiUrl: deps.config.produtos.regemApiUrl }, a, { cupomId: cupom.external_id, chaveDeIdempotencia }));
+      const lido = cupomCriado(corpo);
+      // A lista do Liame acompanha (o cupom inativo); a resposta fora do contrato não desfaz o que o Regem já fez.
+      if (lido) await gravarCupons(tx, { tenantId: conta.tenant_id, brandId: conta.brand_id, connectedAccountId: conta.id }, [lido]);
+      return { ok: true };
+    } catch (err) {
+      if (err instanceof ErroConector && (err.tipo === 'definitivo' || err.tipo === 'permissao' || recusaDaLoja(acesso.credencial, err))) {
+        return { ok: false, mensagem: recusaDoRegem(err) };
+      }
+      throw err;
+    }
   }
 }
 

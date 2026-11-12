@@ -1,6 +1,6 @@
 import type { ActionResponse, PlanSummary } from '@liame/contracts';
 import { grupoDoPlano } from './planos-textos';
-import { type Grupo, grupoDe } from './textos';
+import { type Grupo, grupoDe, prazoNoDestino } from './textos';
 
 // A lista de Aprovações junta dois tipos de pedido (protótipo P8): as ações que alguém pediu e os planos do
 // Estrategista. A fila de quem decide é uma só: o que expira primeiro vem primeiro, seja ação ou plano.
@@ -14,10 +14,12 @@ export const chaveDoPlano = (id: string) => `p:${id}`;
 
 /** Os pedidos e os planos nos grupos da lista: o que espera decisão, o que a política fez sozinha e o decidido hoje. */
 export function montarLista(acoes: ActionResponse[], planos: PlanSummary[], agora: Date): Record<Grupo, ItemDaLista[]> {
-  const grupos: Record<Grupo, ItemDaLista[]> = { pendente: [], auto: [], feito: [] };
+  const grupos: Record<Grupo, ItemDaLista[]> = { pendente: [], destino: [], auto: [], feito: [] };
   for (const acao of acoes) {
     const grupo = grupoDe(acao, agora);
-    if (grupo) grupos[grupo].push({ chave: chaveDaAcao(acao.id), tipo: 'acao', grupo, acao, expira: acao.expires_at, mexido: acao.updated_at });
+    // O envio que espera o RegemCast vence pelo prazo de lá (Hub DMS F5, parte D).
+    const expira = grupo === 'destino' ? prazoNoDestino(acao) : acao.expires_at;
+    if (grupo) grupos[grupo].push({ chave: chaveDaAcao(acao.id), tipo: 'acao', grupo, acao, expira, mexido: acao.updated_at });
   }
   for (const plano of planos) {
     const grupo = grupoDoPlano(plano, agora);
@@ -25,7 +27,7 @@ export function montarLista(acoes: ActionResponse[], planos: PlanSummary[], agor
     if (grupo) grupos[grupo].push({ chave: chaveDoPlano(plano.id), tipo: 'plano', grupo, plano, expira: plano.expires_at, mexido: plano.status === 'expirado' ? plano.expires_at : plano.updated_at });
   }
   // As datas chegam em ISO de mesmo formato: comparar o texto é comparar o instante.
-  grupos.pendente.sort((x, y) => x.expira.localeCompare(y.expira));
+  for (const g of ['pendente', 'destino'] as const) grupos[g].sort((x, y) => x.expira.localeCompare(y.expira));
   for (const g of ['auto', 'feito'] as const) grupos[g].sort((x, y) => y.mexido.localeCompare(x.mexido));
   return grupos;
 }

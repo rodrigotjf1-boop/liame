@@ -36,6 +36,21 @@ export function credenciaisDaConexao(guardada: CredencialGuardada | null | undef
 /** Gravar no RegemCast (rascunho, disparo, pausa) só pelo token da distribuição: a autorização do dono libera só leitura. */
 export const podeGravar = (c: CredencialDaConta): c is CredencialDaConta & { via: 'token' } => c.via === 'token';
 
+/**
+ * A flag da parte D do Hub DMS (F5), por empresa, desligada: o envio de mensagem vai como pedido ao RegemCast, aprovado
+ * lá por uma pessoa da conta, e a conta ligada pela autorização por clique grava quando o dono ligou as opções de
+ * campanha. Com ela, o pedido de autorização traz também as opcionais de gravar.
+ */
+export const FLAG_DO_PEDIDO_AO_DESTINO = 'regemcast_pede_ao_destino';
+
+/**
+ * Hub DMS F5, parte D: a ligação do clique grava quando o dono ligou as opcionais de gravar no RegemCast (RegemCast
+ * #132) e a empresa tem a flag `regemcast_pede_ao_destino` (conferida por quem chama). Pela ligação, o disparo só sai
+ * como PEDIDO aprovado lá (`campanha_disparo_pedir`): o RegemCast recusa o `campanha_disparar` a ela.
+ */
+export const ligacaoGrava = (c: CredencialDaConta, permissoes: readonly string[]): c is CredencialDaConta & { via: 'ligacao' } =>
+  c.via === 'ligacao' && permissoes.every((p) => c.escopos.includes(p));
+
 /** O que a pessoa lê quando o Liame não pode gravar numa conta ligada pela autorização do dono (B1-3). */
 export const SO_LEITURA_PELA_AUTORIZACAO =
   'Esta conta do RegemCast foi ligada pela autorização do dono, que por enquanto libera só leitura: criar e enviar mensagens pelo Liame ainda não está disponível para ela. Para enviar agora, fale com o suporte.';
@@ -51,17 +66,20 @@ export function dmsIdDosLeitores(dmsId: NonNullable<AppConfig['dmsId']>): Client
 /**
  * Chama o RegemCast com o acesso da conta. Pelo token, direto. Pela ligação, com o token do DMS ID do aplicativo do
  * Liame, pedido de novo uma vez se o RegemCast o recusar (vencido, trocado): o RegemCast confere o token antes do resto.
+ * `permissoes`: as do token do DMS ID; as leituras usam as de sempre, e quem grava pela ligação (parte D) passa
+ * `PERMISSOES_DA_ESCRITA_PELO_CLIQUE`, à parte, para a leitura não depender delas.
  */
 export async function comAcessoDaConta<T>(
   c: CredencialDaConta,
   config: Pick<AppConfig, 'dmsId' | 'produtos'>,
   contaChave: string,
   chamar: (a: AcessoAoRegemcast) => Promise<T>,
+  permissoes: readonly string[] = PERMISSOES_DO_CLIQUE,
 ): Promise<T> {
   if (c.via === 'token') return chamar({ token: c.token, contaChave });
   const apiUrl = config.produtos.regemcastApiUrl;
   if (!config.dmsId || !apiUrl) throw new ErroConector('definitivo', 'regemcast', 'a ligação do RegemCast pede o aplicativo do Liame no DMS ID e o endereço do RegemCast');
-  return comTokenDoDmsId(dmsIdDosLeitores(config.dmsId), recursoDoRegemcast(apiUrl), PERMISSOES_DO_CLIQUE, (token) => chamar({ token, contaChave, ligacao: c.ligacao }));
+  return comTokenDoDmsId(dmsIdDosLeitores(config.dmsId), recursoDoRegemcast(apiUrl), permissoes, (token) => chamar({ token, contaChave, ligacao: c.ligacao }));
 }
 
 /**

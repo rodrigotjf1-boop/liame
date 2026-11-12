@@ -246,6 +246,38 @@ export type DisparoRegemcast = z.infer<typeof DisparoRegemcast>;
 export const PausaRegemcast = z.object({ campanha: CampanhaRegemcast, proximoPasso: Texto(2000) });
 export type PausaRegemcast = z.infer<typeof PausaRegemcast>;
 
+/** As situações do pedido de ação no destino (Padrão DMS §8, pedido de ação): as cinco últimas são finais. */
+export const SITUACOES_DO_PEDIDO = ['aguardando', 'aprovado', 'executando', 'executado', 'recusado', 'vencido', 'cancelado', 'falhou'] as const;
+export type SituacaoDoPedido = (typeof SITUACOES_DO_PEDIDO)[number];
+/** O pedido ainda pode mudar (e o envio, sair). */
+export const PEDIDO_EM_ABERTO: readonly SituacaoDoPedido[] = ['aguardando', 'aprovado', 'executando'];
+
+/**
+ * `campanha_disparo_pedir`, `acao_pedido_ler` e `acao_pedido_cancelar` (`campanhas.disparar`; Hub DMS F5, parte B): o
+ * pedido de disparo que uma pessoa da conta aprova no RegemCast. Sem dado pessoal nem quem aprovou: a situação, o
+ * prazo, o teto, o motivo, o que quem recusou escreveu e o link da tela de aprovação.
+ */
+export const PedidoDeAcaoRegemcast = z.object({
+  pedido: z.object({
+    id: Id,
+    acao: Texto(100),
+    situacao: z.enum(SITUACOES_DO_PEDIDO),
+    criado_em: Instante,
+    vence_em: Instante,
+    decidido_em: Instante.optional(),
+    teto_de_gasto_centavos: z.int().min(0).optional(),
+    motivo: Texto(300).optional(),
+    motivo_da_recusa: Texto(600).optional(),
+    tela: z.string().regex(/^https:\/\//).max(500).optional(),
+  }),
+  proximoPasso: Texto(2000),
+});
+export type PedidoDeAcaoRegemcast = z.infer<typeof PedidoDeAcaoRegemcast>;
+
+/** `aviso_registrar` (RegemCast #131): o aviso deste aplicativo na conta, sem o segredo. Só se confere o "registrado". */
+export const AvisoRegistradoRegemcast = z.object({ registrado: z.boolean() }).passthrough();
+export type AvisoRegistradoRegemcast = z.infer<typeof AvisoRegistradoRegemcast>;
+
 /** `integracao_revogar`: o próprio token desligado. */
 export const RevogacaoRegemcast = z.object({ revogado: z.boolean(), revogadoEm: Instante });
 

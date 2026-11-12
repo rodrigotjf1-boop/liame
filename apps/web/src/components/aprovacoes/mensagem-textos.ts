@@ -1,7 +1,7 @@
 import type { ActionResponse, MessagingCampaign, MessagingCampaignDetailResponse } from '@liame/contracts';
 import { centavos } from '@/components/mensagens/textos';
-import { horaDe, inteiro } from '@/lib/formato';
-import type { PedidoApresentado, Risco } from './textos';
+import { horaDe, inteiro, quandoComHora } from '@/lib/formato';
+import { type PedidoApresentado, PEDIDO_NO_DESTINO_ABERTO, type Risco } from './textos';
 
 // O pedido de mensagem de WhatsApp em Aprovações (mockups/prototipo-mensagens.html, P15 aprovado em 09/10/2026; Y5 da
 // A5). O servidor manda a mensagem do pedido (`message`: o texto do modelo, as variáveis, o público, a janela, o cupom e
@@ -15,7 +15,7 @@ type Mensagem = AcaoDeMensagem['message'];
 
 /** O pedido é de envio ou de pausa de uma mensagem que o Liame montou? */
 export function ehPedidoDeMensagem(a: Acao): a is AcaoDeMensagem {
-  return Boolean(a.message) && (a.tool === 'mensagem_disparar' || a.tool === 'mensagem_pausar');
+  return Boolean(a.message) && (a.tool === 'mensagem_disparar' || a.tool === 'mensagem_pedir_ao_destino' || a.tool === 'mensagem_pausar');
 }
 
 const ehPausa = (a: Pick<Acao, 'tool'>): boolean => a.tool === 'mensagem_pausar';
@@ -275,6 +275,37 @@ export interface ResultadoDaMensagem {
   texto: string;
   /** O envio está em andamento e uma pessoa pode pausá-lo. */
   podePausar: boolean;
+  /** Um link para fora (a tela de aprovação no RegemCast, quando o envio espera o destino). */
+  link?: { href: string; rotulo: string };
+}
+
+/**
+ * O pedido ao destino (Hub DMS F5, parte D; decisão F5-9): a aprovação é de uma pessoa no RegemCast, e o Liame mostra
+ * "esperando o destino", com o prazo e o link da tela de lá. Nulo quando o pedido já saiu (executado: vale o andamento
+ * da campanha) ou quando o envio não foi por pedido ao destino.
+ */
+function resultadoNoDestino(a: AcaoDeMensagem, agora: Date): ResultadoDaMensagem | null {
+  const d = a.message.destination;
+  if (!d || d.status === 'executado') return null;
+  const nada = { podePausar: false };
+  const cupom = d.coupon_deactivated ? ' O cupom da mensagem foi desativado no Regem.' : '';
+  const motivo = d.reason ? ` “${d.reason}”.` : '';
+  if (PEDIDO_NO_DESTINO_ABERTO.includes(d.status)) {
+    const prazo = d.expires_at ? `, até ${quandoComHora(d.expires_at, agora)}` : '';
+    const texto = d.status === 'aguardando' ? ` Uma pessoa da conta aprova lá, com o código do aplicativo autenticador e o teto de gasto${prazo}. Nada saiu ainda.` : ' Aprovado lá: o envio começa em instantes.';
+    return {
+      tom: 'espera',
+      icone: 'clock',
+      forte: 'Esperando a aprovação no RegemCast.',
+      texto,
+      ...nada,
+      ...(d.url && d.status === 'aguardando' ? { link: { href: d.url, rotulo: 'Abrir no RegemCast' } } : {}),
+    };
+  }
+  if (d.status === 'recusado') return { tom: 'falha', icone: 'x', forte: 'Recusado no RegemCast.', texto: `${motivo} Nada foi enviado.${cupom}`, ...nada };
+  if (d.status === 'vencido') return { tom: 'falha', icone: 'x', forte: 'Ninguém aprovou no RegemCast a tempo.', texto: ` Nada foi enviado.${cupom}`, ...nada };
+  if (d.status === 'cancelado') return { tom: 'falha', icone: 'x', forte: 'O pedido foi encerrado no RegemCast.', texto: `${motivo} Nada foi enviado.${cupom}`, ...nada };
+  return { tom: 'falha', icone: 'x', forte: 'O RegemCast não conseguiu enviar.', texto: `${motivo}${cupom}`, ...nada };
 }
 
 /** Quem pausou e quando (o pedido de pausa, quando a tela o tem). */
@@ -289,12 +320,29 @@ function aprovadaPor(a: Acao): string {
  * O que aconteceu com o pedido de envio decidido. `campanha` são os números lidos do RegemCast agora (nulos enquanto a
  * leitura não chegou, ou quando ela não é possível); `custo` é o gasto que ele informa, em centavos.
  */
-export function resultadoDoEnvio(a: AcaoDeMensagem, campanha: MessagingCampaign | null, custo: MessagingCampaignDetailResponse['cost'], pausa: Pausa): ResultadoDaMensagem {
+export function resultadoDoEnvio(
+  a: AcaoDeMensagem,
+  campanha: MessagingCampaign | null,
+  custo: MessagingCampaignDetailResponse['cost'],
+  pausa: Pausa,
+  agora: Date = new Date(),
+): ResultadoDaMensagem {
   const nada = { podePausar: false };
   const r = recusa(a);
   if (r) return { tom: 'falha', icone: 'x', forte: null, texto: r.motivo ? `Recusada por ${r.quem}: “${r.motivo}”. Nada foi enviado.` : `Recusada por ${r.quem}. Nada foi enviado.`, ...nada };
   if (a.status === 'cancelada') return { tom: 'falha', icone: 'x', forte: null, texto: 'Cancelada por quem pediu. Nada foi enviado.', ...nada };
   if (a.status === 'expirada') return { tom: 'falha', icone: 'x', forte: null, texto: 'Expirou sem aprovação: nada foi enviado.', ...nada };
+  if (a.status === 'executada') {
+    const noDestino = resultadoNoDestino(a, agora);
+    if (noDestino) return noDestino;
+  }
+  // O pedido ao destino ainda não foi feito (o Liame o faz em instantes), ou não deu para fazer: quem aprova é uma pessoa
+  // no RegemCast, e aqui não há aprovação a mostrar.
+  if (a.tool === 'mensagem_pedir_ao_destino') {
+    if (a.status === 'falhou') return { tom: 'falha', icone: 'x', forte: 'O pedido ao RegemCast não foi feito.', texto: ` ${ponto(a.status_reason ?? 'Nada foi enviado')}`, ...nada };
+    const espera = a.next_attempt_at ? ` Ainda não foi: ${a.status_reason ?? 'o RegemCast pediu para esperar'}. O Liame tenta de novo às ${horaDe(a.next_attempt_at)}.` : ' O pedido sai em instantes.';
+    if (a.status !== 'executada') return { tom: 'espera', icone: 'clock', forte: 'O Liame vai pedir a aprovação no RegemCast.', texto: espera, ...nada };
+  }
   const quem = aprovadaPor(a);
   if (a.status === 'falhou') return { tom: 'falha', icone: 'x', forte: `${quem}, mas a mensagem não foi enviada.`, texto: ` ${ponto(a.status_reason ?? 'O envio falhou')}`, ...nada };
   if (a.status !== 'executada') {

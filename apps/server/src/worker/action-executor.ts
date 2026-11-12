@@ -246,9 +246,10 @@ export class ActionExecutor {
     // Primeiro valida (quando o provedor oferece), depois aplica.
     const attrs = { 'liame.provider': row.provider, 'liame.tool': row.tool };
     try {
-      const check = await inSpan('conector.validar', attrs, () => connector.apply(tx, ref, row.desired_state, expected, { validateOnly: true, requestedBy: row.requested_by }));
+      const quem = { requestedBy: row.requested_by, tool: row.tool, actorType: row.actor_type };
+      const check = await inSpan('conector.validar', attrs, () => connector.apply(tx, ref, row.desired_state, expected, { validateOnly: true, ...quem }));
       if (!check.ok) return recusa(check);
-      const applied = await inSpan('conector.aplicar', attrs, () => connector.apply(tx, ref, row.desired_state, expected, { requestedBy: row.requested_by }));
+      const applied = await inSpan('conector.aplicar', attrs, () => connector.apply(tx, ref, row.desired_state, expected, quem));
       if (!applied.ok) return recusa(applied);
       return { status: 'executada', reason: null, result: applied.state, version: applied.version };
     } catch (err) {
@@ -355,6 +356,8 @@ export class ActionExecutor {
   }
 
   private async autoApproved(row: ActionRow): Promise<boolean> {
+    // A aprovação é no destino (Hub DMS F5, parte D; F5-9): a flag da ferramenta é conferida logo depois, em `run`.
+    if (TOOLS[row.tool]?.aprovacaoNoDestino) return true;
     if (row.mode !== 'LIMITED_AUTO' && row.mode !== 'AUTO') return false;
     if (row.actor_type === 'human' && TOOLS[row.tool]?.directByPerson) return true;
     // A resposta automática: o portão foi conferido logo antes, em `run` (e na criação); não depende do `autopilot`.

@@ -50,8 +50,12 @@ export type ApplyResult =
   /** O provedor recusou de vez (regra inválida, código em uso, sem permissão): repetir não resolve. */
   | { ok: false; reason: 'recusado'; mensagem: string };
 
-/** `validateOnly`: só confere se dá para aplicar. `requestedBy`: quem pediu a ação (o connector não decide por ele; só registra). */
-export type ApplyOptions = { validateOnly?: boolean; requestedBy?: string | null };
+/**
+ * `validateOnly`: só confere se dá para aplicar. `requestedBy`: quem pediu a ação (o connector não decide por ele; só
+ * registra). `tool` e `actorType`: a ferramenta e quem pediu (pessoa ou agente), para o conector que muda o caminho pela
+ * ferramenta (Hub DMS F5, parte D: o pedido ao destino em vez do disparo).
+ */
+export type ApplyOptions = { validateOnly?: boolean; requestedBy?: string | null; tool?: string; actorType?: string | null };
 
 export interface Connector {
   readonly provider: string;

@@ -11,7 +11,8 @@ import { SincronizadorConversas } from '../../src/attribution/sincronizador-conv
 import { loadConfig } from '../../src/config.js';
 import { registrarConexaoDaDistribuicao } from '../../src/connections/distribuicao.js';
 import { FLAG_REGEMCAST_POR_CLIQUE } from '../../src/connections/oauth.js';
-import { SO_LEITURA_PELA_AUTORIZACAO } from '../../src/connectors/regemcast/credencial-da-conta.js';
+import { OPCIONAIS_DE_ESCRITA_DO_CLIQUE } from '../../src/connectors/regemcast/conector-regemcast.js';
+import { FLAG_DO_PEDIDO_AO_DESTINO, SO_LEITURA_PELA_AUTORIZACAO } from '../../src/connectors/regemcast/credencial-da-conta.js';
 import { DATABASE } from '../../src/database/database.module.js';
 import { FlagService } from '../../src/flags/flag.service.js';
 import { lerContaDoRegemcast } from '../../src/mensageria/conta-do-regemcast.js';
@@ -150,6 +151,8 @@ describe.skipIf(!hasDb)('o RegemCast lido pela ligação da autorização por cl
   /** O DMS ID recusa o aplicativo do Liame (o segredo trocado lá). */
   let dmsIdRecusaOAplicativo = false;
   let ultimaLigacao = '';
+  /** As opcionais de gravar que o dono liga na página do RegemCast (só as que o pedido trouxe entram). */
+  let opcionaisQueODonoLiga: string[] = [];
 
   const problema = (tipo: string, status: number): Resposta => ({
     status,
@@ -241,7 +244,10 @@ describe.skipIf(!hasDb)('o RegemCast lido pela ligação da autorização por cl
       const contaId = randomUUID();
       ligacoes.set(ligacao, contaId);
       ultimaLigacao = ligacao;
-      return { status: 200, corpo: { ligacao, prefixo: ligacao.slice(0, 22), conta_id: contaId, conta: 'Mister Burgers', permissoes: LEITURAS, segredo_em: new Date().toISOString() } };
+      // O dono liga (ou não) as opcionais de gravar que o pedido trouxe (Hub DMS F5, parte D; RegemCast #132).
+      const pedidas = String(pedido.corpo.scope ?? '').split(' ');
+      const permissoes = [...LEITURAS, ...opcionaisQueODonoLiga.filter((p) => pedidas.includes(p))];
+      return { status: 200, corpo: { ligacao, prefixo: ligacao.slice(0, 22), conta_id: contaId, conta: 'Mister Burgers', permissoes, segredo_em: new Date().toISOString() } };
     }
     return { status: 404, corpo: {} };
   }
@@ -477,6 +483,41 @@ describe.skipIf(!hasDb)('o RegemCast lido pela ligação da autorização por cl
     expect(chamadas).toEqual([]);
     const [pedidosDeEnvio] = await ownerQuery<{ n: string }>(`select count(*)::text as n from liame.message_request where tenant_id = $1`, [e.tenantId]);
     expect(pedidosDeEnvio!.n).toBe('0');
+  });
+
+  it('Hub DMS F5, parte D: com a flag, o pedido de autorização traz também as opcionais de gravar; sem a flag, só as leituras', async () => {
+    const sem = await empresa('Mister Burgers Pedido Sem a Flag da Parte D');
+    await conectarPorClique(sem);
+    expect(pedidos.at(-1)!.corpo.scope!.split(' ').sort()).toEqual([...LEITURAS].sort());
+
+    const com = await empresa('Mister Burgers Pedido Com a Flag da Parte D');
+    await ligarFlag(com.tenantId, FLAG_DO_PEDIDO_AO_DESTINO);
+    await conectarPorClique(com);
+    expect(pedidos.at(-1)!.corpo.scope!.split(' ').sort()).toEqual([...LEITURAS, ...OPCIONAIS_DE_ESCRITA_DO_CLIQUE].sort());
+  });
+
+  it('Hub DMS F5, parte D: com a flag, mas sem as opções de campanha ligadas pelo dono no RegemCast, a proposta é recusada (409) antes de chamar o RegemCast', async () => {
+    const e = await empresa('Mister Burgers Parte D Sem as Opções');
+    await ligarFlag(e.tenantId, FLAG_DO_PEDIDO_AO_DESTINO);
+    await ligarFlag(e.tenantId, FLAG_DO_ENVIO);
+    // O dono liga só o rascunho de modelo: falta o rascunho de campanha e o pedido de disparo.
+    opcionaisQueODonoLiga = ['modelos.rascunhar'];
+    let c: PeloClique;
+    try {
+      c = await conectarPorClique(e);
+    } finally {
+      opcionaisQueODonoLiga = [];
+    }
+    const proposta = { marca: e.brandId, conta: c.conta, nome: 'Combo família de domingo', modelo: { nome: 'promo_sexta_v2' }, publico: { origem: 'publico', id: 'recentes_30' }, variaveis: [{ origem: 'primeiro_nome' }] };
+    const recusa = await api.app
+      .get(PedidoDeMensagemService)
+      .propor({ tenantId: e.tenantId, agentKey: 'crm', agentLabel: 'CRM e mensageria', emNomeDe: e.userId }, proposta)
+      .then(
+        () => null,
+        (err: unknown) => err as { status?: number; code?: string; getStatus?: () => number },
+      );
+    expect(recusa && [recusa.status ?? recusa.getStatus?.(), recusa.code]).toEqual([409, 'regemcast-sem-opcoes-de-campanha']);
+    expect(chamadas).toEqual([]);
   });
 
   it('as propostas do funcionário de CRM numa conta que passou a ser lida pela ligação (a que esperava o rascunho e a que esperava a Meta) são descartadas com `sem_permissao`, sem chamar o RegemCast', async () => {

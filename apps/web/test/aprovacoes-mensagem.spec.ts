@@ -435,3 +435,49 @@ describe('pedido de mensagem: o detalhe desenhado', () => {
     expect(desenho(pedido({ status: 'executada', approvals: aprovacao(), message: mensagem({ coupon: { ...mensagem().coupon!, created: false } }) }))).not.toContain('id="mens-cupom-onde"');
   });
 });
+
+describe('pedido de mensagem: esperando o destino (Hub DMS F5, parte D; decisão F5-9)', () => {
+  const agora = new Date(local(12));
+  const destino = (o: Partial<NonNullable<NonNullable<ActionResponse['message']>['destination']>> = {}) => ({
+    status: 'aguardando',
+    expires_at: local(11, 5, 10),
+    url: 'https://cast.exemplo.test/para-aprovar/p1',
+    reason: null,
+    checked_at: local(11, 6),
+    coupon_deactivated: false,
+    ...o,
+  });
+  const peloDestino = (o: Partial<ActionResponse> = {}, d = destino()) =>
+    pedido({ tool: 'mensagem_pedir_ao_destino', action: 'mensagem.pedir_ao_destino', status: 'executada', approvals: [], updated_at: local(11, 6), message: { ...mensagem(), destination: d }, ...o });
+
+  it('é pedido de mensagem; aberto no RegemCast, fica no grupo próprio, de qualquer dia, e não em "precisa de você"', () => {
+    expect(ehPedidoDeMensagem(peloDestino())).toBe(true);
+    expect(grupoDe(peloDestino({ updated_at: local(11, 6, 5) }), agora)).toBe('destino');
+    expect(grupoDe(peloDestino({}, destino({ status: 'recusado' })), agora)).toBe('feito');
+  });
+
+  it('o resultado: esperando a aprovação lá, com o prazo e o link; aprovado lá; recusado com o motivo; vencido; com o cupom desativado', () => {
+    const espera = resultadoDoEnvio(peloDestino(), null, null, null, agora);
+    expect(espera).toMatchObject({ tom: 'espera', forte: 'Esperando a aprovação no RegemCast.', link: { href: 'https://cast.exemplo.test/para-aprovar/p1', rotulo: 'Abrir no RegemCast' }, podePausar: false });
+    expect(espera.texto).toContain('com o código do aplicativo autenticador e o teto de gasto, até');
+    expect(espera.texto).toContain('Nada saiu ainda.');
+    expect(resultadoDoEnvio(peloDestino({}, destino({ status: 'aprovado' })), null, null, null, agora)).toMatchObject({ texto: ' Aprovado lá: o envio começa em instantes.' });
+    expect(resultadoDoEnvio(peloDestino({}, destino({ status: 'aprovado' })), null, null, null, agora).link).toBeUndefined();
+    expect(resultadoDoEnvio(peloDestino({}, destino({ status: 'recusado', reason: 'Agora não é a hora.', coupon_deactivated: true })), null, null, null, agora)).toMatchObject({
+      tom: 'falha',
+      forte: 'Recusado no RegemCast.',
+      texto: ' “Agora não é a hora.”. Nada foi enviado. O cupom da mensagem foi desativado no Regem.',
+    });
+    expect(resultadoDoEnvio(peloDestino({}, destino({ status: 'vencido' })), null, null, null, agora)).toMatchObject({ forte: 'Ninguém aprovou no RegemCast a tempo.', texto: ' Nada foi enviado.' });
+    // Executado lá: vale o andamento da campanha, como no envio aprovado aqui.
+    expect(resultadoDoEnvio(peloDestino({}, destino({ status: 'executado' })), null, null, null, agora)).toMatchObject({ texto: ' O envio está com o RegemCast.' });
+  });
+
+  it('antes do pedido sair do Liame, e quando ele não pôde ser feito: sem "Aprovada por", que aqui ninguém aprova', () => {
+    expect(resultadoDoEnvio(peloDestino({ status: 'aprovada', message: mensagem() }), null, null, null, agora)).toMatchObject({ forte: 'O Liame vai pedir a aprovação no RegemCast.', texto: ' O pedido sai em instantes.' });
+    expect(resultadoDoEnvio(peloDestino({ status: 'falhou', status_reason: 'O RegemCast recusou o pedido de envio: restrição. Nada foi enviado.', message: mensagem() }), null, null, null, agora)).toMatchObject({
+      tom: 'falha',
+      forte: 'O pedido ao RegemCast não foi feito.',
+    });
+  });
+});
