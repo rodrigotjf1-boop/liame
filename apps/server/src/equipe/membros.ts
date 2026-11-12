@@ -1,4 +1,5 @@
 import { LIA } from '../ai/conversa/prompt.js';
+import { WORKFLOW_DO_CRIATIVO_GOOGLE } from '../ai/criativo/google.js';
 import { CRIATIVO, WORKFLOW_DO_CRIATIVO } from '../ai/criativo/prompt.js';
 import { CRM, WORKFLOW_DO_CRM } from '../ai/crm/prompt.js';
 import { ESTRATEGISTA } from '../ai/estrategista/prompt.js';
@@ -65,8 +66,9 @@ export const EQUIPE: Record<Membro, DefinicaoDoMembro> = {
   estrategista: { key: 'estrategista', kind: 'ia', funcionario: ESTRATEGISTA, fluxos: ['estrategista.plano'], desligavel: true },
   pesquisador: { key: 'pesquisador', kind: 'ia', funcionario: PESQUISADOR, fluxos: ['pesquisador.pagina'], desligavel: true },
   trafego: { key: GESTOR_DE_TRAFEGO, kind: 'regra', funcionario: null, fluxos: [], desligavel: true },
-  // A chave da pausa (`agent_pause`) é a do funcionário no registro: é ela que o serviço das peças confere ao pedir.
-  criativo: { key: CRIATIVO_DA_EQUIPE, kind: 'ia', funcionario: CRIATIVO, fluxos: [WORKFLOW_DO_CRIATIVO], desligavel: true },
+  // A chave da pausa (`agent_pause`) é a do funcionário no registro: é ela que o serviço das peças confere ao pedir. O
+  // custo soma as peças e os textos da campanha nova no Google (A5, Y9, parte 4).
+  criativo: { key: CRIATIVO_DA_EQUIPE, kind: 'ia', funcionario: CRIATIVO, fluxos: [WORKFLOW_DO_CRIATIVO, WORKFLOW_DO_CRIATIVO_GOOGLE], desligavel: true },
   // A chave é a do funcionário no registro e a do pedido que ele faz (`action_request.agent_key`, `message_request.agent_key`).
   crm: { key: CRM_DA_EQUIPE, kind: 'ia', funcionario: CRM, fluxos: [WORKFLOW_DO_CRM], desligavel: true },
   // A chave é a do funcionário no registro, a do pedido que ele faz (`action_request.agent_key`) e a da pausa que as

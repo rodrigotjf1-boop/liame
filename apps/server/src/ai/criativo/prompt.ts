@@ -1,4 +1,5 @@
 import type { FuncionarioDef, PromptDef } from '../registro/definicoes.js';
+import { TAREFA_CRIATIVO_GOOGLE } from './google.js';
 
 // O Criativo (A4, X6): escreve o título, o texto principal e o botão de um anúncio, a pedido de uma pessoa, a partir de
 // uma oferta de Minha marca. Não tem ferramenta nenhuma: não lê, não publica, não fala com ninguém. A oferta, o anúncio
@@ -52,17 +53,24 @@ export const PROMPT_CRIATIVO_TEXTO: PromptDef = {
   ].join('\n'),
 };
 
-/** O Criativo: escreve a proposta de texto de um anúncio. Nenhuma ferramenta: quem confere é o código, quem decide é uma pessoa. */
+/**
+ * O Criativo: escreve a proposta de texto de um anúncio. Desde a v2 (A5, Y9, parte 4), também os textos da campanha
+ * nova no Google, a partir da peça aprovada. Nenhuma ferramenta: quem confere é o código, quem decide é uma pessoa.
+ */
 export const CRIATIVO: FuncionarioDef = {
   key: 'criativo',
-  version: 1,
+  version: 2,
   name: 'Criativo',
   cargo: 'Criação de anúncios',
   responsabilidades: [
     'Escrever o título, o texto principal e o botão de um anúncio, a pedido de uma pessoa, a partir de uma oferta de Minha marca, da voz da marca e de um anúncio que já trouxe pedidos',
-    'Entregar cada peça para a conferência do Compliance, antes de uma pessoa decidir se ela serve',
+    'Escrever, a partir da peça aprovada, os títulos, o título longo e as descrições da campanha no Google, nos tamanhos do Google, para uma pessoa usar, ajustar e pedir a campanha',
+    'Entregar cada peça e cada texto para a conferência do Compliance, antes de uma pessoa decidir se ela serve',
   ],
   ferramentas: [],
-  tarefas: [{ task: TAREFA_CRIATIVO_TEXTO, prompt: 'criativo.texto' }],
+  tarefas: [
+    { task: TAREFA_CRIATIVO_TEXTO, prompt: 'criativo.texto' },
+    { task: TAREFA_CRIATIVO_GOOGLE, prompt: 'criativo.google' },
+  ],
   ativoPorPadrao: true,
 };

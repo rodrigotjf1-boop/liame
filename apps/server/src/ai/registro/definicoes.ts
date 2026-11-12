@@ -5,6 +5,7 @@ import { canonicalJson, sha256 } from '../../audit/audit.js';
 import { PROPOR_CUPOM } from '../conversa/cupom.defs.js';
 import { ABRIR_DEMANDA } from '../conversa/demanda.defs.js';
 import { LIA, PROMPT_CONVERSA_LIA } from '../conversa/prompt.js';
+import { PROMPT_CRIATIVO_GOOGLE } from '../criativo/google.js';
 import { CRIATIVO, PROMPT_CRIATIVO_TEXTO } from '../criativo/prompt.js';
 import { CRM, PROMPT_CRM_MENSAGEM } from '../crm/prompt.js';
 import { ESTRATEGISTA, PROMPT_ESTRATEGISTA } from '../estrategista/prompt.js';
@@ -79,6 +80,7 @@ export const PROMPTS: PromptDef[] = [
   PROMPT_PESQUISADOR,
   PROMPT_REVISOR,
   PROMPT_CRIATIVO_TEXTO,
+  PROMPT_CRIATIVO_GOOGLE,
   PROMPT_CRM_MENSAGEM,
   PROMPT_SOCIAL_RESPOSTA,
   PROMPT_SOCIAL_POST,

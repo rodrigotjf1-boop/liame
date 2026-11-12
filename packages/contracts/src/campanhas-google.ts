@@ -97,3 +97,56 @@ export const GoogleCampaignOptionsResponse = z.strictObject({
   ),
 });
 export type GoogleCampaignOptionsResponse = z.infer<typeof GoogleCampaignOptionsResponse>;
+
+/**
+ * O pedido dos textos do Google ao Criativo (A5, Y9, parte 4; D-A5-22; P45, "Pedir ao Criativo"): a peça aprovada da
+ * marca. O Criativo escreve, a partir dela, da oferta do pedido da peça e de Minha marca, uma proposta inteira nos
+ * tamanhos do Google; a pessoa usa no lugar dos textos da gaveta, ou deixa como está.
+ */
+export const GoogleCampaignTextsRequest = z.strictObject({
+  brand_id: z.uuid(),
+  /** Uma peça aprovada em Criativos; vai a versão atual dela. */
+  piece_id: z.uuid(),
+});
+export type GoogleCampaignTextsRequest = z.infer<typeof GoogleCampaignTextsRequest>;
+
+export const GOOGLE_TEXTS_NO_AI_REASONS = [
+  'ia_desligada',
+  'funcionario_desligado',
+  'sem-rota',
+  'teto',
+  'limite-usuario',
+  'travada',
+  'parada',
+  'indisponivel',
+  'entrada-grande',
+  'formato',
+  'barrado',
+  'recusa',
+] as const;
+
+/**
+ * A proposta do Criativo, já conferida: cada texto no tamanho do Google, sem repetir, sem dado pessoal e pelo Compliance
+ * (o preço só o da oferta, as regras do Liame e o que a marca não diz); o que não passa sai da proposta (`dropped`
+ * conta), e a proposta só volta com o mínimo do Google. Sem a IA (desligada, sem rota, no teto, fora do ar, com a
+ * proposta que não chega ao mínimo, ou o Criativo recusou o assunto da peça), `origin` é `sem_ia`, com o motivo, e a
+ * pessoa fica com os textos da gaveta.
+ */
+export const GoogleCampaignTextsResponse = z.strictObject({
+  origin: z.enum(['ia', 'sem_ia']),
+  reason: z.enum(GOOGLE_TEXTS_NO_AI_REASONS).nullable(),
+  texts: z
+    .strictObject({
+      headlines: z.array(z.string().min(1).max(30)).min(3).max(15),
+      long_headlines: z.array(z.string().min(1).max(90)).min(1).max(5),
+      descriptions: z.array(z.string().min(1).max(90)).min(2).max(5),
+    })
+    .nullable(),
+  /** Quantos textos da proposta ficaram de fora (longos, repetidos, com dado pessoal ou barrados pelo Compliance). */
+  dropped: z.int().min(0),
+  /** No teto de custo: quando a IA volta. */
+  retry_at: z.iso.datetime({ offset: true }).nullable(),
+  /** A chamada em `ai_usage` (para o retorno da pessoa); nula sem a IA. */
+  usage_id: z.uuid().nullable(),
+});
+export type GoogleCampaignTextsResponse = z.infer<typeof GoogleCampaignTextsResponse>;

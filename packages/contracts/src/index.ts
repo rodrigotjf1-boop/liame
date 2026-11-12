@@ -685,9 +685,12 @@ export {
 } from './campanhas-novas.js';
 export {
   CreateGoogleCampaignRequest,
+  GOOGLE_TEXTS_NO_AI_REASONS,
   GoogleCampaignOptionsQuery,
   GoogleCampaignOptionsResponse,
   GoogleCampaignResponse,
+  GoogleCampaignTextsRequest,
+  GoogleCampaignTextsResponse,
 } from './campanhas-google.js';
 export {
   CreateVideoMontageRequest,

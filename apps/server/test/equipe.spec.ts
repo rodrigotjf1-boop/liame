@@ -71,8 +71,9 @@ describe('Sua equipe (A3, I13b)', () => {
       desligavel: true,
       fluxos: [WORKFLOW_DO_SOCIAL, WORKFLOW_DO_SOCIAL_POST, WORKFLOW_DO_SOCIAL_COMENTARIO, WORKFLOW_DO_SOCIAL_COMENTARIO_TIPO, WORKFLOW_DO_SOCIAL_VIDEO],
     });
-    // O Criativo (A4; P12): o fluxo é o que o worker das peças grava, e a empresa pode desligar.
-    expect(EQUIPE.criativo).toMatchObject({ kind: 'ia', desligavel: true, fluxos: [WORKFLOW_DO_CRIATIVO] });
+    // O Criativo (A4; P12): os fluxos são o que o worker das peças grava e os textos do Google (Y9, parte 4); a empresa
+    // pode desligar.
+    expect(EQUIPE.criativo).toMatchObject({ kind: 'ia', desligavel: true, fluxos: [WORKFLOW_DO_CRIATIVO, 'criativo.google'] });
     // O CRM e mensageria (A5; P16): o fluxo é o das chamadas que escrevem a mensagem, e a empresa pode desligar.
     expect(EQUIPE.crm).toMatchObject({ kind: 'ia', desligavel: true, fluxos: [WORKFLOW_DO_CRM] });
     for (const m of MEMBROS) expect(EQUIPE[m].funcionario?.key ?? m).toBe(m);

@@ -158,6 +158,10 @@
       "version": 5,
       "hash": "d5b0881843f940a0b418c132c1e1c51469aec5fd4e96cabe976975afa2679963"
     },
+    "criativo.google": {
+      "version": 1,
+      "hash": "b6bff6d78daee5bcdb3f58107c2e0c27850869e37527d14061af1e2d2dc453d2"
+    },
     "criativo.texto": {
       "version": 2,
       "hash": "d01e1028885b66c998d0b2661de55e7c38442c914e9e659e532c1ab166c0ffad"
@@ -205,8 +209,8 @@
       "hash": "c0dd5badc7b8b72166b98eb81b70fd93d399e8da98d5c71b9d7fdc1609bc4b24"
     },
     "criativo": {
-      "version": 1,
-      "hash": "77c504cfac2fc3c5a7b56259b15aba2b9c31a8480343728049c06e15f329cd28"
+      "version": 2,
+      "hash": "86224f666145b4c60681354389ffd9d05fa56273f1264076b86a97a9fb469542"
     },
     "crm": {
       "version": 1,

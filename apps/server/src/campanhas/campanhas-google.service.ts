@@ -1,14 +1,41 @@
-import type { CreateGoogleCampaignRequest, GoogleCampaignOptionsQuery, GoogleCampaignOptionsResponse, GoogleCampaignResponse } from '@liame/contracts';
-import { uuidv7 } from '@liame/database';
-import { Injectable } from '@nestjs/common';
+import type {
+  CreateGoogleCampaignRequest,
+  GoogleCampaignOptionsQuery,
+  GoogleCampaignOptionsResponse,
+  GoogleCampaignResponse,
+  GoogleCampaignTextsRequest,
+  GoogleCampaignTextsResponse,
+} from '@liame/contracts';
+import { type Database, uuidv7 } from '@liame/database';
+import { Inject, Injectable } from '@nestjs/common';
 import { sql } from 'drizzle-orm';
 import { ActionService } from '../actions/action.service.js';
+import { baseDoPedido } from '../ai/criativo/contexto.js';
+import {
+  contextoDosTextosDoGoogle,
+  mensagemDosTextosDoGoogle,
+  PROMPT_CRIATIVO_GOOGLE,
+  RespostaDosTextosDoGoogle,
+  TAREFA_CRIATIVO_GOOGLE,
+  textosDoGoogleDaResposta,
+  totalDeDescartes,
+  WORKFLOW_DO_CRIATIVO_GOOGLE,
+} from '../ai/criativo/google.js';
+import { CRIATIVO } from '../ai/criativo/prompt.js';
+import { AiError, AiGateway } from '../ai/gateway.js';
+import { naTransacaoDaEmpresa } from '../ai/na-empresa.js';
+import { registrarRecusa } from '../ai/recusas.js';
+import { funcionarioAtivo } from '../ai/registro/ativacao.js';
 import { contaConectada } from '../connections/conectada.js';
 import { emMenorUnidade } from '../connectors/meta/verba.js';
 import { type AuthContext, auditDetail, currentTx } from '../context/request-context.js';
+import { marcaDoCriativo } from '../criativo/base.js';
+import { FLAG_DO_CRIATIVO } from '../criativo/pecas.service.js';
+import { DATABASE } from '../database/database.module.js';
 import { AppProblem } from '../errors/problems.js';
 import { FlagService } from '../flags/flag.service.js';
 import { PolicyService } from '../policy/policy.service.js';
+import { REGRAS_DE_TEXTO_VERSAO } from '../policy/texto.js';
 import { tetoDaVerba } from '../policy/teto-da-verba.js';
 import { destinoDoPost } from '../posts/link-do-post.js';
 import { LIMITES_DO_GOOGLE, motivoDaFotoPequena, motivoDosTextos, recursoDaCampanhaGoogle } from './campanha-google-plano.js';
@@ -131,6 +158,8 @@ export class CampanhasGoogleService {
     private readonly actions: ActionService,
     private readonly flags: FlagService,
     private readonly policies: PolicyService,
+    @Inject(DATABASE) private readonly database: Database | null,
+    private readonly gateway: AiGateway,
   ) {}
 
   private quem(auth: AuthContext): Quem {
@@ -272,6 +301,110 @@ export class CampanhasGoogleService {
       },
     });
     return this.obter(auth, id);
+  }
+
+  /**
+   * Os textos do Google pelo Criativo (parte 4; D-A5-22; P45, "Pedir ao Criativo"): a leitura numa transação curta (a
+   * marca, a função, a peça aprovada com a oferta do pedido dela, o Criativo e Minha marca); a IA sem transação aberta (a
+   * rota espera o modelo por segundos); cada texto conferido antes de voltar, e a proposta só com o mínimo do Google. Sem
+   * a IA, `sem_ia` com o motivo, e a pessoa fica com os textos da gaveta; o texto barrado conta em Sua equipe, sem o texto.
+   */
+  async textos(auth: AuthContext, body: GoogleCampaignTextsRequest): Promise<GoogleCampaignTextsResponse> {
+    const quem = this.quem(auth);
+    if (!this.database) throw new AppProblem(503, 'sem-banco', 'Indisponível', 'Tente de novo em instantes.');
+    const database = this.database;
+    const contexto = { tenantId: quem.tenantId, userId: quem.userId, brandId: body.brand_id };
+    const lido = await naTransacaoDaEmpresa(database, quem, async () => {
+      const tx = currentTx();
+      const marca = (await tx.execute<{ name: string }>(sql`select name from liame.brand where id = ${body.brand_id} and tenant_id = ${quem.tenantId} and archived_at is null`)).rows[0];
+      if (!marca) throw new AppProblem(404, 'nao-encontrado', 'Não encontramos', 'Marca não encontrada nesta empresa.');
+      if (!(await this.flags.isEnabled(FLAG_DA_CAMPANHA_GOOGLE, this.flags.context(contexto)))) {
+        throw conflito('funcao-desligada', 'Função desligada', 'A campanha nova no Google não está ligada para esta empresa.');
+      }
+      // A peça aprovada, na versão atual, com a oferta do pedido dela.
+      const peca = (
+        await tx.execute<{ status: string; title: string | null; body: string | null; offer: string | null }>(sql`
+          select p.status, v.title, v.body, r.offer
+            from liame.ad_piece p
+            left join liame.ad_piece_version v on v.piece_id = p.id and v.version = p.version and v.tenant_id = p.tenant_id
+            left join liame.ad_piece_request r on r.id = p.request_id and r.tenant_id = p.tenant_id
+           where p.id = ${body.piece_id} and p.tenant_id = ${quem.tenantId} and p.brand_id = ${body.brand_id}`)
+      ).rows[0];
+      if (!peca || !peca.title || !peca.body) throw recusa('peca-nao-encontrada', 'Peça não encontrada', 'A peça não está em Criativos desta marca.', 'piece_id');
+      if (peca.status !== 'aprovada') throw recusa('peca-nao-aprovada', 'A peça não foi aprovada', 'Só a peça aprovada em Criativos vira campanha. Aprove a peça antes.', 'piece_id');
+      // O Criativo trabalha com a função dele ligada e ativo na marca (pelo plano e pela própria empresa).
+      const ativo =
+        (await this.flags.isEnabled(FLAG_DO_CRIATIVO, this.flags.context(contexto))) &&
+        (await funcionarioAtivo(tx, { tenantId: quem.tenantId, brandId: body.brand_id, agentKey: CRIATIVO.key, ativoPorPadrao: CRIATIVO.ativoPorPadrao }));
+      const fuso = (await tx.execute<{ timezone: string | null }>(sql`select timezone from liame.organization where id = ${quem.tenantId}`)).rows[0]?.timezone ?? 'America/Sao_Paulo';
+      return { ativo, nome: marca.name, peca: { titulo: peca.title, texto: peca.body, oferta: peca.offer ?? '' }, dossie: await marcaDoCriativo(body.brand_id, fuso, new Date()) };
+    });
+
+    const semIa = (reason: NonNullable<GoogleCampaignTextsResponse['reason']>, extra: { voltaEm?: Date; usageId?: string; dropped?: number } = {}): GoogleCampaignTextsResponse => ({
+      origin: 'sem_ia',
+      reason,
+      texts: null,
+      dropped: extra.dropped ?? 0,
+      retry_at: extra.voltaEm ? extra.voltaEm.toISOString() : null,
+      usage_id: extra.usageId ?? null,
+    });
+    if (!lido.ativo) return semIa('funcionario_desligado');
+    if (!(await this.gateway.ligada(contexto))) return semIa('ia_desligada');
+
+    const dossie = lido.dossie;
+    const pedido = {
+      marca: lido.nome,
+      dossie: dossie?.dossie ?? `Marca "${lido.nome}": Minha marca ainda não foi preenchida.`,
+      oferta: lido.peca.oferta,
+      peca: { titulo: lido.peca.titulo, texto: lido.peca.texto },
+    };
+    let r: Awaited<ReturnType<AiGateway['structured']>>;
+    try {
+      r = await this.gateway.structured({
+        tenantId: quem.tenantId,
+        brandId: body.brand_id,
+        userId: quem.userId,
+        workflow: WORKFLOW_DO_CRIATIVO_GOOGLE,
+        task: TAREFA_CRIATIVO_GOOGLE,
+        promptVersion: `${PROMPT_CRIATIVO_GOOGLE.key}@${PROMPT_CRIATIVO_GOOGLE.version}`,
+        instructions: PROMPT_CRIATIVO_GOOGLE.content,
+        context: contextoDosTextosDoGoogle(pedido),
+        messages: [{ role: 'user', content: mensagemDosTextosDoGoogle(pedido) }],
+        schema: RespostaDosTextosDoGoogle,
+      });
+    } catch (err) {
+      if (!(err instanceof AiError)) throw err;
+      return semIa(err.code === 'desligada' ? 'ia_desligada' : err.code, { voltaEm: err.detalhe.voltaEm });
+    }
+
+    // O que a conferência tirou conta em Sua equipe (sem o texto): uma linha por motivo, com quantos textos.
+    const anotar = (kind: string, rules: string[], items: number) =>
+      registrarRecusa(database, {
+        tenantId: quem.tenantId,
+        brandId: body.brand_id,
+        userId: quem.userId,
+        usageId: r.usageId,
+        member: CRIATIVO.key,
+        workflow: WORKFLOW_DO_CRIATIVO_GOOGLE,
+        kind,
+        rules,
+        rulesVersion: kind === 'compliance' ? REGRAS_DE_TEXTO_VERSAO : null,
+        items,
+      });
+    const resposta = RespostaDosTextosDoGoogle.safeParse(r.object);
+    if (!resposta.success) {
+      await anotar('formato', [], 1);
+      return semIa('formato', { usageId: r.usageId });
+    }
+    const c = textosDoGoogleDaResposta(resposta.data, baseDoPedido({ oferta: pedido.oferta, instrucao: null }, { fatos: dossie?.fatos ?? '', proibidas: dossie?.proibidas ?? [], concorrentes: dossie?.concorrentes ?? [] }));
+    if (c.descartes.barrado) await anotar('compliance', c.achados.map((a) => a.tipo), c.descartes.barrado);
+    if (c.descartes.dado_pessoal) await anotar('compliance', ['dado_pessoal'], c.descartes.dado_pessoal);
+    if (!c.ok) {
+      if (c.motivo === 'recusa') return semIa('recusa', { usageId: r.usageId });
+      if (c.motivo === 'formato') await anotar('formato', [], 1);
+      return semIa(c.motivo, { usageId: r.usageId, dropped: totalDeDescartes(c.descartes) });
+    }
+    return { origin: 'ia', reason: null, texts: c.textos, dropped: totalDeDescartes(c.descartes), retry_at: null, usage_id: r.usageId };
   }
 
   /**

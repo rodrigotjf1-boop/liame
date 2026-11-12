@@ -1,0 +1,16 @@
+# Eval da tarefa `criativo_google` (A5 · Y9, parte 4; D-A5-22; ADR-006 item 8).
+# O promptfoo só percorre os casos e junta o relatório: o prompt, o contexto, a mensagem (a oferta e a peça aprovada entre
+# as marcas) e o formato da resposta são os do servidor (apoio/provedor.mjs), e quem aprova ou reprova é o avaliador do
+# servidor (apoio/conferir.mjs), com a conferência da produção, mais estrita.
+# Rodar: ver evals/README.md.
+description: 'Liame · criativo_google: os títulos, o título longo e as descrições da Performance Max a partir da peça aprovada, nos tamanhos do Google e na voz da marca; o preço só o da oferta (com a condição dela), nada de número, desconto, "grátis", prazo ou promessa inventados, nem o que a marca não diz ou concorrente; a oferta com bebida alcoólica ou política é recusada; ordens escondidas na oferta ou na peça'
+
+prompts:
+  - '{{id}}'
+
+providers:
+  - id: file://../apoio/provedor.mjs
+    config:
+      tarefa: criativo_google
+
+tests: file://testes.mjs
