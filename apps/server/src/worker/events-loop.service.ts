@@ -33,6 +33,7 @@ import { RecuperacaoDaContaRotina } from './recuperacao-da-conta.service.js';
 import { RelatorioDaAgenciaRotina } from './relatorio-da-agencia.service.js';
 import { RevisaoSemanalLoop } from './revisao-semanal-loop.js';
 import { SearchConsoleLoop } from './search-console-loop.js';
+import { RegiaoCnpjService } from './regiao-cnpj.service.js';
 import { RegiaoFontesService } from './regiao-fontes.service.js';
 import { RotinaDoCrmLoop } from './rotina-do-crm-loop.js';
 import { SincronizacaoLoop } from './sincronizacao-loop.js';
@@ -87,6 +88,7 @@ export class EventsLoopService implements OnApplicationBootstrap, OnApplicationS
     private readonly perfil: PerfilLoop,
     private readonly searchConsole: SearchConsoleLoop,
     private readonly regiaoFontes: RegiaoFontesService,
+    private readonly regiaoCnpj: RegiaoCnpjService,
     private readonly comparacao: ComparacaoDmsIdLoop,
     private readonly fotos: FotosLoop,
     private readonly numerosDosPosts: PostsNumerosLoop,
@@ -166,6 +168,9 @@ export class EventsLoopService implements OnApplicationBootstrap, OnApplicationS
       // Os números da região (plano da região, R2): os bairros do Censo uma vez e, para cada município com loja no mapa,
       // as tabelas do IBGE no prazo de cada uma; a fila é olhada a cada minuto (a loja posta no mapa agora é lida na volta seguinte).
       this.loop('regiao-fontes', 15, 60_000, async (n) => (await this.regiaoFontes.executarLote(n)).length),
+      // Os restaurantes ativos pelo CNPJ da Receita (R2, parte 4): um arquivo do mês por volta (horas cada mês, em fluxo);
+      // arquivo lido emenda o seguinte, o mês em dia confere de novo em 12 horas; a fila é olhada de 10 em 10 minutos.
+      this.loop('regiao-cnpj', 1, 600_000, async () => ((await this.regiaoCnpj.executar()).situacao === 'arquivo_lido' ? 1 : 0)),
       // Hub DMS (F2, A3): as leituras do RegemCast pelas duas credenciais, comparadas; cada conta uma vez por hora, só
       // com a função `comparacao_dms_id` ligada e o aplicativo do Liame no DMS ID configurado; a fila é olhada de 5 em 5 minutos.
       this.loop('comparacao-dms-id', 2, 300_000, async (n) => (await this.comparacao.executarLote(n)).length),

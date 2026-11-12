@@ -306,6 +306,7 @@ export {
   LOCATION_PRECISIONS,
   LOCATION_SOURCES,
   OSM_ATTRIBUTION,
+  RegionFoodCount,
   RegionNumber,
   RegionOverviewQuery,
   RegionOverviewResponse,

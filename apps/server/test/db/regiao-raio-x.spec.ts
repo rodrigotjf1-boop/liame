@@ -4,10 +4,12 @@ import { createDatabase, type Database, runMigrations, withContext } from '@liam
 import { sql } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { ARQUIVO_BASICO, ARQUIVO_RENDA } from '../../src/regiao/censo.js';
+import { ENDERECO_DOS_MUNICIPIOS_DO_IBGE, HOST_DA_RECEITA, PASTA_DO_CNPJ } from '../../src/regiao/cnpj.js';
+import { RegiaoCnpjService } from '../../src/worker/regiao-cnpj.service.js';
 import { RegiaoFontesService } from '../../src/worker/regiao-fontes.service.js';
 import { enableMfa, ownerQuery, resetIpRateLimits, signupAndLogin, startApi, type TestApi } from '../helpers/api.js';
 import { ligarFlagDaEmpresa } from '../helpers/meta-de-mentira.js';
-import { zipCom } from '../helpers/zip-de-mentira.js';
+import { zip64Com, zipCom } from '../helpers/zip-de-mentira.js';
 import { APP_URL, hasDb, OWNER_URL } from './env.js';
 
 // Plano da região, R2, parte 1 (Sua região; migration 0137), contra Postgres, com o IBGE simulado (nada sai para a
@@ -91,7 +93,55 @@ function ibgeDeMentira(falhar: Set<string>, pedidos: string[]): typeof fetch {
   }) as typeof fetch;
 }
 
+/** Uma linha do arquivo de estabelecimentos da Receita (30 colunas; os dados da pessoa são de mentira). */
+function linhaDoCnpj(o: { situacao?: string; dataSituacao?: string; inicio?: string; cnae?: string; bairro: string; cep: string }): string {
+  const c: string[] = Array.from({ length: 30 }, () => '');
+  [c[0], c[1], c[2], c[3], c[4]] = ['12345678', '0001', '00', '1', 'NOME DE MENTIRA'];
+  c[5] = o.situacao ?? '02';
+  c[6] = o.dataSituacao ?? '20200101';
+  c[10] = o.inicio ?? '20150101';
+  c[11] = o.cnae ?? '5611201';
+  c[14] = 'RUA DE MENTIRA';
+  [c[17], c[18], c[19], c[20]] = [o.bairro, o.cep, 'RJ', '6001'];
+  c[27] = 'contato@exemplo.invalid';
+  return c.map((v) => `"${v}"`).join(';');
+}
+
+/**
+ * A Receita simulada (R2, parte 4): a pasta WebDAV com os meses pedidos (todos inteiros), o arquivo de municípios, a lista
+ * de municípios do IBGE e os 10 arquivos de cada mês (`partes[mes][n]` = as linhas do arquivo n); `falhar` lista os
+ * arquivos ("2026-11/3") que respondem 500 uma vez.
+ */
+function receitaDeMentira(partes: Record<string, string[][]>, falhar: Set<string>, pedidos: string[]): typeof fetch {
+  const raiz = new URL(PASTA_DO_CNPJ).pathname;
+  const xml = (itens: Array<{ href: string; tamanho?: number }>) =>
+    `<d:multistatus xmlns:d="DAV:">${itens.map((i) => `<d:response><d:href>${i.href}</d:href><d:propstat><d:prop>${i.tamanho === undefined ? '' : `<d:getcontentlength>${i.tamanho}</d:getcontentlength>`}</d:prop></d:propstat></d:response>`).join('')}</d:multistatus>`;
+  return (async (entrada: string | URL | Request) => {
+    const url = String(entrada instanceof Request ? entrada.url : entrada);
+    pedidos.push(url);
+    if (url === ENDERECO_DOS_MUNICIPIOS_DO_IBGE) {
+      const lista = Array.from({ length: 5000 }, (_, i) => ({ 'municipio-id': 1_100_000 + i, 'municipio-nome': `Cidade ${i}`, 'UF-sigla': 'RO' }));
+      lista.push({ 'municipio-id': Number(RIO), 'municipio-nome': 'Rio de Janeiro', 'UF-sigla': 'RJ' });
+      return new Response(JSON.stringify(lista), { status: 200 });
+    }
+    if (url === PASTA_DO_CNPJ) return new Response(xml([{ href: raiz }, ...Object.keys(partes).map((m) => ({ href: `${raiz}${m}/` }))]), { status: 207 });
+    const [mes, arquivo] = url.slice(PASTA_DO_CNPJ.length).split('/') as [string, string];
+    if (!arquivo) {
+      return new Response(xml([{ href: `${raiz}${mes}/Municipios.zip`, tamanho: 43443 }, ...Array.from({ length: 10 }, (_, i) => ({ href: `${raiz}${mes}/Estabelecimentos${i}.zip`, tamanho: 1000 }))]), { status: 207 });
+    }
+    if (arquivo === 'Municipios.zip') {
+      const linhas = ['"6001";"RIO DE JANEIRO"', ...Array.from({ length: 5000 }, (_, i) => `"${String(i + 1).padStart(4, '0')}";"CIDADE ${i}"`)];
+      return new Response(zipCom([{ nome: 'F.K03200$Z.D61010.MUNICCSV', conteudo: Buffer.from(linhas.join('\n'), 'latin1') }]));
+    }
+    const n = Number(arquivo.replace('Estabelecimentos', '').replace('.zip', ''));
+    if (falhar.delete(`${mes}/${n}`)) return new Response('erro', { status: 500 });
+    return new Response(zip64Com('K3241.ESTABELE', Buffer.from(`${(partes[mes]?.[n] ?? []).join('\n')}\n`, 'latin1')));
+  }) as typeof fetch;
+}
+
 const limpar = async () => {
+  await ownerQuery(`delete from liame.region_food_part`);
+  await ownerQuery(`delete from liame.region_food_count`);
   await ownerQuery(`delete from liame.region_source_read`);
   await ownerQuery(`delete from liame.region_fact`);
   await ownerQuery(`delete from liame.region_district`);
@@ -193,7 +243,10 @@ describe.skipIf(!hasDb)('Sua região: a rotina das fontes públicas e o retrato 
       },
     });
     expect(r.body.district.income_rank).toEqual({ above_pct: 66, districts: 3, typical_median: 4000 });
-    expect(r.body.sources.every((f: { status: string }) => f.status === 'em_dia')).toBe(true);
+    // O CNPJ da Receita (parte 4) ainda não foi lido: a Concorrência fica "lendo" e o resto do retrato já está pronto.
+    expect(r.body.sources.filter((f: { source: string }) => f.source !== 'receita_cnpj').every((f: { status: string }) => f.status === 'em_dia')).toBe(true);
+    expect(r.body.sources.find((f: { source: string }) => f.source === 'receita_cnpj')).toMatchObject({ status: 'lendo' });
+    expect(r.body.food_places).toBeNull();
     // Os números mais novos que o Censo (parte 3): a renda do bairro corrigida pelo IPCA (7.695,82 ÷ 6.411,95 = 1,2002),
     // a renda da PNAD na UF e na RM, a média dos 4 trimestres da capital, o Pix (out/2026 × out/2025; o mês corrente,
     // parcial, fica de fora) e a inflação de comer fora na RM e no Brasil.
@@ -210,6 +263,72 @@ describe.skipIf(!hasDb)('Sua região: a rotina das fontes públicas e o retrato 
 
     // A volta seguinte não lê de novo o que está em dia (nem o Censo, que entra uma vez).
     expect((await rotina.executarLote(50, new Date(agora.getTime() + 60_000), ibgeDeMentira(new Set(), []))).filter((f) => f.lugar === RIO || f.lugar === '0')).toEqual([]);
+  });
+
+  it('os restaurantes do CNPJ (parte 4): um arquivo por volta, o mês somado no fim, a falha e o mês com defeito', async () => {
+    const cnpj = new RegiaoCnpjService(database);
+    const tijucaRest = linhaDoCnpj({ bairro: 'TIJUCA', cep: '20520054' });
+    const maracanaLanche = linhaDoCnpj({ cnae: '5611203', bairro: 'MARACANA', cep: '20271110' });
+    const tijucaBarNovo = linhaDoCnpj({ cnae: '5611204', bairro: 'Tijuca', cep: '20520100', inicio: '20260301' });
+    const grajauCasa = linhaDoCnpj({ cnae: '5620104', bairro: 'GRAJAÚ', cep: '20561000' });
+    const tijucaBaixado = linhaDoCnpj({ situacao: '08', dataSituacao: '20260601', bairro: 'TIJUCA', cep: '20520054' });
+    const semBairro = linhaDoCnpj({ bairro: 'BAIRRO QUE O CENSO NAO TEM', cep: '21000000' });
+    const outubro = [[tijucaRest, maracanaLanche], [tijucaBarNovo], [grajauCasa], [tijucaBaixado], ...Array.from({ length: 6 }, () => [semBairro])];
+    const pedidos: string[] = [];
+    const falhar = new Set<string>(['2026-10/4']);
+    let t = agora.getTime();
+    const volta = (meses: Record<string, string[][]>) => cnpj.executar(new Date((t += 61 * 60_000)), receitaDeMentira(meses, falhar, pedidos));
+
+    // Um arquivo por volta; o 5º responde 500 uma vez (a próxima tentativa fica para 1 hora depois) e é lido de novo.
+    const situacoes: string[] = [];
+    for (let i = 0; i < 11; i++) situacoes.push((await volta({ '2026-10': outubro })).situacao);
+    expect(situacoes).toEqual(['arquivo_lido', 'arquivo_lido', 'arquivo_lido', 'arquivo_lido', 'falhou', 'arquivo_lido', 'arquivo_lido', 'arquivo_lido', 'arquivo_lido', 'arquivo_lido', 'retrato_trocado']);
+    expect((await ownerQuery<{ n: number }>(`select count(*)::int as n from liame.region_food_part`))[0]!.n).toBe(0);
+    // A Receita e o IBGE recebem só os pedidos dos arquivos públicos: nada da loja.
+    expect(pedidos.every((u) => new URL(u).host === HOST_DA_RECEITA || u === ENDERECO_DOS_MUNICIPIOS_DO_IBGE)).toBe(true);
+    expect(pedidos.some((u) => u.includes('20520') || u.includes('Conde') || u.includes('Tijuca'))).toBe(false);
+    // Só contagens no banco: nenhum nome, rua, e-mail ou CNPJ.
+    expect(JSON.stringify(await ownerQuery(`select * from liame.region_food_count`))).not.toMatch(/MENTIRA|exemplo|12345678/);
+
+    const r = await retrato(tijuca);
+    expect(r.status, JSON.stringify(r.body)).toBe(200);
+    expect(r.body.status).toBe('pronto');
+    expect(r.body.sources.find((f: { source: string }) => f.source === 'receita_cnpj')).toMatchObject({ status: 'em_dia' });
+    // Rio: 10 ativos (7 restaurantes, 1 lanchonete, 1 bar, 1 para casa), 1 aberto e 1 baixado em 12 meses; 4 dos 10 com bairro do Censo.
+    expect(r.body.food_places).toEqual({
+      period: '2026-10',
+      since: '2025-10',
+      city: { active: 10, restaurant: 7, snack: 1, bar: 1, home: 1, opened_12m: 1, closed_12m: 1, per_10k: 0, district_coverage_pct: 40 },
+      district: { active: 2, restaurant: 1, snack: 0, bar: 1, home: 0, opened_12m: 1, closed_12m: 1, per_km2: 0.2 },
+      postal: { active: 2, restaurant: 1, snack: 0, bar: 1, home: 0, opened_12m: 1, closed_12m: 1, prefix: '20520' },
+      // As áreas de entrega que casaram: Tijuca e Maracanã ("Bairro Inventado" não casa).
+      delivery_area: { active: 3, restaurant: 1, snack: 1, bar: 1, home: 0, opened_12m: 1, closed_12m: 1, matched: 2 },
+    });
+
+    // O mês em dia: a volta seguinte (depois das 12 horas) só confere a pasta.
+    t += 12 * 60 * 60_000;
+    expect((await volta({ '2026-10': outubro })).situacao).toBe('em_dia');
+
+    // Um mês novo com quase nada ativo (arquivo da Receita com defeito) não troca o retrato.
+    t += 12 * 60 * 60_000;
+    const novembro = [[tijucaRest], ...Array.from({ length: 9 }, () => [tijucaBaixado])];
+    const deNovembro: string[] = [];
+    for (let i = 0; i < 10; i++) deNovembro.push((await volta({ '2026-10': outubro, '2026-11': novembro })).situacao);
+    expect(deNovembro.slice(0, 9).every((s) => s === 'arquivo_lido')).toBe(true);
+    expect(deNovembro[9]).toBe('falhou');
+    const leitura = (await ownerQuery<{ last_error: string }>(`select last_error from liame.region_source_read where source = 'receita_cnpj' and geo_code = '0'`))[0]!;
+    expect(leitura.last_error).toContain('menos de 80%');
+    expect((await retrato(tijuca)).body.food_places).toMatchObject({ period: '2026-10', city: { active: 10 } });
+
+    // A empresa lê as contagens, mas não grava.
+    const quem = { tenantId, userId };
+    await expect(
+      withContext(database.db, quem, (tx) =>
+        tx.execute(sql`insert into liame.region_food_count (geo_code, area_kind, area_key, period, active, active_restaurant, active_snack, active_bar, active_home, opened_12m, closed_12m)
+                       values ('3304557', 'cep', '99999', '2026-10', 1, 1, 0, 0, 0, 0, 0)`),
+      ),
+    ).rejects.toThrow();
+    await ownerQuery(`delete from liame.region_food_part`);
   });
 
   it('a fonte que falha aparece como "falhou", com a próxima tentativa em 1 hora; o resto vale', async () => {

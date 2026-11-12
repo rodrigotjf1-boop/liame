@@ -11,6 +11,7 @@ import { useDetalhes } from '@/lib/modo';
 import { GavetaFontes } from './gaveta-fontes';
 import {
   comparaDensidade,
+  FONTE_DO_CNPJ,
   FONTES_DA_REGIAO,
   fonteDaRendaDoBairro,
   fonteDoNumero,
@@ -21,8 +22,10 @@ import {
   hora,
   inteiro,
   mesAno,
+  movimentoDaContagem,
   pct,
   reais,
+  tiposDaContagem,
   trimestre,
   umaCasa,
   variacao,
@@ -154,7 +157,7 @@ export function SuaRegiao({ brandId, lojas }: { brandId: string; lojas: StoreLoc
     );
   } else if (r.status === 'lendo') {
     const censo = r.sources.find((s) => s.source === 'ibge_censo_bairro');
-    const cidadeLida = r.sources.filter((s) => s.source !== 'ibge_censo_bairro').every((s) => s.status === 'em_dia');
+    const cidadeLida = r.sources.filter((s) => s.source !== 'ibge_censo_bairro' && s.source !== FONTE_DO_CNPJ).every((s) => s.status === 'em_dia');
     const passo = (ok: boolean, texto: string) => (
       <li className={ok ? 'rg-ok' : undefined}>
         <Icone nome={ok ? 'check-circle' : 'clock'} />
@@ -179,6 +182,9 @@ export function SuaRegiao({ brandId, lojas }: { brandId: string; lojas: StoreLoc
     const falhas = fontesQueFalharam(r);
     const b = r.district;
     const c = r.city;
+    // Os restaurantes pelo CNPJ da Receita (R2, parte 4) e a leitura deles (horas na primeira vez; não segura o retrato).
+    const fp = r.food_places;
+    const cnpj = r.sources.find((s) => s.source === FONTE_DO_CNPJ);
     const falhou = (fonte: string) => falhas.some((f) => f.source === fonte);
     const proxima = falhas.map((f) => f.next_try_at).filter((x): x is string => x !== null)[0];
     const linhaDaFalha = (o: string) => (
@@ -354,8 +360,60 @@ export function SuaRegiao({ brandId, lojas }: { brandId: string; lojas: StoreLoc
           <section className="rg-grupo" aria-labelledby={`${ids}-conc`}>
             <div className="rg-grupo-cab">
               <h3 id={`${ids}-conc`}>Concorrência</h3>
-              <p>no município</p>
+              <p>{fp ? 'restaurantes, lanchonetes e bares com CNPJ ativo' : 'no município'}</p>
             </div>
+            {!fp && cnpj?.status === 'falhou' && (
+              <p className="rg-falhou">
+                <Icone nome="alert-circle" />
+                <span>
+                  <b>Os restaurantes por bairro e por CEP: a Receita não respondeu.</b> {cnpj.next_try_at ? `Tentamos de novo às ${hora(cnpj.next_try_at)}.` : 'Tentamos de novo em 1 hora.'} Os números do IBGE valem.
+                </span>
+              </p>
+            )}
+            {!fp && cnpj?.status === 'lendo' && (
+              <p className="lite-frase">
+                Os restaurantes por bairro e por CEP vêm do cadastro de CNPJ da Receita Federal, lido uma vez por mês para o Brasil inteiro. A primeira leitura leva algumas horas; enquanto isso, a conta é a do município (IBGE).
+              </p>
+            )}
+            {fp && (
+              <div className="rg-nums">
+                {fp.district && b && (
+                  <Numero
+                    classe="rg-num--largo"
+                    valor={inteiro(fp.district.active)}
+                    obs={`lugares de comida com CNPJ ativo no bairro ${b.name}${fp.district.per_km2 !== null ? `, ${umaCasa(fp.district.per_km2)} por km²` : ''}: ${tiposDaContagem(fp.district)}. ${movimentoDaContagem(fp.district, fp.since)}.`}
+                    fonte={`Receita Federal · CNPJ aberto, ${mesAno(fp.period)}`}
+                    pro={`CNAE principal 5611-2/01, /03, /04, /05 e 5620-1/04 · situação 02 · pelo nome do bairro que a empresa informou · bairro ${b.code}`}
+                    mostraPro={mostraPro}
+                  />
+                )}
+                {fp.postal && (
+                  <Numero
+                    valor={inteiro(fp.postal.active)}
+                    obs={`lugares de comida na área do CEP ${fp.postal.prefix}-xxx (os 5 primeiros números do CEP da loja): ${tiposDaContagem(fp.postal)}`}
+                    fonte={`Receita Federal · CNPJ aberto, ${mesAno(fp.period)}`}
+                    pro={`CEP ${fp.postal.prefix} · ${movimentoDaContagem(fp.postal, fp.since)}`}
+                    mostraPro={mostraPro}
+                  />
+                )}
+                {fp.delivery_area && (
+                  <Numero
+                    valor={inteiro(fp.delivery_area.active)}
+                    obs={`lugares de comida em ${fp.delivery_area.matched} ${fp.delivery_area.matched === 1 ? 'bairro' : 'bairros'} da área de entrega: ${tiposDaContagem(fp.delivery_area)}`}
+                    fonte={`Receita Federal · CNPJ aberto, ${mesAno(fp.period)} · a soma dos bairros`}
+                    pro={movimentoDaContagem(fp.delivery_area, fp.since)}
+                    mostraPro={mostraPro}
+                  />
+                )}
+                <Numero
+                  valor={inteiro(fp.city.active)}
+                  obs={`lugares de comida no município${c?.name ? ` (${c.name})` : ''}${fp.city.per_10k !== null ? `, ${umaCasa(fp.city.per_10k)} para cada 10 mil pessoas` : ''}: ${tiposDaContagem(fp.city)}. ${movimentoDaContagem(fp.city, fp.since)}.`}
+                  fonte={`Receita Federal · CNPJ aberto, ${mesAno(fp.period)}`}
+                  pro={c?.population_estimate ? `por 10 mil: ativos ÷ ${inteiro(c.population_estimate.value)} pessoas (IBGE, estimativa de ${c.population_estimate.period})` : undefined}
+                  mostraPro={mostraPro}
+                />
+              </div>
+            )}
             {falhou('ibge_9528') ? (
               linhaDaFalha('Os restaurantes do município')
             ) : (
@@ -363,7 +421,7 @@ export function SuaRegiao({ brandId, lojas }: { brandId: string; lojas: StoreLoc
                 {c?.restaurants && (
                   <Numero
                     valor={inteiro(c.restaurants.value)}
-                    obs={`restaurantes e similares no município (${c.name})`}
+                    obs={`restaurantes e similares no município (${c.name})${fp ? ', pelo IBGE: as empresas com atividade no ano' : ''}`}
                     fonte={fonteDoNumero(c.restaurants)}
                     pro={`tabela 9528 · variável 706 · CNAE 56.11-2 (categoria 117551) · município ${c.code}`}
                     mostraPro={mostraPro}
@@ -383,6 +441,14 @@ export function SuaRegiao({ brandId, lojas }: { brandId: string; lojas: StoreLoc
                   />
                 )}
               </div>
+            )}
+            {fp && (
+              <p className="eixo-nota">
+                A Receita conta todo CNPJ ativo, inclusive MEI e quem parou sem dar baixa; o IBGE conta as empresas com atividade no ano. Por isso os números são diferentes.
+                {fp.city.district_coverage_pct !== null && fp.city.district_coverage_pct < 100
+                  ? ` ${fp.city.district_coverage_pct}% dos ativos do município informaram um bairro que o Censo conhece; os outros entram só no município e no CEP.`
+                  : ''}
+              </p>
             )}
           </section>
 
@@ -454,7 +520,6 @@ export function SuaRegiao({ brandId, lojas }: { brandId: string; lojas: StoreLoc
             </div>
             <ul className="rg-ainda">
               {[
-                ['Restaurantes ativos por bairro e por CEP', 'Vêm do cadastro de CNPJ da Receita Federal, atualizado todo mês, na próxima entrega. Hoje, a conta é a do município (IBGE).'],
                 ['A semana que vem', 'A previsão do tempo, os feriados e as datas comerciais chegam numa próxima entrega.'],
                 ['Pedidos por hora e tíquete médio da loja', 'Aparecem com os pedidos do Regem (R3). Sem ele, a medida de pedido é o cupom exclusivo de cada campanha.'],
                 ['Pessoas no raio, na Meta', 'Aparece com a conta de anúncios: a Meta estima quantas pessoas há no raio, por faixa de idade, antes de gastar (R6).'],

@@ -39,6 +39,8 @@ export function GavetaFontes({ loja, r, reserva, aoFechar }: { loja: StoreLocati
         return c?.food_away_inflation ? `12 meses até ${mesAno(c.food_away_inflation.period)}` : '—';
       case 'bcb_pix':
         return c?.pix ? mesAno(c.pix.period) : '—';
+      case 'receita_cnpj':
+        return r.food_places ? `${mesAno(r.food_places.period)} (abertos e baixados desde ${mesAno(r.food_places.since)})` : '—';
       case 'ibge_rm':
         return 'atual';
       default: {

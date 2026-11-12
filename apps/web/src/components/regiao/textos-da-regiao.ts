@@ -37,6 +37,13 @@ export const FONTES_DA_REGIAO: Record<string, { dado: string; fonte: string; rec
   ibge_7060: { dado: 'Inflação de comer fora na região', fonte: 'IBGE · IPCA', recorte: 'região metropolitana ou município', consulta: 'tabela 7060 · variável 2265 (12 meses) · subitens 7432, 7434 e 7435', renova: 'todo mês' },
   ibge_7060_brasil: { dado: 'Inflação de comer fora no Brasil', fonte: 'IBGE · IPCA', recorte: 'Brasil', consulta: 'tabela 7060 · variável 2265 (12 meses) · subitens 7432, 7434 e 7435', renova: 'todo mês' },
   bcb_pix: { dado: 'Pagamentos com Pix no município', fonte: 'Banco Central · dados abertos do Pix', recorte: 'município', consulta: 'TransacoesPixPorMunicipio · QT_PES_PagadorPF e VL_PagadorPF', renova: 'todo mês' },
+  receita_cnpj: {
+    dado: 'Restaurantes, lanchonetes e bares com CNPJ ativo',
+    fonte: 'Receita Federal · CNPJ aberto',
+    recorte: 'município, bairro e CEP',
+    consulta: 'Estabelecimentos0..9.zip · CNAE principal 5611-2/01, /03, /04, /05 e 5620-1/04 · situação 02 · guarda só contagens',
+    renova: 'todo mês (o Brasil inteiro numa leitura)',
+  },
 };
 
 const MESES = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
@@ -131,9 +138,35 @@ export function fonteDoNumero(n: RegionNumber): string {
   return f.fonte.includes(n.period) ? f.fonte : `${f.fonte}, ${n.period}`;
 }
 
-/** As fontes que falharam (nunca deram certo), com a hora da próxima tentativa. */
+/** A fonte dos restaurantes ativos (o CNPJ da Receita): a falha e o "lendo" dela ficam na Concorrência, não na faixa do IBGE. */
+export const FONTE_DO_CNPJ = 'receita_cnpj';
+
+/** As fontes do IBGE e do Banco Central que falharam (nunca deram certo), com a hora da próxima tentativa. */
 export function fontesQueFalharam(r: RegionOverviewResponse): RegionSourceStatus[] {
-  return r.sources.filter((s) => s.status === 'falhou');
+  return r.sources.filter((s) => s.status === 'falhou' && s.source !== FONTE_DO_CNPJ);
+}
+
+type Contagem = { active: number; restaurant: number; snack: number; bar: number; home: number; opened_12m: number; closed_12m: number };
+
+/** Os tipos de uma contagem em palavras, só os que têm algum: "300 restaurantes, 250 lanchonetes e 50 de comida para casa". */
+export function tiposDaContagem(c: Contagem): string {
+  const partes = (
+    [
+      [c.restaurant, 'restaurante', 'restaurantes'],
+      [c.snack, 'lanchonete', 'lanchonetes'],
+      [c.bar, 'bar', 'bares'],
+      [c.home, 'de comida para casa', 'de comida para casa'],
+    ] as Array<[number, string, string]>
+  )
+    .filter(([n]) => n > 0)
+    .map(([n, um, varios]) => `${inteiro(n)} ${n === 1 ? um : varios}`);
+  if (partes.length <= 1) return partes[0] ?? 'nenhum ativo';
+  return `${partes.slice(0, -1).join(', ')} e ${partes.at(-1)}`;
+}
+
+/** O movimento de 12 meses: "90 abriram e 60 deram baixa desde out/2025". */
+export function movimentoDaContagem(c: Contagem, desde: string): string {
+  return `${inteiro(c.opened_12m)} ${c.opened_12m === 1 ? 'abriu' : 'abriram'} e ${inteiro(c.closed_12m)} ${c.closed_12m === 1 ? 'deu' : 'deram'} baixa no CNPJ desde ${mesAno(desde)}`;
 }
 
 /** A linha do frescor no cabeçalho do cartão. */
