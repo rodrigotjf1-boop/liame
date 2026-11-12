@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Região P40</title>
 <!--
-@prototipo Liame · Região · P40 · A loja no mapa (R1) e Sua região (R2) (APROVADO PELO DONO em 11/11/2026, com as D-RG-11 a D-RG-20 como recomendadas) · REVISÃO de 12/11/2026, APROVADA PELO DONO em 12/11/2026: a demanda da loja (R3, parte 1; estados 19 a 22; D-RG-21 a D-RG-25 como recomendadas) · REVISÃO R4 de 12/11/2026: a mídia na região (estados 23 a 25; D-RG-32 a D-RG-35 como recomendadas), aprovada pelo dono antecipadamente pela autorização geral da noite de 12/11/2026
+@prototipo Liame · Região · P40 · A loja no mapa (R1) e Sua região (R2) (APROVADO PELO DONO em 11/11/2026, com as D-RG-11 a D-RG-20 como recomendadas) · REVISÃO de 12/11/2026, APROVADA PELO DONO em 12/11/2026: a demanda da loja (R3, parte 1; estados 19 a 22; D-RG-21 a D-RG-25 como recomendadas) · REVISÃO R4 de 12/11/2026: a mídia na região (estados 23 a 25; D-RG-32 a D-RG-35 como recomendadas), aprovada pelo dono antecipadamente pela autorização geral da noite de 12/11/2026 · REVISÃO R3, parte 2 de 12/11/2026: os bairros para atacar e para defender (estados 26 e 27; D-RG-36 a D-RG-39 como recomendadas), aprovada da mesma forma
 pedido: o plano "tráfego pela região" (docs/plano-regiao.md), aprovado pelo dono em 11/11/2026 com as decisões D-RG-1 a
       D-RG-10 na recomendação. Cada entrega tem protótipo aprovado antes de tela nova: este é o das duas primeiras, R1
       (a loja no mapa) e R2 (o raio-x da região). Acréscimo do mesmo dia: a marca sem loja (sem o Regem), vários Perfis
@@ -1170,6 +1170,14 @@ window.P40_DECISOES_R4 = [
   { id: 'D-RG-35', titulo: 'A leitura', texto: 'Uma vez por dia, para cada conta de anúncio da marca com a região ligada, as 4 semanas até ontem; a leitura nova substitui a anterior (os números de anúncio mudam por até 28 dias). A conta desligada leva junto o que foi lido dela. Os números da conta do Instagram e da Página (seguidores, a cidade do público) ficam para depois das permissões aprovadas pela Meta para clientes de fora.', rec: 'assim.', porque: 'É o ritmo dos outros números de anúncio do Liame; ler mais vezes não muda a decisão do dia e gasta a cota.' },
 ];
 
+/* A revisão R3, parte 2 de 12/11/2026 (os bairros dos pedidos), aprovada pelo dono antecipadamente pela autorização da noite, como recomendada. */
+window.P40_DECISOES_R3B = [
+  { id: 'D-RG-36', titulo: 'O que o Regem manda', texto: 'Os pedidos de entrega confirmados das 4 semanas completas até ontem, somados por bairro (a mesma régua de Resultados: a receita líquida, sem a gorjeta). O bairro com menos de 5 pedidos vem somado em "outros", sem o nome; a retirada e o balcão vêm só no total. Nunca vem cliente, telefone, rua, número nem CEP; a 99 não entra (o Liame não tem a permissão dela). Rota nova do Regem, aditiva, sob a permissão de pedidos que o Liame já tem.', rec: 'assim.', porque: 'O bairro de quem pediu, somado e com mínimo, responde "de onde vêm os pedidos" sem identificar ninguém.' },
+  { id: 'D-RG-37', titulo: 'A conta de atacar e defender', texto: 'Para cada bairro do município da loja com a gente do Censo: os pedidos por mil moradores, comparados com a mediana deles. Defender: 1,5 vez a mediana ou mais (o bairro já compra muito). Atacar: gente acima da mediana dos bairros e pedidos na metade da mediana ou menos (muita gente, pouco pedido). O resto: manter. Com menos de 3 bairros com a gente conhecida, nenhum papel.', rec: 'assim, sem a renda por enquanto.', porque: 'É a jogada 2 do plano (§4.2) com o que já é conta: a gente e os pedidos. A renda entra quando o Compliance tiver a regra "nenhum atributo pessoal no texto".' },
+  { id: 'D-RG-38', titulo: 'A área de entrega entra', texto: 'Os bairros da área de entrega que não chegaram a 5 pedidos aparecem como "menos de 5 pedidos" e contam como pouco pedido na comparação: são os candidatos naturais a atacar.', rec: 'assim.', porque: 'Sem eles, o bairro com mais gente e nenhum pedido — o mais importante para atacar — nem apareceria.' },
+  { id: 'D-RG-39', titulo: 'Quem vê e quando lê', texto: 'Só quem vê Resultados (D-RG-24). A leitura é da rotina das vendas do Regem, uma vez por dia por loja, só com a região ligada; a leitura nova substitui a anterior, e a conta desligada leva junto o que foi lido dela.', rec: 'assim.', porque: 'São os pedidos da loja: a mesma régua dos outros números de venda.' },
+];
+
 /* ---------- os dados de exemplo (o CEP e os números da região são reais) ---------- */
 const P40_PERFIS = {
   tijuca: { id: 'tijuca', nome: 'Mister Burgers Tijuca', end: { rua: 'Rua Conde de Bonfim', numero: '450', compl: '', bairro: 'Tijuca', municipio: 'Rio de Janeiro', uf: 'RJ', cep: '20520-054', ibge: '3304557' }, areas: ['Tijuca', 'Maracanã', 'Vila Isabel', 'Praça da Bandeira', 'Andaraí', 'Grajaú', 'Rio Comprido'] },
@@ -1221,6 +1229,8 @@ const P40_ESTADOS = {
   midia: '23 · R4: A mídia na região (a hora dos cliques e as cidades do Google)',
   'midia-sem-google': '24 · R4: Só a Meta conectada (a hora, sem a cidade)',
   'midia-sem-conta': '25 · R4: Sem conta de anúncio conectada',
+  bairros: '26 · R3, parte 2: Bairros para atacar e para defender',
+  'bairros-poucos': '27 · R3, parte 2: Poucos bairros com a gente conhecida (sem comparar)',
 };
 
 const km = (v) => numero(v, Number.isInteger(v) ? 0 : 1);
@@ -1247,6 +1257,8 @@ function p40Base() {
     demanda: 'pronto', vendas: true,
     // R4: as contas de anúncio conectadas (`meta`, `google`).
     anuncios: ['meta', 'google'],
+    // R3, parte 2: os bairros dos pedidos (`pronto` ou `poucos`: menos de 3 bairros com a gente conhecida).
+    bairros: 'pronto',
   };
 }
 const p40Loja = (id) => p40.lojas.find((l) => l.id === id) || null;
@@ -1451,6 +1463,39 @@ function p40Midia() {
   </section>`;
 }
 
+/* ---------- Bairros para atacar e para defender (R3, parte 2; D-RG-36 a D-RG-39) ---------- */
+const P40_BAIRROS = [
+  // nome, pedidos (nulo: menos de 5), gente do Censo, por mil moradores, papel, na área de entrega
+  ['Praça da Bandeira', 30, 8662, '3,5', 'defender', true],
+  ['Grajaú', 26, 38671, '0,7', 'defender', true],
+  ['Vila Isabel', null, 86018, null, 'atacar', true],
+  ['Andaraí', null, 39365, null, 'atacar', true],
+  ['Maracanã', 9, 25256, '0,4', 'manter', true],
+  ['Tijuca', 42, 142909, '0,3', 'manter', true],
+];
+function p40Bairros() {
+  const cab = (sub) => `<div class="p40-grupo-cab"><h3 id="g-bairros">Bairros para atacar e para defender</h3><p>${sub}</p></div>`;
+  if (!p40.vendas) {
+    return `<section class="p40-grupo" aria-labelledby="g-bairros">${cab('pedidos do Regem por bairro')}<p class="p40-nota">${ic('i-lock')}<span>Os pedidos por bairro ficam para quem vê Resultados. Peça ao dono a permissão, se precisar deles.</span></p></section>`;
+  }
+  if (!p40.marca.regem) {
+    return `<section class="p40-grupo" aria-labelledby="g-bairros">${cab('pedidos por bairro')}<p class="lite-frase">Com o Regem, o Liame mostra de que bairros vêm os pedidos de entrega, somados e sem identificar ninguém, e quais bairros atacar e quais defender.</p></section>`;
+  }
+  const poucos = p40.bairros === 'poucos';
+  const lista = (poucos ? P40_BAIRROS.slice(4) : P40_BAIRROS)
+    .map(([nome, pedidos, gente, porMil, papel, entrega]) => {
+      const selo = poucos ? '' : `<span class="st ${papel === 'defender' ? 'st--concluido' : papel === 'atacar' ? 'st--perigo' : 'st--espera'}">${papel === 'defender' ? 'Defender' : papel === 'atacar' ? 'Atacar' : 'Manter'}</span> `;
+      return `<li><span><b>${esc(nome)}</b>${entrega ? '<small>na área de entrega</small>' : ''}</span><span>${selo}${pedidos === null ? 'menos de 5 pedidos' : `${pedidos} pedidos, ${porMil} por mil moradores`}<small class="so-pro"> · ${numero(gente, 0)} moradores (Censo 2022)</small></span></li>`;
+    })
+    .join('');
+  return `<section class="p40-grupo" aria-labelledby="g-bairros">${cab('pedidos de entrega do Regem, 4 semanas até ontem (11/11)')}
+    ${poucos ? '<p class="lite-frase">Ainda não dá para dizer quem atacar e quem defender: são precisos pelo menos 3 bairros com a gente conhecida pelo Censo.</p>' : ''}
+    <ul class="p40-ref">${lista}</ul>
+    <p class="lite-frase">Dos 196 pedidos de entrega: 9 outros bairros somam 22 pedidos (cada um com menos de 5); 6 sem o bairro no endereço; 41 de retirada e balcão.</p>
+    <p class="p40-nota">${ic('i-info')}<span>Atacar: muita gente e poucos pedidos (reconhecimento e oferta de entrada). Defender: o bairro já compra muito (recompra e novidade). O Regem manda os pedidos somados por bairro, sem identificar ninguém; o bairro com menos de 5 pedidos vem somado.</span></p>
+  </section>`;
+}
+
 function p40Grupos(loja, falhou) {
   const b = loja.end.bairro;
   const gente = `<section class="p40-grupo" aria-labelledby="g-gente"><div class="p40-grupo-cab"><h3 id="g-gente">Gente</h3><p>no bairro da loja</p></div><div class="p40-nums">
@@ -1501,9 +1546,8 @@ function p40Grupos(loja, falhou) {
       <ul class="p40-ainda">
         <li><span class="st st--espera">Ainda não</span><span><b>Pessoas no raio, na Meta</b><small>Aparece com a conta de anúncios: a Meta estima quantas pessoas há no raio, por faixa de idade, antes de gastar (R6).</small></span></li>
         <li><span class="st st--espera">Ainda não</span><span><b>Concorrentes no raio</b><small>Aparece com o servidor de mapas próprio (R8). Hoje, a conta é a do município.</small></span></li>
-        <li><span class="st st--espera">Ainda não</span><span><b>Bairros para atacar e para defender</b><small>Pede os pedidos por bairro do Regem, somados e sem identificar ninguém (R3, D-RG-8).</small></span></li>
       </ul></section>`;
-  return `<div class="p40-grupos">${gente}${bolso}${conc}${p40Demanda(loja)}${p40Midia()}${preco}${semana}${ref}${ainda}</div>`;
+  return `<div class="p40-grupos">${gente}${bolso}${conc}${p40Demanda(loja)}${p40Bairros()}${p40Midia()}${preco}${semana}${ref}${ainda}</div>`;
 }
 
 function p40Lendo(loja) {
@@ -1619,7 +1663,9 @@ function p40Decisoes() {
   const lista = window.P40_DECISOES.map((d) => `<li class="p40-dec"><p class="p40-dec-cab"><code>${esc(d.id)}</code><b>${esc(d.titulo)}</b></p><p>${esc(d.texto)}</p>${d.porque ? `<p>Por quê: ${esc(d.porque)}</p>` : ''}<p class="rec">Recomendo: ${esc(d.rec)}</p></li>`).join('');
   const novas = window.P40_DECISOES_R3.map((d) => `<li class="p40-dec"><p class="p40-dec-cab"><code>${esc(d.id)}</code><b>${esc(d.titulo)}</b></p><p>${esc(d.texto)}</p>${d.porque ? `<p>Por quê: ${esc(d.porque)}</p>` : ''}<p class="rec">Recomendo: ${esc(d.rec)}</p></li>`).join('');
   const r4 = window.P40_DECISOES_R4.map((d) => `<li class="p40-dec"><p class="p40-dec-cab"><code>${esc(d.id)}</code><b>${esc(d.titulo)}</b></p><p>${esc(d.texto)}</p>${d.porque ? `<p>Por quê: ${esc(d.porque)}</p>` : ''}<p class="rec">Recomendo: ${esc(d.rec)}</p></li>`).join('');
-  return `<section class="card p40-proto p40-decisoes" aria-labelledby="p40-dec-r4-t"><h2 id="p40-dec-r4-t">Revisão R4: a mídia na região (D-RG-32 a D-RG-35)</h2><p class="lite-frase">Aprovadas antecipadamente pelo dono pela autorização da noite de 12/11/2026, todas como recomendadas. Estados 23 a 25 do menu.</p><ul class="p40-dec-lista">${r4}</ul></section>
+  const r3b = window.P40_DECISOES_R3B.map((d) => `<li class="p40-dec"><p class="p40-dec-cab"><code>${esc(d.id)}</code><b>${esc(d.titulo)}</b></p><p>${esc(d.texto)}</p>${d.porque ? `<p>Por quê: ${esc(d.porque)}</p>` : ''}<p class="rec">Recomendo: ${esc(d.rec)}</p></li>`).join('');
+  return `<section class="card p40-proto p40-decisoes" aria-labelledby="p40-dec-r3b-t"><h2 id="p40-dec-r3b-t">Revisão R3, parte 2: os bairros dos pedidos (D-RG-36 a D-RG-39)</h2><p class="lite-frase">Aprovadas antecipadamente pelo dono pela autorização da noite de 12/11/2026, todas como recomendadas. Estados 26 e 27 do menu. A rota do Regem é aditiva, sob a permissão de pedidos que o Liame já tem.</p><ul class="p40-dec-lista">${r3b}</ul></section>
+  <section class="card p40-proto p40-decisoes" aria-labelledby="p40-dec-r4-t"><h2 id="p40-dec-r4-t">Revisão R4: a mídia na região (D-RG-32 a D-RG-35)</h2><p class="lite-frase">Aprovadas antecipadamente pelo dono pela autorização da noite de 12/11/2026, todas como recomendadas. Estados 23 a 25 do menu.</p><ul class="p40-dec-lista">${r4}</ul></section>
   <section class="card p40-proto p40-decisoes" aria-labelledby="p40-dec-r3-t"><h2 id="p40-dec-r3-t">Revisão R3, parte 1: a demanda da loja (D-RG-21 a D-RG-25)</h2><p class="lite-frase">Aprovadas pelo dono em 12/11/2026, todas como recomendadas. Estados 19 a 22 do menu. A seção usa os pedidos que o Liame já lê do Regem; nada muda no Regem.</p><ul class="p40-dec-lista">${novas}</ul></section>
   <section class="card p40-proto p40-decisoes" aria-labelledby="p40-dec-t"><h2 id="p40-dec-t">Decisões do protótipo (D-RG-11 a D-RG-20)</h2><p class="lite-frase">Aprovadas pelo dono em 11/11/2026, todas como recomendadas, junto com o plano e as D-RG-1 a D-RG-10.</p><ul class="p40-dec-lista">${lista}</ul></section>`;
 }
@@ -1882,6 +1928,7 @@ function p40Aplicar(estado, { focar = false } = {}) {
     case 'demanda-sem-permissao': s.vendas = false; s.podeEditar = false; s.pessoa = { nome: 'Camila', ini: 'C', papel: 'Aprovadora' }; break;
     case 'midia-sem-google': s.anuncios = ['meta']; break;
     case 'midia-sem-conta': s.anuncios = []; break;
+    case 'bairros-poucos': s.bairros = 'poucos'; break;
     default: break;
   }
   const sel = $('#rev-p40'); if (sel && sel.value !== estado) sel.value = estado;

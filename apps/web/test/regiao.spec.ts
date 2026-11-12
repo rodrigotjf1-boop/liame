@@ -3,6 +3,7 @@ import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 import { LinhaDaRegiaoVista } from '@/components/regiao/linha-da-regiao';
+import { BairrosDosPedidos } from '@/components/regiao/bairros-dos-pedidos';
 import { LojaNoMapa } from '@/components/regiao/loja-no-mapa';
 import { MidiaNaRegiao } from '@/components/regiao/midia-na-regiao';
 import {
@@ -264,6 +265,8 @@ describe('Sua região (R2, parte 2)', () => {
     store_demand: null,
     paid_media_status: 'sem_conta',
     paid_media: null,
+    order_districts_status: 'sem_regem',
+    order_districts: null,
     sources: [
       { source: 'ibge_censo_bairro', status: 'em_dia', read_at: '2026-11-11T09:10:00.000Z', next_try_at: null },
       { source: 'ibge_9528', status: 'falhou', read_at: null, next_try_at: '2026-11-11T18:00:00.000Z' },
@@ -380,6 +383,38 @@ describe('Sua região (R2, parte 2)', () => {
     expect(soMeta).toContain('a Meta só informa o estado');
     expect(renderToStaticMarkup(createElement(MidiaNaRegiao, { r: { ...retrato, paid_media_status: 'sem_conta', paid_media: null }, ids: 'x', mostraPro: false }))).toContain('href="/contas"');
     expect(renderToStaticMarkup(createElement(MidiaNaRegiao, { r: { ...retrato, paid_media_status: 'sem_permissao', paid_media: null }, ids: 'x', mostraPro: false }))).toContain('quem vê Resultados');
+  });
+
+  it('os bairros para atacar e para defender (R3, parte 2): o papel, os pedidos por mil moradores, o resto somado e os estados', () => {
+    const bairros: NonNullable<RegionOverviewResponse['order_districts']> = {
+      from: '2026-10-15',
+      to: '2026-11-11',
+      minimum: 5,
+      read_at: '2026-11-12T09:00:00.000Z',
+      comparable: true,
+      districts: [
+        { name: 'Praça da Bandeira', orders: 30, population: 8662, per_1000: 3.5, role: 'defender', in_delivery_area: true },
+        { name: 'Vila Isabel', orders: null, population: 86018, per_1000: 0, role: 'atacar', in_delivery_area: true },
+        { name: 'Tijuca', orders: 42, population: 142909, per_1000: 0.3, role: 'manter', in_delivery_area: true },
+      ],
+      others: { districts: 3, orders: 7 },
+      without_district: 4,
+      pickup: 11,
+      delivery_orders: 92,
+    };
+    const desenhar = (extra: Partial<RegionOverviewResponse>) =>
+      renderToStaticMarkup(createElement(BairrosDosPedidos, { r: { ...retrato, ...extra }, ids: 'x', mostraPro: false })).replace(/ /g, ' ');
+    const html = desenhar({ order_districts_status: 'disponivel', order_districts: bairros });
+    expect(html).toContain('pedidos de entrega do Regem, 4 semanas até ontem (11/11)');
+    expect(html).toContain('>Defender</span> 30 pedidos, 3,5 por mil moradores');
+    expect(html).toContain('>Atacar</span> menos de 5 pedidos');
+    expect(html).toContain('Dos 92 pedidos de entrega: 3 outros bairros somam 7 pedidos (cada um com menos de 5); 4 sem o bairro no endereço; 11 de retirada e balcão.');
+    expect(html).not.toContain('R$');
+    expect(desenhar({ order_districts_status: 'disponivel', order_districts: { ...bairros, comparable: false, districts: bairros.districts.map((d) => ({ ...d, role: null })) } })).toContain('são precisos pelo menos 3 bairros');
+    expect(desenhar({ order_districts_status: 'lendo', order_districts: null })).toContain('Lendo os pedidos por bairro do Regem');
+    expect(desenhar({ order_districts_status: 'sem_permissao', order_districts: null })).toContain('quem vê Resultados');
+    expect(desenhar({ order_districts_status: 'sem_regem', order_districts: null })).toContain('Com o Regem');
+    expect(desenhar({ order_districts_status: 'sem_endereco', order_districts: null })).toBe('');
   });
 
   it('o frescor e a situação de cada fonte em palavras', () => {

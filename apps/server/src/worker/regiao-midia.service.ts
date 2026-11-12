@@ -71,8 +71,9 @@ export class RegiaoMidiaLoop {
     const referencia = sql`${agora.toISOString()}::timestamptz`;
     const elegivel = sql`a.provider in ('meta_ads', 'google_ads') and ${contaConectada('a')} and a.credential_secret_id is not null`;
     const reservadas = await withSystem(db, async (tx) => {
-      // A conta desligada leva junto o que foi lido dela (`data-classes.ts`: "com a conta conectada").
-      for (const tabela of [sql`liame.ad_hour_daily`, sql`liame.ad_city_daily`]) {
+      // A conta desligada leva junto o que foi lido dela (`data-classes.ts`: "com a conta conectada"); os pedidos por
+      // bairro da loja do Regem (R3, parte 2) também saem aqui, na mesma limpeza da região.
+      for (const tabela of [sql`liame.ad_hour_daily`, sql`liame.ad_city_daily`, sql`liame.region_order_district`]) {
         await tx.execute(sql`
           delete from ${tabela} m
            using liame.connected_account a

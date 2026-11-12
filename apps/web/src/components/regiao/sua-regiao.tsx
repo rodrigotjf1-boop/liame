@@ -9,6 +9,7 @@ import { Icone } from '@/components/ui/icone';
 import { api, chamar, mensagemDe } from '@/lib/api';
 import { disparar } from '@/lib/disparar';
 import { useDetalhes } from '@/lib/modo';
+import { BairrosDosPedidos } from './bairros-dos-pedidos';
 import { DemandaDaLoja } from './demanda-da-loja';
 import { GavetaFontes } from './gaveta-fontes';
 import { MidiaNaRegiao } from './midia-na-regiao';
@@ -466,6 +467,7 @@ export function SuaRegiao({ brandId, lojas }: { brandId: string; lojas: StoreLoc
           </section>
 
           <DemandaDaLoja r={r} lojaNome={loja.unit_name} ids={ids} mostraPro={mostraPro} />
+          <BairrosDosPedidos r={r} ids={ids} mostraPro={mostraPro} />
           <MidiaNaRegiao r={r} ids={ids} mostraPro={mostraPro} />
 
           {c?.pix && (
@@ -625,7 +627,6 @@ export function SuaRegiao({ brandId, lojas }: { brandId: string; lojas: StoreLoc
               {[
                 ['Pessoas no raio, na Meta', 'Aparece com a conta de anúncios: a Meta estima quantas pessoas há no raio, por faixa de idade, antes de gastar (R6).'],
                 ['Concorrentes no raio', 'Aparece com o servidor de mapas próprio (R8). Hoje, a conta é a do município.'],
-                ['Bairros para atacar e para defender', 'Pede os pedidos por bairro do Regem, somados e sem identificar ninguém (R3, parte 2; D-RG-8).'],
               ].map(([t, s]) => (
                 <li key={t}>
                   <span className="st st--espera">Ainda não</span>

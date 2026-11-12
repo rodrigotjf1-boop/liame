@@ -225,7 +225,9 @@ export function respostaDaRegiao(e: EntradaDaRegiao): RespostaDaRegiao {
           ? 'o dia e a hora dos pedidos (com mais pedidos do Regem), '
           : '';
   const falhou = r.status === 'parcial' ? 'Uma das fontes públicas não respondeu na última leitura; o número que faltou aparece em Sua região quando ela responder. ' : '';
-  m.p(`${falhou}Ainda não dá para saber: ${semDemanda}pessoas no raio (com a conta de anúncios), concorrentes no raio e os bairros dos pedidos.`);
+  // Os pedidos por bairro (R3, parte 2) saem do "ainda não" quando já vieram do Regem.
+  const fim = r.order_districts_status === 'disponivel' ? 'pessoas no raio (com a conta de anúncios) e concorrentes no raio.' : 'pessoas no raio (com a conta de anúncios), concorrentes no raio e os bairros dos pedidos.';
+  m.p(`${falhou}Ainda não dá para saber: ${semDemanda}${fim}`);
   return { ...m.pronto(), valor, tipo: 'regiao' };
 }
 

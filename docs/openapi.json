@@ -125606,6 +125606,137 @@
                       ],
                       "additionalProperties": false
                     },
+                    "order_districts_status": {
+                      "type": "string",
+                      "maxLength": 60,
+                      "pattern": "^[a-z0-9_]+$"
+                    },
+                    "order_districts": {
+                      "type": [
+                        "object",
+                        "null"
+                      ],
+                      "properties": {
+                        "from": {
+                          "type": "string"
+                        },
+                        "to": {
+                          "type": "string"
+                        },
+                        "minimum": {
+                          "type": "integer",
+                          "minimum": -9007199254740991,
+                          "maximum": 9007199254740991
+                        },
+                        "read_at": {
+                          "type": "string"
+                        },
+                        "comparable": {
+                          "type": "boolean"
+                        },
+                        "districts": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "name": {
+                                "type": "string"
+                              },
+                              "orders": {
+                                "type": [
+                                  "integer",
+                                  "null"
+                                ],
+                                "minimum": -9007199254740991,
+                                "maximum": 9007199254740991
+                              },
+                              "population": {
+                                "type": [
+                                  "integer",
+                                  "null"
+                                ],
+                                "minimum": -9007199254740991,
+                                "maximum": 9007199254740991
+                              },
+                              "per_1000": {
+                                "type": [
+                                  "number",
+                                  "null"
+                                ]
+                              },
+                              "role": {
+                                "type": [
+                                  "string",
+                                  "null"
+                                ],
+                                "maxLength": 60,
+                                "pattern": "^[a-z0-9_]+$"
+                              },
+                              "in_delivery_area": {
+                                "type": "boolean"
+                              }
+                            },
+                            "required": [
+                              "name",
+                              "orders",
+                              "population",
+                              "per_1000",
+                              "role",
+                              "in_delivery_area"
+                            ],
+                            "additionalProperties": false
+                          }
+                        },
+                        "others": {
+                          "type": "object",
+                          "properties": {
+                            "districts": {
+                              "type": "integer",
+                              "minimum": -9007199254740991,
+                              "maximum": 9007199254740991
+                            },
+                            "orders": {
+                              "type": "integer",
+                              "minimum": -9007199254740991,
+                              "maximum": 9007199254740991
+                            }
+                          },
+                          "required": [
+                            "districts",
+                            "orders"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "without_district": {
+                          "type": "integer",
+                          "minimum": -9007199254740991,
+                          "maximum": 9007199254740991
+                        },
+                        "pickup": {
+                          "type": "integer",
+                          "minimum": -9007199254740991,
+                          "maximum": 9007199254740991
+                        },
+                        "delivery_orders": {
+                          "type": "integer",
+                          "minimum": -9007199254740991,
+                          "maximum": 9007199254740991
+                        }
+                      },
+                      "required": [
+                        "from",
+                        "to",
+                        "minimum",
+                        "read_at",
+                        "comparable",
+                        "districts",
+                        "others",
+                        "without_district",
+                        "pickup",
+                        "delivery_orders"
+                      ],
+                      "additionalProperties": false
+                    },
                     "sources": {
                       "type": "array",
                       "items": {
@@ -125670,6 +125801,8 @@
                     "store_demand",
                     "paid_media_status",
                     "paid_media",
+                    "order_districts_status",
+                    "order_districts",
                     "sources",
                     "generated_at"
                   ],

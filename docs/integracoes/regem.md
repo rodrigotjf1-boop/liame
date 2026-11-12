@@ -175,6 +175,34 @@ Parâmetros: `cursor`, `limite`. Devolve `{ "itens": [{ "id": "<cliente_id>", "a
 
 Pelo [contrato de cupons](cupons.md), no mesmo endereço base (`{base}/cupons`, `{base}/cupons/usos`).
 
+### 2.5 `GET {base}/pedidos/bairros` · `pedidos.ler` (plano da região, R3, parte 2; 12/11/2026)
+
+Os pedidos de entrega da loja **somados por bairro**, para "Bairros para atacar e para defender" em Sua região (D-RG-8, D-RG-36 a D-RG-39). Rota nova do Regem, aditiva, sob o `pedidos.ler` que o Liame já tem: as frases do escopo ganharam "e as entregas somadas por bairro, sem dado do cliente" no console, na página de autorização e na tela. **Só para os produtos da DMS:** um aplicativo de parceiro recebe 403. O acesso da empresa inteira recebe 400, porque a rota é por loja. No Regem: PR #946, `afa33df9`, com o manifesto e o OpenAPI publicados (veredito aditiva, contrato 1.0.0).
+
+- **Parâmetros:** `de` e `ate` (AAAA-MM-DD, no fuso da loja), até 92 dias contando os dois. A janela pode ir além de hoje: os dias futuros vêm vazios.
+- **Erros:**
+  - 400 `parametro-invalido`: sem `de`/`ate`, fora do formato, dia que não existe, `de` depois de `ate` ou mais de 92 dias;
+  - 403 `escopo-insuficiente`: sem `pedidos.ler`, ou o pedido vem de um parceiro.
+- **A régua é a de `GET /pedidos`:** os pedidos de entrega confirmados, o dia pela hora do pedido no fuso da loja e a receita líquida, sem a gorjeta. A soma usa as vendas já carimbadas, a mesma base de `/pedidos`.
+- **Corpo:** `{ loja_id, de, ate, fuso, minimo: 5, bairros: [{ bairro, cidade, uf, pedidos, receita_micros }], outros: { bairros, pedidos, receita_micros }, sem_bairro: { pedidos, receita_micros }, retirada_e_balcao: { pedidos } }`.
+  - O bairro com menos de `minimo` pedidos vai somado em `outros`, sem o nome.
+  - Os bairros vêm por pedidos (do maior para o menor), depois pela receita e depois pelo nome.
+  - Nunca vem cliente, telefone, rua, número nem CEP.
+- **O agrupamento:**
+  - é por bairro e cidade, sem distinguir maiúscula de minúscula; o nome que sai é a grafia mais frequente;
+  - sem a cidade no pedido (o cardápio do Regem não grava), vale a do cardápio da loja;
+  - a `uf` é a mais frequente do bairro;
+  - um "bairro" que é distância (frete por raio, "~3.2 km") vai para `sem_bairro`.
+- **A 99** só entra com `vendas.99food.ler`. O Liame não tem esse escopo, então a 99 nunca entra: nem nos bairros, nem em outros, nem em sem bairro, nem em retirada.
+- **No Liame:**
+  - **A leitura** é feita pela rotina das vendas, como extra (`conferirBairros`):
+    - uma vez por dia por loja; depois de uma falha, 6 horas;
+    - só com a função `regiao` ligada na marca;
+    - as 4 semanas completas até ontem;
+    - a resposta de outra loja não entra.
+  - **A gravação** guarda só as somas, na tabela `region_order_district`. A leitura substitui a anterior, e a conta desligada leva junto o que foi lido.
+  - **No retrato,** os bairros do município da loja são casados com o Censo pelo nome, e os bairros da área de entrega sem o mínimo entram como "menos de 5". A conta de atacar e defender está em `regiao/bairros.ts`.
+
 ## 3. Eventos (C3b)
 
 No ar no Regem desde 01/10/2026 (PR #603, migration 304). O aviso é **só gatilho de frescor**: o Liame lê pela rota com cursor em seguida. Aviso perdido, repetido ou fora de ordem não muda o resultado; sem avisos, a leitura com cursor a cada 15 minutos e a reconciliação diária bastam (D-A2.5-5).
