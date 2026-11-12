@@ -8,7 +8,7 @@ import { ModelosIa } from '../../src/ai/modelos.js';
 import { APP_CONFIG } from '../../src/config.js';
 import { FlagService } from '../../src/flags/flag.service.js';
 import { enableMfa, ownerQuery, resetIpRateLimits, signupAndLogin, startApi, type TestApi } from '../helpers/api.js';
-import { ligarIa, ModelosDeTeste, responde, rotaCompartilhada } from '../helpers/ia.js';
+import { ligarCriativo, ligarIa, ModelosDeTeste, responde, rotaCompartilhada } from '../helpers/ia.js';
 import { ligarFlagDaEmpresa } from '../helpers/meta-de-mentira.js';
 import { hasDb, OWNER_URL } from './env.js';
 
@@ -61,7 +61,7 @@ describe.skipIf(!hasDb)('os textos do Google pelo Criativo (Y9, parte 4)', () =>
     const tenantId = s.me.active_organization_id as string;
     const brandId = (await ownerQuery<{ id: string }>(`select id from liame.brand where tenant_id = $1 limit 1`, [tenantId]))[0]!.id;
     if (o.google !== false) await ligarFlagDaEmpresa(api, 'campanha_google', tenantId, true);
-    if (o.criativo !== false) await ligarFlagDaEmpresa(api, 'criativo', tenantId, true);
+    if (o.criativo !== false) await ligarCriativo(flags, tenantId);
     if (o.ia !== false) await ligarIa(flags, tenantId);
     const salvo = await api.call('PUT', '/v1/brand-dossier', { cookie: s.cookie, body: { brand_id: brandId, base_version: 0, content: DOSSIE } });
     if (salvo.status !== 200) throw new Error(`dossiê não salvo: ${salvo.status} ${JSON.stringify(salvo.body)}`);
