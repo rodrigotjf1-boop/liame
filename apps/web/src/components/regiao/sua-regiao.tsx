@@ -1,6 +1,7 @@
 'use client';
 
 import type { RegionOverviewResponse, StoreLocation } from '@liame/contracts';
+import { useSearchParams } from 'next/navigation';
 import { type ReactNode, useEffect, useId, useRef, useState } from 'react';
 import { Estado } from '@/components/ui/estado';
 import { Faixa } from '@/components/ui/faixa';
@@ -11,8 +12,15 @@ import { useDetalhes } from '@/lib/modo';
 import { GavetaFontes } from './gaveta-fontes';
 import {
   comparaDensidade,
+  condicaoEmFrase,
+  diaCurto,
+  FONTE_DA_PREVISAO,
   FONTE_DO_CNPJ,
+  FONTES_COM_ESTADO_PROPRIO,
   FONTES_DA_REGIAO,
+  iconeDoTempo,
+  quandoFoiLida,
+  tipoDaData,
   fonteDaRendaDoBairro,
   fonteDoNumero,
   fontesQueFalharam,
@@ -86,6 +94,17 @@ export function SuaRegiao({ brandId, lojas }: { brandId: string; lojas: StoreLoc
     // `assinatura` muda quando a loja é salva de novo, e `tentativa` no "Tentar de novo": o retrato é lido outra vez.
   }, [brandId, lojaId, assinatura, tentativa]);
 
+  // "Ver as fontes" da resposta da LIA (D-RG-18) chega com `?fontes=1`: a gaveta abre uma vez, com o retrato pronto.
+  const params = useSearchParams();
+  const pediuAsFontes = params.get('fontes') === '1';
+  const fontesAbertasPelaUrl = useRef(false);
+  const prontoParaAsFontes = carga?.tipo === 'ok' && carga.r.status !== 'lendo' && carga.r.status !== 'sem_endereco';
+  useEffect(() => {
+    if (!pediuAsFontes || !prontoParaAsFontes || fontesAbertasPelaUrl.current) return;
+    fontesAbertasPelaUrl.current = true;
+    setFontes(true);
+  }, [pediuAsFontes, prontoParaAsFontes]);
+
   const cab = (acoes?: ReactNode) => (
     <div className="rg-card-cab">
       <div>
@@ -157,7 +176,7 @@ export function SuaRegiao({ brandId, lojas }: { brandId: string; lojas: StoreLoc
     );
   } else if (r.status === 'lendo') {
     const censo = r.sources.find((s) => s.source === 'ibge_censo_bairro');
-    const cidadeLida = r.sources.filter((s) => s.source !== 'ibge_censo_bairro' && s.source !== FONTE_DO_CNPJ).every((s) => s.status === 'em_dia');
+    const cidadeLida = r.sources.filter((s) => s.source !== 'ibge_censo_bairro' && !FONTES_COM_ESTADO_PROPRIO.has(s.source)).every((s) => s.status === 'em_dia');
     const passo = (ok: boolean, texto: string) => (
       <li className={ok ? 'rg-ok' : undefined}>
         <Icone nome={ok ? 'check-circle' : 'clock'} />
@@ -185,6 +204,9 @@ export function SuaRegiao({ brandId, lojas }: { brandId: string; lojas: StoreLoc
     // Os restaurantes pelo CNPJ da Receita (R2, parte 4) e a leitura deles (horas na primeira vez; não segura o retrato).
     const fp = r.food_places;
     const cnpj = r.sources.find((s) => s.source === FONTE_DO_CNPJ);
+    // A semana que vem (parte 5): a cidade no CPTEC e a previsão têm o estado próprio, como o CNPJ.
+    const cidadeNoCptec = r.sources.find((s) => s.source === 'cptec_cidade');
+    const previsao = r.sources.find((s) => s.source === FONTE_DA_PREVISAO);
     const falhou = (fonte: string) => falhas.some((f) => f.source === fonte);
     const proxima = falhas.map((f) => f.next_try_at).filter((x): x is string => x !== null)[0];
     const linhaDaFalha = (o: string) => (
@@ -513,6 +535,93 @@ export function SuaRegiao({ brandId, lojas }: { brandId: string; lojas: StoreLoc
             </section>
           )}
 
+          {r.week_ahead && (
+            <section className="rg-grupo" aria-labelledby={`${ids}-semana`}>
+              <div className="rg-grupo-cab">
+                <h3 id={`${ids}-semana`}>A semana que vem</h3>
+                <p>tempo, feriados e datas</p>
+              </div>
+              <div className="rg-duas">
+                <div>
+                  <h4>Previsão do tempo{c?.name ? ` · ${c.name}` : ''}</h4>
+                  {r.week_ahead.weather ? (
+                    <>
+                      <ul className="rg-tempo" aria-label="Previsão por dia">
+                        {r.week_ahead.weather.days.map((d) => (
+                          <li className="rg-dia" key={d.day}>
+                            <b>{diaCurto(d.day)}</b>
+                            <Icone nome={iconeDoTempo(d.condition)} />
+                            <span>{condicaoEmFrase(d.description)}</span>
+                            <span>
+                              <span className="num">{d.min}°</span> a <span className="num">{d.max}°</span>
+                            </span>
+                          </li>
+                        ))}
+                      </ul>
+                      <p className="rg-num-f">CPTEC/INPE, pela BrasilAPI · previsão por dia, lida {quandoFoiLida(r.week_ahead.weather.read_at)}</p>
+                    </>
+                  ) : previsao?.status === 'falhou' ? (
+                    <p className="rg-falhou">
+                      <Icone nome="alert-circle" />
+                      <span>
+                        <b>O CPTEC não respondeu.</b> {previsao.next_try_at ? `Tentamos de novo às ${hora(previsao.next_try_at)}.` : 'Tentamos de novo em 1 hora.'}
+                      </span>
+                    </p>
+                  ) : cidadeNoCptec?.status === 'em_dia' && !previsao ? (
+                    <p className="lite-frase">O CPTEC não tem previsão para este município.</p>
+                  ) : (
+                    <p className="lite-frase">Lendo a previsão do CPTEC para o município; aparece em até 1 minuto.</p>
+                  )}
+                </div>
+                <div>
+                  <h4>Feriados e datas</h4>
+                  {r.week_ahead.dates.length ? (
+                    <ul className="rg-datas">
+                      {r.week_ahead.dates.map((d) => (
+                        <li className="rg-data" key={`${d.day}-${d.name}`}>
+                          <span className="num">{diaCurto(d.day)}</span>
+                          <span>
+                            {d.name}
+                            <small>{tipoDaData(d.kind)}</small>
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <p className="lite-frase">Nenhum feriado nacional nem data do varejo nos próximos 45 dias.</p>
+                  )}
+                  <p className="rg-num-f">Feriados nacionais (pela lei) e datas do varejo: calendário do Liame · o prazo do salário é conta do sistema</p>
+                  {mostraPro && <p className="rg-num-c">os feriados do estado e da cidade ainda não têm fonte pública gratuita (base §19.4) · o 5º dia útil conta o sábado e não conta o domingo nem o feriado nacional</p>}
+                </div>
+              </div>
+              <p className="rg-nota">
+                <Icone nome="info" pequeno />
+                <span>Chuva e frio costumam aumentar o pedido em casa (referência do setor); a prova vem do caixa da própria loja.</span>
+              </p>
+            </section>
+          )}
+
+          {r.sector_references.length > 0 && (
+            <section className="rg-grupo" aria-labelledby={`${ids}-ref`}>
+              <div className="rg-grupo-cab">
+                <h3 id={`${ids}-ref`}>Referência do setor</h3>
+                <p>da imprensa; não é o número da sua loja</p>
+              </div>
+              <ul className="rg-ref">
+                {r.sector_references.map((ref) => (
+                  <li key={ref.text}>
+                    <span>
+                      <span className="st st--espera">Referência do setor (imprensa)</span>
+                    </span>
+                    <span>{ref.text}</span>
+                    <small>{ref.source}</small>
+                    {ref.extra && mostraPro && <small>{ref.extra}</small>}
+                  </li>
+                ))}
+              </ul>
+            </section>
+          )}
+
           <section className="rg-grupo" aria-labelledby={`${ids}-ainda`}>
             <div className="rg-grupo-cab">
               <h3 id={`${ids}-ainda`}>Ainda não</h3>
@@ -520,7 +629,6 @@ export function SuaRegiao({ brandId, lojas }: { brandId: string; lojas: StoreLoc
             </div>
             <ul className="rg-ainda">
               {[
-                ['A semana que vem', 'A previsão do tempo, os feriados e as datas comerciais chegam numa próxima entrega.'],
                 ['Pedidos por hora e tíquete médio da loja', 'Aparecem com os pedidos do Regem (R3). Sem ele, a medida de pedido é o cupom exclusivo de cada campanha.'],
                 ['Pessoas no raio, na Meta', 'Aparece com a conta de anúncios: a Meta estima quantas pessoas há no raio, por faixa de idade, antes de gastar (R6).'],
                 ['Concorrentes no raio', 'Aparece com o servidor de mapas próprio (R8). Hoje, a conta é a do município.'],

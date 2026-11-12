@@ -20,6 +20,16 @@ import {
   numerosDoPix,
   rmDoMunicipio,
 } from '../regiao/ibge.js';
+import {
+  cidadeDoCptec,
+  type DiaDaPrevisao,
+  enderecoDaCidadeDoCptec,
+  enderecoDaPrevisao,
+  FONTE_DA_CIDADE_DO_CPTEC,
+  FONTE_DA_PREVISAO,
+  HOST_DA_BRASILAPI,
+  previsaoDaResposta,
+} from '../regiao/tempo.js';
 
 // Os números da região (plano da região, R2, parte 1; migration 0137): a rotina da distribuição que lê as fontes
 // públicas e guarda nas tabelas do sistema (padrão da PTAX, D-RG-1). Duas coisas:
@@ -35,6 +45,8 @@ const NOVA_TENTATIVA_MIN = 60;
 const NOVA_TENTATIVA_DO_CENSO_MIN = 6 * 60;
 /** O Censo não muda: a leitura feita fica valendo até o próximo (a linha some se a tabela for limpa). */
 const CENSO_VALE_DIAS = 3650;
+/** A previsão do tempo vale 6 horas (o CPTEC atualiza uma vez por dia; quatro leituras pegam a nova cedo). */
+const PREVISAO_VALE_HORAS = 6;
 /** Quantos bairros por instrução ao gravar (17,5 mil no Brasil: 9 instruções). */
 const BAIRROS_POR_LOTE = 2000;
 
@@ -166,6 +178,20 @@ export class RegiaoFontesService {
     );
   }
 
+  /** A previsão do município: os dias que vieram trocam os guardados; os dias de mais de uma semana atrás saem. */
+  private async gravarPrevisao(municipio: string, dias: DiaDaPrevisao[], agora: Date): Promise<void> {
+    await withSystem(this.database!.db, async (tx) => {
+      await tx.execute(sql`
+        insert into liame.region_weather (geo_code, day, condition, condition_desc, min_c, max_c, fetched_at)
+        select ${municipio}, x.dia::date, x.condicao, x.descricao, x.min, x.max, ${agora.toISOString()}::timestamptz
+          from jsonb_to_recordset(${JSON.stringify(dias)}::jsonb) as x (dia text, condicao text, descricao text, min integer, max integer)
+        on conflict (geo_code, day) do update
+           set condition = excluded.condition, condition_desc = excluded.condition_desc, min_c = excluded.min_c, max_c = excluded.max_c,
+               fetched_at = excluded.fetched_at`);
+      await tx.execute(sql`delete from liame.region_weather where geo_code = ${municipio} and day < ${agora.toISOString()}::date - 7`);
+    });
+  }
+
   private async gravarNumeros(nivel: string, lugar: string, fonte: string, numeros: NumeroDoIbge[], agora: Date): Promise<void> {
     await withSystem(this.database!.db, async (tx) => {
       await tx.execute(sql`
@@ -179,10 +205,17 @@ export class RegiaoFontesService {
 
   /** Lê uma fonte já reservada: grava os números e registra a leitura (a falha guarda o motivo e tenta de novo em 1 hora). */
   private async lerUma(fonte: string, lugar: string, nivel: string, renovaDias: number, agora: Date, ler: () => Promise<NumeroDoIbge[]>): Promise<LeituraFeita> {
-    try {
+    return this.lerEGravar(fonte, lugar, renovaDias, agora, async () => {
       const numeros = await ler();
       if (!numeros.length) throw new Error('a fonte não trouxe o número deste lugar');
       await this.gravarNumeros(nivel, lugar, fonte, numeros, agora);
+    });
+  }
+
+  /** O mesmo registro de `lerUma` para a leitura que grava do seu jeito (a previsão do tempo, por dia). */
+  private async lerEGravar(fonte: string, lugar: string, renovaDias: number, agora: Date, trabalho: () => Promise<void>): Promise<LeituraFeita> {
+    try {
+      await trabalho();
       await this.registrar(fonte, lugar, agora, { ok: true, validaAte: minutos(agora, renovaDias * 24 * 60) });
       return { fonte, lugar, situacao: 'lida' };
     } catch (err) {
@@ -198,14 +231,20 @@ export class RegiaoFontesService {
    * fonte × lugar uma vez só, mesmo com várias lojas) e o Pix do município.
    */
   private async lerMunicipios(n: number, agora: Date, buscar: typeof fetch): Promise<LeituraFeita[]> {
+    // O município de cada loja no mapa, com o nome e a UF (o CPTEC procura pelo nome), a RM e a cidade do CPTEC já lidas.
     const municipios = await withSystem(this.database!.db, async (tx) =>
       (
-        await tx.execute<{ municipio: string; rm: string | null }>(sql`
-          select m.municipio,
+        await tx.execute<{ municipio: string; nome: string | null; uf: string | null; rm: string | null; cptec: string | null }>(sql`
+          select m.municipio, m.nome, m.uf,
                  (select f.value::bigint::text from liame.region_fact f
                    where f.geo_level = 'municipio' and f.geo_code = m.municipio and f.indicator = 'rm_pnad'
-                   order by f.period desc limit 1) as rm
-            from (select distinct u.ibge_city_code as municipio from liame.unit u where u.ibge_city_code is not null) m`)
+                   order by f.period desc limit 1) as rm,
+                 (select f.value::bigint::text from liame.region_fact f
+                   where f.geo_level = 'municipio' and f.geo_code = m.municipio and f.indicator = 'cptec_cidade'
+                   order by f.period desc limit 1) as cptec
+            from (select distinct on (u.ibge_city_code) u.ibge_city_code as municipio, u.address_city as nome, u.address_state as uf
+                    from liame.unit u where u.ibge_city_code is not null
+                   order by u.ibge_city_code, u.address_city nulls last) m`)
       ).rows,
     );
     if (!municipios.length) return [];
@@ -234,8 +273,32 @@ export class RegiaoFontesService {
       resta--;
     }
 
-    // (2) As tabelas de cada recorte e o Pix, sem repetir o mesmo par (a UF e o Brasil valem para vários municípios).
-    type Par = { fonte: string; lugar: string; nivel: string; ler: () => Promise<NumeroDoIbge[]>; renovaDias: number };
+    // (1b) A cidade de cada município no CPTEC, pelo nome e a UF (0 é "o CPTEC não tem a cidade": não lê a previsão).
+    const cidadesDevidas = await this.devidas(
+      municipios.filter((m) => m.nome && m.uf).map((m) => ({ fonte: FONTE_DA_CIDADE_DO_CPTEC, lugar: m.municipio })),
+      resta,
+      agora,
+    );
+    for (const d of cidadesDevidas) {
+      const m = municipios.find((x) => x.municipio === d.lugar);
+      if (!m?.nome || !m.uf || !(await this.reservar(d.fonte, d.lugar, agora))) continue;
+      const ano = agora.toISOString().slice(0, 4);
+      feitas.push(
+        await this.lerUma(FONTE_DA_CIDADE_DO_CPTEC, d.lugar, 'municipio', 180, agora, async () => {
+          const cidade = cidadeDoCptec(await buscarJson(enderecoDaCidadeDoCptec(m.nome!), [HOST_DA_BRASILAPI], 20_000, buscar), m.nome!, m.uf!);
+          m.cptec = String(cidade ?? 0);
+          return [{ indicador: 'cptec_cidade', periodo: ano, valor: cidade ?? 0 }];
+        }),
+      );
+      resta--;
+    }
+
+    // (2) As tabelas de cada recorte, o Pix e a previsão do tempo, sem repetir o mesmo par (a UF e o Brasil valem para
+    // vários municípios).
+    type Par = { fonte: string; lugar: string; nivel: string; renovaDias: number } & (
+      | { ler: () => Promise<NumeroDoIbge[]>; gravar?: never }
+      | { gravar: () => Promise<void>; ler?: never }
+    );
     const pares = new Map<string, Par>();
     const mesCorrente = mesEmBrasilia(agora);
     for (const m of municipios) {
@@ -260,11 +323,25 @@ export class RegiaoFontesService {
         renovaDias: 7,
         ler: async () => numerosDoPix(await buscarJson(enderecoDoPix(m.municipio, mesesAntes(mesCorrente, 13)), [HOST_DO_BCB], 20_000, buscar), m.municipio, mesCorrente),
       });
+      const cptec = Number(m.cptec ?? '0');
+      if (cptec > 0) {
+        pares.set(`${FONTE_DA_PREVISAO}:${m.municipio}`, {
+          fonte: FONTE_DA_PREVISAO,
+          lugar: m.municipio,
+          nivel: 'municipio',
+          renovaDias: PREVISAO_VALE_HORAS / 24,
+          gravar: async () => {
+            const dias = previsaoDaResposta(await buscarJson(enderecoDaPrevisao(cptec), [HOST_DA_BRASILAPI], 20_000, buscar));
+            if (!dias.length) throw new Error('o CPTEC não trouxe a previsão desta cidade');
+            await this.gravarPrevisao(m.municipio, dias, agora);
+          },
+        });
+      }
     }
     for (const d of await this.devidas([...pares.values()].map((p) => ({ fonte: p.fonte, lugar: p.lugar })), resta, agora)) {
       const par = pares.get(`${d.fonte}:${d.lugar}`);
       if (!par || !(await this.reservar(d.fonte, d.lugar, agora))) continue;
-      feitas.push(await this.lerUma(par.fonte, par.lugar, par.nivel, par.renovaDias, agora, par.ler));
+      feitas.push(par.gravar ? await this.lerEGravar(par.fonte, par.lugar, par.renovaDias, agora, par.gravar) : await this.lerUma(par.fonte, par.lugar, par.nivel, par.renovaDias, agora, par.ler));
     }
     return feitas;
   }

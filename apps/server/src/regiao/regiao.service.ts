@@ -33,6 +33,8 @@ import { buscarCep, cepNormalizado, type EnderecoDoCep } from './cep.js';
 import { FONTE_CENSO_BAIRRO } from './censo.js';
 import { type Coordenada, nomeComparavel, ProcuraDeCoordenada } from './coordenada.js';
 import { MUNICIPIOS_DO_IPCA, RMS_DO_IPCA } from './ibge.js';
+import { type DataGuardada, datasDaSemana, diaEmBrasilia, REFERENCIAS_DO_SETOR } from './semana.js';
+import { DIAS_DA_PREVISAO } from './tempo.js';
 import {
   acimaDe,
   correcaoDoIpca,
@@ -379,6 +381,8 @@ export class RegiaoService {
       delivery_area: { matched: 0, total: 0, population: null },
       city: null,
       food_places: null,
+      week_ahead: null,
+      sector_references: [],
       generated_at: agora.toISOString(),
     };
     if (!(await this.ligada(auth, brandId))) {
@@ -415,7 +419,9 @@ export class RegiaoService {
             or (geo_level = 'rm' and geo_code = ${rm ?? '-'}) or (geo_level = 'brasil' and geo_code = '1')`)
     ).rows;
 
-    const pares = fontesDoRetrato(cidade, rm);
+    // A cidade do CPTEC (a rotina a resolve pelo nome; 0 é "o CPTEC não tem"): sem ela, a previsão não é fonte do retrato.
+    const cidadeNoCptec = numeros.some((n) => n.geo_level === 'municipio' && n.indicator === 'cptec_cidade' && Number(n.value) > 0);
+    const pares = fontesDoRetrato(cidade, rm, cidadeNoCptec);
     const leituras = (
       await tx.execute<LeituraGuardada>(sql`
         select r.source, r.geo_code, r.last_ok_at, r.last_error, r.next_try_at
@@ -482,6 +488,21 @@ export class RegiaoService {
         ).rows[0]?.ativos ?? 0)
       : 0;
 
+    // A semana que vem: a previsão dos próximos dias do município (de hoje em diante, em Brasília) e as datas do
+    // calendário do Liame do começo deste mês até 60 dias à frente: os feriados que já passaram no mês e os do mês
+    // seguinte entram na conta do prazo do salário (a lista mostra só de hoje em diante).
+    const hoje = diaEmBrasilia(agora);
+    const previsao = (
+      await tx.execute<{ day: string; condition: string; condition_desc: string; min_c: number; max_c: number; fetched_at: Date | string }>(sql`
+        select to_char(day, 'YYYY-MM-DD') as day, condition, condition_desc, min_c, max_c, fetched_at from liame.region_weather
+         where geo_code = ${cidade} and day >= ${hoje}::date order by day limit ${DIAS_DA_PREVISAO}`)
+    ).rows;
+    const datas = (
+      await tx.execute<DataGuardada>(sql`
+        select to_char(day, 'YYYY-MM-DD') as day, name, kind, source from liame.commercial_date
+         where day between date_trunc('month', ${hoje}::date)::date and ${hoje}::date + 60 order by day, name`)
+    ).rows;
+
     const noMunicipio = (indicador: string) => numeroMaisNovo(numeros, indicador, 'municipio', cidade);
     const populacao = noMunicipio('populacao');
     const estimada = noMunicipio('populacao_estimada');
@@ -542,6 +563,8 @@ export class RegiaoService {
         ativosComBairro,
         populacao: (estimada ?? populacao)?.value ?? null,
       }),
+      week_ahead: { weather: previsao.length ? { read_at: new Date(previsao[0]!.fetched_at).toISOString(), days: previsao.map((d) => ({ day: d.day, condition: d.condition, description: d.condition_desc, min: d.min_c, max: d.max_c })) } : null, dates: datasDaSemana(datas, hoje) },
+      sector_references: REFERENCIAS_DO_SETOR.map((r) => ({ ...r })),
       sources: fontes,
       generated_at: agora.toISOString(),
     };

@@ -44,9 +44,48 @@ export const FONTES_DA_REGIAO: Record<string, { dado: string; fonte: string; rec
     consulta: 'Estabelecimentos0..9.zip · CNAE principal 5611-2/01, /03, /04, /05 e 5620-1/04 · situação 02 · guarda só contagens',
     renova: 'todo mês (o Brasil inteiro numa leitura)',
   },
+  cptec_cidade: { dado: 'A cidade no CPTEC (para a previsão)', fonte: 'CPTEC/INPE, pela BrasilAPI', recorte: 'município', consulta: '/api/cptec/v1/cidade/{nome} · pelo nome e a UF', renova: 'a cada 6 meses' },
+  cptec_previsao: { dado: 'Previsão do tempo por dia', fonte: 'CPTEC/INPE, pela BrasilAPI', recorte: 'município', consulta: '/api/cptec/v1/clima/previsao/{cidade}/6', renova: 'a cada 6 horas' },
 };
 
 const MESES = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
+const DIAS = ['dom', 'seg', 'ter', 'qua', 'qui', 'sex', 'sáb'];
+
+/** O dia "2026-11-13" como a semana que vem escreve: "sex 13/11". */
+export function diaCurto(dia: string): string {
+  const d = new Date(`${dia}T12:00:00Z`);
+  return Number.isNaN(d.getTime()) ? dia : `${DIAS[d.getUTCDay()]} ${dia.slice(8, 10)}/${dia.slice(5, 7)}`;
+}
+
+/** O ícone da condição do CPTEC: sol, sol com nuvem, nuvem ou chuva. */
+export function iconeDoTempo(condicao: string): 'sun' | 'cloud-sun' | 'cloud' | 'cloud-rain' {
+  if (condicao === 'cl' || condicao === 'ps') return 'sun';
+  if (condicao === 'pn' || condicao === 'vn') return 'cloud-sun';
+  if (['e', 'n', 'nv', 'g', 'ne', 'nd'].includes(condicao)) return 'cloud';
+  return 'cloud-rain';
+}
+
+/** A condição como o CPTEC escreve ("Parcialmente Nublado") em caixa de frase: "Parcialmente nublado". */
+export function condicaoEmFrase(texto: string): string {
+  const t = texto.trim().toLowerCase();
+  return t ? t[0]!.toUpperCase() + t.slice(1) : t;
+}
+
+/** Quando a previsão foi lida: "hoje às 06:10" ou "em 11/11 às 18:10" (a hora do aparelho de quem vê). */
+export function quandoFoiLida(iso: string, agora: Date = new Date()): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return iso;
+  const dia = (x: Date) => x.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
+  return `${dia(d) === dia(agora) ? 'hoje' : `em ${dia(d)}`} às ${hora(iso)}`;
+}
+
+/** O tipo de uma data da semana que vem, em palavras. */
+export function tipoDaData(kind: string): string {
+  if (kind === 'feriado_nacional') return 'feriado nacional';
+  if (kind === 'varejo') return 'data do varejo';
+  if (kind === 'salario') return 'conta do sistema';
+  return kind;
+}
 
 /** O mês "2026-09" como a tela escreve: "set/2026". */
 export function mesAno(periodo: string): string {
@@ -140,10 +179,13 @@ export function fonteDoNumero(n: RegionNumber): string {
 
 /** A fonte dos restaurantes ativos (o CNPJ da Receita): a falha e o "lendo" dela ficam na Concorrência, não na faixa do IBGE. */
 export const FONTE_DO_CNPJ = 'receita_cnpj';
+/** A previsão do tempo e a cidade dela no CPTEC: o estado delas fica na semana que vem. */
+export const FONTE_DA_PREVISAO = 'cptec_previsao';
+export const FONTES_COM_ESTADO_PROPRIO: ReadonlySet<string> = new Set([FONTE_DO_CNPJ, 'cptec_cidade', FONTE_DA_PREVISAO]);
 
 /** As fontes do IBGE e do Banco Central que falharam (nunca deram certo), com a hora da próxima tentativa. */
 export function fontesQueFalharam(r: RegionOverviewResponse): RegionSourceStatus[] {
-  return r.sources.filter((s) => s.status === 'falhou' && s.source !== FONTE_DO_CNPJ);
+  return r.sources.filter((s) => s.status === 'falhou' && !FONTES_COM_ESTADO_PROPRIO.has(s.source));
 }
 
 type Contagem = { active: number; restaurant: number; snack: number; bar: number; home: number; opened_12m: number; closed_12m: number };
