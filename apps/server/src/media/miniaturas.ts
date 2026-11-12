@@ -6,17 +6,47 @@ import { prefixoDaMarca } from '../fotos/conferencia.js';
 import { carregarSharp } from '../fotos/processar.js';
 import type { ArmazemDeImagens } from '../imagens/armazem.js';
 
-// A cópia da miniatura do anúncio (A3 · I14, parte 1; P44 aprovado em 11/11/2026; D-A3-29 e D-A3-30). Em Resultados,
-// cada campanha mostra a imagem do anúncio que mais gastou no período. O endereço que a Meta entrega expira: depois de
-// cada sincronização da conta, o Liame copia para o armazenamento de imagens a miniatura do criativo que mais gastou em
-// cada campanha (nos últimos 7 e 30 dias), só quando ainda não copiou ou quando a imagem mudou (o endereço sem a
-// assinatura). Só baixa dos domínios da Meta, sem seguir redirecionamento, com teto de tamanho e de tempo.
+// A cópia da miniatura do anúncio (A3 · I14, partes 1 e 3; P44 aprovado em 11/11/2026; D-A3-29 e D-A3-30). Em
+// Resultados, cada campanha mostra a imagem do anúncio que mais gastou no período. O endereço que a Meta entrega expira:
+// depois de cada sincronização da conta, o Liame copia para o armazenamento de imagens a miniatura do criativo que mais
+// gastou em cada campanha (nos últimos 7 e 30 dias), só quando ainda não copiou ou quando a imagem mudou (o endereço sem
+// a assinatura). Na Performance Max do Google (parte 3), a imagem do grupo de recursos que mais gastou em 30 dias. Só
+// baixa dos domínios da plataforma, sem seguir redirecionamento, com teto de tamanho e de tempo.
 
 type Sharp = typeof SharpDoPacote;
 const logger = new Logger('miniaturas');
 
 /** Os domínios de onde a Meta serve as imagens dos criativos. */
 const DOMINIOS_DA_META = ['fbcdn.net', 'facebook.com', 'cdninstagram.com'];
+/** Os domínios de onde o Google serve as imagens dos recursos (a imagem de banco de imagens pode vir de outro: fica sem). */
+const DOMINIOS_DO_GOOGLE = ['googlesyndication.com', 'googleusercontent.com'];
+
+/**
+ * O grupo de recursos da Performance Max que dá a imagem da campanha (o criativo `c`): o que não foi removido, o que
+ * mais gastou em 30 dias, o de menor id. A mesma ordem na cópia e em Resultados.
+ */
+export const ORDEM_DO_GRUPO_DE_RECURSOS = sql`coalesce(c.provider_attributes->>'situacao' = 'REMOVED', false), (c.provider_attributes->>'gasto_30d_micros')::numeric desc nulls last, c.external_id`;
+/** O criativo `c` é um grupo de recursos da campanha `cp` (o id externo dela nos atributos). */
+export const GRUPO_DA_CAMPANHA = sql`c.connected_account_id = cp.connected_account_id and c.provider = 'google_ads' and c.kind = 'PERFORMANCE_MAX' and c.provider_attributes->>'campanha' = cp.external_id`;
+
+function noDominio(url: string | null | undefined, dominios: string[]): URL | null {
+  if (!url) return null;
+  try {
+    const u = new URL(url);
+    if (u.protocol !== 'https:') return null;
+    const host = u.hostname.toLowerCase();
+    return dominios.some((d) => host === d || host.endsWith(`.${d}`)) ? u : null;
+  } catch {
+    return null;
+  }
+}
+
+/** O endereço vale para baixar: HTTPS, num domínio da plataforma do criativo. Nulo quando não vale. */
+export function enderecoDaPlataforma(provider: string, url: string | null | undefined): URL | null {
+  if (provider === 'meta_ads') return noDominio(url, DOMINIOS_DA_META);
+  if (provider === 'google_ads') return noDominio(url, DOMINIOS_DO_GOOGLE);
+  return null;
+}
 /** O arquivo baixado: até 2 MB. */
 export const LIMITE_DA_MINIATURA = 2 * 1024 * 1024;
 /** A cópia guardada cabe em 480 × 480 (o cartão mostra até 120 px, em tela de alta densidade). */
@@ -26,15 +56,7 @@ export const COPIAS_POR_VEZ = 30;
 
 /** O endereço vale para baixar: HTTPS, num domínio da Meta. Nulo quando não vale. */
 export function enderecoDaMeta(url: string | null | undefined): URL | null {
-  if (!url) return null;
-  try {
-    const u = new URL(url);
-    if (u.protocol !== 'https:') return null;
-    const host = u.hostname.toLowerCase();
-    return DOMINIOS_DA_META.some((d) => host === d || host.endsWith(`.${d}`)) ? u : null;
-  } catch {
-    return null;
-  }
+  return noDominio(url, DOMINIOS_DA_META);
 }
 
 /** De onde veio a imagem: o endereço sem a assinatura (a Meta muda a assinatura a cada leitura, a imagem não). */
@@ -47,11 +69,11 @@ export function chaveDaMiniatura(tenantId: string, brandId: string, creativeId: 
   return `${prefixoDaMarca(tenantId, brandId)}anuncio/${creativeId}.jpg`;
 }
 
-/** Baixa a miniatura (só da Meta, sem seguir redirecionamento, com teto de tamanho e de tempo). */
-export async function baixarMiniatura(url: URL, buscar: typeof fetch = fetch, tempoMs = 15_000): Promise<Buffer> {
-  if (!enderecoDaMeta(url.toString())) throw new Error('endereço fora da Meta');
+/** Baixa a miniatura (só do domínio da plataforma, sem seguir redirecionamento, com teto de tamanho e de tempo). */
+export async function baixarMiniatura(url: URL, buscar: typeof fetch = fetch, tempoMs = 15_000, provider = 'meta_ads'): Promise<Buffer> {
+  if (!enderecoDaPlataforma(provider, url.toString())) throw new Error('endereço fora da plataforma');
   const r = await buscar(url, { redirect: 'error', signal: AbortSignal.timeout(tempoMs), headers: { 'user-agent': 'Liame/1.0 (+https://agencialiame.com)' } });
-  if (!r.ok) throw new Error(`a Meta respondeu ${r.status}`);
+  if (!r.ok) throw new Error(`a plataforma respondeu ${r.status}`);
   if (!(r.headers.get('content-type') ?? '').startsWith('image/')) throw new Error('a resposta não é uma imagem');
   if (Number(r.headers.get('content-length') ?? '0') > LIMITE_DA_MINIATURA) throw new Error('miniatura maior que o esperado');
   const buf = Buffer.from(await r.arrayBuffer());
@@ -71,11 +93,12 @@ export async function regravarMiniatura(entrada: Buffer, carregar: () => Promise
   return { bytes: r.data, largura: r.info.width, altura: r.info.height };
 }
 
-type Candidata = { id: string; brand_id: string; thumbnail_url: string; thumbnail_source: string | null };
+type Candidata = { id: string; brand_id: string; provider: string; thumbnail_url: string; thumbnail_source: string | null };
 
 /**
  * Copia as miniaturas que faltam da conta: o criativo que mais gastou em cada campanha nos últimos 7 e 30 dias, na
- * Meta, cuja imagem ainda não foi copiada ou mudou. Nunca derruba a sincronização: o que falha fica para a seguinte.
+ * Meta, e o grupo de recursos de cada campanha Performance Max, no Google, cuja imagem ainda não foi copiada ou mudou.
+ * Nunca derruba a sincronização: o que falha fica para a seguinte.
  */
 export async function copiarMiniaturas(opcoes: {
   db: Db;
@@ -106,12 +129,18 @@ export async function copiarMiniaturas(opcoes: {
         (select distinct on (campaign_id) creative_id from gasto where g30 > 0 order by campaign_id, g30 desc, creative_id)
         union
         (select distinct on (campaign_id) creative_id from gasto where g7 > 0 order by campaign_id, g7 desc, creative_id)
+        union
+        (select distinct on (cp.id) c.id as creative_id
+           from liame.campaign cp
+           join liame.creative c on ${GRUPO_DA_CAMPANHA}
+          where cp.connected_account_id = ${contaId}
+          order by cp.id, ${ORDEM_DO_GRUPO_DE_RECURSOS})
       )
-      select c.id, ca.brand_id, c.thumbnail_url, c.thumbnail_source
+      select c.id, ca.brand_id, c.provider, c.thumbnail_url, c.thumbnail_source
         from escolhidos e
         join liame.creative c on c.id = e.creative_id
         join liame.connected_account ca on ca.id = c.connected_account_id
-       where c.provider = 'meta_ads' and c.thumbnail_url is not null
+       where c.provider in ('meta_ads', 'google_ads') and c.thumbnail_url is not null
        order by c.id`);
     return r.rows;
   });
@@ -120,12 +149,12 @@ export async function copiarMiniaturas(opcoes: {
   let falhas = 0;
   for (const c of candidatas) {
     if (copiadas + falhas >= COPIAS_POR_VEZ) break;
-    const url = enderecoDaMeta(c.thumbnail_url);
+    const url = enderecoDaPlataforma(c.provider, c.thumbnail_url);
     if (!url) continue;
     const origem = origemDaMiniatura(url);
     if (c.thumbnail_source === origem) continue;
     try {
-      const imagem = await regravarMiniatura(await baixarMiniatura(url, buscar), carregar);
+      const imagem = await regravarMiniatura(await baixarMiniatura(url, buscar, undefined, c.provider), carregar);
       const chave = chaveDaMiniatura(tenantId, c.brand_id, c.id);
       await armazem.gravar(chave, imagem.bytes);
       await withTenant(db, tenantId, (tx) =>

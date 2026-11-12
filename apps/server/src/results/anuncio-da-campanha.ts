@@ -2,6 +2,7 @@ import type { CampaignTopAd } from '@liame/contracts';
 import type { Tx } from '@liame/database';
 import { sql } from 'drizzle-orm';
 import type { ArmazemDeImagens } from '../imagens/armazem.js';
+import { GRUPO_DA_CAMPANHA, ORDEM_DO_GRUPO_DE_RECURSOS } from '../media/miniaturas.js';
 
 // O anúncio que mais gastou em cada campanha no período (A3 · I14, parte 1; P44 aprovado em 11/11/2026; D-A3-29 a
 // D-A3-33): a imagem para reconhecer a campanha em Resultados. A imagem é a cópia que o Liame guarda (a miniatura do
@@ -69,18 +70,35 @@ export async function anunciosQueMaisGastaram(
       join liame.connected_account ca on ca.id = a.connected_account_id
      where x.gasto > 0
      order by x.campaign_id, x.gasto desc, a.id`);
+  const imagemDe = async (l: Pick<Linha, 'thumbnail_key' | 'thumbnail_width' | 'thumbnail_height'>): Promise<CampaignTopAd['image']> => {
+    if (!l.thumbnail_key || !l.thumbnail_width || !l.thumbnail_height || !armazem?.disponivel) return null;
+    try {
+      return { url: await armazem.enderecoDeLeitura(l.thumbnail_key, SEGUNDOS_DA_IMAGEM), width: l.thumbnail_width, height: l.thumbnail_height };
+    } catch {
+      // Sem o endereço agora: o cartão mostra o quadro neutro, e os números seguem.
+      return null;
+    }
+  };
   for (const l of r.rows) {
     const kind = tipoDoAnuncio(l.provider, l.kind);
     const offAir = FORA_DO_AR.has((l.provider_status ?? '').toUpperCase());
-    let image: CampaignTopAd['image'] = null;
-    if (!offAir && kind !== 'texto' && l.thumbnail_key && l.thumbnail_width && l.thumbnail_height && armazem?.disponivel) {
-      try {
-        image = { url: await armazem.enderecoDeLeitura(l.thumbnail_key, SEGUNDOS_DA_IMAGEM), width: l.thumbnail_width, height: l.thumbnail_height };
-      } catch {
-        // Sem o endereço agora: o cartão mostra o quadro neutro, e os números seguem.
-      }
-    }
+    const image = !offAir && kind !== 'texto' ? await imagemDe(l) : null;
     saida.set(l.campaign_id, { name: l.name, kind, off_air: offAir, image, manager_url: linkDoAnuncio(l.provider, l.conta_externa, l.ad_externo) });
+  }
+
+  // A Performance Max do Google (I14, parte 3) não tem anúncio com gasto: a imagem é a do grupo de recursos que mais
+  // gastou em 30 dias (a mesma escolha da cópia). O grupo removido aparece "fora do ar", sem a imagem (D-A3-32).
+  const semAnuncio = campanhas.filter((id) => !saida.has(id));
+  if (!semAnuncio.length) return saida;
+  const g = await tx.execute<{ campaign_id: string; name: string | null; situacao: string | null; thumbnail_key: string | null; thumbnail_width: number | null; thumbnail_height: number | null }>(sql`
+    select distinct on (cp.id) cp.id as campaign_id, c.name, c.provider_attributes->>'situacao' as situacao, c.thumbnail_key, c.thumbnail_width, c.thumbnail_height
+      from liame.campaign cp
+      join liame.creative c on ${GRUPO_DA_CAMPANHA}
+     where cp.id in ${semAnuncio}
+     order by cp.id, ${ORDEM_DO_GRUPO_DE_RECURSOS}`);
+  for (const l of g.rows) {
+    const offAir = FORA_DO_AR.has((l.situacao ?? '').toUpperCase());
+    saida.set(l.campaign_id, { name: l.name ?? 'Grupo de recursos', kind: 'imagem', off_air: offAir, image: offAir ? null : await imagemDe(l), manager_url: null });
   }
   return saida;
 }

@@ -56,6 +56,13 @@ describe.skipIf(!hasDb)('conector do Google Ads (leitura, v25)', () => {
       return { status: 400, corpo: { error: { code: 400, status: 'INVALID_ARGUMENT', message: 'Unrecognized field in the query' } } };
     }
     if (/FROM customer_client/.test(query)) return { status: 200, corpo: fixture(`customer-clients-${cliente}`) };
+    // A Performance Max (I14, parte 3): as imagens dos grupos de recursos e o gasto de 30 dias de cada grupo. A conta que
+    // recusa os campos de URL recusa também a consulta das imagens (a leitura segue sem elas).
+    if (/FROM asset_group_asset\b/.test(query)) {
+      if (cliente === '7778889990') return { status: 400, corpo: { error: { code: 400, status: 'INVALID_ARGUMENT', message: 'Unrecognized field in the query' } } };
+      return { status: 200, corpo: fixture('asset-group-assets') };
+    }
+    if (/FROM asset_group\b/.test(query)) return { status: 200, corpo: fixture('asset-groups-spend') };
     const comData = /segments\.date BETWEEN/.test(query);
     if (/FROM campaign\b/.test(query)) return { status: 200, corpo: comData ? porData('metrics-campaign', query) : fixture('campaigns') };
     if (/FROM ad_group_ad\b/.test(query)) return { status: 200, corpo: comData ? porData('metrics-ad', query) : fixture('ads') };
@@ -188,6 +195,37 @@ describe.skipIf(!hasDb)('conector do Google Ads (leitura, v25)', () => {
     expect(e.creatives.map((c) => [c.externalId, c.kind])).toEqual([
       ['51000000001', 'RESPONSIVE_SEARCH_AD'],
       ['51000000002', 'RESPONSIVE_SEARCH_AD'],
+      ['pmax:61000000001', 'PERFORMANCE_MAX'],
+      ['pmax:61000000002', 'PERFORMANCE_MAX'],
+    ]);
+  });
+
+  it('I14 parte 3: na Performance Max, um criativo por grupo de recursos, com a imagem que cabe no cartão e o gasto de 30 dias', async () => {
+    const antes = pedidos.length;
+    const e = await conector().lerEntidades(conta());
+    const consultas = pedidos.slice(antes).map((p) => p.query ?? '');
+    expect(consultas.find((q) => /FROM asset_group_asset/.test(q))).toBe(
+      "SELECT campaign.id, asset_group.id, asset_group.name, asset_group.status, asset_group_asset.field_type, asset.id, asset.image_asset.full_size.url, asset.image_asset.full_size.width_pixels, asset.image_asset.full_size.height_pixels FROM asset_group_asset WHERE asset_group_asset.field_type IN ('SQUARE_MARKETING_IMAGE', 'MARKETING_IMAGE', 'PORTRAIT_MARKETING_IMAGE') AND asset_group_asset.status != 'REMOVED'",
+    );
+    expect(consultas.find((q) => /FROM asset_group$|FROM asset_group WHERE/.test(q))).toBe('SELECT asset_group.id, metrics.cost_micros FROM asset_group WHERE segments.date DURING LAST_30_DAYS');
+    const pmax = e.creatives.filter((c) => c.kind === 'PERFORMANCE_MAX');
+    expect(pmax).toEqual([
+      {
+        externalId: 'pmax:61000000001',
+        name: 'Cardápio - smash',
+        kind: 'PERFORMANCE_MAX',
+        // A quadrada vence a deitada do mesmo grupo.
+        thumbnailUrl: 'https://tpc.googlesyndication.com/simgad/71000000002',
+        providerAttributes: { campanha: '21000000002', grupo_de_recursos: '61000000001', situacao: 'ENABLED', gasto_30d_micros: 45_200_000, imagem: { tipo: 'SQUARE_MARKETING_IMAGE', largura: 1200, altura: 1200 } },
+      },
+      {
+        externalId: 'pmax:61000000002',
+        name: 'Cardápio - batata',
+        kind: 'PERFORMANCE_MAX',
+        thumbnailUrl: 'https://tpc.googlesyndication.com/simgad/71000000004',
+        // O gasto zero que o JSON do protobuf omite.
+        providerAttributes: { campanha: '21000000002', grupo_de_recursos: '61000000002', situacao: 'ENABLED', gasto_30d_micros: 0, imagem: { tipo: 'PORTRAIT_MARKETING_IMAGE', largura: 960, altura: 1200 } },
+      },
     ]);
   });
 
@@ -232,7 +270,11 @@ describe.skipIf(!hasDb)('conector do Google Ads (leitura, v25)', () => {
     expect(e.ads.map((a) => a.providerAttributes)).toEqual([undefined, undefined]);
     const consultas = pedidos.slice(antes).map((p) => p.query ?? '');
     expect(consultas.filter((q) => /final_url|tracking_url_template/.test(q))).toHaveLength(3);
-    expect(consultas.filter((q) => !/final_url|tracking_url_template/.test(q))).toHaveLength(3);
+    // As três sem os campos de URL, e as duas da Performance Max (I14, parte 3).
+    expect(consultas.filter((q) => !/final_url|tracking_url_template/.test(q) && !/FROM asset_group/.test(q))).toHaveLength(3);
+    expect(consultas.filter((q) => /FROM asset_group/.test(q))).toHaveLength(2);
+    // O Google recusou a consulta das imagens: a campanha fica sem imagem, e a leitura segue.
+    expect(e.creatives.map((c) => c.kind)).toEqual(['RESPONSIVE_SEARCH_AD', 'RESPONSIVE_SEARCH_AD']);
   });
 
   it('micros para unidade sem ponto flutuante', () => {

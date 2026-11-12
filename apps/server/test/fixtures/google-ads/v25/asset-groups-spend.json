@@ -1,0 +1,10 @@
+[
+  {
+    "results": [
+      { "assetGroup": { "resourceName": "customers/4445556667/assetGroups/61000000001", "id": "61000000001" }, "metrics": { "costMicros": "45200000" } },
+      { "assetGroup": { "resourceName": "customers/4445556667/assetGroups/61000000002", "id": "61000000002" } }
+    ],
+    "fieldMask": "assetGroup.id,metrics.costMicros",
+    "requestId": "req-asset-groups-spend"
+  }
+]

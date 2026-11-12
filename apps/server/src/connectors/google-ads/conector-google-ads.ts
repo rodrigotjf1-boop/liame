@@ -19,6 +19,7 @@ import {
   versaoRegistrada,
 } from '../tipos.js';
 import { soDigitos } from '../validacao.js';
+import { CONSULTA_DAS_IMAGENS, CONSULTA_DO_GASTO, type CriativoDaPerformanceMax, criativosDaPerformanceMax, type LinhaDaImagem, type LinhaDoGasto } from './performance-max.js';
 
 // Conector de LEITURA do Google Ads (A2, G5; base de conhecimento §3.1). GAQL por REST com
 // `googleAds:searchStream` (a resposta é uma lista de lotes, campos em camelCase, int64 como texto).
@@ -263,6 +264,9 @@ export class ConectorGoogleAds implements ConectorLeitura {
     const urlDaCampanha = new Map(campanhas.itens.map(({ campaign: c }) => [String(c.id), c]));
     const grupoDoAnuncio = new Map(grupos.itens.map(({ adGroup: g, campaign }) => [String(g.id), { url: g, campanha: idNumerico(campaign?.id) }]));
     const micros = (v: string | undefined) => (v === undefined ? null : Number(v));
+    // A imagem da Performance Max (I14, parte 3): só na conta que tem campanha desse tipo.
+    const temPerformanceMax = campanhas.itens.some(({ campaign: c }) => c.advertisingChannelType === 'PERFORMANCE_MAX');
+    const daPerformanceMax = temPerformanceMax ? await this.lerPerformanceMax((x) => q(x)) : [];
     return {
       campaigns: campanhas.itens.map(({ campaign: c, campaignBudget: b }) => ({
         externalId: String(c.id),
@@ -298,8 +302,30 @@ export class ConectorGoogleAds implements ConectorLeitura {
             : {}),
         };
       }),
-      creatives: anuncios.itens.map(({ adGroupAd: a }) => ({ externalId: String(a.ad.id), name: a.ad.name ?? null, kind: a.ad.type ?? null, thumbnailUrl: null })),
+      creatives: [
+        ...anuncios.itens.map(({ adGroupAd: a }) => ({ externalId: String(a.ad.id), name: a.ad.name ?? null, kind: a.ad.type ?? null, thumbnailUrl: null })),
+        ...daPerformanceMax,
+      ],
     };
+  }
+
+  /**
+   * Os grupos de recursos da Performance Max, com a imagem e o gasto dos 30 dias (I14, parte 3). Nunca derruba a leitura
+   * das campanhas: se o Google recusar ou falhar a consulta das imagens, a campanha fica sem imagem; sem o gasto, a
+   * imagem é a de um grupo qualquer da campanha. Limite, permissão e autenticação seguem para quem chama, como antes.
+   */
+  private async lerPerformanceMax(q: <T>(query: string) => Promise<T[]>): Promise<CriativoDaPerformanceMax[]> {
+    const tolerar = async <T>(consulta: string, recurso: string): Promise<T[] | null> => {
+      try {
+        return await q<T>(consulta);
+      } catch (err) {
+        if (!(err instanceof ErroConector) || (err.tipo !== 'definitivo' && err.tipo !== 'transitorio')) throw err;
+        this.logger.warn(`${recurso}: a consulta da Performance Max falhou (${err.tipo}: ${err.message}); segue sem ela`);
+        return null;
+      }
+    };
+    const [imagens, gastos] = await Promise.all([tolerar<LinhaDaImagem>(CONSULTA_DAS_IMAGENS, 'asset_group_asset'), tolerar<LinhaDoGasto>(CONSULTA_DO_GASTO, 'asset_group')]);
+    return imagens ? criativosDaPerformanceMax(imagens, gastos) : [];
   }
 
   /**
