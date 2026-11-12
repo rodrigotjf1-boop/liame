@@ -27,9 +27,14 @@ import {
   frescor,
   grande,
   inteiro,
+  condicaoEmFrase,
+  diaCurto,
   fontesQueFalharam,
+  iconeDoTempo,
   mesAno,
   movimentoDaContagem,
+  quandoFoiLida,
+  tipoDaData,
   pct,
   reais,
   situacaoEmPalavras,
@@ -38,6 +43,7 @@ import {
   umaCasa,
   variacao,
 } from '@/components/regiao/textos-da-regiao';
+import { caminhosDa, respondeuARegiao } from '@/components/conversa/textos';
 import { temModos, tituloDa } from '@/components/shell/navegacao';
 import { ModoProvider } from '@/lib/modo';
 
@@ -239,13 +245,45 @@ describe('Sua região (R2, parte 2)', () => {
       postal: { active: 1, restaurant: 1, snack: 0, bar: 0, home: 0, opened_12m: 0, closed_12m: 0, prefix: '20520' },
       delivery_area: null,
     },
+    week_ahead: {
+      weather: { read_at: '2026-11-12T09:10:00.000Z', days: [{ day: '2026-11-13', condition: 'c', description: 'Chuva', min: 20, max: 28 }] },
+      dates: [{ day: '2026-11-15', name: 'Proclamação da República', kind: 'feriado_nacional', source: 'Lei 662/1949' }],
+    },
+    sector_references: [],
     sources: [
       { source: 'ibge_censo_bairro', status: 'em_dia', read_at: '2026-11-11T09:10:00.000Z', next_try_at: null },
       { source: 'ibge_9528', status: 'falhou', read_at: null, next_try_at: '2026-11-11T18:00:00.000Z' },
       { source: 'receita_cnpj', status: 'falhou', read_at: null, next_try_at: '2026-11-11T18:00:00.000Z' },
+      { source: 'cptec_previsao', status: 'falhou', read_at: null, next_try_at: '2026-11-11T18:00:00.000Z' },
     ],
     generated_at: '2026-11-11T15:00:00.000Z',
   };
+
+  it('a semana que vem (parte 5): o dia curto, o ícone de cada condição, a condição em frase e o tipo da data', () => {
+    expect([diaCurto('2026-11-13'), diaCurto('2026-11-15'), diaCurto('não é dia')]).toEqual(['sex 13/11', 'dom 15/11', 'não é dia']);
+    expect(['ps', 'cl', 'pn', 'n', 'nv', 'c', 'pt', 't', 'xx'].map(iconeDoTempo)).toEqual(['sun', 'sun', 'cloud-sun', 'cloud', 'cloud', 'cloud-rain', 'cloud-rain', 'cloud-rain', 'cloud-rain']);
+    expect(condicaoEmFrase('Parcialmente Nublado')).toBe('Parcialmente nublado');
+    expect(['feriado_nacional', 'varejo', 'salario'].map(tipoDaData)).toEqual(['feriado nacional', 'data do varejo', 'conta do sistema']);
+    const hoje = new Date('2026-11-12T15:00:00.000Z');
+    expect(quandoFoiLida('2026-11-12T09:10:00.000Z', hoje)).toMatch(/^hoje às \d{2}:\d{2}$/);
+    expect(quandoFoiLida('2026-11-10T09:10:00.000Z', hoje)).toMatch(/^em 10\/11 às \d{2}:\d{2}$/);
+    // A previsão que falhou fica na semana que vem, fora da faixa do IBGE.
+    expect(fontesQueFalharam(retrato).map((f) => f.source)).toEqual(['ibge_9528']);
+  });
+
+  it('a resposta da LIA sobre a região (D-RG-18): Ver Sua região e Ver as fontes, na marca da conversa, sem pedir a análise', () => {
+    const tudo = () => true;
+    const marca = '0190d2b0-0000-7000-8000-000000000050';
+    expect(caminhosDa(['Sua região'], tudo, marca)).toEqual([
+      { href: `/marca/regiao?marca=${marca}`, rotulo: 'Ver Sua região' },
+      { href: `/marca/regiao?marca=${marca}&fontes=1`, rotulo: 'Ver as fontes' },
+    ]);
+    // Sem loja no mapa, só a página; sem a permissão de ver Minha marca ou sem a marca, nenhum caminho.
+    expect(caminhosDa(['Lojas no mapa'], tudo, marca)).toEqual([{ href: `/marca/regiao?marca=${marca}`, rotulo: 'Ver Sua região' }]);
+    expect(caminhosDa(['Sua região'], (p) => p !== 'dossie.ver', marca)).toEqual([]);
+    expect(caminhosDa(['Sua região'], tudo)).toEqual([]);
+    expect([respondeuARegiao(['Sua região']), respondeuARegiao(['Lojas no mapa']), respondeuARegiao(['Avisos da Atenção'])]).toEqual([true, true, false]);
+  });
 
   it('os restaurantes do CNPJ (parte 4) em palavras; a falha da Receita fica fora da faixa do IBGE', () => {
     const fp = retrato.food_places!;

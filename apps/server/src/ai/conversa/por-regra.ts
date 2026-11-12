@@ -11,11 +11,14 @@ import type { RespostaDaLia } from './resposta.js';
 // Errar para o lado da IA custa uma chamada; errar para o lado da regra daria uma resposta que não é a da pergunta.
 // Funções puras: a conversa (`conversa/conversa.service.ts`) só as chama.
 
-/** `semana` (o dinheiro do marketing na semana), `campanhas` (cada campanha) e `avisos` (o que pede alguém agora). */
-export type PedidoPorRegra = 'semana' | 'campanhas' | 'avisos';
+/**
+ * `semana` (o dinheiro do marketing na semana), `campanhas` (cada campanha), `avisos` (o que pede alguém agora) e
+ * `regiao` (como é a região da loja: plano da região, D-RG-18; lida pelo serviço de Sua região, não por ferramenta).
+ */
+export type PedidoPorRegra = 'semana' | 'campanhas' | 'avisos' | 'regiao';
 
 /** A leitura que responde cada pedido: a mesma ferramenta que a LIA usaria, com a permissão de quem pergunta. */
-export const LEITURA_DO_PEDIDO: Record<PedidoPorRegra, 'resultados_ciclo_fechado' | 'atencao_avisos'> = {
+export const LEITURA_DO_PEDIDO: Record<Exclude<PedidoPorRegra, 'regiao'>, 'resultados_ciclo_fechado' | 'atencao_avisos'> = {
   semana: 'resultados_ciclo_fechado',
   campanhas: 'resultados_ciclo_fechado',
   avisos: 'atencao_avisos',
@@ -48,6 +51,10 @@ const JUNTO_DAS_CAMPANHAS = palavras('melhor pior melhores piores mais menos ven
 const DOS_AVISOS = palavras('aviso avisos alerta alertas problema problemas errado errada pendencia pendencias urgente urgentes precisa faco fazer');
 const JUNTO_DOS_AVISOS = palavras('eu mim algum alguma alguns algumas algo coisa ha existe primeiro antes hoje atencao resolver olhar cuidar');
 
+// A região da loja (D-RG-18): "como é a minha região?", "me fala do meu bairro", "quem mora em volta da loja?".
+const DA_REGIAO = palavras('regiao bairro vizinhanca redondeza redondezas arredores entorno');
+const JUNTO_DA_REGIAO = palavras('sobre fica ficam onde perto volta redor ao raio x retrato quem mora moram gente pessoas publico tipo aqui la');
+
 const CUMPRIMENTOS = [['bom', 'dia'], ['boa', 'tarde'], ['boa', 'noite'], ['e', 'ai'], ['oi'], ['ola'], ['opa']];
 
 /** As palavras do pedido, sem acento, sem pontuação e sem o cumprimento do começo. */
@@ -69,6 +76,8 @@ export function reconhecerPedido(texto: string): PedidoPorRegra | null {
   if (!p.length || p.length > PALAVRAS_MAXIMO || p[0] === 'e') return null;
   const todas = (...listas: Array<Set<string>>) => p.every((x) => listas.some((l) => l.has(x)));
   const alguma = (lista: Set<string>) => p.some((x) => lista.has(x));
+  // A região com qualquer palavra de outro pedido ("as vendas na minha região") é análise: vai para a IA.
+  if (alguma(DA_REGIAO)) return todas(COMUNS, DA_REGIAO, JUNTO_DA_REGIAO) ? 'regiao' : null;
   if (alguma(DAS_CAMPANHAS)) return todas(COMUNS, DAS_CAMPANHAS, JUNTO_DAS_CAMPANHAS, DA_SEMANA, JUNTO_DA_SEMANA) ? 'campanhas' : null;
   if (alguma(DOS_AVISOS)) return todas(COMUNS, DOS_AVISOS, JUNTO_DOS_AVISOS) ? 'avisos' : null;
   if (alguma(DA_SEMANA)) return todas(COMUNS, DA_SEMANA, JUNTO_DA_SEMANA) ? 'semana' : null;
@@ -109,7 +118,7 @@ const contagem = (v: unknown): number => (typeof v === 'string' && /^[\d.]+$/.te
 const juntar = (itens: string[]): string => (itens.length <= 1 ? (itens[0] ?? '') : `${itens.slice(0, -1).join(', ')} e ${itens.at(-1)}`);
 const pedidosEscritos = (texto: string, n: number): string => `${texto} ${n === 1 ? 'pedido confirmado' : 'pedidos confirmados'}`;
 
-function montador() {
+export function montador() {
   const blocos: RespostaDaLia['blocos'] = [];
   const calculados: RespostaPorRegra['calculados'] = [];
   return {
@@ -259,5 +268,7 @@ export function respostaPorRegra(pedido: PedidoPorRegra, leitura: unknown): Resp
   const v = obj(leitura);
   if (pedido === 'semana') return daSemana(v);
   if (pedido === 'campanhas') return dasCampanhas(v);
-  return dosAvisos(v);
+  if (pedido === 'avisos') return dosAvisos(v);
+  // A região é montada com o retrato de Sua região (`ai/conversa/regiao.ts`), não com uma leitura de ferramenta.
+  return null;
 }

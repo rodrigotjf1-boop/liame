@@ -6,7 +6,7 @@ import { Icone } from '@/components/ui/icone';
 import { useDialogo } from '@/components/ui/use-dialogo';
 import { useDetalhes } from '@/lib/modo';
 import { Osm } from './aneis';
-import { FONTES_DA_REGIAO, mesAno, situacaoEmPalavras, trimestre } from './textos-da-regiao';
+import { diaCurto, FONTES_DA_REGIAO, mesAno, situacaoEmPalavras, trimestre } from './textos-da-regiao';
 
 // A gaveta "Ver as fontes" de Sua região (protótipo P40): cada número com a fonte, o recorte, o período, quando foi lido
 // e, no Pro (ou em "Ver detalhes"), a consulta e de quanto em quanto renova. Os números ficam numa tabela do sistema; a
@@ -41,6 +41,12 @@ export function GavetaFontes({ loja, r, reserva, aoFechar }: { loja: StoreLocati
         return c?.pix ? mesAno(c.pix.period) : '—';
       case 'receita_cnpj':
         return r.food_places ? `${mesAno(r.food_places.period)} (abertos e baixados desde ${mesAno(r.food_places.since)})` : '—';
+      case 'cptec_cidade':
+        return 'atual';
+      case 'cptec_previsao': {
+        const dias = r.week_ahead?.weather?.days ?? [];
+        return dias.length ? `${diaCurto(dias[0]!.day)} a ${diaCurto(dias.at(-1)!.day)}` : '—';
+      }
       case 'ibge_rm':
         return 'atual';
       default: {

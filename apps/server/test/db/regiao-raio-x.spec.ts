@@ -5,6 +5,7 @@ import { sql } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { ARQUIVO_BASICO, ARQUIVO_RENDA } from '../../src/regiao/censo.js';
 import { ENDERECO_DOS_MUNICIPIOS_DO_IBGE, HOST_DA_RECEITA, PASTA_DO_CNPJ } from '../../src/regiao/cnpj.js';
+import { diaEmBrasilia, diasDepois } from '../../src/regiao/semana.js';
 import { RegiaoCnpjService } from '../../src/worker/regiao-cnpj.service.js';
 import { RegiaoFontesService } from '../../src/worker/regiao-fontes.service.js';
 import { enableMfa, ownerQuery, resetIpRateLimits, signupAndLogin, startApi, type TestApi } from '../helpers/api.js';
@@ -19,6 +20,8 @@ import { APP_URL, hasDb, OWNER_URL } from './env.js';
 // tabelas são do produto (sem empresa): o teste limpa no começo e no fim.
 
 const RIO = '3304557';
+/** Hoje em Brasília, pelo relógio de verdade (a rota do retrato não recebe o relógio do teste). */
+const HOJE = diaEmBrasilia(new Date());
 // A rotina lê o município de TODAS as lojas no mapa do banco (o de teste é dividido com as outras suítes): a loja da
 // falha usa um código novo a cada rodada, para a leitura dele nunca estar em dia de uma rodada anterior.
 const SP = `35${String(Date.now() % 100_000).padStart(5, '0')}`;
@@ -59,6 +62,15 @@ function ibgeDeMentira(falhar: Set<string>, pedidos: string[]): typeof fetch {
       const mun = Number(/Municipio_Ibge%20eq%20([0-9]{7})/.exec(url)?.[1] ?? '0');
       const linha = (AnoMes: number, pessoas: number, valor: number) => ({ AnoMes, Municipio_Ibge: mun, VL_PagadorPF: valor, QT_PES_PagadorPF: pessoas });
       return json({ value: [linha(202510, 4900000, 40000000000), linha(202610, 5109806, 44244787453.94), linha(202611, 4817947, 17335615315.87)] });
+    }
+    // A BrasilAPI (parte 5): a cidade do CPTEC pelo nome (o Rio; o mesmo nome em outra UF não serve) e a previsão.
+    if (url.startsWith('https://brasilapi.com.br/api/cptec/v1/cidade/')) {
+      return json([{ nome: 'Rio de Janeiro', id: 241, estado: 'RJ', regiao: 'Sudeste' }, { nome: 'Rio de Janeiro', id: 9999, estado: 'XX', regiao: 'Sul' }]);
+    }
+    if (url === 'https://brasilapi.com.br/api/cptec/v1/clima/previsao/241/6') {
+      // Os dias da previsão a partir de hoje de verdade: a rota do retrato lê "de hoje em diante" pelo relógio real.
+      const dia = (n: number, condicao: string, condicao_desc: string, min: number, max: number) => ({ data: diasDepois(HOJE, n), condicao, condicao_desc, min, max, indice_uv: 0 });
+      return json({ cidade: 'Rio de Janeiro', estado: 'RJ', atualizado_em: HOJE, clima: [dia(0, 'pn', 'Parcialmente Nublado', 21, 29), dia(1, 'c', 'Chuva', 20, 28), dia(2, 'ps', 'Predomínio de Sol', 22, 31)] });
     }
     const tabela = /agregados\/([0-9]+)\//.exec(url)?.[1] ?? '';
     const decod = decodeURIComponent(url);
@@ -210,6 +222,9 @@ describe.skipIf(!hasDb)('Sua região: a rotina das fontes públicas e o retrato 
         // O Rio é capital: a renda do trabalho da PNAD trimestral.
         `ibge_6472:${RIO}:lida`,
         `bcb_pix:${RIO}:lida`,
+        // A semana que vem (parte 5): a cidade no CPTEC (resolvida na mesma volta) e a previsão dela.
+        `cptec_cidade:${RIO}:lida`,
+        `cptec_previsao:${RIO}:lida`,
         // A UF, a RM do Rio (resolvida na mesma volta) e o Brasil.
         'ibge_7531:33:lida',
         'ibge_7395:3301:lida',
@@ -220,7 +235,7 @@ describe.skipIf(!hasDb)('Sua região: a rotina das fontes públicas e o retrato 
       ].sort(),
     );
     // As fontes recebem só códigos de lugar (e os arquivos do Censo): nada da loja.
-    expect(pedidos.every((u) => u.startsWith('https://ftp.ibge.gov.br/') || u.startsWith('https://servicodados.ibge.gov.br/') || u.startsWith('https://olinda.bcb.gov.br/'))).toBe(true);
+    expect(pedidos.every((u) => u.startsWith('https://ftp.ibge.gov.br/') || u.startsWith('https://servicodados.ibge.gov.br/') || u.startsWith('https://olinda.bcb.gov.br/') || u.startsWith('https://brasilapi.com.br/api/cptec/'))).toBe(true);
     expect(pedidos.some((u) => u.includes('20520054') || u.includes('Conde'))).toBe(false);
 
     const r = await retrato(tijuca);
@@ -247,6 +262,20 @@ describe.skipIf(!hasDb)('Sua região: a rotina das fontes públicas e o retrato 
     expect(r.body.sources.filter((f: { source: string }) => f.source !== 'receita_cnpj').every((f: { status: string }) => f.status === 'em_dia')).toBe(true);
     expect(r.body.sources.find((f: { source: string }) => f.source === 'receita_cnpj')).toMatchObject({ status: 'lendo' });
     expect(r.body.food_places).toBeNull();
+    // A semana que vem (parte 5): a previsão de hoje em diante (em Brasília, pelo relógio de verdade) e as datas do
+    // calendário do Liame, na ordem, com o prazo do salário (a conta exata está em `test/regiao-semana.spec.ts`).
+    expect(r.body.week_ahead.weather.days).toEqual([
+      { day: HOJE, condition: 'pn', description: 'Parcialmente Nublado', min: 21, max: 29 },
+      { day: diasDepois(HOJE, 1), condition: 'c', description: 'Chuva', min: 20, max: 28 },
+      { day: diasDepois(HOJE, 2), condition: 'ps', description: 'Predomínio de Sol', min: 22, max: 31 },
+    ]);
+    const datas = r.body.week_ahead.dates as Array<{ day: string; name: string; kind: string }>;
+    expect(datas.length).toBeGreaterThan(0);
+    expect(datas.length).toBeLessThanOrEqual(6);
+    expect(datas.every((d) => d.day >= HOJE && d.day <= diasDepois(HOJE, 45))).toBe(true);
+    expect(datas.map((d) => d.day)).toEqual([...datas.map((d) => d.day)].sort());
+    expect(datas.filter((d) => d.kind === 'salario').length).toBeLessThanOrEqual(1);
+    expect(r.body.sector_references.length).toBeGreaterThan(0);
     // Os números mais novos que o Censo (parte 3): a renda do bairro corrigida pelo IPCA (7.695,82 ÷ 6.411,95 = 1,2002),
     // a renda da PNAD na UF e na RM, a média dos 4 trimestres da capital, o Pix (out/2026 × out/2025; o mês corrente,
     // parcial, fica de fora) e a inflação de comer fora na RM e no Brasil.
@@ -329,6 +358,47 @@ describe.skipIf(!hasDb)('Sua região: a rotina das fontes públicas e o retrato 
       ),
     ).rejects.toThrow();
     await ownerQuery(`delete from liame.region_food_part`);
+  });
+
+  it('a LIA responde "como é a minha região?" por regra, sem IA, com os números de Sua região e sem o endereço (D-RG-18)', async () => {
+    await ligarFlagDaEmpresa(api, 'ia', tenantId, true);
+    try {
+      // A rota da conversa responde em fluxo (text/event-stream): lê até o fim e guarda os eventos.
+      const res = await fetch(`${api.base}/v1/conversations/messages`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', cookie },
+        body: JSON.stringify({ message_id: randomUUID(), brand_id: brandId, text: 'Como é a minha região?' }),
+      });
+      expect(res.status).toBe(200);
+      const eventos = (await res.text())
+        .split('\n\n')
+        .map((b) => b.split('\n').filter((l) => l.startsWith('data: ')).map((l) => l.slice(6)).join('\n'))
+        .filter(Boolean)
+        .map((d) => JSON.parse(d) as { type: string; step?: { id: string; label: string; status: string }; message?: Record<string, any> });
+      expect(eventos.map((e) => [e.type, e.step?.status ?? null])).toEqual([
+        ['inicio', null],
+        ['passo', 'lendo'],
+        ['passo', 'ok'],
+        ['mensagem', null],
+        ['fim', null],
+      ]);
+      expect(eventos[1]!.step).toMatchObject({ id: 'regra-regiao', label: 'Lendo Sua região' });
+      const m = eventos.find((e) => e.type === 'mensagem')!.message!;
+      expect(m).toMatchObject({ role: 'lia', status: 'ok', by_system: true, usage_id: null, read: ['Sua região'] });
+      const texto = (m.blocks as Array<{ text: Array<{ text: string }> }>).map((b) => b.text.map((s) => s.text).join(''));
+      expect(texto[0]).toBe('Gente: a loja Loja Tijuca fica no bairro Tijuca, Rio de Janeiro: 142.909 pessoas em 9,94 km², 14.375 por km² (IBGE, Censo 2022).');
+      expect(texto.some((t) => t.startsWith('Concorrência: 2 lugares de comida com CNPJ ativo no bairro e 10 no município'))).toBe(true);
+      const amanha = diasDepois(HOJE, 1);
+      expect(texto.find((t) => t.startsWith('Semana que vem: chuva prevista '))).toContain(`, ${amanha.slice(8, 10)}/${amanha.slice(5, 7)} (CPTEC)`);
+      expect(texto.at(-1)).toMatch(/^Ainda não dá para saber:/);
+      // Cada número leva a fonte, e nada do endereço da loja aparece (D-RG-2).
+      expect((m.numbers as Array<{ value: string; sources: string[] }>).find((n) => n.value === '142.909')?.sources.join(' ')).toContain('Sua região');
+      expect(JSON.stringify(m)).not.toMatch(/Conde de Bonfim|20520054|450/);
+      // Nenhuma chamada à IA.
+      expect((await ownerQuery<{ n: number }>(`select count(*)::int as n from liame.ai_usage where tenant_id = $1`, [tenantId]))[0]!.n).toBe(0);
+    } finally {
+      await ligarFlagDaEmpresa(api, 'ia', tenantId, false);
+    }
   });
 
   it('a fonte que falha aparece como "falhou", com a próxima tentativa em 1 hora; o resto vale', async () => {

@@ -11,7 +11,7 @@ import { horaDe } from '@/lib/formato';
 import type { Modo } from '@/lib/modo';
 import { type AcoesDosCartoes, CartaoDaConversa, ContatoDoAtendimento } from './cartoes';
 import { RetornoDaMensagem } from './retorno-da-mensagem';
-import { avisoDoSistema, caminhosDa, gruposDe, NOTA_DO_SISTEMA, registradoNoAviso, textoDaResposta } from './textos';
+import { avisoDoSistema, caminhosDa, gruposDe, NOTA_DO_SISTEMA, registradoNoAviso, respondeuARegiao, textoDaResposta } from './textos';
 
 // As mensagens da conversa (protótipo P5). A da pessoa, como foi guardada (sem dado pessoal); a da LIA, em blocos já
 // conferidos, com a fonte de cada número, o que ela leu e o que ela registrou; e o aviso do sistema, que nunca é
@@ -86,6 +86,7 @@ export function MensagemDaLia({
   pode,
   cartoes,
   ultima,
+  marca = null,
   aoPerguntarDeNovo,
   aoPedirAnalise,
 }: {
@@ -95,6 +96,8 @@ export function MensagemDaLia({
   cartoes: AcoesDosCartoes;
   /** É a última mensagem da conversa: só nela "Perguntar de novo" faz sentido. */
   ultima: boolean;
+  /** A marca da conversa (os caminhos de Sua região levam a ela). */
+  marca?: string | null;
   aoPerguntarDeNovo: () => void;
   /** Depois de um resumo do sistema, a pessoa pode pedir a análise da LIA (a pergunta seguinte, já escrita). */
   aoPedirAnalise: () => void;
@@ -182,9 +185,10 @@ export function MensagemDaLia({
     requestAnimationFrame(() => linhas.current[n]?.scrollIntoView({ block: 'nearest', behavior: semMovimento() ? 'auto' : 'smooth' }));
   }
   const texto = (t: ExplanationSegment[]) => <TextoDaExplicacao trechos={t} numeros={m.numbers} aoTocar={mostrarFonte} />;
-  const caminhos = caminhosDa(m.read, pode);
+  const caminhos = caminhosDa(m.read, pode, marca);
   const doSistema = m.by_system;
-  const pedirAnalise = doSistema && ultima;
+  // A resposta da região fica com os dois caminhos dela (D-RG-18): sem "Pedir a análise da LIA".
+  const pedirAnalise = doSistema && ultima && !respondeuARegiao(m.read);
 
   return (
     <li className="msg msg--lia" id={`msg-${item.id}`}>

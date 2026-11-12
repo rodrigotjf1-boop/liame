@@ -163,3 +163,24 @@
   .rg-cep { grid-template-columns: minmax(0, 1fr) auto; }
   .rg-g-mapa { grid-template-columns: minmax(0, 1fr); justify-items: center; }
 }
+
+/* A semana que vem e a referência do setor (R2, parte 5; P40): o tempo por dia, as datas e as notícias do setor. */
+.rg-duas { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--sp-4); }
+.rg-duas > div { display: grid; align-content: start; gap: var(--sp-2); min-width: 0; }
+.rg-duas h4 { font-size: var(--text-sm); font-weight: 600; }
+@container rgcard (max-width: 620px) { .rg-duas { grid-template-columns: minmax(0, 1fr); } }
+.rg-tempo { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 104px), 1fr)); gap: var(--sp-2); margin: 0; padding: 0; list-style: none; }
+.rg-dia { display: grid; justify-items: start; gap: 2px; padding: var(--sp-2) var(--sp-3); border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); font-size: var(--text-xs); min-width: 0; }
+.rg-dia b { font-size: var(--text-sm); font-weight: 600; }
+.rg-dia .ic { width: 20px; height: 20px; color: var(--text-muted); }
+.rg-dia span { color: var(--text-muted); overflow-wrap: anywhere; }
+.rg-dia .num { color: var(--text); }
+.rg-datas { display: grid; gap: var(--sp-2); margin: 0; padding: 0; list-style: none; }
+.rg-data { display: grid; grid-template-columns: 5.5rem minmax(0, 1fr); gap: var(--sp-3); align-items: baseline; font-size: var(--text-sm); }
+.rg-data .num { color: var(--text-muted); font-size: var(--text-xs); white-space: nowrap; }
+.rg-data span { min-width: 0; overflow-wrap: anywhere; }
+.rg-data small { display: block; font-size: var(--text-xs); color: var(--text-subtle); }
+.rg-ref { display: grid; gap: var(--sp-2); margin: 0; padding: 0; list-style: none; }
+.rg-ref li { display: grid; gap: 2px; padding: var(--sp-3) var(--sp-4); border-left: 3px solid var(--border-strong); background: var(--surface-2); border-radius: 0 var(--radius) var(--radius) 0; font-size: var(--text-sm); min-width: 0; overflow-wrap: anywhere; }
+.rg-ref li > span:first-child { justify-self: start; }
+.rg-ref small { font-size: var(--text-xs); color: var(--text-subtle); }

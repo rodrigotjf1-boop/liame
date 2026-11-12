@@ -1,6 +1,7 @@
 import type { RegionFoodCount, RegionNumber, RegionOverviewResponse, RegionSourceStatus } from '@liame/contracts';
 import { FONTE_CENSO_BAIRRO } from './censo.js';
 import { FONTE_DO_CNPJ } from './cnpj.js';
+import { FONTE_DA_CIDADE_DO_CPTEC, FONTE_DA_PREVISAO } from './tempo.js';
 import { FONTE_DA_RM, FONTE_DO_PIX, LEITURAS_DO_MUNICIPIO, lugarDaLeitura } from './ibge.js';
 
 // Sua região (plano da região, R2): as contas puras do retrato, sem banco e sem rede. Os números vêm das tabelas do
@@ -29,7 +30,7 @@ export type LeituraGuardada = {
 };
 
 /** As fontes (e o lugar de cada uma) que o retrato de uma loja usa: o Censo, a RM, as tabelas de cada recorte e o Pix. */
-export function fontesDoRetrato(municipio: string, rm: string | null): Array<{ fonte: string; lugar: string }> {
+export function fontesDoRetrato(municipio: string, rm: string | null, cidadeNoCptec = false): Array<{ fonte: string; lugar: string }> {
   const lista = [
     { fonte: FONTE_CENSO_BAIRRO, lugar: '0' },
     { fonte: FONTE_DA_RM, lugar: municipio },
@@ -41,8 +42,14 @@ export function fontesDoRetrato(municipio: string, rm: string | null): Array<{ f
   lista.push({ fonte: FONTE_DO_PIX, lugar: municipio });
   // O CNPJ da Receita vale para o país inteiro (uma leitura por mês, de horas): por último, e não segura o retrato.
   lista.push({ fonte: FONTE_DO_CNPJ, lugar: '0' });
+  // A semana que vem (parte 5): a cidade no CPTEC e, quando ela existe, a previsão; também não seguram o retrato.
+  lista.push({ fonte: FONTE_DA_CIDADE_DO_CPTEC, lugar: municipio });
+  if (cidadeNoCptec) lista.push({ fonte: FONTE_DA_PREVISAO, lugar: municipio });
   return lista;
 }
+
+/** As fontes que têm o estado próprio na tela (a Concorrência e a semana que vem) e não seguram o retrato. */
+export const FONTES_QUE_NAO_SEGURAM: ReadonlySet<string> = new Set([FONTE_DO_CNPJ, FONTE_DA_CIDADE_DO_CPTEC, FONTE_DA_PREVISAO]);
 
 const iso = (v: Date | string | null): string | null => (v === null ? null : (v instanceof Date ? v : new Date(v)).toISOString());
 
@@ -156,7 +163,7 @@ export function situacaoDaFonte(fonte: string, leitura: LeituraGuardada | undefi
 /** A situação do retrato: `lendo` se alguma fonte ainda não foi lida, `parcial` se alguma falhou, senão `pronto`. */
 export function situacaoDoRetrato(fontes: readonly RegionSourceStatus[]): 'lendo' | 'parcial' | 'pronto' {
   // A leitura do CNPJ leva horas na primeira vez: a Concorrência mostra o "lendo" dela, e o resto do retrato aparece antes.
-  const contam = fontes.filter((f) => f.source !== FONTE_DO_CNPJ);
+  const contam = fontes.filter((f) => !FONTES_QUE_NAO_SEGURAM.has(f.source));
   if (contam.some((f) => f.status === 'lendo')) return 'lendo';
   if (contam.some((f) => f.status === 'falhou')) return 'parcial';
   return 'pronto';

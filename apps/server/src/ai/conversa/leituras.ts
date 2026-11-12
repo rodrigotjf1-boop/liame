@@ -48,6 +48,9 @@ export function rotuloDoPasso(ferramenta: string, input: unknown): string {
       return 'Registrando a demanda';
     case FERRAMENTA_PROPOR_CUPOM:
       return 'Enviando a proposta para Aprovações';
+    // A resposta por regra de "como é a minha região?" (D-RG-18): lê Sua região, não uma ferramenta da LIA.
+    case 'sua_regiao':
+      return 'Lendo Sua região';
     default:
       return 'Lendo os dados';
   }
@@ -72,6 +75,9 @@ export function rotuloDaLeitura(ferramenta: string, input: unknown): string | nu
       return 'Como te acham no Google';
     case 'equipe_trabalho':
       return 'Sua equipe';
+    // Sem loja no mapa, a leitura é a lista das lojas (a tela leva só a Sua região, sem "Ver as fontes").
+    case 'sua_regiao':
+      return (input && typeof input === 'object' && (input as { tipo?: unknown }).tipo === 'sem_loja') ? 'Lojas no mapa' : 'Sua região';
     default:
       return null;
   }

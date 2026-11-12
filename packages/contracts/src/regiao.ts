@@ -299,6 +299,33 @@ export const RegionOverviewResponse = z.strictObject({
       delivery_area: RegionFoodCount.extend({ matched: z.number().int() }).nullable(),
     })
     .nullable(),
+  /**
+   * A semana que vem (R2, parte 5): a previsão do tempo por dia do município (CPTEC/INPE, pela BrasilAPI; nula se o
+   * CPTEC não tem a cidade ou ainda não foi lida) e as datas dos próximos 45 dias (os feriados nacionais e as datas do
+   * varejo do calendário do Liame, e o prazo do salário, conta do sistema). Nula sem a loja no mapa.
+   */
+  week_ahead: z
+    .strictObject({
+      weather: z
+        .strictObject({
+          read_at: z.iso.datetime(),
+          days: z.array(
+            z.strictObject({
+              day: z.string(),
+              /** O código da condição no CPTEC ("c", "pn", "ps"…) e o texto dela. */
+              condition: z.string(),
+              description: z.string(),
+              min: z.number().int(),
+              max: z.number().int(),
+            }),
+          ),
+        })
+        .nullable(),
+      dates: z.array(z.strictObject({ day: z.string(), name: z.string(), kind: Slug, source: z.string() })),
+    })
+    .nullable(),
+  /** A referência do setor (D-RG-9): números divulgados à imprensa, com a fonte; nunca o número da loja. */
+  sector_references: z.array(z.strictObject({ text: z.string(), source: z.string(), extra: z.string().nullable(), as_of: z.string() })),
   sources: z.array(RegionSourceStatus),
   generated_at: z.iso.datetime(),
 });
