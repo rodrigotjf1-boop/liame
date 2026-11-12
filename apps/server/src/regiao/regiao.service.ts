@@ -730,14 +730,27 @@ export class RegiaoService {
     const google = contas.filter((c) => c.provider === 'google_ads');
     const cidades = google.length
       ? (
+          // O Google tem mais de um lugar "City" para o mesmo município (o antigo, "Duque de Caxias,State of Rio de
+          // Janeiro,Brazil", e o novo, "Duque de Caxias,Duque de Caxias,State of…"): a cidade da tela é o nome com o
+          // estado (o penúltimo pedaço do nome completo), somada; o lugar ainda sem nome fica sozinho, pelo id.
           await tx.execute<{ id: string; name: string | null; full_name: string | null; clicks: string; impressions: string; total: string }>(sql`
-            select c.geo_target_id::text as id, g.name, g.canonical_name as full_name, sum(c.clicks)::text as clicks,
-                   sum(c.impressions)::text as impressions, sum(sum(c.clicks)) over ()::text as total
-              from liame.ad_city_daily c
-              left join liame.region_geo_target g on g.id = c.geo_target_id
-             where c.brand_id = ${brandId} and c.connected_account_id in ${google.map((c) => c.id)} and c.day between ${j.inicio}::date and ${j.fim}::date
-             group by c.geo_target_id, g.name, g.canonical_name
-             order by sum(c.clicks) desc, c.geo_target_id
+            with por_lugar as (
+              select c.geo_target_id, g.name, g.canonical_name, sum(c.clicks) as clicks, sum(c.impressions) as impressions,
+                     string_to_array(g.canonical_name, ',') as partes
+                from liame.ad_city_daily c
+                left join liame.region_geo_target g on g.id = c.geo_target_id
+               where c.brand_id = ${brandId} and c.connected_account_id in ${google.map((c) => c.id)} and c.day between ${j.inicio}::date and ${j.fim}::date
+               group by c.geo_target_id, g.name, g.canonical_name
+            ), por_cidade as (
+              select min(geo_target_id) as geo_target_id, min(name) as name,
+                     (array_agg(canonical_name order by length(canonical_name), geo_target_id))[1] as full_name,
+                     sum(clicks) as clicks, sum(impressions) as impressions
+                from por_lugar
+               group by coalesce(name || '|' || coalesce(partes[greatest(cardinality(partes) - 1, 1)], ''), 'id:' || geo_target_id::text)
+            )
+            select geo_target_id::text as id, name, full_name, clicks::text as clicks, impressions::text as impressions, sum(clicks) over ()::text as total
+              from por_cidade
+             order by clicks desc, geo_target_id
              limit ${CIDADES_NA_SECAO}`)
         ).rows
       : [];
