@@ -41,11 +41,28 @@ de menu confirmado).
 | `pages_messaging` | Recebe e responde as mensagens da Página no Messenger, dentro da janela da Meta | Direct e Messenger | No código (A6, Z14) |
 | `pages_manage_metadata` | Inscreve o app nos avisos da Página (as mensagens e os comentários chegam na hora) | — (sem tela própria) | No código |
 
-**A parte da região (a sessão da região completa):** o uso dos números do Instagram e da Página em Sua região (os
-seguidores e a cidade do público), com o caminho da tela e o roteiro do vídeo. _Espaço reservado:_
+**A parte da região (escrita pela sessão da região em 12/11/2026):** os números da conta do Instagram e da Página, e não de
+cada publicação, em **Minha marca › Região › Sua região › "O público nas redes"**.
+- **Fonte:** plano da região, R4, parte 3; revisão R4-3 do protótipo P40 (estados 28 a 30), aprovada pelo dono em 12/11/2026; base §19.7.
+- **Situação:** **em construção** no dia deste rascunho. Os 4 pedidos de acesso avançado já estão no rascunho de análise do app, adicionados pela sessão da região em 12/11/2026, com o dono presente.
+- **Quem vê:** quem vê Minha marca › Região.
+- **Quando lê:** uma leitura por dia, só com a função `regiao` ligada na marca.
+- **O que nunca aparece:** seguidor nenhum por nome; os números são somados.
 
-- `instagram_manage_insights` e `read_insights` em Sua região: …
-- `instagram_basic` e `pages_read_engagement` em Sua região: …
+- **`instagram_manage_insights` em Sua região:**
+  - os seguidores do Instagram e como mudam nas 4 semanas (o campo `followers_count`, com a série guardada pelo Liame, e `follows_and_unfollows`);
+  - os toques nos botões do perfil: "como chegar", "ligar" e "mensagem" (`profile_links_taps`);
+  - de que cidades são os seguidores (`follower_demographics` com `breakdown=city`: as 45 maiores, só com 100 seguidores ou mais).
+- **`read_insights` e `pages_read_engagement` em Sua região:**
+  - os seguidores da Página e quem seguiu ou deixou de seguir (`page_follows`, `page_daily_follows_unique` e `page_daily_unfollows_unique`);
+  - as visitas à Página (`page_views_total`).
+  - A cidade não: a Meta tirou as métricas de cidade da Página em 15/11/2025.
+- **`instagram_basic` em Sua região:** o perfil da conta ligada (o nome e o `followers_count`), base dos números acima.
+- **Linha do vídeo (só se a seção estiver no ar no dia da gravação):**
+  1. Em Minha marca › Região, rolar até "O público nas redes" e mostrar os seguidores, os toques e as cidades.
+  2. No app do Instagram, abrir o painel profissional › Insights › Público e mostrar os mesmos seguidores e as mesmas cidades.
+  3. No Business Suite, mostrar os seguidores da Página.
+- **Recomendação da sessão da região:** não segurar o envio por esta seção. As 4 permissões já aparecem em telas no ar ("Do seu Instagram" e "O que o post trouxe"). Se ela entrar no ar antes da gravação, acrescente a linha do vídeo e a frase em inglês da seção 4.
 
 ## 3. Os vídeos (um por permissão, ou um que passe por todas, como a Meta aceitar)
 
@@ -88,6 +105,12 @@ vivo no painel, da mesma conta, e o login da Meta no começo do vídeo**. Então
   without a person's approval."
 - **`pages_read_user_content` e `pages_manage_engagement`:** "The same for the comments on the restaurant's own Facebook
   Page posts: read, reply after a person approves, hide and unhide."
+- **A frase da região (acrescentar ao fim do texto de `instagram_manage_insights` e ao de `pages_read_engagement` e
+  `read_insights`, só se "O público nas redes" estiver no ar no dia da gravação):** "Liame also shows the account-level
+  numbers of the connected Instagram account and Facebook Page on the 'Your region' page: the followers and how they
+  change, taps on the directions, call and message buttons, Page views and the top cities of the Instagram followers, as
+  Meta aggregates them, so the restaurant can check whether its audience lives in its delivery area. No follower is shown
+  by name."
 - **`instagram_manage_messages`:** "Liame shows the Direct messages sent to the restaurant's Instagram account and lets the
   restaurant team reply within Meta's 24-hour window. A person writes or approves each reply."
 - **`pages_messaging` e `pages_manage_metadata`:** "The same for the Messenger conversations of the restaurant's Facebook
