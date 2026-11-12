@@ -514,7 +514,7 @@ describe('desenho da tela (o mesmo componente do navegador)', () => {
     expect(pro).toContain('; na última coluna, o pedido de mudança</caption>');
     // Nos cartões (o padrão do Pro, P44), um botão por campanha com pedido. Na tabela (a um clique, montada escondida),
     // cada campanha com pedido tem o botão na coluna e embaixo do nome (no celular a coluna some).
-    const [cartoes, tabela] = pro.split('class="table-wrap"');
+    const [cartoes, tabela] = pro.split('class="cc-tab table-wrap"');
     expect(botoes(cartoes!)).toEqual(['Combo sexta', 'Smash em dobro']);
     expect(botoes(tabela!)).toEqual(['Combo sexta', 'Combo sexta', 'Smash em dobro', 'Smash em dobro']);
     expect(pro.match(/class="mudar-linha"/g)).toHaveLength(2);
@@ -555,7 +555,12 @@ describe('desenho da tela (o mesmo componente do navegador)', () => {
     expect(pro).toContain('Anúncio de texto');
     // Fora do ar não mostra imagem nenhuma, nem a do armazenamento.
     expect(pro.match(/<img src="https:\/\/armazem.exemplo/g)).toHaveLength(1);
-    expect(pro).toContain('<b>Total</b>');
+    expect(pro).toContain('<span>Total do período</span>');
+    // O nome da campanha é um título (o leitor de tela navega pelos cartões), e a situação é um selo.
+    expect(pro).toContain('<h3 class="cc-nome">');
+    expect(pro).toContain('Toque na imagem para ver o anúncio maior.');
+    // Na tabela (a um clique), cada número leva o nome da coluna, para o bloco do estreito.
+    expect(pro).toContain('data-col="ROAS caixa"');
     // No Lite, a miniatura pequena ao lado do nome, sem abrir a prévia.
     const lite = desenhar(r, '7', 'lite');
     semLixo(lite);

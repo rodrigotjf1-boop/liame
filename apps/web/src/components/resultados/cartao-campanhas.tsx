@@ -23,9 +23,11 @@ import type { CartaoCampanhas as Dados, Celula, LinhaCampanha } from './textos';
 // Com "vendas informadas ao Google" ligado (protótipo P14, parte B), uma linha embaixo da lista diz quantas vendas o
 // Liame informou ao Google: no modo simples, antes de "Ver detalhes"; no Pro, embaixo da tabela (uma vez só).
 
-function Numero({ c }: { c: Celula }) {
+// `data-col` leva o nome da coluna: no estreito, cada linha da tabela vira um bloco, e o nome aparece antes do número
+// (P44: nenhuma barra de rolagem de lado).
+function Numero({ c, col }: { c: Celula; col: string }) {
   return (
-    <td className={c.forte ? 'n num forte' : 'n num'}>
+    <td className={c.forte ? 'n num forte' : 'n num'} data-col={col}>
       {c.texto}
       {c.sub && <span className={c.subAtencao ? 'sub sub--atencao' : 'sub'}>{c.sub}</span>}
     </td>
@@ -35,14 +37,14 @@ function Numero({ c }: { c: Celula }) {
 function Celulas({ c }: { c: LinhaCampanha['celulas'] }) {
   return (
     <>
-      <Numero c={c.investimento} />
-      <Numero c={c.conversas} />
-      <Numero c={c.pedidos} />
-      <Numero c={c.receita} />
-      <Numero c={c.margem} />
-      <Numero c={c.custoPorPedido} />
-      <Numero c={c.roasPlataforma} />
-      <Numero c={c.roasCaixa} />
+      <Numero c={c.investimento} col="Investimento" />
+      <Numero c={c.conversas} col="Conversas" />
+      <Numero c={c.pedidos} col="Pedidos" />
+      <Numero c={c.receita} col="Receita" />
+      <Numero c={c.margem} col="Margem conhecida" />
+      <Numero c={c.custoPorPedido} col="Custo por pedido" />
+      <Numero c={c.roasPlataforma} col="ROAS plataforma" />
+      <Numero c={c.roasCaixa} col="ROAS caixa" />
     </>
   );
 }
@@ -109,18 +111,36 @@ export function CartaoCampanhas({ campanhas, lite, rotuloPeriodo, pedir = null, 
       <div className="card-cab">
         <div>
           <h2 id="t-camp">{d.pro || campanhas.vazio ? 'Por campanha' : lite.titulo}</h2>
-          {d.mostraPro && <p className="card-sub">Cada linha compara o ROAS que a plataforma informa, na janela dela, com o confirmado no caixa, na janela de 7 dias do Liame.</p>}
+          {d.mostraPro && (
+            <p className="card-sub">
+              {vista === 'cartoes' && !campanhas.vazio
+                ? 'Cada cartão traz a imagem do anúncio que mais gastou no período e compara o ROAS que a plataforma informa, na janela dela, com o confirmado no caixa, na janela de 7 dias do Liame.'
+                : 'Cada linha compara o ROAS que a plataforma informa, na janela dela, com o confirmado no caixa, na janela de 7 dias do Liame.'}
+            </p>
+          )}
         </div>
         {d.mostraPro && !campanhas.vazio && (
-          <div className="legenda" aria-hidden="true">
-            <span>
-              <i />
-              Plataforma
-            </span>
-            <span>
-              <i className="lg-caixa" />
-              Confirmado no caixa
-            </span>
+          <div className="cc-cab-dir">
+            <div className="legenda" aria-hidden="true">
+              <span>
+                <i />
+                Plataforma
+              </span>
+              <span>
+                <i className="lg-caixa" />
+                Confirmado no caixa
+              </span>
+            </div>
+            <div className="seg cc-vista" role="group" aria-label="Ver as campanhas em">
+              <button type="button" aria-pressed={vista === 'cartoes'} onClick={() => mudarVista('cartoes')}>
+                <Icone nome="image" pequeno />
+                Cartões
+              </button>
+              <button type="button" aria-pressed={vista === 'tabela'} onClick={() => mudarVista('tabela')}>
+                <Icone nome="menu" pequeno />
+                Tabela
+              </button>
+            </div>
           </div>
         )}
       </div>
@@ -144,18 +164,6 @@ export function CartaoCampanhas({ campanhas, lite, rotuloPeriodo, pedir = null, 
           {!d.pro && vendasAoGoogle && <LinhaVendasGoogle linha={vendasAoGoogle} />}
           {!d.pro && <BotaoDetalhes aberto={d.aberto} controla="camp-pro" aoAlternar={d.alternar} />}
           <div className="res-pro" id="camp-pro" hidden={!d.mostraPro}>
-            <div className="cc-vista-linha">
-              <div className="seg cc-vista" role="group" aria-label="Ver as campanhas em">
-                <button type="button" aria-pressed={vista === 'cartoes'} onClick={() => mudarVista('cartoes')}>
-                  <Icone nome="image" pequeno />
-                  Cartões
-                </button>
-                <button type="button" aria-pressed={vista === 'tabela'} onClick={() => mudarVista('tabela')}>
-                  <Icone nome="menu" pequeno />
-                  Tabela
-                </button>
-              </div>
-            </div>
             {vista === 'cartoes' && (
               <>
                 <CartoesDeCampanhas campanhas={campanhas} pedir={comPedir} />
@@ -165,12 +173,24 @@ export function CartaoCampanhas({ campanhas, lite, rotuloPeriodo, pedir = null, 
                   </p>
                 ))}
                 <p className="cc-total">
-                  <b>Total</b> {campanhas.total.investimento.texto} investidos · {campanhas.total.pedidos.texto} pedidos · {campanhas.total.receita.texto} de receita · ROAS do caixa{' '}
-                  {campanhas.total.roasCaixa.texto}
+                  <span>Total do período</span>
+                  <span>
+                    <b>{campanhas.total.investimento.texto}</b> investidos
+                  </span>
+                  <span>
+                    <b>{campanhas.total.pedidos.texto}</b> pedidos
+                  </span>
+                  <span>
+                    <b>{campanhas.total.receita.texto}</b> de receita
+                  </span>
+                  <span>
+                    ROAS do caixa <b>{campanhas.total.roasCaixa.texto}</b>
+                  </span>
                 </p>
+                <p className="eixo-nota">Toque na imagem para ver o anúncio maior.</p>
               </>
             )}
-            <div className="table-wrap" hidden={vista !== 'tabela'}>
+            <div className="cc-tab table-wrap" hidden={vista !== 'tabela'}>
               <table className="tabela tabela--camp">
                 <caption className="sr-only">
                   Resultado por campanha em {rotuloPeriodo}: investimento, conversas, pedidos, receita, margem conhecida, custo por pedido, ROAS da plataforma e ROAS confirmado no caixa
@@ -228,7 +248,9 @@ export function CartaoCampanhas({ campanhas, lite, rotuloPeriodo, pedir = null, 
                         )}
                       </th>
                       <Celulas c={l.celulas} />
-                      <td>{l.halteres ? <Halteres plataforma={l.halteres.plataforma} caixa={l.halteres.caixa} rotulo={l.rotuloHalteres} /> : <span className="eixo-nota">—</span>}</td>
+                      <td className="cc-tab-barra" data-col="Plataforma × caixa">
+                        {l.halteres ? <Halteres plataforma={l.halteres.plataforma} caixa={l.halteres.caixa} rotulo={l.rotuloHalteres} /> : <span className="eixo-nota">—</span>}
+                      </td>
                       {comPedir && (
                         <td className="mudar">
                           {comPedir.porCampanha.has(l.id) ? <BotaoPedir campanha={l} pedir={comPedir} curto /> : !comBotao.has(l.provider) && <span className="eixo-nota">só leitura</span>}
@@ -242,15 +264,19 @@ export function CartaoCampanhas({ campanhas, lite, rotuloPeriodo, pedir = null, 
                         {s.titulo}
                         <span className="camp-canal">id de clique, sem o id da campanha</span>
                       </th>
-                      <td className="n">—</td>
-                      <td className="n">—</td>
-                      <td className="n num">{s.pedidos}</td>
-                      <td className="n num">{s.receita}</td>
-                      <td className="n">—</td>
-                      <td className="n">—</td>
-                      <td className="n">—</td>
-                      <td className="n">—</td>
-                      <td>
+                      <td className="n cc-vazia">—</td>
+                      <td className="n cc-vazia">—</td>
+                      <td className="n num" data-col="Pedidos">
+                        {s.pedidos}
+                      </td>
+                      <td className="n num" data-col="Receita">
+                        {s.receita}
+                      </td>
+                      <td className="n cc-vazia">—</td>
+                      <td className="n cc-vazia">—</td>
+                      <td className="n cc-vazia">—</td>
+                      <td className="n cc-vazia">—</td>
+                      <td className="cc-tab-barra">
                         <span className="eixo-nota">{s.nota}</span>
                       </td>
                       {comPedir && <td className="mudar" />}
