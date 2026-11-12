@@ -147,6 +147,37 @@ describe.skipIf(!hasDb)('a mídia por região e por hora, pela rotina do worker 
     }
   });
 
+  it('o mesmo município com dois lugares "City" no Google (o antigo e o novo) aparece uma vez só, somado', async () => {
+    // Visto em produção em 12/11/2026: "Duque de Caxias,State of Rio de Janeiro,Brazil" e "Duque de Caxias,Duque de
+    // Caxias,State of Rio de Janeiro,Brazil" em duas linhas. Os lugares são novos a cada rodada (ERR-215).
+    const nome = `Cidade Dupla ${randomInt(100_000, 999_999)}`;
+    const antigo = String(randomInt(900_000_000, 999_999_999));
+    const novo = String(randomInt(900_000_000, 999_999_999));
+    await ownerQuery(
+      `insert into liame.region_geo_target (id, name, canonical_name, target_type, country_code)
+       values ($1, $3, $3 || ',State of Rio de Janeiro,Brazil', 'City', 'BR'), ($2, $3, $3 || ',' || $3 || ',State of Rio de Janeiro,Brazil', 'City', 'BR')`,
+      [antigo, novo, nome],
+    );
+    await ownerQuery(
+      `insert into liame.ad_city_daily (connected_account_id, tenant_id, brand_id, provider, day, geo_target_id, impressions, clicks, spend)
+       values ($1, $2, $3, 'google_ads', (now() at time zone 'America/Sao_Paulo')::date - 2, $4, 40, 5, 1),
+              ($1, $2, $3, 'google_ads', (now() at time zone 'America/Sao_Paulo')::date - 2, $5, 10, 1, 1)`,
+      [e.conta, e.tenantId, e.brandId, novo, antigo],
+    );
+    const loja = randomUUID();
+    await ownerQuery(
+      `insert into liame.unit (id, tenant_id, brand_id, name, address_postal_code, address_district, address_city, address_state, ibge_city_code, location_source, delivery_radius_km)
+       values ($1, $2, $3, 'Loja da Cidade Dupla', '20520054', 'Tijuca', 'Rio de Janeiro', 'RJ', '3304557', 'cep', 3)`,
+      [loja, e.tenantId, e.brandId],
+    );
+    const r = await api.call('GET', `/v1/region/overview?brand_id=${e.brandId}&unit_id=${loja}`, { cookie: e.cookie });
+    // As linhas desta prova saem antes das conferências: os testes seguintes contam as cidades lidas da conta.
+    await ownerQuery(`delete from liame.ad_city_daily where connected_account_id = $1 and geo_target_id = any($2::bigint[])`, [e.conta, [antigo, novo]]);
+    expect(r.status, JSON.stringify(r.body)).toBe(200);
+    const dela =(r.body.paid_media.cities as Array<{ id: string; name: string; full_name: string; clicks: number; impressions: number }>).filter((c) => c.name === nome);
+    expect(dela).toEqual([{ id: [antigo, novo].sort((a, b) => Number(a) - Number(b))[0], name: nome, full_name: `${nome},State of Rio de Janeiro,Brazil`, clicks: 6, impressions: 50, clicks_pct: expect.any(Number) }]);
+  });
+
   it('no dia seguinte: o lugar já conhecido não é traduzido de novo; a cidade que falha não derruba a hora e deixa a de antes', async () => {
     google.chamadas.length = 0;
     cidadesFalham = true;
