@@ -1,0 +1,11 @@
+[
+  {
+    "results": [
+      { "campaign": { "resourceName": "customers/4445556667/campaigns/21000000002", "id": "21000000002" }, "assetGroup": { "resourceName": "customers/4445556667/assetGroups/61000000001", "id": "61000000001", "name": "Cardápio - smash", "status": "ENABLED" }, "assetGroupAsset": { "resourceName": "customers/4445556667/assetGroupAssets/61000000001~71000000003~MARKETING_IMAGE", "fieldType": "MARKETING_IMAGE" }, "asset": { "resourceName": "customers/4445556667/assets/71000000003", "id": "71000000003", "imageAsset": { "fullSize": { "url": "https://tpc.googlesyndication.com/simgad/71000000003", "widthPixels": "1200", "heightPixels": "628" } } } },
+      { "campaign": { "resourceName": "customers/4445556667/campaigns/21000000002", "id": "21000000002" }, "assetGroup": { "resourceName": "customers/4445556667/assetGroups/61000000001", "id": "61000000001", "name": "Cardápio - smash", "status": "ENABLED" }, "assetGroupAsset": { "resourceName": "customers/4445556667/assetGroupAssets/61000000001~71000000002~SQUARE_MARKETING_IMAGE", "fieldType": "SQUARE_MARKETING_IMAGE" }, "asset": { "resourceName": "customers/4445556667/assets/71000000002", "id": "71000000002", "imageAsset": { "fullSize": { "url": "https://tpc.googlesyndication.com/simgad/71000000002", "widthPixels": "1200", "heightPixels": "1200" } } } },
+      { "campaign": { "resourceName": "customers/4445556667/campaigns/21000000002", "id": "21000000002" }, "assetGroup": { "resourceName": "customers/4445556667/assetGroups/61000000002", "id": "61000000002", "name": "Cardápio - batata", "status": "ENABLED" }, "assetGroupAsset": { "resourceName": "customers/4445556667/assetGroupAssets/61000000002~71000000004~PORTRAIT_MARKETING_IMAGE", "fieldType": "PORTRAIT_MARKETING_IMAGE" }, "asset": { "resourceName": "customers/4445556667/assets/71000000004", "id": "71000000004", "imageAsset": { "fullSize": { "url": "https://tpc.googlesyndication.com/simgad/71000000004", "widthPixels": "960", "heightPixels": "1200" } } } }
+    ],
+    "fieldMask": "campaign.id,assetGroup.id,assetGroup.name,assetGroup.status,assetGroupAsset.fieldType,asset.id,asset.imageAsset.fullSize.url,asset.imageAsset.fullSize.widthPixels,asset.imageAsset.fullSize.heightPixels",
+    "requestId": "req-asset-group-assets"
+  }
+]

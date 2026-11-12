@@ -140,4 +140,55 @@ describe.skipIf(!hasDb)('a miniatura do anúncio (P44)', () => {
     const c2 = (fora.body.campaigns as { campaign_id: string; top_ad: Record<string, unknown> }[]).find((c) => c.campaign_id === ids.camp)!;
     expect(c2.top_ad).toMatchObject({ name: 'Anúncio do combo', off_air: true, image: null });
   }, 60_000);
+
+  it('Performance Max (parte 3): a imagem do grupo de recursos que mais gastou, copiada do Google; o removido sai da escolha', async () => {
+    const g = { conta: randomUUID(), camp: randomUUID(), forte: randomUUID(), fraco: randomUUID(), removido: randomUUID() };
+    await ownerQuery(
+      `insert into liame.connected_account (id, tenant_id, brand_id, provider, external_id, name, currency, timezone) values ($1, $2, $3, 'google_ads', '4445556667', 'Google - Mister', 'BRL', $4)`,
+      [g.conta, tenantId, brandId, FUSO],
+    );
+    await ownerQuery(`insert into liame.campaign (id, tenant_id, connected_account_id, provider, external_id, name, status) values ($1, $2, $3, 'google_ads', '21000000002', 'Performance Max - cardápio', 'ativa')`, [
+      g.camp,
+      tenantId,
+      g.conta,
+    ]);
+    const grupo = (id: string, externo: string, nome: string, situacao: string, gastoMicros: number | null, url: string) =>
+      ownerQuery(
+        `insert into liame.creative (id, tenant_id, connected_account_id, provider, external_id, name, kind, thumbnail_url, provider_attributes)
+         values ($1, $2, $3, 'google_ads', $4, $5, 'PERFORMANCE_MAX', $6, $7::jsonb)`,
+        [id, tenantId, g.conta, externo, nome, url, JSON.stringify({ campanha: '21000000002', grupo_de_recursos: externo.slice(5), situacao, gasto_30d_micros: gastoMicros })],
+      );
+    await grupo(g.forte, 'pmax:61000000001', 'Cardápio - smash', 'ENABLED', 45_200_000, 'https://tpc.googlesyndication.com/simgad/71000000002');
+    await grupo(g.fraco, 'pmax:61000000002', 'Cardápio - batata', 'ENABLED', 0, 'https://tpc.googlesyndication.com/simgad/71000000004');
+    // O removido gastou mais, mas saiu: não é ele.
+    await grupo(g.removido, 'pmax:61000000003', 'Antigo', 'REMOVED', 90_000_000, 'https://tpc.googlesyndication.com/simgad/71000000009');
+    for (const d of [1, 2, 3]) {
+      await ownerQuery(
+        `insert into liame.metric_latest (connected_account_id, level, external_entity_id, metric_date, metric_name, attribution_window, tenant_id, brand_id, provider, entity_id, metric_value, currency, timezone, observed_at, changed_at)
+         values ($1, 'campaign', '21000000002', $2, 'spend', '', $3, $4, 'google_ads', $5, 15000000, 'BRL', $6, now(), now())`,
+        [g.conta, menos(d), tenantId, brandId, g.camp, FUSO],
+      );
+    }
+
+    const antes = baixadas.length;
+    expect(await copiarMiniaturas({ db: database.db, armazem, contaId: g.conta, tenantId, buscar })).toEqual({ copiadas: 1, falhas: 0 });
+    expect(baixadas.slice(antes)).toEqual(['https://tpc.googlesyndication.com/simgad/71000000002']);
+    expect(await coluna(g.forte)).toEqual({ thumbnail_key: chaveDaMiniatura(tenantId, brandId, g.forte), thumbnail_source: 'https://tpc.googlesyndication.com/simgad/71000000002', thumbnail_width: 480 });
+    expect((await coluna(g.removido)).thumbnail_key).toBeNull();
+    // A segunda leitura não baixa de novo; o endereço fora do Google não baixa.
+    expect(await copiarMiniaturas({ db: database.db, armazem, contaId: g.conta, tenantId, buscar })).toEqual({ copiadas: 0, falhas: 0 });
+    await ownerQuery(`update liame.creative set thumbnail_url = 'https://exemplo.com/estoque.jpg', thumbnail_key = null, thumbnail_source = null, thumbnail_width = null, thumbnail_height = null, thumbnail_copied_at = null where id = $1`, [g.forte]);
+    expect(await copiarMiniaturas({ db: database.db, armazem, contaId: g.conta, tenantId, buscar })).toEqual({ copiadas: 0, falhas: 0 });
+    await ownerQuery(`update liame.creative set thumbnail_url = 'https://tpc.googlesyndication.com/simgad/71000000002' where id = $1`, [g.forte]);
+    await copiarMiniaturas({ db: database.db, armazem, contaId: g.conta, tenantId, buscar });
+
+    // Resultados: a campanha sem anúncio com gasto mostra o grupo de recursos, sem o link do Gerenciador da Meta.
+    const q = `brand_id=${brandId}&from=${menos(7)}&to=${menos(1)}`;
+    const ler = async () =>
+      ((await api.call('GET', `/v1/results/closed-loop?${q}`, { cookie })).body.campaigns as { campaign_id: string; top_ad: Record<string, unknown> }[]).find((c) => c.campaign_id === g.camp)!;
+    expect((await ler()).top_ad).toMatchObject({ name: 'Cardápio - smash', kind: 'imagem', off_air: false, image: { url: expect.any(String), width: 480, height: 480 }, manager_url: null });
+    // Todos os grupos removidos: fora do ar, sem imagem.
+    await ownerQuery(`update liame.creative set provider_attributes = provider_attributes || '{"situacao": "REMOVED"}'::jsonb where connected_account_id = $1`, [g.conta]);
+    expect((await ler()).top_ad).toMatchObject({ off_air: true, image: null });
+  }, 60_000);
 });
