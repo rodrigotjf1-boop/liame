@@ -126276,6 +126276,238 @@
                       ],
                       "additionalProperties": false
                     },
+                    "social_audience_status": {
+                      "type": "string",
+                      "maxLength": 60,
+                      "pattern": "^[a-z0-9_]+$"
+                    },
+                    "social_audience": {
+                      "type": [
+                        "object",
+                        "null"
+                      ],
+                      "properties": {
+                        "from": {
+                          "type": "string"
+                        },
+                        "to": {
+                          "type": "string"
+                        },
+                        "instagram": {
+                          "type": [
+                            "object",
+                            "null"
+                          ],
+                          "properties": {
+                            "name": {
+                              "type": "string"
+                            },
+                            "read_at": {
+                              "type": "string"
+                            },
+                            "followers": {
+                              "type": [
+                                "integer",
+                                "null"
+                              ],
+                              "minimum": -9007199254740991,
+                              "maximum": 9007199254740991
+                            },
+                            "follows": {
+                              "type": [
+                                "integer",
+                                "null"
+                              ],
+                              "minimum": -9007199254740991,
+                              "maximum": 9007199254740991
+                            },
+                            "unfollows": {
+                              "type": [
+                                "integer",
+                                "null"
+                              ],
+                              "minimum": -9007199254740991,
+                              "maximum": 9007199254740991
+                            },
+                            "followers_change": {
+                              "type": [
+                                "integer",
+                                "null"
+                              ],
+                              "minimum": -9007199254740991,
+                              "maximum": 9007199254740991
+                            },
+                            "taps": {
+                              "type": [
+                                "object",
+                                "null"
+                              ],
+                              "properties": {
+                                "total": {
+                                  "type": "integer",
+                                  "minimum": -9007199254740991,
+                                  "maximum": 9007199254740991
+                                },
+                                "directions": {
+                                  "type": "integer",
+                                  "minimum": -9007199254740991,
+                                  "maximum": 9007199254740991
+                                },
+                                "call": {
+                                  "type": "integer",
+                                  "minimum": -9007199254740991,
+                                  "maximum": 9007199254740991
+                                },
+                                "message": {
+                                  "type": "integer",
+                                  "minimum": -9007199254740991,
+                                  "maximum": 9007199254740991
+                                },
+                                "other": {
+                                  "type": "integer",
+                                  "minimum": -9007199254740991,
+                                  "maximum": 9007199254740991
+                                }
+                              },
+                              "required": [
+                                "total",
+                                "directions",
+                                "call",
+                                "message",
+                                "other"
+                              ],
+                              "additionalProperties": false
+                            },
+                            "cities_status": {
+                              "type": "string",
+                              "maxLength": 60,
+                              "pattern": "^[a-z0-9_]+$"
+                            },
+                            "cities": {
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "properties": {
+                                  "name": {
+                                    "type": "string"
+                                  },
+                                  "full_name": {
+                                    "type": "string"
+                                  },
+                                  "followers": {
+                                    "type": "integer",
+                                    "minimum": -9007199254740991,
+                                    "maximum": 9007199254740991
+                                  },
+                                  "followers_pct": {
+                                    "type": [
+                                      "integer",
+                                      "null"
+                                    ],
+                                    "minimum": -9007199254740991,
+                                    "maximum": 9007199254740991
+                                  },
+                                  "store_city": {
+                                    "type": "boolean"
+                                  }
+                                },
+                                "required": [
+                                  "name",
+                                  "full_name",
+                                  "followers",
+                                  "followers_pct",
+                                  "store_city"
+                                ],
+                                "additionalProperties": false
+                              }
+                            }
+                          },
+                          "required": [
+                            "name",
+                            "read_at",
+                            "followers",
+                            "follows",
+                            "unfollows",
+                            "followers_change",
+                            "taps",
+                            "cities_status",
+                            "cities"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "page": {
+                          "type": [
+                            "object",
+                            "null"
+                          ],
+                          "properties": {
+                            "name": {
+                              "type": "string"
+                            },
+                            "read_at": {
+                              "type": "string"
+                            },
+                            "followers": {
+                              "type": [
+                                "integer",
+                                "null"
+                              ],
+                              "minimum": -9007199254740991,
+                              "maximum": 9007199254740991
+                            },
+                            "follows": {
+                              "type": [
+                                "integer",
+                                "null"
+                              ],
+                              "minimum": -9007199254740991,
+                              "maximum": 9007199254740991
+                            },
+                            "unfollows": {
+                              "type": [
+                                "integer",
+                                "null"
+                              ],
+                              "minimum": -9007199254740991,
+                              "maximum": 9007199254740991
+                            },
+                            "followers_change": {
+                              "type": [
+                                "integer",
+                                "null"
+                              ],
+                              "minimum": -9007199254740991,
+                              "maximum": 9007199254740991
+                            },
+                            "views": {
+                              "type": [
+                                "integer",
+                                "null"
+                              ],
+                              "minimum": -9007199254740991,
+                              "maximum": 9007199254740991
+                            }
+                          },
+                          "required": [
+                            "name",
+                            "read_at",
+                            "followers",
+                            "follows",
+                            "unfollows",
+                            "followers_change",
+                            "views"
+                          ],
+                          "additionalProperties": false
+                        }
+                      },
+                      "required": [
+                        "from",
+                        "to",
+                        "instagram",
+                        "page"
+                      ],
+                      "additionalProperties": false
+                    },
                     "sources": {
                       "type": "array",
                       "items": {
@@ -126342,6 +126574,8 @@
                     "paid_media",
                     "order_districts_status",
                     "order_districts",
+                    "social_audience_status",
+                    "social_audience",
                     "sources",
                     "generated_at"
                   ],
