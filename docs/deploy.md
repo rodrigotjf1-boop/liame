@@ -27,6 +27,7 @@ migration nova é aplicada e conferida na nuvem **antes** de mesclar o PR que de
 | --- | --- | --- | --- |
 | `liame-api` | `apps/server/Dockerfile` | 80 (o EasyPanel injeta `PORT=80`; fora dele, 3001) | `https://api.agencialiame.com` |
 | `liame-worker` | `apps/server/Dockerfile` + comando do worker | — (sonda interna na mesma `PORT`) | nenhum |
+| `liame-render` | `apps/server/Dockerfile.render` (A6 · Z15: a montagem do vídeo) | — (sonda interna na mesma `PORT`) | nenhum |
 | `liame-web` | `apps/web/Dockerfile` | 80 (o EasyPanel injeta `PORT=80`; fora dele, 3000) | `https://app.agencialiame.com` |
 
 O Collector do OpenTelemetry entra quando a conta do Grafana Cloud existir (`infra/otel-collector.yaml`);
@@ -71,6 +72,13 @@ Menus em português, como aparecem no painel. Em cada serviço: **Fonte → Gith
 4. **Implantar**. Conferir nos logs `worker no ar` e, na API, `/health/ready` com `queue: ok` (o worker cria as tabelas da fila na primeira subida). Com "tempo de inatividade zero", o log mistura o contêiner novo e o antigo por alguns instantes. A sonda de vida do worker responde `/health` só no
    `127.0.0.1` do contêiner: é o que o HEALTHCHECK da imagem consulta (sem ela, o contêiner ficaria
    "unhealthy" e seria reiniciado em ciclo).
+
+### 3.4 `liame-render` (A6 · Z15: a montagem do vídeo)
+
+1. **+ Serviço → App** → `liame-render`. Fonte igual à da API; **Construção → Dockerfile** → `apps/server/Dockerfile.render`. Sem comando (a imagem já sobe o serviço de montagem).
+2. **Ambiente**: `DATABASE_URL`, `IMAGENS_BUCKET`, `AWS_REGION`, `AWS_ACCESS_KEY_ID` e `AWS_SECRET_ACCESS_KEY` com os mesmos valores do `liame-worker` (o serviço lê a fila no banco e grava o vídeo no mesmo bucket). **Sem domínio**.
+3. **Avançado → Recursos**: limite de **2 núcleos** e **3 GB** de memória, **1 réplica** (D-A6-139): o vídeo pesado não tira CPU dos outros projetos da VPS.
+4. **Implantar**. O primeiro build demora mais (baixa o navegador do Remotion, ~120 MB). Conferir nos logs `serviço de montagem no ar`. Com a função `video_montado` desligada, a fila fica vazia e o serviço só olha a cada 5 segundos.
 
 ### 3.3 `liame-web`
 

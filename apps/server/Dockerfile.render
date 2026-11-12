@@ -1,0 +1,46 @@
+# syntax=docker/dockerfile:1.7
+# Imagem do serviço de montagem do vídeo (`liame-render`, A6 · Z15 parte 2b; D-A6-139): o mesmo código da API e do
+# worker (ADR-002), com o Chrome Headless Shell do Remotion e os modelos empacotados (`packages/video-modelos`).
+# Contexto: raiz do repositório.
+#   docker build -f apps/server/Dockerfile.render -t liame-render --build-arg APP_VERSION=$(git rev-parse --short HEAD) .
+#   docker run liame-render   (o /health responde no 127.0.0.1 do contêiner, como o worker)
+# No EasyPanel: um serviço só, com uma réplica, limite de 2 núcleos e 3 GB, sem domínio (não recebe pedido de fora).
+
+# A mesma base fixada por digest da API e do worker (Node 24.22.1, bookworm-slim, de 21/10/2026; o job `imagem` do CI
+# confere a versão; base-conhecimento §15.1). O Remotion pede glibc 2.35 ou mais: o bookworm tem a 2.36.
+FROM node:24.22.1-bookworm-slim@sha256:55fb5f5a527ea2c5c4a95f963e48ef90aa38c7b346054fdc8ee9957a2b55d205 AS build
+ENV CI=true TURBO_TELEMETRY_DISABLED=1 NEXT_TELEMETRY_DISABLED=1
+# pnpm 12 é nativo: o script de instalação DELE troca o marcador pelo binário da plataforma (ERR-017).
+# Os scripts das dependências do projeto continuam desligados (V9, LIC-079).
+RUN npm install --global pnpm@12.6.0
+WORKDIR /repo
+COPY . .
+RUN pnpm install --frozen-lockfile --ignore-scripts
+# O servidor e os modelos do vídeo (o bundler do Remotion empacota em packages/video-modelos/build).
+RUN pnpm turbo run build --filter=@liame/server... --filter=@liame/video-modelos
+RUN pnpm --filter @liame/server deploy --prod /out \
+ && rm -rf /out/src /out/test /out/tsconfig.json /out/tsconfig.build.json /out/nest-cli.json \
+ && cp -r packages/video-modelos/build /out/video-modelos
+
+FROM node:24.22.1-bookworm-slim@sha256:55fb5f5a527ea2c5c4a95f963e48ef90aa38c7b346054fdc8ee9957a2b55d205 AS runtime
+# As bibliotecas do Chrome Headless Shell (a lista do Remotion para Debian, "Linux dependencies", lida em 12/11/2026).
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends \
+      libnss3 libdbus-1-3 libatk1.0-0 libgbm1 libasound2 libxrandr2 libxkbcommon0 libxfixes3 libxcomposite1 \
+      libxdamage1 libatk-bridge2.0-0 libpango-1.0-0 libcairo2 libcups2 ca-certificates \
+ && rm -rf /var/lib/apt/lists/*
+# Versão no /health: o EasyPanel passa GIT_SHA como argumento de build; APP_VERSION explícito vence.
+ARG GIT_SHA=dev
+ARG APP_VERSION=${GIT_SHA}
+ENV NODE_ENV=production APP_VERSION=${APP_VERSION} PORT=3001 LIAME_VIDEO_MODELOS=/app/video-modelos
+WORKDIR /app
+COPY --from=build --chown=node:node /out ./
+# Certificado raiz do Supabase (público): as URLs do banco usam sslmode=verify-full&sslrootcert=/app/certs/supabase-ca.crt.
+COPY --chown=node:node infra/supabase/prod-ca-2021.crt ./certs/supabase-ca.crt
+# Sem root em tempo de execução. O navegador do Remotion é baixado no build da imagem, já como o usuário do serviço.
+USER node
+RUN node -e "import('@remotion/renderer').then((r) => r.ensureBrowser()).then(() => console.log('navegador do Remotion pronto'))"
+EXPOSE 3001
+HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=3 \
+  CMD ["node", "-e", "fetch('http://127.0.0.1:'+(process.env.PORT||3001)+'/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+CMD ["node", "--enable-source-maps", "--import", "./dist/telemetry.js", "dist/main.render.js"]

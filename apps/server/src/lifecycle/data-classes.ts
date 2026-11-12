@@ -126,6 +126,7 @@ export const DATA_CLASSES: Record<string, TableClassification> = {
   region_fact: { class: 'PUBLIC', retention: 'do produto (números públicos do IBGE por lugar e período)' },
   region_source_read: { class: 'INTERNAL', retention: 'do produto (a última leitura de cada fonte pública)' },
   region_food_count: { class: 'PUBLIC', retention: 'do produto (contagens de restaurantes do CNPJ aberto da Receita, só o mês mais novo; sem nome, endereço nem CNPJ)' },
+  region_weather: { class: 'PUBLIC', retention: 'do produto (a previsão do tempo por dia do CPTEC, por município; os dias de mais de uma semana atrás saem)' },
   region_food_part: { class: 'INTERNAL', retention: 'até somar o mês (contagens de cada arquivo do CNPJ da Receita em leitura)' },
   ai_usage: { class: 'PERSONAL', retention: 'com a empresa (registro técnico, sem conteúdo)' },
   ai_exchange: { class: 'CONFIDENTIAL', retention: '30 dias (o que foi enviado ao modelo e o que voltou)', purge: { job: 'conteudo_ia', days: 30 } },

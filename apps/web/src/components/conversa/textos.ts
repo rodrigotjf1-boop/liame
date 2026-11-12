@@ -97,9 +97,20 @@ export function textoDaResposta(m: Pick<ConversationMessage, 'blocks'>): string 
   return linhas.filter(Boolean).join('\n');
 }
 
+/** A resposta é a da região (por regra): tem os seus dois caminhos e não oferece "Pedir a análise da LIA" (D-RG-18). */
+export function respondeuARegiao(lido: string[]): boolean {
+  return lido.includes('Sua região') || lido.includes('Lojas no mapa');
+}
+
 /** Para onde a resposta pode levar, pelo que a LIA leu (no máximo dois caminhos, só para quem pode ver a tela). */
-export function caminhosDa(lido: string[], pode: (permissao: string) => boolean): Array<{ href: string; rotulo: string }> {
+export function caminhosDa(lido: string[], pode: (permissao: string) => boolean, marca: string | null = null): Array<{ href: string; rotulo: string }> {
   const caminhos: Array<{ href: string; rotulo: string }> = [];
+  // "Como é a minha região?" (D-RG-18): Ver Sua região e Ver as fontes, na marca da conversa; sem loja no mapa, só a página.
+  if (respondeuARegiao(lido) && pode('dossie.ver') && marca) {
+    const pagina = `/marca/regiao?marca=${encodeURIComponent(marca)}`;
+    caminhos.push({ href: pagina, rotulo: 'Ver Sua região' });
+    if (lido.includes('Sua região')) caminhos.push({ href: `${pagina}&fontes=1`, rotulo: 'Ver as fontes' });
+  }
   // "Como te acham no Google" é um cartão de Resultados (P18).
   if (lido.some((l) => l.startsWith('Resultados') || l === 'Como te acham no Google') && pode('vendas.ver')) caminhos.push({ href: '/resultados', rotulo: 'Ver em Resultados' });
   if (lido.some((l) => l.startsWith('Avisos')) && pode('campanhas.ver')) caminhos.push({ href: '/atencao', rotulo: 'Ver os avisos' });

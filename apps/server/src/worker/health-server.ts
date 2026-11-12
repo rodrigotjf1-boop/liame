@@ -5,8 +5,8 @@ import { createServer, type Server } from 'node:http';
  * processo; sem isto, o contêiner do worker ficaria "unhealthy" e o orquestrador (Swarm, no EasyPanel) o
  * reiniciaria em ciclo. Só no 127.0.0.1 do contêiner: não é um endpoint público.
  */
-export function startWorkerHealth(port: number, version: string, host = '127.0.0.1'): Promise<Server> {
-  const body = JSON.stringify({ status: 'ok', service: 'liame-worker', version });
+export function startWorkerHealth(port: number, version: string, host = '127.0.0.1', service = 'liame-worker'): Promise<Server> {
+  const body = JSON.stringify({ status: 'ok', service, version });
   const server = createServer((req, res) => {
     if (req.method === 'GET' && req.url === '/health') {
       res.writeHead(200, { 'content-type': 'application/json', 'cache-control': 'no-store' }).end(body);

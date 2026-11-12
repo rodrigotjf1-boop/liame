@@ -19,6 +19,7 @@ import { valorDaDemanda, valorDaProposta } from '../ai/conversa/escritas.js';
 import { indiceDasOrigens, marcarResposta, type OrigemDosNumeros } from '../ai/conversa/fontes.js';
 import { foraDoDia, nomesDaLeitura, rotuloDaLeitura, rotuloDoPasso } from '../ai/conversa/leituras.js';
 import { LEITURA_DO_PEDIDO, type PedidoPorRegra, reconhecerPedido, respostaPorRegra } from '../ai/conversa/por-regra.js';
+import { type EntradaDaRegiao, respostaDaRegiao } from '../ai/conversa/regiao.js';
 import { LIA, PROMPT_CONVERSA_LIA, TAREFA_CONVERSA } from '../ai/conversa/prompt.js';
 import { contextoDoPedido, contextoPermitido, dossieDoPedido, historicoParaOModelo, querFalarComPessoa, textoDaResposta } from '../ai/conversa/contexto.js';
 import { conferirResposta, RespostaDaLia } from '../ai/conversa/resposta.js';
@@ -40,6 +41,7 @@ import { AppProblem } from '../errors/problems.js';
 import { dossieParaOModelo, proibidasDaMarca } from '../marca/marca.service.js';
 import { conferirTexto, REGRAS_DE_TEXTO_VERSAO } from '../policy/texto.js';
 import { diaNoFuso, menosDias } from '../results/fora-do-normal.js';
+import { RegiaoService } from '../regiao/regiao.service.js';
 import { ResultsService } from '../results/results.service.js';
 import { ATENDIMENTO } from '../suporte.js';
 import { DemandasService, type QuemPede } from './demandas.service.js';
@@ -176,6 +178,7 @@ export class ConversaService {
     private readonly cupons: CouponsService,
     private readonly propostas: PropostaDeCupomService,
     private readonly revisor: RevisorService,
+    private readonly regiao: RegiaoService,
   ) {}
 
   private get db(): Database {
@@ -495,6 +498,7 @@ export class ConversaService {
     io: { enviar: (e: ConversationStreamEvent) => void; parar: AbortSignal },
     aviso: (notice: string, extra?: Record<string, unknown>) => Final,
   ): Promise<Final | null> {
+    if (pedido === 'regiao') return this.porRegraDaRegiao(t, io);
     const nome = LEITURA_DO_PEDIDO[pedido];
     const [ferramenta] = this.leituras.paraPedido({ tenantId: t.quem.tenantId, userId: t.quem.userId, permissions: t.quem.permissions }, [nome]);
     if (!ferramenta) return null;
@@ -522,6 +526,59 @@ export class ConversaService {
     const origens: OrigemDosNumeros[] = [
       { rotulo: rotuloDaOrigem(leitura), valor: leitura.valor, comCaminho: true, ordem: 1 },
       ...montada.calculados.map((c) => ({ rotulo: c.rotulo, valor: c.valor, comCaminho: false, ordem: 1 })),
+      { rotulo: 'Liame · calendário (dia de hoje e os próximos)', valor: fixo.datas, comCaminho: false, ordem: 4 },
+    ];
+    const { blocks, numbers } = marcarResposta(montada.resposta, indiceDasOrigens(origens), nomes);
+    return { role: 'lia', status: 'ok', content: { blocks, numbers, read: lidas([leitura]), cards: [], economy: false, by_system: true }, usageId: null };
+  }
+
+  /**
+   * "Como é a minha região?" (plano da região, D-RG-18): o retrato de Sua região da primeira loja no mapa (a mesma que a
+   * página abre), lido com a sessão de quem pergunta e a permissão de ver Minha marca, montado por regra e conferido
+   * como as outras respostas por regra. Nulo (segue para a IA) sem a permissão, com a função desligada para a marca ou
+   * com o texto que não passou na conferência.
+   */
+  private async porRegraDaRegiao(t: TurnoPreparado, io: { enviar: (e: ConversationStreamEvent) => void; parar: AbortSignal }): Promise<Final | null> {
+    if (!t.quem.permissions.has('dossie.ver')) return null;
+    const ferramenta = 'sua_regiao';
+    const passo = (status: string) => io.enviar(evento('passo', { step: { id: 'regra-regiao', label: rotuloDoPasso(ferramenta, {}), status } }));
+    passo('lendo');
+    let entrada: EntradaDaRegiao | null;
+    try {
+      entrada = await naTransacaoDaEmpresa(this.db, t.quem, async () => {
+        const lojas = await this.regiao.lojas(t.auth, t.marca.id);
+        if (lojas.availability.status !== 'disponivel') return null;
+        const noMapa = lojas.stores.filter((s) => s.address);
+        const primeira = noMapa[0];
+        if (!primeira?.address) return { lojasNoMapa: 0, temRegem: lojas.has_regem, loja: null, retrato: null };
+        const retrato = await this.regiao.raioX(t.auth, t.marca.id, primeira.unit_id);
+        return {
+          lojasNoMapa: noMapa.length,
+          temRegem: lojas.has_regem,
+          loja: { nome: primeira.unit_name, bairro: retrato.district?.name ?? primeira.address.district, municipio: primeira.address.city },
+          retrato,
+        };
+      });
+    } catch (err) {
+      this.logger.warn(`conversa: a leitura de Sua região falhou (${err instanceof Error ? err.message : String(err)}); a IA tenta`);
+      entrada = null;
+    }
+    passo(entrada ? 'ok' : 'falhou');
+    if (!entrada) return null;
+    if (io.parar.aborted) return { role: 'lia', status: 'parada', content: { blocks: [], numbers: [], read: [], cards: [], economy: false }, usageId: null };
+    const montada = respostaDaRegiao(entrada);
+    const leitura: Leitura = { ferramenta, input: { tipo: montada.tipo }, valor: limparJson(montada.valor).valor };
+    // O nome da loja, do bairro, do município e das datas não é afirmação da marca: fica fora da conferência de texto.
+    const lugares = [entrada.loja?.nome, entrada.loja?.bairro, entrada.loja?.municipio, ...(entrada.retrato?.week_ahead?.dates.map((d) => d.name) ?? [])];
+    const nomes = [...new Set([t.marca.nome, ...nomesDaLeitura(leitura.valor), ...lugares.filter((x): x is string => !!x)])];
+    const fixo = contextoPermitido(t);
+    const recusa = conferirResposta(montada.resposta, { emDia: [leitura.valor, fixo, montada.calculados.map((c) => c.valor)], velhas: [], nomes, daMarca: t.daMarca });
+    if (recusa) {
+      this.logger.warn(`conversa: resposta por regra (regiao) não passou na conferência (${recusa.recusa}${recusa.detalhe.length ? `: ${recusa.detalhe.slice(0, 8).join(' | ')}` : ''})`);
+      return null;
+    }
+    const origens: OrigemDosNumeros[] = [
+      { rotulo: rotuloDaOrigem(leitura), valor: leitura.valor, comCaminho: true, ordem: 1 },
       { rotulo: 'Liame · calendário (dia de hoje e os próximos)', valor: fixo.datas, comCaminho: false, ordem: 4 },
     ];
     const { blocks, numbers } = marcarResposta(montada.resposta, indiceDasOrigens(origens), nomes);

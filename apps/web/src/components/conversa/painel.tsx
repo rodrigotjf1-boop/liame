@@ -586,7 +586,7 @@ export function PainelDaLia({ modal }: { modal: boolean }) {
             item.de === 'eu' ? (
               <MensagemDaPessoa key={item.id} item={item} />
             ) : item.de === 'lia' ? (
-              <MensagemDaLia key={item.id} item={item} modo={modo} pode={pode} cartoes={cartoes} ultima={ultima} aoPerguntarDeNovo={tentarDeNovo} aoPedirAnalise={pedirAnalise} />
+              <MensagemDaLia key={item.id} item={item} modo={modo} pode={pode} cartoes={cartoes} ultima={ultima} marca={marca} aoPerguntarDeNovo={tentarDeNovo} aoPedirAnalise={pedirAnalise} />
             ) : (
               <MensagemDoSistema key={item.id} item={item} podeVerContas={pode('contas.ver')} ultima={ultima} contato={dados?.contact ?? null} cartoes={cartoes} aoTentarDeNovo={tentarDeNovo} />
             );

@@ -124215,6 +124215,131 @@
                       ],
                       "additionalProperties": false
                     },
+                    "week_ahead": {
+                      "type": [
+                        "object",
+                        "null"
+                      ],
+                      "properties": {
+                        "weather": {
+                          "type": [
+                            "object",
+                            "null"
+                          ],
+                          "properties": {
+                            "read_at": {
+                              "type": "string",
+                              "format": "date-time",
+                              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+                            },
+                            "days": {
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "properties": {
+                                  "day": {
+                                    "type": "string"
+                                  },
+                                  "condition": {
+                                    "type": "string"
+                                  },
+                                  "description": {
+                                    "type": "string"
+                                  },
+                                  "min": {
+                                    "type": "integer",
+                                    "minimum": -9007199254740991,
+                                    "maximum": 9007199254740991
+                                  },
+                                  "max": {
+                                    "type": "integer",
+                                    "minimum": -9007199254740991,
+                                    "maximum": 9007199254740991
+                                  }
+                                },
+                                "required": [
+                                  "day",
+                                  "condition",
+                                  "description",
+                                  "min",
+                                  "max"
+                                ],
+                                "additionalProperties": false
+                              }
+                            }
+                          },
+                          "required": [
+                            "read_at",
+                            "days"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "dates": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "day": {
+                                "type": "string"
+                              },
+                              "name": {
+                                "type": "string"
+                              },
+                              "kind": {
+                                "type": "string",
+                                "maxLength": 60,
+                                "pattern": "^[a-z0-9_]+$"
+                              },
+                              "source": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "day",
+                              "name",
+                              "kind",
+                              "source"
+                            ],
+                            "additionalProperties": false
+                          }
+                        }
+                      },
+                      "required": [
+                        "weather",
+                        "dates"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "sector_references": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "text": {
+                            "type": "string"
+                          },
+                          "source": {
+                            "type": "string"
+                          },
+                          "extra": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
+                          "as_of": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "text",
+                          "source",
+                          "extra",
+                          "as_of"
+                        ],
+                        "additionalProperties": false
+                      }
+                    },
                     "sources": {
                       "type": "array",
                       "items": {
@@ -124273,6 +124398,8 @@
                     "delivery_area",
                     "city",
                     "food_places",
+                    "week_ahead",
+                    "sector_references",
                     "sources",
                     "generated_at"
                   ],
