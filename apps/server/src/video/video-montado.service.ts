@@ -174,15 +174,21 @@ export class VideoMontadoService {
 
     // As fotos e o vídeo de Fotos: prontos, da marca; o vídeo montado não entra de novo.
     const midias = (
-      await tx.execute<{ id: string; kind: string | null; montage_id: string | null }>(sql`
-        select id, kind, montage_id from liame.brand_photo
+      await tx.execute<{ id: string; kind: string | null; montage_id: string | null; duration_ms: number | null; has_audio: boolean | null }>(sql`
+        select id, kind, montage_id, duration_ms, has_audio from liame.brand_photo
          where id in ${ids} and tenant_id = ${quem.tenantId} and brand_id = ${body.brand_id} and status = 'pronta' and removed_at is null`)
     ).rows;
     if (midias.length !== ids.length) throw recusa('midia-fora-das-fotos', 'Foto não encontrada', 'Escolha fotos ou vídeos prontos de Fotos desta marca.', 'media_ids');
     if (midias.some((m) => m.montage_id)) throw recusa('midia-montada', 'Vídeo montado', 'Um vídeo montado pelo Liame não entra de novo numa montagem.', 'media_ids');
-    const comVideo = midias.some((m) => m.kind === 'video');
-    if (comVideo && !regra.video) throw recusa('video-no-modelo', 'Só fotos', 'Este modelo leva só fotos. Para usar um vídeo, escolha "Novidade da casa".', 'media_ids');
-    if (body.sound === 'original' && !comVideo) throw recusa('som-sem-video', 'Sem vídeo', 'O som original só vale quando o vídeo da loja entra no modelo.', 'sound');
+    const video = midias.find((m) => m.kind === 'video');
+    if (video && !regra.video) throw recusa('video-no-modelo', 'Só fotos', 'Este modelo leva só fotos. Para usar um vídeo, escolha "Novidade da casa".', 'media_ids');
+    if (body.sound === 'original' && !video) throw recusa('som-sem-video', 'Sem vídeo', 'O som original só vale quando o vídeo da loja entra no modelo.', 'sound');
+    // O vídeo da loja toca uma vez, do começo: ele precisa ter pelo menos a duração escolhida (parte 3).
+    if (video && (video.duration_ms ?? 0) < body.duration_s * 1000) {
+      const tem = Math.floor((video.duration_ms ?? 0) / 1000);
+      throw recusa('video-curto', 'Vídeo curto', `O vídeo tem ${tem} s: escolha uma duração de até ${tem} s, ou outro vídeo.`, 'duration_s');
+    }
+    if (body.sound === 'original' && video && video.has_audio === false) throw recusa('video-sem-som', 'Vídeo sem som', 'Este vídeo não tem som: escolha "Sem música".', 'sound');
 
     // A logo de Minha marca.
     if (body.with_logo) {
