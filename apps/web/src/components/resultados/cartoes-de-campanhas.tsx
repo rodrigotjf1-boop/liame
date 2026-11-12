@@ -28,8 +28,8 @@ function Numero({ rotulo, c, forte = false, sub }: { rotulo: string; c: Celula; 
   );
 }
 
-/** O selo da situação da campanha: ativa em verde; pausada e as outras, neutras. */
-function Situacao({ texto }: { texto: string }) {
+/** O selo da situação da campanha: ativa em verde; pausada e as outras, neutras (também na tabela). */
+export function Situacao({ texto }: { texto: string }) {
   const t = texto.trim();
   const rotulo = t.charAt(0).toLocaleUpperCase('pt-BR') + t.slice(1);
   return <span className={/^ativ/i.test(t) ? 'st st--concluido' : 'st st--neutro'}>{rotulo}</span>;

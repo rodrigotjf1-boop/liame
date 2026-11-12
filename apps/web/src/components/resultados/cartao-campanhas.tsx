@@ -7,7 +7,7 @@ import { mostraOPedir, notaDoPedir } from '@/components/pedir/textos';
 import { Icone } from '@/components/ui/icone';
 import { useDetalhes } from '@/lib/modo';
 import { ListaDeCampanhas } from './campanhas-lite';
-import { CartoesDeCampanhas } from './cartoes-de-campanhas';
+import { CartoesDeCampanhas, Situacao } from './cartoes-de-campanhas';
 import type { CampanhasLite } from './graficos';
 import { Halteres } from './halteres';
 import { LinhaVendasGoogle } from './linha-vendas-google';
@@ -190,7 +190,9 @@ export function CartaoCampanhas({ campanhas, lite, rotuloPeriodo, pedir = null, 
                 <p className="eixo-nota">Toque na imagem para ver o anúncio maior.</p>
               </>
             )}
-            <div className="cc-tab table-wrap" hidden={vista !== 'tabela'}>
+            {/* O contêiner (`cc-tab`) por fora do invólucro da tabela: a regra do estreito vale para o invólucro. */}
+            <div className="cc-tab" hidden={vista !== 'tabela'}>
+            <div className="table-wrap">
               <table className="tabela tabela--camp">
                 <caption className="sr-only">
                   Resultado por campanha em {rotuloPeriodo}: investimento, conversas, pedidos, receita, margem conhecida, custo por pedido, ROAS da plataforma e ROAS confirmado no caixa
@@ -238,7 +240,7 @@ export function CartaoCampanhas({ campanhas, lite, rotuloPeriodo, pedir = null, 
                         {l.nome}
                         <span className="camp-canal">
                           <span className={`plat plat--${l.classe}`}>{l.nomePlataforma}</span>
-                          {l.situacao}
+                          <Situacao texto={l.situacao} />
                         </span>
                         {/* No celular a tabela rola de lado e a coluna "Mudar" some: o botão fica embaixo do nome. */}
                         {comPedir && comPedir.porCampanha.has(l.id) && (
@@ -292,6 +294,7 @@ export function CartaoCampanhas({ campanhas, lite, rotuloPeriodo, pedir = null, 
                   </tr>
                 </tfoot>
               </table>
+            </div>
             </div>
             <p className="eixo-nota">Plataforma × caixa: escala de 0 a 7. A linha vertical marca ROAS 1, o ponto em que a mídia se paga.</p>
             {nota && <p className="eixo-nota">{nota}</p>}

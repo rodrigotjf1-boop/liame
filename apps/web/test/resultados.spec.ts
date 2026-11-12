@@ -514,7 +514,7 @@ describe('desenho da tela (o mesmo componente do navegador)', () => {
     expect(pro).toContain('; na última coluna, o pedido de mudança</caption>');
     // Nos cartões (o padrão do Pro, P44), um botão por campanha com pedido. Na tabela (a um clique, montada escondida),
     // cada campanha com pedido tem o botão na coluna e embaixo do nome (no celular a coluna some).
-    const [cartoes, tabela] = pro.split('class="cc-tab table-wrap"');
+    const [cartoes, tabela] = pro.split('class="cc-tab"');
     expect(botoes(cartoes!)).toEqual(['Combo sexta', 'Smash em dobro']);
     expect(botoes(tabela!)).toEqual(['Combo sexta', 'Combo sexta', 'Smash em dobro', 'Smash em dobro']);
     expect(pro.match(/class="mudar-linha"/g)).toHaveLength(2);

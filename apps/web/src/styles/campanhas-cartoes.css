@@ -87,11 +87,14 @@ button.cc-mini:focus-visible { outline: none; box-shadow: var(--focus-ring); }
   .cc-tab .tabela--camp .mudar { position: static; box-shadow: none; background: transparent; text-align: left; }
   .cc-tab .tabela--camp td.mudar .pedido-esperando { margin-left: 0; text-align: left; }
   .cc-tab .tabela--camp tfoot tr { border-color: var(--border-strong); }
-  .cc-tab.table-wrap { overflow: visible; border: 0; }
+  .cc-tab .table-wrap { overflow: visible; border: 0; }
+  /* No bloco, o Pedir fica só no fim (como no P44): o de baixo do nome, do celular, não repete. */
+  .cc-tab .tabela--camp .mudar-linha { display: none; }
 }
 
 /* a prévia maior do anúncio */
-.cc-dlg { width: min(560px, calc(100vw - 32px)); }
+/* Até 480 px vale a regra do diálogo (a tela inteira); acima, a prévia fica estreita. */
+@media (min-width: 481px) { .cc-dlg { width: min(560px, calc(100vw - 32px)); } }
 .cc-dlg h2 { overflow-wrap: anywhere; }
 .cc-dlg h2:focus { outline: none; }
 .cc-prev { display: grid; gap: var(--sp-4); justify-items: start; }
