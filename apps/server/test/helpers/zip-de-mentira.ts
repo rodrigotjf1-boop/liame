@@ -39,3 +39,29 @@ export function zipCom(arquivos: Array<{ nome: string; conteudo: Buffer; guardad
   fim.writeUInt32LE(deslocamento, 16);
   return Buffer.concat([...locais, diretorio, fim]);
 }
+
+/**
+ * Um .zip de um arquivo só com o cabeçalho local no formato zip64 (os tamanhos em 0xFFFFFFFF e o campo extra 0x0001
+ * com o tamanho e o comprimido, 8 bytes cada), como o `Estabelecimentos0.zip` da Receita, que passa de 4 GB. O que vem
+ * depois dos dados (o diretório central) é só enfeite: a leitura em fluxo para no fim dos dados.
+ */
+export function zip64Com(nome: string, conteudo: Buffer, bandeiras = 0): Buffer {
+  const n = Buffer.from(nome, 'utf8');
+  const dados = deflateRawSync(conteudo);
+  const local = Buffer.alloc(30);
+  local.writeUInt32LE(0x04034b50, 0);
+  local.writeUInt16LE(45, 4);
+  local.writeUInt16LE(bandeiras, 6);
+  local.writeUInt16LE(8, 8);
+  local.writeUInt32LE(0xffffffff, 18);
+  local.writeUInt32LE(0xffffffff, 22);
+  local.writeUInt16LE(n.length, 26);
+  local.writeUInt16LE(20, 28);
+  const extra = Buffer.alloc(20);
+  extra.writeUInt16LE(0x0001, 0);
+  extra.writeUInt16LE(16, 2);
+  extra.writeBigUInt64LE(BigInt(conteudo.length), 4);
+  extra.writeBigUInt64LE(BigInt(dados.length), 12);
+  const enfeite = Buffer.from([0x50, 0x4b, 0x01, 0x02, 0, 0, 0, 0]);
+  return Buffer.concat([local, n, extra, dados, enfeite]);
+}

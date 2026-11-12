@@ -46,6 +46,8 @@ import {
   numeroMaisNovo,
   pixDoMunicipio,
   por10Mil,
+  type ContagemGuardada,
+  restaurantesDoRetrato,
   situacaoDaFonte,
   situacaoDoRetrato,
 } from './raio-x.js';
@@ -376,14 +378,23 @@ export class RegiaoService {
       ipca: null,
       delivery_area: { matched: 0, total: 0, population: null },
       city: null,
+      food_places: null,
       generated_at: agora.toISOString(),
     };
     if (!(await this.ligada(auth, brandId))) {
       return { ...vazio, availability: { status: 'desligado_pela_liame' }, status: 'sem_endereco', district_status: 'sem_bairro', sources: [] };
     }
     const loja = (
-      await tx.execute<{ address_district: string | null; address_city: string | null; address_state: string | null; ibge_city_code: string | null; delivery_areas: unknown }>(sql`
-        select address_district, address_city, address_state, ibge_city_code, delivery_areas from liame.unit where id = ${unitId} and brand_id = ${brandId}`)
+      await tx.execute<{
+        address_postal_code: string | null;
+        address_district: string | null;
+        address_city: string | null;
+        address_state: string | null;
+        ibge_city_code: string | null;
+        delivery_areas: unknown;
+      }>(sql`
+        select address_postal_code, address_district, address_city, address_state, ibge_city_code, delivery_areas
+          from liame.unit where id = ${unitId} and brand_id = ${brandId}`)
     ).rows[0];
     if (!loja) throw new AppProblem(404, 'loja-nao-encontrada', 'Não encontramos', 'Loja não encontrada nesta marca.');
     const cidade = loja.ibge_city_code;
@@ -442,13 +453,34 @@ export class RegiaoService {
     const chaves = [...new Set(areas.map((a) => nomeComparavel(a)))];
     const entrega = chaves.length
       ? (
-          await tx.execute<{ casaram: number; pessoas: number | null }>(sql`
-            select count(*)::int as casaram, sum(population)::int as pessoas from (
-              select distinct on (name_key) name_key, population from liame.region_district
+          await tx.execute<{ casaram: number; pessoas: number | null; codigos: string[] | null }>(sql`
+            select count(*)::int as casaram, sum(population)::int as pessoas, array_agg(district_code) as codigos from (
+              select distinct on (name_key) name_key, district_code, population from liame.region_district
                where city_code = ${cidade} and name_key = any(array(select jsonb_array_elements_text(${JSON.stringify(chaves)}::jsonb)))
-               order by name_key, population desc nulls last) b`)
+               order by name_key, population desc nulls last, district_code) b`)
         ).rows[0]
-      : { casaram: 0, pessoas: null };
+      : { casaram: 0, pessoas: null, codigos: null };
+
+    // Os restaurantes pelo CNPJ da Receita: as linhas do município que a loja usa (o município, o bairro dela, a área do
+    // CEP e os bairros das áreas de entrega) e a soma dos ativos de todos os bairros (para a cobertura).
+    const prefixoDoCep = loja.address_postal_code ? loja.address_postal_code.slice(0, 5) : null;
+    const bairrosDaEntrega = entrega?.codigos ?? [];
+    const bairrosDaConta = [...new Set([...(bairro ? [bairro.district_code] : []), ...bairrosDaEntrega])];
+    const contagens = (
+      await tx.execute<ContagemGuardada>(sql`
+        select area_kind, area_key, period, active, active_restaurant, active_snack, active_bar, active_home, opened_12m, closed_12m
+          from liame.region_food_count
+         where geo_code = ${cidade}
+           and (area_kind = 'municipio'
+                or (area_kind = 'cep' and area_key = ${prefixoDoCep ?? '-'})
+                or (area_kind = 'bairro' and area_key = any(array(select jsonb_array_elements_text(${JSON.stringify(bairrosDaConta)}::jsonb)))))`)
+    ).rows;
+    const ativosComBairro = contagens.length
+      ? ((
+          await tx.execute<{ ativos: number }>(sql`
+            select coalesce(sum(active), 0)::int as ativos from liame.region_food_count where geo_code = ${cidade} and area_kind = 'bairro'`)
+        ).rows[0]?.ativos ?? 0)
+      : 0;
 
     const noMunicipio = (indicador: string) => numeroMaisNovo(numeros, indicador, 'municipio', cidade);
     const populacao = noMunicipio('populacao');
@@ -502,6 +534,14 @@ export class RegiaoService {
             ? { scope: 'brasil', period: ipcaBrasil.period, away: ipcaBrasil.away, meal: ipcaBrasil.meal, snack: ipcaBrasil.snack, brasil: null }
             : null,
       },
+      food_places: restaurantesDoRetrato({
+        linhas: contagens,
+        bairro: bairro ? { codigo: bairro.district_code, areaKm2: area } : null,
+        prefixoDoCep,
+        bairrosDaEntrega,
+        ativosComBairro,
+        populacao: (estimada ?? populacao)?.value ?? null,
+      }),
       sources: fontes,
       generated_at: agora.toISOString(),
     };

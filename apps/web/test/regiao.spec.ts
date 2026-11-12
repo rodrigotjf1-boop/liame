@@ -27,10 +27,13 @@ import {
   frescor,
   grande,
   inteiro,
+  fontesQueFalharam,
   mesAno,
+  movimentoDaContagem,
   pct,
   reais,
   situacaoEmPalavras,
+  tiposDaContagem,
   trimestre,
   umaCasa,
   variacao,
@@ -228,12 +231,30 @@ describe('Sua região (R2, parte 2)', () => {
       pix: { period: '2026-10', payers: 5109806, value: 44244787453.94, payers_prev_year: 4900000, value_prev_year: 40000000000 },
       food_away_inflation: { scope: 'rm', period: '2026-09', away: 4.31, meal: 2.66, snack: 7.75, brasil: { away: 5.79, meal: 5.01, snack: 7.59 } },
     },
+    food_places: {
+      period: '2026-10',
+      since: '2025-10',
+      city: { active: 30000, restaurant: 12000, snack: 9000, bar: 6000, home: 3000, opened_12m: 4000, closed_12m: 2500, per_10k: 44.6, district_coverage_pct: 70 },
+      district: { active: 800, restaurant: 300, snack: 250, bar: 200, home: 50, opened_12m: 90, closed_12m: 1, per_km2: 80.5 },
+      postal: { active: 1, restaurant: 1, snack: 0, bar: 0, home: 0, opened_12m: 0, closed_12m: 0, prefix: '20520' },
+      delivery_area: null,
+    },
     sources: [
       { source: 'ibge_censo_bairro', status: 'em_dia', read_at: '2026-11-11T09:10:00.000Z', next_try_at: null },
       { source: 'ibge_9528', status: 'falhou', read_at: null, next_try_at: '2026-11-11T18:00:00.000Z' },
+      { source: 'receita_cnpj', status: 'falhou', read_at: null, next_try_at: '2026-11-11T18:00:00.000Z' },
     ],
     generated_at: '2026-11-11T15:00:00.000Z',
   };
+
+  it('os restaurantes do CNPJ (parte 4) em palavras; a falha da Receita fica fora da faixa do IBGE', () => {
+    const fp = retrato.food_places!;
+    expect(tiposDaContagem(fp.district!)).toBe('300 restaurantes, 250 lanchonetes, 200 bares e 50 de comida para casa');
+    expect(tiposDaContagem(fp.postal!)).toBe('1 restaurante');
+    expect(tiposDaContagem({ ...fp.postal!, restaurant: 0 })).toBe('nenhum ativo');
+    expect(movimentoDaContagem(fp.district!, fp.since)).toBe('90 abriram e 1 deu baixa no CNPJ desde out/2025');
+    expect(fontesQueFalharam(retrato).map((f) => f.source)).toEqual(['ibge_9528']);
+  });
 
   it('os números como a tela escreve: inteiro, uma casa e reais sem centavos quando redondo', () => {
     expect([inteiro(142909), umaCasa(5174.6), umaCasa(24), reais(5500), reais(8056.52)]).toEqual(['142.909', '5.174,6', '24', 'R$ 5.500', 'R$ 8.056,52']);

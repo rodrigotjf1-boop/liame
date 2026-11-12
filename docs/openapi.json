@@ -123348,6 +123348,271 @@
                       ],
                       "additionalProperties": false
                     },
+                    "food_places": {
+                      "type": [
+                        "object",
+                        "null"
+                      ],
+                      "properties": {
+                        "period": {
+                          "type": "string"
+                        },
+                        "since": {
+                          "type": "string"
+                        },
+                        "city": {
+                          "type": "object",
+                          "properties": {
+                            "active": {
+                              "type": "integer",
+                              "minimum": -9007199254740991,
+                              "maximum": 9007199254740991
+                            },
+                            "restaurant": {
+                              "type": "integer",
+                              "minimum": -9007199254740991,
+                              "maximum": 9007199254740991
+                            },
+                            "snack": {
+                              "type": "integer",
+                              "minimum": -9007199254740991,
+                              "maximum": 9007199254740991
+                            },
+                            "bar": {
+                              "type": "integer",
+                              "minimum": -9007199254740991,
+                              "maximum": 9007199254740991
+                            },
+                            "home": {
+                              "type": "integer",
+                              "minimum": -9007199254740991,
+                              "maximum": 9007199254740991
+                            },
+                            "opened_12m": {
+                              "type": "integer",
+                              "minimum": -9007199254740991,
+                              "maximum": 9007199254740991
+                            },
+                            "closed_12m": {
+                              "type": "integer",
+                              "minimum": -9007199254740991,
+                              "maximum": 9007199254740991
+                            },
+                            "per_10k": {
+                              "type": [
+                                "number",
+                                "null"
+                              ]
+                            },
+                            "district_coverage_pct": {
+                              "type": [
+                                "integer",
+                                "null"
+                              ],
+                              "minimum": -9007199254740991,
+                              "maximum": 9007199254740991
+                            }
+                          },
+                          "required": [
+                            "active",
+                            "restaurant",
+                            "snack",
+                            "bar",
+                            "home",
+                            "opened_12m",
+                            "closed_12m",
+                            "per_10k",
+                            "district_coverage_pct"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "district": {
+                          "type": [
+                            "object",
+                            "null"
+                          ],
+                          "properties": {
+                            "active": {
+                              "type": "integer",
+                              "minimum": -9007199254740991,
+                              "maximum": 9007199254740991
+                            },
+                            "restaurant": {
+                              "type": "integer",
+                              "minimum": -9007199254740991,
+                              "maximum": 9007199254740991
+                            },
+                            "snack": {
+                              "type": "integer",
+                              "minimum": -9007199254740991,
+                              "maximum": 9007199254740991
+                            },
+                            "bar": {
+                              "type": "integer",
+                              "minimum": -9007199254740991,
+                              "maximum": 9007199254740991
+                            },
+                            "home": {
+                              "type": "integer",
+                              "minimum": -9007199254740991,
+                              "maximum": 9007199254740991
+                            },
+                            "opened_12m": {
+                              "type": "integer",
+                              "minimum": -9007199254740991,
+                              "maximum": 9007199254740991
+                            },
+                            "closed_12m": {
+                              "type": "integer",
+                              "minimum": -9007199254740991,
+                              "maximum": 9007199254740991
+                            },
+                            "per_km2": {
+                              "type": [
+                                "number",
+                                "null"
+                              ]
+                            }
+                          },
+                          "required": [
+                            "active",
+                            "restaurant",
+                            "snack",
+                            "bar",
+                            "home",
+                            "opened_12m",
+                            "closed_12m",
+                            "per_km2"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "postal": {
+                          "type": [
+                            "object",
+                            "null"
+                          ],
+                          "properties": {
+                            "active": {
+                              "type": "integer",
+                              "minimum": -9007199254740991,
+                              "maximum": 9007199254740991
+                            },
+                            "restaurant": {
+                              "type": "integer",
+                              "minimum": -9007199254740991,
+                              "maximum": 9007199254740991
+                            },
+                            "snack": {
+                              "type": "integer",
+                              "minimum": -9007199254740991,
+                              "maximum": 9007199254740991
+                            },
+                            "bar": {
+                              "type": "integer",
+                              "minimum": -9007199254740991,
+                              "maximum": 9007199254740991
+                            },
+                            "home": {
+                              "type": "integer",
+                              "minimum": -9007199254740991,
+                              "maximum": 9007199254740991
+                            },
+                            "opened_12m": {
+                              "type": "integer",
+                              "minimum": -9007199254740991,
+                              "maximum": 9007199254740991
+                            },
+                            "closed_12m": {
+                              "type": "integer",
+                              "minimum": -9007199254740991,
+                              "maximum": 9007199254740991
+                            },
+                            "prefix": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "active",
+                            "restaurant",
+                            "snack",
+                            "bar",
+                            "home",
+                            "opened_12m",
+                            "closed_12m",
+                            "prefix"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "delivery_area": {
+                          "type": [
+                            "object",
+                            "null"
+                          ],
+                          "properties": {
+                            "active": {
+                              "type": "integer",
+                              "minimum": -9007199254740991,
+                              "maximum": 9007199254740991
+                            },
+                            "restaurant": {
+                              "type": "integer",
+                              "minimum": -9007199254740991,
+                              "maximum": 9007199254740991
+                            },
+                            "snack": {
+                              "type": "integer",
+                              "minimum": -9007199254740991,
+                              "maximum": 9007199254740991
+                            },
+                            "bar": {
+                              "type": "integer",
+                              "minimum": -9007199254740991,
+                              "maximum": 9007199254740991
+                            },
+                            "home": {
+                              "type": "integer",
+                              "minimum": -9007199254740991,
+                              "maximum": 9007199254740991
+                            },
+                            "opened_12m": {
+                              "type": "integer",
+                              "minimum": -9007199254740991,
+                              "maximum": 9007199254740991
+                            },
+                            "closed_12m": {
+                              "type": "integer",
+                              "minimum": -9007199254740991,
+                              "maximum": 9007199254740991
+                            },
+                            "matched": {
+                              "type": "integer",
+                              "minimum": -9007199254740991,
+                              "maximum": 9007199254740991
+                            }
+                          },
+                          "required": [
+                            "active",
+                            "restaurant",
+                            "snack",
+                            "bar",
+                            "home",
+                            "opened_12m",
+                            "closed_12m",
+                            "matched"
+                          ],
+                          "additionalProperties": false
+                        }
+                      },
+                      "required": [
+                        "period",
+                        "since",
+                        "city",
+                        "district",
+                        "postal",
+                        "delivery_area"
+                      ],
+                      "additionalProperties": false
+                    },
                     "sources": {
                       "type": "array",
                       "items": {
@@ -123405,6 +123670,7 @@
                     "ipca",
                     "delivery_area",
                     "city",
+                    "food_places",
                     "sources",
                     "generated_at"
                   ],

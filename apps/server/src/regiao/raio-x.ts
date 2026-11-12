@@ -1,5 +1,6 @@
-import type { RegionNumber, RegionSourceStatus } from '@liame/contracts';
+import type { RegionFoodCount, RegionNumber, RegionOverviewResponse, RegionSourceStatus } from '@liame/contracts';
 import { FONTE_CENSO_BAIRRO } from './censo.js';
+import { FONTE_DO_CNPJ } from './cnpj.js';
 import { FONTE_DA_RM, FONTE_DO_PIX, LEITURAS_DO_MUNICIPIO, lugarDaLeitura } from './ibge.js';
 
 // Sua região (plano da região, R2): as contas puras do retrato, sem banco e sem rede. Os números vêm das tabelas do
@@ -38,6 +39,8 @@ export function fontesDoRetrato(municipio: string, rm: string | null): Array<{ f
     if (lugar) lista.push({ fonte: l.fonte, lugar: lugar.codigo });
   }
   lista.push({ fonte: FONTE_DO_PIX, lugar: municipio });
+  // O CNPJ da Receita vale para o país inteiro (uma leitura por mês, de horas): por último, e não segura o retrato.
+  lista.push({ fonte: FONTE_DO_CNPJ, lugar: '0' });
   return lista;
 }
 
@@ -152,7 +155,73 @@ export function situacaoDaFonte(fonte: string, leitura: LeituraGuardada | undefi
 
 /** A situação do retrato: `lendo` se alguma fonte ainda não foi lida, `parcial` se alguma falhou, senão `pronto`. */
 export function situacaoDoRetrato(fontes: readonly RegionSourceStatus[]): 'lendo' | 'parcial' | 'pronto' {
-  if (fontes.some((f) => f.status === 'lendo')) return 'lendo';
-  if (fontes.some((f) => f.status === 'falhou')) return 'parcial';
+  // A leitura do CNPJ leva horas na primeira vez: a Concorrência mostra o "lendo" dela, e o resto do retrato aparece antes.
+  const contam = fontes.filter((f) => f.source !== FONTE_DO_CNPJ);
+  if (contam.some((f) => f.status === 'lendo')) return 'lendo';
+  if (contam.some((f) => f.status === 'falhou')) return 'parcial';
   return 'pronto';
+}
+
+/** Uma linha da `region_food_count` (os números vêm do banco como texto ou número). */
+export type ContagemGuardada = {
+  area_kind: string;
+  area_key: string;
+  period: string;
+  active: number | string;
+  active_restaurant: number | string;
+  active_snack: number | string;
+  active_bar: number | string;
+  active_home: number | string;
+  opened_12m: number | string;
+  closed_12m: number | string;
+};
+
+function contagemDa(linhas: readonly ContagemGuardada[]): RegionFoodCount {
+  const soma = (campo: keyof ContagemGuardada) => linhas.reduce((t, l) => t + Number(l[campo]), 0);
+  return {
+    active: soma('active'),
+    restaurant: soma('active_restaurant'),
+    snack: soma('active_snack'),
+    bar: soma('active_bar'),
+    home: soma('active_home'),
+    opened_12m: soma('opened_12m'),
+    closed_12m: soma('closed_12m'),
+  };
+}
+
+/**
+ * Os restaurantes do retrato (CNPJ da Receita): o município, o bairro da loja, a área do CEP e as áreas de entrega,
+ * das linhas guardadas do município. `ativosComBairro` é a soma dos ativos de todos os bairros do município (a cobertura).
+ */
+export function restaurantesDoRetrato(entrada: {
+  linhas: readonly ContagemGuardada[];
+  bairro: { codigo: string; areaKm2: number | null } | null;
+  prefixoDoCep: string | null;
+  bairrosDaEntrega: readonly string[];
+  ativosComBairro: number;
+  populacao: number | null;
+}): RegionOverviewResponse['food_places'] {
+  const municipio = entrada.linhas.find((l) => l.area_kind === 'municipio');
+  if (!municipio) return null;
+  const doBairro = (codigo: string) => entrada.linhas.filter((l) => l.area_kind === 'bairro' && l.area_key === codigo);
+  const cidade = contagemDa([municipio]);
+  const bairro = entrada.bairro ? doBairro(entrada.bairro.codigo) : [];
+  const cep = entrada.prefixoDoCep ? entrada.linhas.filter((l) => l.area_kind === 'cep' && l.area_key === entrada.prefixoDoCep) : [];
+  const entrega = [...new Set(entrada.bairrosDaEntrega)].flatMap(doBairro);
+  const contagemDoBairro = entrada.bairro ? contagemDa(bairro) : null;
+  return {
+    period: municipio.period,
+    since: `${Number(municipio.period.slice(0, 4)) - 1}${municipio.period.slice(4)}`,
+    city: {
+      ...cidade,
+      per_10k: por10Mil(cidade.active, entrada.populacao),
+      district_coverage_pct: cidade.active > 0 ? Math.round((entrada.ativosComBairro / cidade.active) * 100) : null,
+    },
+    district:
+      entrada.bairro && contagemDoBairro
+        ? { ...contagemDoBairro, per_km2: densidade(contagemDoBairro.active, entrada.bairro.areaKm2) }
+        : null,
+    postal: entrada.prefixoDoCep ? { ...contagemDa(cep), prefix: entrada.prefixoDoCep } : null,
+    delivery_area: entrada.bairrosDaEntrega.length ? { ...contagemDa(entrega), matched: new Set(entrada.bairrosDaEntrega).size } : null,
+  };
 }

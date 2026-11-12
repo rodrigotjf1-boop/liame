@@ -195,6 +195,19 @@ export const RegionSourceStatus = z.strictObject({
 });
 export type RegionSourceStatus = z.infer<typeof RegionSourceStatus>;
 
+/** Uma contagem de restaurantes (CNPJ da Receita): ativos por tipo de CNAE principal, abertos e baixados em 12 meses. */
+export const RegionFoodCount = z.strictObject({
+  active: z.number().int(),
+  /** Restaurante (5611-2/01), lanchonete (5611-2/03), bar (5611-2/04 e /05) e comida para casa (5620-1/04). */
+  restaurant: z.number().int(),
+  snack: z.number().int(),
+  bar: z.number().int(),
+  home: z.number().int(),
+  opened_12m: z.number().int(),
+  closed_12m: z.number().int(),
+});
+export type RegionFoodCount = z.infer<typeof RegionFoodCount>;
+
 export const RegionOverviewResponse = z.strictObject({
   brand_id: z.uuid(),
   unit_id: z.uuid(),
@@ -261,6 +274,29 @@ export const RegionOverviewResponse = z.strictObject({
           brasil: z.strictObject({ away: z.number().nullable(), meal: z.number().nullable(), snack: z.number().nullable() }).nullable(),
         })
         .nullable(),
+    })
+    .nullable(),
+  /**
+   * Os restaurantes pelo CNPJ da Receita (R2, parte 4), no mês mais novo lido por inteiro (`period`, "2026-10"):
+   * ativos por tipo de CNAE principal, os que abriram desde `since` ("2025-10") e os que deram baixa no mesmo período.
+   * Nulo enquanto o primeiro mês não terminou de ser lido.
+   */
+  food_places: z
+    .strictObject({
+      period: z.string(),
+      since: z.string(),
+      city: RegionFoodCount.extend({
+        /** Ativos por 10 mil habitantes (a estimativa mais nova da população, ou o Censo). */
+        per_10k: z.number().nullable(),
+        /** Quantos por cento dos ativos informaram um bairro que o Censo conhece (o resto não entra na conta do bairro). */
+        district_coverage_pct: z.number().int().nullable(),
+      }),
+      /** O bairro da loja (o do Censo), com ativos por km²; nulo sem o bairro achado. */
+      district: RegionFoodCount.extend({ per_km2: z.number().nullable() }).nullable(),
+      /** A área do CEP da loja (os 5 primeiros dígitos); nula sem o CEP. */
+      postal: RegionFoodCount.extend({ prefix: z.string() }).nullable(),
+      /** As áreas de entrega que casaram com bairros do Censo, somadas; nula sem nenhuma. */
+      delivery_area: RegionFoodCount.extend({ matched: z.number().int() }).nullable(),
     })
     .nullable(),
   sources: z.array(RegionSourceStatus),
