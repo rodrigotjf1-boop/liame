@@ -137,4 +137,27 @@ describe('a campanha nova (A4 · X5, parte 1)', () => {
     expect(v.url_tags).toBeUndefined();
     expect(parametrosDoAnuncio(estado(), '222', '333')).toEqual({ name: 'Combo sexta · novembro · anúncio', adset_id: '222', creative: '{"creative_id":"333"}', status: 'PAUSED' });
   });
+
+  it('o Reels (parte 6; D-A4-46): o post como está, pela Página e pelo Instagram dela, com o botão e o rastreio; sem peça', () => {
+    const reels = estado({ nome: 'Reels de 18/09 · novembro', peca: null, midia: { id: '17900000000000042', tipo: 'reels', legenda: 'Smash duplo saindo da chapa. Peça pelo link da bio.' } });
+    const p = planoDaCampanhaNova(reels);
+    expect(p.ok && p.desejado.situacao).toBe('criada');
+    const c = parametrosDoCriativo(reels, { tipo: 'reels', id: '17900000000000042' });
+    // O guia "Use Posts as Instagram Ads": `object_id`, `instagram_user_id`, `source_instagram_media_id` e o botão; nada de
+    // `object_story_spec` (o texto e o vídeo são os do post).
+    expect(c).toMatchObject({ object_id: '1234567890', instagram_user_id: '17840000000000001', source_instagram_media_id: '17900000000000042', url_tags: rastreioDoAnuncio() });
+    expect(c.object_story_spec).toBeUndefined();
+    expect(JSON.parse(c.call_to_action!)).toEqual({ type: 'ORDER_NOW', value: { link: 'https://cardapio.exemplo.com.br/mister-centro' } });
+    expect(Object.keys(JSON.parse(c.degrees_of_freedom_spec!).creative_features_spec)).toHaveLength(MELHORIAS_DO_CRIATIVO.length);
+    // No WhatsApp, o botão da conversa, sem o rastreio de site.
+    const w = parametrosDoCriativo({ ...reels, objetivo: 'whatsapp', link: null }, { tipo: 'reels', id: '17900000000000042' });
+    expect(JSON.parse(w.call_to_action!)).toEqual({ type: 'WHATSAPP_MESSAGE', value: { app_destination: 'WHATSAPP', link: 'https://api.whatsapp.com/send' } });
+    expect(w.url_tags).toBeUndefined();
+    // O Reels sem o Instagram da Página não vira anúncio; a origem é uma ou outra, nunca as duas nem nenhuma.
+    expect(planoDaCampanhaNova({ ...reels, instagram: null }).ok).toBe(false);
+    expect(() => parametrosDoCriativo({ ...reels, instagram: null }, { tipo: 'reels', id: '17900000000000042' })).toThrow();
+    expect(planoDaCampanhaNova({ ...reels, peca: estado().peca }).ok).toBe(false);
+    expect(planoDaCampanhaNova(estado({ peca: null })).ok).toBe(false);
+    expect(planoDaCampanhaNova({ ...reels, midia: { id: 'nao-e-numero', tipo: 'reels', legenda: '' } }).ok).toBe(false);
+  });
 });

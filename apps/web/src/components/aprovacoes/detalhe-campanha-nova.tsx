@@ -4,8 +4,9 @@ import type { ActionResponse, AdPieceResponse, BrandPhoto, NewCampaignOptionsRes
 import Link from 'next/link';
 import { type RefObject, useCallback, useEffect, useId, useState } from 'react';
 import { Icone } from '@/components/ui/icone';
+import { PreviaDoReels } from '@/components/criativos/campanha-do-reels';
 import { PreviaDoAnuncio } from '@/components/criativos/gaveta-campanha-nova';
-import { ehVideo, idDaCampanhaNova, kmEscrito, linkDoGerenciador, OBJETIVOS, passosDaCriacao, situacaoDaCampanha } from '@/components/criativos/campanha-nova-textos';
+import { diaDoReels, ehVideo, idDaCampanhaNova, kmEscrito, linkDoGerenciador, OBJETIVOS, passosDaCriacao, situacaoDaCampanha } from '@/components/criativos/campanha-nova-textos';
 import { api, chamar, mensagemDe, type Problema } from '@/lib/api';
 import type { Prova } from '@/lib/chave-de-acesso';
 import { disparar } from '@/lib/disparar';
@@ -62,12 +63,14 @@ export function DetalheCampanhaNova({ acao, grupo, agora, podeDecidir, podeOpera
     if (!id) return;
     const r = await chamar(() => api.GET('/v1/new-campaigns/{id}', { params: { path: { id } } }));
     if (!r.ok) return setLida({ estado: 'erro', problema: r.problema });
-    // A peça (o texto da prévia) e quem assina (a Página e o Instagram): sem eles, a prévia só fica mais pobre.
+    // A peça (o texto da prévia; o Reels não tem) e quem assina (a Página e o Instagram): sem eles, a prévia só fica
+    // mais pobre.
+    const pecaId = r.data.piece_id;
     const [p, o] = await Promise.all([
-      chamar(() => api.GET('/v1/ad-pieces/{id}', { params: { path: { id: r.data.piece_id } } })),
+      pecaId ? chamar(() => api.GET('/v1/ad-pieces/{id}', { params: { path: { id: pecaId } } })) : null,
       chamar(() => api.GET('/v1/new-campaigns/options', { params: { query: { brand_id: r.data.brand_id } } })),
     ]);
-    setLida({ estado: 'ok', c: r.data, peca: p.ok ? p.data : null, quem: o.ok ? { page: o.data.page, instagram: o.data.instagram } : null });
+    setLida({ estado: 'ok', c: r.data, peca: p?.ok ? p.data : null, quem: o.ok ? { page: o.data.page, instagram: o.data.instagram } : null });
   }, [id]);
 
   useEffect(() => {
@@ -155,8 +158,10 @@ export function DetalheCampanhaNova({ acao, grupo, agora, podeDecidir, podeOpera
   }
 
   const c = lida.c;
-  const midia = fotos.get(c.media_id) ?? null;
-  const video = midia ? ehVideo(midia) : Boolean(c.meta.video_id);
+  // A campanha a partir de um Reels (D-A4-46): o post como está, sem a peça e sem a mídia de Fotos.
+  const doReels = c.instagram_media_id !== null;
+  const midia = c.media_id ? (fotos.get(c.media_id) ?? null) : null;
+  const video = doReels ? false : midia ? ehVideo(midia) : Boolean(c.meta.video_id);
   const situacao = situacaoDaCampanha(c);
   const passos = passosDaCriacao(c, video);
   const pendente = grupo === 'pendente';
@@ -220,11 +225,20 @@ export function DetalheCampanhaNova({ acao, grupo, agora, podeDecidir, podeOpera
             <div>
               <b>A campanha não foi criada</b>
               {c.error && <span>{c.error}</span>}
-              <span>O que já foi criado na Meta ficou pausado: nada aparece para ninguém nem gasta. Para tentar de novo, peça de novo pela peça, em Criativos.</span>
+              <span>
+                O que já foi criado na Meta ficou pausado: nada aparece para ninguém nem gasta.{' '}
+                {doReels ? 'Para tentar de novo, peça de novo pelo Reels, em Fotos › Do seu Instagram.' : 'Para tentar de novo, peça de novo pela peça, em Criativos.'}
+              </span>
               <span className="cn-acoes">
-                <Link className="btn btn--sm" href={`/criativos?peca=${c.piece_id}`}>
-                  Abrir a peça em Criativos
-                </Link>
+                {doReels ? (
+                  <Link className="btn btn--sm" href="/fotos">
+                    Abrir Fotos
+                  </Link>
+                ) : (
+                  <Link className="btn btn--sm" href={`/criativos?peca=${c.piece_id}`}>
+                    Abrir a peça em Criativos
+                  </Link>
+                )}
                 {gerenciador}
               </span>
             </div>
@@ -301,6 +315,15 @@ export function DetalheCampanhaNova({ acao, grupo, agora, podeDecidir, podeOpera
       <div className="secao">
         <p className="rotulo-marca">O que foi pedido</p>
         <dl className="pd-agora cn-destino">
+          {doReels && (
+            <>
+              <dt>O anúncio</dt>
+              <dd>
+                {c.reels ? `O Reels de ${diaDoReels(c.reels.published_at)}, como está no post` : 'Um Reels do Instagram da marca, como está no post'}
+                <small>o vídeo e a legenda ficam como estão; o Liame põe o botão e o rastreio, e pergunta antes à Meta se o Reels pode virar anúncio</small>
+              </dd>
+            </>
+          )}
           <dt>Objetivo</dt>
           <dd>
             {OBJETIVOS[c.objective].rotulo}
@@ -326,6 +349,14 @@ export function DetalheCampanhaNova({ acao, grupo, agora, podeDecidir, podeOpera
 
       <div className="secao cn-ap-previa">
         <p className="rotulo-marca">Como o anúncio aparece</p>
+        {doReels && <PreviaDoReels reels={c.reels} objetivo={c.objective} nome={lida.quem?.instagram?.name ?? lida.quem?.page?.name ?? ''} />}
+        {doReels && c.reels?.permalink && (
+          <a className="btn btn--sm" href={c.reels.permalink} target="_blank" rel="noopener noreferrer">
+            <Icone nome="external" pequeno />
+            Ver o Reels no Instagram
+            <span className="sr-only"> (abre em outra aba)</span>
+          </a>
+        )}
         {lida.peca && (
           <>
             <div className="seg" role="group" aria-label="Ver como sai em">
@@ -338,7 +369,7 @@ export function DetalheCampanhaNova({ acao, grupo, agora, podeDecidir, podeOpera
             <PreviaDoAnuncio peca={lida.peca} midia={midia} objetivo={c.objective} nome={assina} instagram={aba === 'instagram'} />
           </>
         )}
-        {!midia && (
+        {!doReels && !midia && (
           <p className="nota">
             <Icone nome="info" pequeno />
             <span>A foto ou o vídeo da loja aparece aqui para quem vê as Fotos.</span>

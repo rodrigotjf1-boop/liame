@@ -517,9 +517,8 @@ export function CriativosTela() {
       {montando && campanhas && (
         <GavetaCampanhaNova
           brandId={carga.marca}
-          peca={montando.peca}
+          origem={{ tipo: 'peca', peca: montando.peca, midias: montando.midias }}
           opcoes={campanhas}
-          midias={montando.midias}
           hoje={new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Sao_Paulo', year: 'numeric', month: '2-digit', day: '2-digit' }).format(agora)}
           reserva={titulo}
           aoFechar={() => setMontando(null)}

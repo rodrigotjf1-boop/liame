@@ -52,6 +52,11 @@ export class MetaDeMentira {
   leiturasDoVideoEmPreparo = 0;
   /** O próximo vídeo enviado dá erro no preparo. */
   videoComErro = false;
+  /**
+   * Os Reels do Instagram da Página (A4, X5, parte 6): o id do post e o que a Meta responde em
+   * `boost_eligibility_info.eligible_to_boost` (nulo: o campo não vem). O post fora daqui não existe.
+   */
+  readonly reels = new Map<string, boolean | null>();
   base = '';
   private servidor: Server | null = null;
   private seq = 0;
@@ -95,6 +100,7 @@ export class MetaDeMentira {
     this.falhasDaCriacao = [];
     this.leiturasDoVideoEmPreparo = 0;
     this.videoComErro = false;
+    this.reels.clear();
   }
 
   erro(code: number, message: string, extra: Record<string, unknown> = {}): unknown {
@@ -141,6 +147,13 @@ export class MetaDeMentira {
       const situacao = video.erro ? 'error' : video.leituras > 0 ? 'processing' : 'ready';
       if (video.leituras > 0) video.leituras -= 1;
       return { status: 200, corpo: { id, status: { video_status: situacao } } };
+    }
+    // Um Reels do Instagram: `GET /{ig-media-id}?fields=boost_eligibility_info` (o guia "Use Posts as Instagram Ads").
+    if (req.method === 'GET' && this.reels.has(id)) {
+      const falha = this.falhasDaLeitura.shift();
+      if (falha) return falha;
+      const elegivel = this.reels.get(id);
+      return { status: 200, corpo: elegivel === null ? { id } : { id, boost_eligibility_info: { eligible_to_boost: elegivel } } };
     }
     const o = this.objetos.get(id);
     if (!o) {
@@ -224,7 +237,17 @@ export class MetaDeMentira {
       if (!aceitos.includes(params.optimization_goal ?? '')) return invalido('O objetivo de otimização não combina com o da campanha.');
       if (params.destination_type === 'WHATSAPP' && !json<{ page_id?: string }>('promoted_object')?.page_id) return invalido('O WhatsApp pede a Página promovida.');
     }
-    if (aresta === 'adcreatives') {
+    // O criativo de um post já publicado no Instagram (A4, X5, parte 6): a Página (`object_id`), o Instagram dela, o
+    // post (`source_instagram_media_id`) e o botão; sem `object_story_spec`. O post que não pode virar anúncio é recusado.
+    if (aresta === 'adcreatives' && params.source_instagram_media_id !== undefined) {
+      if ('object_story_spec' in params) return invalido('Use source_instagram_media_id ou object_story_spec, não os dois.');
+      if (!params.object_id || !params.instagram_user_id) return invalido('O criativo de um post do Instagram precisa da Página (object_id) e do Instagram (instagram_user_id).');
+      if (!this.reels.has(params.source_instagram_media_id)) return invalido('O post do Instagram não existe ou não é desta conta.');
+      if (this.reels.get(params.source_instagram_media_id) === false) return invalido('Este post não pode ser usado como anúncio.', { error_subcode: 2446886 });
+      const botao = json<{ type?: string; value?: { link?: string; app_destination?: string } }>('call_to_action');
+      if (!botao?.type || (!botao.value?.link && !botao.value?.app_destination)) return invalido('O botão precisa do tipo e do destino.');
+    }
+    if (aresta === 'adcreatives' && params.source_instagram_media_id === undefined) {
       const spec = json<Record<string, unknown>>('object_story_spec');
       if (!spec?.page_id) return invalido('O criativo precisa da Página.');
       if ('instagram_actor_id' in spec) return invalido('instagram_actor_id foi descontinuado: use instagram_user_id.');

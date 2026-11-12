@@ -1,23 +1,35 @@
 'use client';
 
-import type { InstagramMedia } from '@liame/contracts';
+import type { InstagramMedia, NewCampaignOptionsResponse } from '@liame/contracts';
+import Link from 'next/link';
 import { type RefObject, useId, useRef, useState } from 'react';
+import { situacaoDaCampanha } from '@/components/criativos/campanha-nova-textos';
 import { Icone } from '@/components/ui/icone';
 import { useDialogo } from '@/components/ui/use-dialogo';
 import { comMusicaDoInstagram, ehReels, fatosDaPublicacao, NOTA_DA_MUSICA, nomeDaPublicacao } from './do-seu-instagram';
 
 // Uma publicação do Instagram ("Do seu Instagram", A6 · Z10, parte 5b; P37 parte A; D-A6-83), na gaveta à direita: a
-// miniatura (a capa, no Reels), a legenda, os números e o link para ver no Instagram. Só lê: o vídeo não toca dentro do
-// Liame, e as ações que o protótipo desenhou além da leitura ficam para depois (D-A6-83, item 4).
+// miniatura (a capa, no Reels), a legenda, os números e o link para ver no Instagram. O vídeo não toca dentro do Liame.
+// No Reels, com a campanha nova ligada, "Usar como base de um anúncio" (A4, X5, parte 6; P42; D-A4-46) abre a gaveta da
+// campanha nova por cima desta; as outras ações do protótipo ficam para depois (D-A6-83, item 4).
+
+/** A campanha nova a partir deste Reels: em que pé está a última, quem pode pedir e o que abre a gaveta. */
+export type CampanhaDoReels = {
+  atual: NewCampaignOptionsResponse['by_reels'][number] | null;
+  podePedir: boolean;
+  aoUsar: () => void;
+};
 
 type Props = {
   publicacao: InstagramMedia;
   agora: Date;
   reserva: RefObject<HTMLElement | null>;
+  /** Nula sem a função `campanha_nova`, ou quando as opções dela não abriram. */
+  campanha?: CampanhaDoReels | null;
   aoFechar: () => void;
 };
 
-export function GavetaDoInstagram({ publicacao, agora, reserva, aoFechar }: Props) {
+export function GavetaDoInstagram({ publicacao, agora, reserva, campanha = null, aoFechar }: Props) {
   const ids = useId();
   const fecharBt = useRef<HTMLButtonElement>(null);
   const { ref, fechar, devolverFoco } = useDialogo({ focoInicial: fecharBt, reserva });
@@ -87,6 +99,7 @@ export function GavetaDoInstagram({ publicacao, agora, reserva, aoFechar }: Prop
               </div>
             ))}
           </dl>
+          {reels && campanha && <CampanhaDoReelsNaGaveta campanha={campanha} ids={ids} />}
         </div>
         <div className="dialogo-acoes">
           {publicacao.permalink && (
@@ -102,5 +115,44 @@ export function GavetaDoInstagram({ publicacao, agora, reserva, aoFechar }: Prop
         </div>
       </div>
     </dialog>
+  );
+}
+
+/** A campanha nova a partir do Reels: o botão da gaveta, ou em que pé está a campanha deste Reels (como na peça). */
+function CampanhaDoReelsNaGaveta({ campanha, ids }: { campanha: CampanhaDoReels; ids: string }) {
+  const atual = campanha.atual;
+  const andando = atual && (atual.status === 'pedida' || atual.status === 'criando');
+  const situacao = atual ? situacaoDaCampanha(atual) : null;
+  return (
+    <section className="cn-na-peca ig-campanha" aria-labelledby={`${ids}-cn-t`}>
+      <div className="card-cab">
+        <h3 className="rotulo-marca" id={`${ids}-cn-t`}>
+          Campanha nova na Meta
+        </h3>
+        {situacao && <span className={`st st--${situacao.tom}`}>{situacao.rotulo}</span>}
+      </div>
+      <p className="campo-dica">
+        {atual
+          ? andando
+            ? 'Este Reels já tem um pedido de campanha: decida em Aprovações antes de pedir outro.'
+            : atual.status === 'nao_criada'
+              ? 'A última campanha com este Reels não foi criada: o motivo está em Aprovações. Dá para pedir de novo.'
+              : 'A campanha com este Reels já existe na Meta. Ativar e pausar ficam em Aprovações.'
+          : 'O Reels vira uma campanha na Meta como está no post, criada pausada: não aparece para ninguém e não gasta até você ativar. Antes, o Liame pergunta à Meta se ele pode virar anúncio: post com música protegida ou com filtro interativo não pode.'}
+      </p>
+      <div className="vazio-acoes">
+        {campanha.podePedir && !andando && (
+          <button className="btn btn--sm" type="button" aria-haspopup="dialog" data-ig-campanha="" onClick={campanha.aoUsar}>
+            <Icone nome="megaphone" pequeno />
+            Usar como base de um anúncio
+          </button>
+        )}
+        {atual?.action_id && (
+          <Link className="btn btn--sm" href={`/aprovacoes?pedido=${atual.action_id}`}>
+            Ver em Aprovações
+          </Link>
+        )}
+      </div>
+    </section>
   );
 }

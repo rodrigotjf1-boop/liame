@@ -379,6 +379,116 @@ describe.skipIf(!hasDb)('a campanha nova na Meta (A4 · X5, parte 1)', () => {
     expect(meta.defeitos).toEqual([]);
   }, 120_000);
 
+  /** Um post na leitura de Fotos › Do seu Instagram, do Instagram da Página (ou de outro perfil da marca). */
+  async function postNoInstagram(e: Cenario, o: { kind?: string; caption?: string; perfil?: string } = {}): Promise<string> {
+    const id = `179${randomBytes(6).readUIntBE(0, 6)}`;
+    const [conta] = await ownerQuery<{ id: string }>(`select id from liame.connected_account where tenant_id = $1 and provider = 'instagram' and external_id = $2`, [e.tenantId, o.perfil ?? e.instagram]);
+    await ownerQuery(
+      `insert into liame.instagram_media (connected_account_id, tenant_id, brand_id, media_id, kind, caption, permalink, thumbnail_url, has_file, published_at)
+       values ($1, $2, $3, $4, $5, $6, $7, 'https://scontent.exemplo/capa.jpg', false, '2026-09-18T21:00:00Z')`,
+      [conta!.id, e.tenantId, e.brandId, id, o.kind ?? 'reels', o.caption ?? 'Smash duplo saindo da chapa. Peça pelo link da bio.', `https://www.instagram.com/reel/${id}/`],
+    );
+    return id;
+  }
+  const pedirReels = (e: Cenario, reels: string, extra: Record<string, unknown> = {}) =>
+    api.call('POST', '/v1/new-campaigns', {
+      cookie: e.cookie,
+      body: { brand_id: e.brandId, instagram_media_id: reels, unit_id: e.unitId, name: 'Reels de 18/09 · novembro', objective: 'cardapio', radius_km: 5, daily_budget_micros: 30_000_000, ...extra },
+    });
+
+  it('a campanha a partir de um Reels (parte 6): o post do Instagram da Página, como está; a Meta pergunta antes; o que não pode não cria nada', async () => {
+    const e = await cenario('Brasa Campanha Reels');
+    const reels = await postNoInstagram(e);
+    const codigo = async (r: { status: number; body: Record<string, unknown> }) => [r.status, r.body.code];
+
+    // Uma origem ou a outra: a peça com o Reels não passa do contrato.
+    expect((await pedirReels(e, reels, { piece_id: e.peca })).status).toBe(400);
+    expect((await pedirReels(e, 'nao-e-numero')).status).toBe(400);
+    // O post que não está na leitura, o post que é foto e o Reels de outro perfil da marca.
+    expect(await codigo(await pedirReels(e, '17900000000000001'))).toEqual([422, 'reels-nao-encontrado']);
+    expect(await codigo(await pedirReels(e, await postNoInstagram(e, { kind: 'foto' })))).toEqual([422, 'nao-e-reels']);
+    const outroPerfil = `1784${randomBytes(6).readUIntBE(0, 6)}`;
+    await ownerQuery(`insert into liame.connected_account (id, tenant_id, brand_id, provider, external_id, name, provider_attributes) values ($1, $2, $3, 'instagram', $4, '@outra', '{}'::jsonb)`, [
+      randomUUID(),
+      e.tenantId,
+      e.brandId,
+      outroPerfil,
+    ]);
+    expect(await codigo(await pedirReels(e, await postNoInstagram(e, { perfil: outroPerfil })))).toEqual([422, 'reels-nao-encontrado']);
+
+    const r = await pedirReels(e, reels);
+    expect(r.status, JSON.stringify(r.body)).toBe(201);
+    expect(r.body).toMatchObject({
+      status: 'pedida',
+      piece_id: null,
+      piece_version: null,
+      media_id: null,
+      instagram_media_id: reels,
+      reels: { caption: 'Smash duplo saindo da chapa. Peça pelo link da bio.', permalink: `https://www.instagram.com/reel/${reels}/`, published_at: '2026-09-18T21:00:00.000Z' },
+    });
+    const pedido = await pedidoDe(r.body.action_id as string);
+    expect(pedido).toMatchObject({ status: 'aguardando_aprovacao', tool: 'campanha_criar' });
+    expect(pedido.before_state).toMatchObject({ peca: null, midia: { id: reels, tipo: 'reels', legenda: 'Smash duplo saindo da chapa. Peça pelo link da bio.' }, instagram: { id: e.instagram } });
+    expect(await codigo(await pedirReels(e, reels))).toEqual([409, 'ja-pedida']);
+    // As opções: o Reels na lista dele, nunca na das peças.
+    const opcoes = (await api.call('GET', `/v1/new-campaigns/options?brand_id=${e.brandId}`, { cookie: e.cookie })).body;
+    expect(opcoes.by_reels).toEqual([{ instagram_media_id: reels, campaign_id: r.body.id, status: 'pedida', active: false, action_id: r.body.action_id }]);
+    expect(opcoes.by_piece).toEqual([]);
+
+    // Criar: a pergunta da elegibilidade antes de tudo; o criativo aponta para o post; tudo pausado.
+    meta.reels.set(reels, true);
+    await aprovar(e, r.body.action_id as string);
+    await executar(e);
+    expect((await pedidoDe(r.body.action_id as string)).status).toBe('executada');
+    const id = r.body.id as string;
+    expect(await linhaDe(id)).toMatchObject({ status: 'criada', error: null, meta_video_id: null });
+    const [criativo] = daCampanha(id, 'adcreatives');
+    expect(criativo!.params).toMatchObject({ object_id: e.pagina, instagram_user_id: e.instagram, source_instagram_media_id: reels });
+    expect(criativo!.params.object_story_spec).toBeUndefined();
+    expect(JSON.parse(criativo!.params.call_to_action!)).toEqual({ type: 'ORDER_NOW', value: { link: CARDAPIO } });
+    expect(criativo!.params.url_tags).toContain('utm_source=meta&utm_medium=paid');
+    const pergunta = meta.chamadas.findIndex((c) => c.id === reels && c.metodo === 'GET');
+    const campanha = meta.chamadas.findIndex((c) => c.id === `act_${meta.conta}/campaigns` && c.params.name === 'Reels de 18/09 · novembro');
+    expect(pergunta).toBeGreaterThanOrEqual(0);
+    expect(meta.chamadas[pergunta]!.params.fields).toBe('boost_eligibility_info');
+    expect(pergunta).toBeLessThan(campanha);
+    expect(['campaigns', 'adsets', 'adcreatives', 'ads'].map((a) => daCampanha(id, a).length)).toEqual([1, 1, 1, 1]);
+    expect(daCampanha(id, 'advideos')).toEqual([]);
+    expect(meta.defeitos).toEqual([]);
+
+    // O Reels que a Meta diz que não pode (a música do Instagram): não criada, com o motivo, e nada criado na Meta.
+    const naoPode = await postNoInstagram(e, { caption: 'Com música' });
+    meta.reels.set(naoPode, false);
+    const n = await pedirReels(e, naoPode, { name: 'Reels com música' });
+    expect(n.status, JSON.stringify(n.body)).toBe(201);
+    await aprovar(e, n.body.action_id as string);
+    await executar(e);
+    const recusada = await linhaDe(n.body.id as string);
+    expect(recusada.status).toBe('nao_criada');
+    expect(recusada.error).toMatch(/^A Meta não deixa este Reels virar anúncio/);
+    expect(['campaigns', 'adsets', 'adcreatives', 'ads'].map((a) => daCampanha(n.body.id as string, a).length)).toEqual([0, 0, 0, 0]);
+    expect((await pedidoDe(n.body.action_id as string)).status).toBe('falhou');
+
+    // A Meta que não responde o campo: segue, e o criativo diz se aceita.
+    const semResposta = await postNoInstagram(e, { caption: 'Sem a resposta' });
+    meta.reels.set(semResposta, null);
+    const s = await pedirReels(e, semResposta, { name: 'Reels sem resposta' });
+    await aprovar(e, s.body.action_id as string);
+    await executar(e);
+    expect((await linhaDe(s.body.id as string)).status).toBe('criada');
+
+    // O Reels que saiu da leitura do Instagram depois do pedido: não criada, sem ir à Meta.
+    const saiu = await postNoInstagram(e, { caption: 'Vai sair' });
+    const q = await pedirReels(e, saiu, { name: 'Reels que saiu' });
+    await aprovar(e, q.body.action_id as string);
+    await ownerQuery(`delete from liame.instagram_media where media_id = $1`, [saiu]);
+    await executar(e);
+    expect(await linhaDe(q.body.id as string)).toMatchObject({ status: 'nao_criada', meta_campaign_id: null });
+    expect((await linhaDe(q.body.id as string)).error).toMatch(/^O Reels desta campanha saiu do Instagram da marca/);
+    const lida = await api.call('GET', `/v1/new-campaigns/${q.body.id}`, { cookie: e.cookie });
+    expect(lida.body).toMatchObject({ instagram_media_id: saiu, reels: null, status: 'nao_criada' });
+  }, 180_000);
+
   it('a recusa da Meta encerra com o motivo; o que já foi criado fica pausado', async () => {
     const e = await cenario('Brasa Campanha Recusa');
     const foto = await fotoGuardada(e, armazem, { largura: 1080, altura: 1350 });

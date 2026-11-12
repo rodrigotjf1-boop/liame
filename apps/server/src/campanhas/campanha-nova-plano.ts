@@ -33,14 +33,24 @@ export const EstadoDaCampanhaNova = z.object({
   marca: z.string().regex(UUID),
   nome: z.string().min(1).max(80),
   objetivo: z.enum(OBJETIVOS_DA_CAMPANHA_NOVA),
-  peca: z.object({
-    id: z.string().regex(UUID),
-    versao: z.number().int().min(1),
-    titulo: z.string().min(1).max(60),
-    texto: z.string().min(1).max(400),
-    botao: z.enum(['pedir_agora', 'ver_cardapio', 'enviar_mensagem']),
-  }),
-  midia: z.object({ id: z.string().regex(UUID), tipo: z.enum(['foto', 'video']), arquivo: z.string().min(1) }),
+  /** A peça aprovada; nula na campanha a partir de um Reels (A4, X5, parte 6; D-A4-46: o texto é a legenda do post). */
+  peca: z
+    .object({
+      id: z.string().regex(UUID),
+      versao: z.number().int().min(1),
+      titulo: z.string().min(1).max(60),
+      texto: z.string().min(1).max(400),
+      botao: z.enum(['pedir_agora', 'ver_cardapio', 'enviar_mensagem']),
+    })
+    .nullable(),
+  /**
+   * A foto ou o vídeo de Fotos, ou o Reels já publicado (o id dele no Instagram e a legenda, como estão). A capa do Reels
+   * fica de fora: o endereço dela vence, e o estado aprovado não pode mudar sozinho.
+   */
+  midia: z.union([
+    z.object({ id: z.string().regex(UUID), tipo: z.enum(['foto', 'video']), arquivo: z.string().min(1) }),
+    z.object({ id: z.string().regex(/^[0-9]{1,40}$/), tipo: z.literal('reels'), legenda: z.string().max(2200) }),
+  ]),
   pagina: z.object({ id: z.string().min(1), nome: z.string() }),
   instagram: z.object({ id: z.string().min(1), nome: z.string() }).nullable(),
   loja: z.object({ id: z.string().regex(UUID), nome: z.string(), latitude: z.number().min(-90).max(90), longitude: z.number().min(-180).max(180) }),
@@ -70,6 +80,10 @@ export function planoDaCampanhaNova(before: unknown): PlanoDaCampanhaNova {
   if (e.situacao === 'cancelada') return { ok: false, motivo: 'Esta campanha nova foi cancelada.' };
   if (e.situacao === 'nao_criada') return { ok: false, motivo: 'Esta campanha nova não foi criada: peça de novo pela peça.' };
   if ((e.objetivo === 'cardapio') !== (e.link !== null)) return { ok: false, motivo: 'O destino da campanha não bate com o objetivo.' };
+  // As duas origens (D-A4-46): a peça com a foto ou o vídeo de Fotos, ou o Reels sozinho (o texto é a legenda dele).
+  const doReels = e.midia.tipo === 'reels';
+  if (doReels !== (e.peca === null)) return { ok: false, motivo: 'A campanha nova tem a peça com a mídia de Fotos, ou só o Reels.' };
+  if (doReels && !e.instagram) return { ok: false, motivo: 'O Reels é da conta do Instagram ligada à Página: conecte o Instagram da marca antes.' };
   return { ok: true, desejado: { ...e, situacao: 'criada' } };
 }
 
@@ -209,7 +223,7 @@ export function rastreioDoAnuncio(): string {
  * A mídia do criativo: a foto pelo endereço assinado do armazenamento (a Meta a guarda na biblioteca da conta); o vídeo
  * pelo id que a Meta deu, com a capa pelo endereço assinado.
  */
-export type MidiaNaMeta = { tipo: 'foto'; imagem: string } | { tipo: 'video'; videoId: string; capa: string };
+export type MidiaNaMeta = { tipo: 'foto'; imagem: string } | { tipo: 'video'; videoId: string; capa: string } | { tipo: 'reels'; id: string };
 
 /** O link do WhatsApp no anúncio que abre a conversa (o exemplo oficial do clique para o WhatsApp). */
 export const LINK_DO_WHATSAPP = 'https://api.whatsapp.com/send';
@@ -223,6 +237,22 @@ export function parametrosDoCriativo(e: EstadoDaCampanhaNova, midia: MidiaNaMeta
   const link = e.objetivo === 'cardapio' ? e.link! : LINK_DO_WHATSAPP;
   const botao =
     e.objetivo === 'cardapio' ? { type: 'ORDER_NOW', value: { link } } : { type: 'WHATSAPP_MESSAGE', value: { app_destination: 'WHATSAPP', link } };
+  const melhorias = Object.fromEntries(MELHORIAS_DO_CRIATIVO.map((m) => [m, { enroll_status: 'OPT_OUT' }]));
+  // O Reels já publicado (A4, X5, parte 6; D-A4-46): o próprio post, pela referência "Use Posts as Instagram Ads" (lida
+  // em 12/11/2026): a Página (`object_id`), a conta do Instagram e o id do post; o Liame põe só o botão e o rastreio.
+  if (midia.tipo === 'reels') {
+    if (!e.instagram) throw new Error('o Reels precisa da conta do Instagram ligada à Página');
+    return {
+      name: `${e.nome} · criativo`,
+      object_id: e.pagina.id,
+      instagram_user_id: e.instagram.id,
+      source_instagram_media_id: midia.id,
+      call_to_action: JSON.stringify(botao),
+      degrees_of_freedom_spec: JSON.stringify({ creative_features_spec: melhorias }),
+      ...(e.objetivo === 'cardapio' ? { url_tags: rastreioDoAnuncio() } : {}),
+    };
+  }
+  if (!e.peca) throw new Error('a foto ou o vídeo de Fotos vai com a peça aprovada');
   const spec: Record<string, unknown> = { page_id: e.pagina.id };
   if (e.instagram) spec.instagram_user_id = e.instagram.id;
   if (midia.tipo === 'foto') {
@@ -230,7 +260,6 @@ export function parametrosDoCriativo(e: EstadoDaCampanhaNova, midia: MidiaNaMeta
   } else {
     spec.video_data = { video_id: midia.videoId, image_url: midia.capa, message: e.peca.texto, title: e.peca.titulo, call_to_action: botao };
   }
-  const melhorias = Object.fromEntries(MELHORIAS_DO_CRIATIVO.map((m) => [m, { enroll_status: 'OPT_OUT' }]));
   return {
     name: `${e.nome} · criativo`,
     object_story_spec: JSON.stringify(spec),
