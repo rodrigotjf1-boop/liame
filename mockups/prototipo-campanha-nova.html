@@ -7860,5 +7860,570 @@ selP42.addEventListener('change', () => p42Estado(selP42.value, { focar: true })
 if (params.get('p10') && !params.get('p42')) p42Desligar();
 else p42Estado(P42_TODOS[params.get('p42')] ? params.get('p42') : 'gaveta-foto');
 </script>
+<style>
+/* ===== A5 · P45 · Campanha nova no Google (Y9): a gaveta, os recortes, as prévias e o pedido em Aprovações ===== */
+.p45-gaveta { width: min(920px, 100vw); }
+@media (max-width: 920px) { .p45-gaveta { border-width: 0; border-radius: 0; } }
+#dlg-p45-t:focus, #p45-falha:focus, #p45-feito-t:focus, #p45-proposta-t:focus { outline: none; }
+.p45-lista { display: grid; gap: var(--sp-2); margin: 0; padding: 0; list-style: none; }
+.p45-lista li { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; align-items: center; gap: var(--sp-2); min-width: 0; }
+.p45-lista .input { min-width: 0; width: 100%; }
+.p45-conta { font-family: var(--font-mono); font-size: var(--text-xs); color: var(--text-muted); white-space: nowrap; }
+.p45-conta[data-passou] { color: var(--danger); font-weight: 600; }
+.p45-mais { justify-self: start; }
+.p45-recortes { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--sp-3); margin: 0; padding: 0; list-style: none; align-items: end; }
+@container p42g (max-width: 440px) { .p45-recortes { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.p45-recortes figure { display: grid; gap: 4px; margin: 0; min-width: 0; }
+.p45-recortes figcaption { font-size: var(--text-xs); color: var(--text-muted); overflow-wrap: anywhere; }
+.p45-recortes figcaption b { display: block; color: var(--text); font-weight: 600; }
+.p45-recortes figcaption .p45-ruim { color: var(--danger); font-weight: 600; }
+.p45-quadro { position: relative; overflow: hidden; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--bg-subtle); }
+.p45-quadro img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.p45-quadro--deitada { aspect-ratio: 1.91 / 1; }
+.p45-quadro--quadrada { aspect-ratio: 1 / 1; }
+.p45-quadro--em-pe { aspect-ratio: 4 / 5; }
+.p45-quadro--ruim { opacity: .45; }
+.p45-logo { display: flex; align-items: center; gap: var(--sp-3); min-width: 0; }
+.p45-logo-img { width: 48px; height: 48px; flex: none; overflow: hidden; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--surface); }
+.p45-logo-img img { display: block; width: 100%; height: 100%; }
+.p45-logo span { min-width: 0; overflow-wrap: anywhere; }
+.p45-logo small { display: block; }
+.p45-linha { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: var(--sp-2); min-width: 0; }
+.p45-linha .input { min-width: 0; width: 100%; }
+.p45-proposta { display: grid; gap: var(--sp-2); padding: var(--sp-3); border: 1px dashed var(--border); border-radius: var(--radius); background: var(--surface-2); }
+.p45-proposta h3 { margin: 0; font-size: var(--text-sm); }
+.p45-proposta ol, .p45-proposta ul { margin: 0; padding-left: 1.2em; display: grid; gap: 2px; font-size: var(--text-sm); overflow-wrap: anywhere; }
+.p45-acoes { display: flex; flex-wrap: wrap; gap: var(--sp-2); }
+.p45-busca { display: grid; gap: 4px; padding: var(--sp-3); }
+.p45-busca .p45-url { display: flex; align-items: center; gap: var(--sp-2); min-width: 0; font-size: var(--text-xs); }
+.p45-busca .p45-url span:last-child { min-width: 0; overflow-wrap: anywhere; }
+.p45-busca .p45-tit { color: var(--link); font-weight: 500; line-height: 1.3; overflow-wrap: anywhere; }
+.p45-busca p { margin: 0; color: var(--text-muted); overflow-wrap: anywhere; }
+.p45-display .p45-quadro { border-width: 0 0 1px; border-radius: 0; }
+.p45-display-txt { display: grid; grid-template-columns: 32px minmax(0, 1fr); align-items: start; gap: var(--sp-2); padding: var(--sp-3); }
+.p45-display-txt .p45-logo-img { width: 32px; height: 32px; }
+.p45-display-txt b { overflow-wrap: anywhere; }
+.p45-display-txt p { margin: 2px 0 0; color: var(--text-muted); font-size: var(--text-xs); overflow-wrap: anywhere; }
+.p45-display-pe { display: flex; justify-content: flex-end; padding: 0 var(--sp-3) var(--sp-3); }
+.p45-no-google { display: grid; gap: var(--sp-2); margin: 0; padding: 0; list-style: none; }
+.p45-no-google li { display: grid; grid-template-columns: 20px minmax(0, 1fr) auto; align-items: start; gap: var(--sp-2); font-size: var(--text-sm); }
+.p45-no-google li > .ic { width: 18px; height: 18px; margin-top: 1px; color: var(--success); }
+.p45-no-google li span { min-width: 0; overflow-wrap: anywhere; }
+.p45-no-google small { display: block; color: var(--text-muted); font-size: var(--text-xs); }
+.p45-decisoes { margin-bottom: var(--sp-5); }
+</style>
+<script>
+/* =====================================================================================================================
+   A5 · P45 · Campanha nova no Google (Y9; decisões propostas D-A5-21 a D-A5-26). Pré-aprovado pelo dono em 12/11/2026
+   ("qualquer mockup que surgir já tem meu aprovado"), com as recomendações. Uma camada por cima do P42: a mesma peça
+   aprovada em Criativos vira uma campanha Performance Max no Google, pausada, com os textos nos tamanhos do Google, a
+   foto de Fotos recortada nas proporções que ele pede, a logo e o nome de Minha marca, o raio em volta da loja e o
+   cardápio de destino. Os números são os da documentação do Google lida em 12/11/2026 (base §3.1): de 3 a 15 títulos de
+   até 30 caracteres, de 1 a 5 títulos longos de até 90, de 2 a 5 descrições de até 90, o nome com até 25; a imagem
+   deitada (1,91:1, mínimo de 600 × 314) e a quadrada (1:1, mínimo de 300 × 300) obrigatórias, a em pé (4:5) opcional; a
+   logo quadrada (mínimo de 128 × 128). A criação no Google é uma requisição só: ou cria tudo, ou nada.
+   ===================================================================================================================== */
+var p45 = null;
+const P45_ESTADOS = {
+  'Gaveta (Criativos › a peça aprovada › Campanha no Google)': {
+    'google-gaveta': 'Performance Max com a foto da loja',
+    'google-criativo': 'Os textos pedidos ao Criativo',
+    'google-erro-titulo': 'Um título passa de 30 caracteres',
+    'google-foto-pequena': 'A foto é pequena para o formato deitado',
+    'google-sem-logo': 'Sem a logo em Minha marca: não dá para pedir',
+    'google-pedido': 'Pedido criado',
+  },
+  'Em Aprovações': {
+    'google-aprovar': 'Criar, pausada: espera a sua decisão',
+    'google-criada': 'Criada e pausada: o que existe no Google',
+    'google-nao-criada': 'Não criada: o Google recusou, nada foi criado',
+  },
+  'Decisões': {
+    'google-decisoes': 'As decisões propostas (D-A5-21 a D-A5-26)',
+  },
+};
+const P45_TODOS = Object.assign({}, ...Object.values(P45_ESTADOS));
+const P45_GAVETA = Object.keys(Object.values(P45_ESTADOS)[0]);
+const P45_APROV = Object.keys(P45_ESTADOS['Em Aprovações']);
+const P45_LIM = { titulo: 30, titulos: [3, 15], longo: 90, descricao: 90, descricoes: [2, 5], nome: 25 };
+const P45_NOME = 'Mister Burgers';
+const P45_URL = 'app.dmsregem.com › c › mister-centro';
+const P45_LOGO = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="96" height="96" viewBox="0 0 96 96"><rect width="96" height="96" fill="#1F2A24"/><circle cx="48" cy="48" r="34" fill="#E0A048"/><text x="48" y="58" font-family="Arial, sans-serif" font-size="28" font-weight="700" text-anchor="middle" fill="#1F2A24">MB</text></svg>');
+/* Os textos que a gaveta traz da peça, já nos tamanhos do Google; e o que o Criativo propõe (exemplos fixos). */
+const P45_TEXTOS = {
+  titulos: ['Combo sexta: R$ 34,90', 'Smash, batata e refri', 'Peça no cardápio online'],
+  longo: 'Sexta é dia de combo: smash, batata e refri por R$ 34,90 na Loja Centro',
+  descricoes: ['Peça o combo de sexta pelo cardápio online e receba em casa.', 'Smash, batata e refrigerante por R$ 34,90. Entrega no Centro ou retirada no balcão.'],
+};
+const P45_PROPOSTA = {
+  titulos: ['Combo sexta: R$ 34,90', 'Smash, batata e refri', 'Peça no cardápio online', 'Sexta é dia de combo', 'Entrega rápida no Centro'],
+  longo: 'Combo de sexta na Mister Burgers: smash, batata e refri por R$ 34,90, com entrega no Centro',
+  descricoes: ['Peça o combo de sexta pelo cardápio online e receba em casa.', 'Smash, batata e refrigerante por R$ 34,90. Entrega no Centro ou retirada no balcão.', 'O smash da casa, na chapa, com batata rústica. Só às sextas.'],
+};
+/* As fotos de Fotos (sem os vídeos: a primeira versão não leva vídeo, D-A5-23) e uma foto pequena, do celular. */
+const P45_PEQUENA = { id: 'f7', tipo: 'smash', w: 520, h: 520, produto: 'Smash duplo', desc: 'Smash no prato, foto do celular' };
+P45_PEQUENA.src = p42Svg(P45_PEQUENA.tipo, P45_PEQUENA.w, P45_PEQUENA.h);
+const p45Fotos = () => [...P42_FOTOS.filter((f) => !f.video), ...(p45?.pequena ? [P45_PEQUENA] : [])];
+const p45Foto = (id) => p45Fotos().find((f) => f.id === id) ?? null;
+/* Os recortes que o Liame faz da foto, pelo centro: o maior pedaço da foto em cada proporção, e se ele alcança o mínimo. */
+function p45Recortes(f) {
+  return [['deitada', 'Deitada 1,91:1', 1.91, 600, 314, true], ['quadrada', 'Quadrada 1:1', 1, 300, 300, true], ['em-pe', 'Em pé 4:5', 0.8, 480, 600, false]].map(([id, rot, r, minW, minH, obrigatoria]) => {
+    const w = Math.min(f.w, Math.round(f.h * r)), h = Math.round(w / r);
+    return { id, rot, w, h, minW, minH, obrigatoria, ok: w >= minW && h >= minH };
+  });
+}
+const p45Conta = (txt, max, id) => { const n = [...(txt ?? '')].length; return `<span class="p45-conta" id="${id}"${n > max ? ' data-passou' : ''}>${n}/${max}</span>`; };
+
+/* ---------- a gaveta (um diálogo próprio, com o desenho da gaveta do P42) ---------- */
+document.body.insertAdjacentHTML('beforeend', `
+<dialog class="dialogo dialogo--lado p42-gaveta p45-gaveta" id="dlg-p45" aria-labelledby="dlg-p45-t">
+  <form class="dialogo-form" id="p45-form" novalidate></form>
+</dialog>`);
+const dlgP45 = $('#dlg-p45'), formP45 = $('#p45-form');
+/* Fechar e abrir de novo na mesma hora: o "fechou" que chega depois, com a gaveta já aberta de novo, não vale. */
+dlgP45.addEventListener('close', (e) => { if (dlgP45.open) e.stopImmediatePropagation(); }, true);
+dlgP45.addEventListener('close', () => {
+  const o = origemDlg.get(dlgP45);
+  if (o) {
+    if (o.getAttribute('aria-haspopup') === 'dialog') o.setAttribute('aria-expanded', 'false');
+    // O foco volta ao botão só quando a pessoa fechou (Esc, Fechar, Cancelar); "Ver em Aprovações" leva o foco para lá.
+    if (['', 'cancelar'].includes(dlgP45.returnValue) && o.isConnected) o.focus({ preventScroll: true });
+  }
+  origemDlg.delete(dlgP45);
+  if (p45) p45.m = null;
+});
+dlgP45.addEventListener('click', (e) => { if (e.target === dlgP45 || (e.target instanceof Element && e.target.closest('[data-fechar]'))) dlgP45.close('cancelar'); });
+
+function p45AbrirGaveta({ gatilho = document.activeElement, foto = 'f2', textos = P45_TEXTOS } = {}) {
+  const o = OFERTAS_P10.combo;
+  p45.m = { nome: `${o.nome} · Google · ${MES.proximo}`, raio: '5', verba: emTexto(30), fim: '', foto, aba: 'busca', fase: 'form', criado: null, erro: null, campo: null, proposta: null,
+    titulos: [...textos.titulos], longo: textos.longo, descricoes: [...textos.descricoes] };
+  p45Desenhar();
+  abrirDialogo(dlgP45, gatilho);
+  $('#dlg-p45-t')?.focus({ preventScroll: true });
+}
+function p45Ler() {
+  const m = p45?.m;
+  if (!m || m.fase !== 'form') return;
+  const val = (sel, atual) => $(sel)?.value ?? atual;
+  m.titulos = m.titulos.map((t, i) => val(`#p45-t-${i}`, t));
+  m.descricoes = m.descricoes.map((t, i) => val(`#p45-d-${i}`, t));
+  Object.assign(m, { longo: val('#p45-longo', m.longo), nome: val('#p45-nome', m.nome), verba: val('#p45-verba', m.verba), fim: val('#p45-fim', m.fim), raio: $('input[name="p45-raio"]:checked')?.value ?? m.raio });
+}
+function p45Previa(m) {
+  const f = p45Foto(m.foto), ts = m.titulos.filter((t) => t.trim()), ds = m.descricoes.filter((t) => t.trim());
+  if (m.aba === 'display') {
+    const quadro = f ? `<div class="p45-quadro p45-quadro--deitada"><img src="${f.src}" alt="${esc(`Recorte deitado da foto: ${f.desc}`)}"></div>` : `<div class="p45-quadro p45-quadro--deitada"></div>`;
+    return `<div class="previa p45-display" role="group" aria-label="Prévia do anúncio no Display do Google">${quadro}
+      <div class="p45-display-txt"><span class="p45-logo-img" aria-hidden="true">${p45.semLogo ? '' : `<img src="${P45_LOGO}" alt="">`}</span><span><b>${esc(m.longo || ts[0] || '')}</b><p>${esc(ds[0] ?? '')}</p><p>${P45_NOME}</p></span></div>
+      <div class="p45-display-pe"><span class="pv-bt">Abrir</span></div></div>`;
+  }
+  return `<div class="previa p45-busca" role="group" aria-label="Prévia do anúncio na Pesquisa do Google"><small><b>Patrocinado</b></small>
+    <span class="p45-url"><span class="pv-av" aria-hidden="true">MB</span><span><b>${P45_NOME}</b><br>${P45_URL}</span></span>
+    <span class="p45-tit">${esc(ts.slice(0, 3).join(' | '))}</span><p>${esc(ds.slice(0, 2).join(' '))}</p></div>`;
+}
+function p45Html() {
+  const m = p45.m, L = p9.limites, erroEm = (c) => (m.erro && m.campo === c ? m.erro : null);
+  const cab = `<div class="dialogo-cab"><div class="dlg-titulo"><p class="rotulo-marca">Campanha nova no Google, pausada</p><h2 id="dlg-p45-t" tabindex="-1">${m.fase === 'criado' ? 'Pedido criado' : 'Sexta é dia de combo'}</h2></div><button class="btn btn--icon btn--ghost" type="button" data-fechar aria-label="Fechar">${ic('i-x')}</button></div>`;
+  const fechar = '<button class="btn" type="button" data-fechar>Fechar</button>';
+  if (m.fase === 'criado') {
+    return `${cab}<div class="dialogo-corpo"><div class="pd-feito"><span class="vazio-ic vazio-ic--ok" aria-hidden="true">${ic('i-check')}</span><h3 id="p45-feito-t" tabindex="-1">Pedido criado</h3><p><b>Criar a campanha “${esc(m.nome)}” no Google, pausada.</b> Ele espera a aprovação com o código do app. Nada é criado no Google antes disso.</p></div></div>
+      <div class="dialogo-acoes">${fechar}<button class="btn btn--primary" type="button" data-p45-ver="${m.criado}">Ver em Aprovações</button></div>`;
+  }
+  const f = p45Foto(m.foto), recortes = f ? p45Recortes(f) : [], semLogo = p45.semLogo;
+  const aviso = semLogo ? `<div class="pd-aviso pd-aviso--perigo" id="p45-falha" tabindex="-1" role="alert">${ic('i-alert-circle')}<div><b>Falta a logo da loja</b><span id="p45-falha-txt">A campanha no Google sai com o nome e a logo da loja. Envie a logo em Minha marca antes (quadrada, de pelo menos 128 × 128).</span><a class="btn btn--primary btn--sm" href="prototipo-video-montado.html">Enviar a logo em Minha marca</a></div></div>` : '';
+  const origem = `<p class="p42-origem">${ic('i-megaphone')}<span>A mesma peça aprovada em Criativos, nos tamanhos do Google: <b>Performance Max</b> mostra o anúncio na Pesquisa, no YouTube, no Display, no Gmail, no Maps e no Discover, combinando os textos e as imagens.</span></p>`;
+  const lista = (nome, rot, itens, max, minimo, idBase, maxItens) => {
+    const lis = itens.map((t, i) => `<li><label class="sr-only" for="${idBase}-${i}">${rot} ${i + 1}</label><input class="input" id="${idBase}-${i}" autocomplete="off" maxlength="${max * 2}" value="${esc(t)}" aria-describedby="${idBase}-${i}-n${erroEm(nome) ? ` p45-${nome}-erro` : ''}"${erroEm(nome) && [...t].length > max ? ' aria-invalid="true"' : ''}>${p45Conta(t, max, `${idBase}-${i}-n`)}${i >= minimo ? `<button class="btn btn--icon btn--ghost btn--sm" type="button" data-p45-tirar="${nome}:${i}" aria-label="Tirar: ${esc(rot.toLowerCase())} ${i + 1}">${ic('i-x')}</button>` : '<span aria-hidden="true"></span>'}</li>`).join('');
+    const mais = itens.length < maxItens ? `<button class="btn btn--sm p45-mais" type="button" data-p45-mais="${nome}">${ic('i-plus', 'ic ic-sm')}Mais ${rot.toLowerCase()}</button>` : '';
+    return `<ol class="p45-lista">${lis}</ol>${mais}${erroEm(nome) ? `<span class="campo-erro" id="p45-${nome}-erro" role="alert">${erroEm(nome)}</span>` : ''}`;
+  };
+  const proposta = m.proposta ? `<div class="p45-proposta" aria-labelledby="p45-proposta-t"><h3 id="p45-proposta-t" tabindex="-1">O que o Criativo propõe</h3>
+      <p class="campo-dica">Escrito a partir da peça aprovada, nos tamanhos do Google, e conferido pelo Compliance antes de chegar aqui.</p>
+      <p class="rotulo">Títulos</p><ol>${m.proposta.titulos.map((t) => `<li>${esc(t)}</li>`).join('')}</ol>
+      <p class="rotulo">Título longo</p><ul><li>${esc(m.proposta.longo)}</li></ul>
+      <p class="rotulo">Descrições</p><ol>${m.proposta.descricoes.map((t) => `<li>${esc(t)}</li>`).join('')}</ol>
+      <div class="p45-acoes"><button class="btn btn--primary btn--sm" type="button" data-p45-usar-proposta>Usar estes</button><button class="btn btn--sm" type="button" data-p45-sem-proposta>Deixar como está</button></div></div>` : '';
+  const textos = `<div class="pd-bloco"><p class="rotulo-marca">Os textos do Google</p>
+      <div class="p45-acoes"><button class="btn btn--sm" type="button" data-p45-criativo>${ic('i-sparkles', 'ic ic-sm')}Pedir ao Criativo</button></div>${proposta}
+      <fieldset class="campo"><legend>Títulos <span class="campo-dica">de ${P45_LIM.titulos[0]} a ${P45_LIM.titulos[1]}, até ${P45_LIM.titulo} caracteres cada</span></legend>${lista('titulos', 'Título', m.titulos, P45_LIM.titulo, P45_LIM.titulos[0], 'p45-t', P45_LIM.titulos[1])}</fieldset>
+      <div class="campo"><label for="p45-longo">Título longo <span class="campo-dica">até ${P45_LIM.longo} caracteres</span></label><div class="p45-linha"><input class="input" id="p45-longo" autocomplete="off" maxlength="${P45_LIM.longo * 2}" value="${esc(m.longo)}" aria-describedby="p45-longo-n${erroEm('longo') ? ' p45-longo-erro' : ''}"${erroEm('longo') ? ' aria-invalid="true"' : ''}>${p45Conta(m.longo, P45_LIM.longo, 'p45-longo-n')}</div>${erroEm('longo') ? `<span class="campo-erro" id="p45-longo-erro" role="alert">${erroEm('longo')}</span>` : ''}</div>
+      <fieldset class="campo"><legend>Descrições <span class="campo-dica">de ${P45_LIM.descricoes[0]} a ${P45_LIM.descricoes[1]}, até ${P45_LIM.descricao} caracteres cada</span></legend>${lista('descricoes', 'Descrição', m.descricoes, P45_LIM.descricao, P45_LIM.descricoes[0], 'p45-d', P45_LIM.descricoes[1])}</fieldset></div>`;
+  const opFoto = (x) => `<li><button class="po-foto-op" type="button" data-p45-foto="${x.id}" aria-pressed="${m.foto === x.id}" aria-label="${esc(`${x.produto}: ${x.desc}, ${x.w} × ${x.h}`)}"><img src="${x.src}" alt=""></button></li>`;
+  const fig = (r) => `<li><figure><div class="p45-quadro p45-quadro--${r.id}${r.ok ? '' : ' p45-quadro--ruim'}">${f ? `<img src="${f.src}" alt="">` : ''}</div><figcaption><b>${r.rot}</b>${r.ok ? `${r.w} × ${r.h}` : `<span class="p45-ruim">${r.obrigatoria ? `pequena: o Google pede ${r.minW} × ${r.minH}` : 'fica de fora: pequena'}</span>`}${r.obrigatoria ? '' : ' · opcional'}</figcaption></figure></li>`;
+  const imagens = `<div class="campo" id="p45-imagens"><span class="rotulo" id="p45-foto-t">A foto e os recortes</span><span class="campo-dica" id="p45-foto-d">As fotos de verdade de Fotos. O Liame recorta pelo centro nas proporções que o Google pede; ele combina os recortes nos anúncios.</span>
+      <ul class="po-fotos" aria-labelledby="p45-foto-t" aria-describedby="p45-foto-d">${p45Fotos().map(opFoto).join('')}</ul>
+      ${f ? `<ul class="p45-recortes" aria-label="Os recortes da foto">${recortes.map(fig).join('')}</ul>` : ''}
+      ${erroEm('foto') ? `<span class="campo-erro" id="p45-foto-erro" role="alert">${erroEm('foto')}</span>` : ''}</div>`;
+  const logo = `<div class="pd-bloco"><p class="rotulo-marca">O nome e a logo da loja</p><div class="p45-logo"><span class="p45-logo-img">${semLogo ? '' : `<img src="${P45_LOGO}" alt="A logo da Mister Burgers">`}</span><span><b>${P45_NOME}</b><small class="campo-dica">${semLogo ? 'Sem a logo em Minha marca.' : 'De Minha marca: o nome (até 25 caracteres) e a logo quadrada. O Google mostra os dois no anúncio.'}</small></span></div></div>`;
+  const lado = `<section class="p42-lado" aria-labelledby="p45-previa-t"><h3 class="rotulo-marca" id="p45-previa-t">Como o anúncio pode aparecer</h3>
+      <div class="seg" role="group" aria-label="Ver a prévia na">${[['busca', 'Pesquisa'], ['display', 'Display']].map(([id, rot]) => `<button type="button" data-p45-aba="${id}" aria-pressed="${m.aba === id}">${rot}</button>`).join('')}</div>
+      ${p45Previa(m)}
+      <p class="pd-nota">${ic('i-info')}<span>É um desenho. Na Performance Max, o Google escolhe a combinação dos títulos, das descrições e dos recortes em cada lugar onde mostra o anúncio. Com a campanha criada, pausada, dá para ver as combinações no Google Ads antes de ativar.</span></p>
+      <p class="pd-nota">${ic('i-sparkles')}<span>${p42Conferir('Se o Google acrescenta textos e vídeos feitos por ele, e como o Liame desliga isso na criação')}.</span></p></section>`;
+  const inv = (c) => (erroEm(c) ? ' aria-invalid="true"' : '');
+  const nome = `<div class="campo"><label for="p45-nome">Nome da campanha</label><input class="input" id="p45-nome" autocomplete="off" maxlength="80" value="${esc(m.nome)}" aria-describedby="p45-nome-d"${inv('p45-nome')}><p class="campo-dica" id="p45-nome-d">É o nome que aparece no Google Ads e em Resultados.</p></div>`;
+  const publico = `<fieldset class="campo"><legend>Quem vê</legend><div class="pd-escolha">${P42_RAIOS.map(([id, rot]) => `<label class="pd-opcao"><input type="radio" name="p45-raio" value="${id}"${m.raio === id ? ' checked' : ''} aria-describedby="p45-raio-dica">${rot}</label>`).join('')}</div><p class="campo-dica" id="p45-raio-dica">Quem está num raio de ${p42KmTxt(m.raio)} em volta da ${P42_LOJA.nome} (${P42_LOJA.endereco}). No Google, o raio vale para quem está ou costuma estar ali.</p></fieldset>`;
+  const verba = `<div class="campo"><label for="p45-verba">Verba diária</label><div class="pd-valor"><span aria-hidden="true">R$</span><input id="p45-verba" inputmode="decimal" autocomplete="off" maxlength="10" value="${esc(m.verba)}" aria-describedby="p45-verba-d"${inv('p45-verba')}></div><p class="campo-dica" id="p45-verba-d">${L.tetoCampanha == null ? 'A empresa ainda não definiu o teto por campanha.' : `Teto por campanha: ${moeda(L.tetoCampanha)} por dia.`} Enquanto estiver pausada, ela não gasta. O Google pode gastar até o dobro num dia, e a média do mês fica na verba.</p></div>`;
+  const fim = `<div class="campo"><label for="p45-fim">Termina em <span class="campo-dica">Opcional.</span></label><input class="input" type="date" id="p45-fim" min="2026-09-30" value="${esc(m.fim)}" aria-describedby="p45-fim-d"${inv('p45-fim')}><p class="campo-dica" id="p45-fim-d">Em branco, não tem data de fim. Ela começa quando você ativar.</p></div>`;
+  const erro = m.erro && !['titulos', 'longo', 'descricoes', 'foto'].includes(m.campo) ? `<p class="campo-erro" id="p45-erro" role="alert" tabindex="-1">${m.erro}</p>` : '';
+  const como = `<div class="pd-bloco"><p class="rotulo-marca">Como o Google gasta</p><dl class="pd-agora mc-destino"><dt>Lance</dt><dd>Maximizar conversões<small>o Google busca o máximo de pedidos dentro da verba diária, sem alvo de custo por pedido</small></dd>
+      <dt>Para onde leva</dt><dd>O cardápio online da ${P42_LOJA.nome}<small>${P45_URL.replace(/ › /g, '/')}</small></dd>
+      <dt>Rastreio do Liame</dt><dd>Vai junto, no sufixo do URL final<small>os pedidos deste anúncio aparecem em Resultados</small></dd></dl>
+      <p class="campo-dica">No Google, este tipo de campanha não abre conversa no WhatsApp: o destino é o cardápio.</p></div>`;
+  const limites = L.tetoMes == null ? '' : `<div class="pd-bloco"><p class="rotulo-marca">Limites da empresa</p><ul class="pd-limites"><li><span>Teto por campanha</span><b>${moeda(L.tetoCampanha)} por dia</b></li><li><span>Verba de ${MES.nome}</span><b>conferida ao ativar</b></li></ul></div>`;
+  const nota = `<p class="pd-nota">${ic('i-shield')}<span>O pedido vai para Aprovações, com a prévia. Depois da aprovação com o código do app, o Liame confere com o Google e cria tudo numa requisição só: o orçamento, a campanha, o raio e o grupo de recursos com os textos, os recortes, o nome e a logo, pausados. Se o Google recusar, nada é criado.</span></p>`;
+  const corpo = `${aviso}${origem}<div class="p42-grade"><div class="p42-f1">${textos}${imagens}${logo}</div>${lado}<div class="p42-f2">${nome}${publico}${verba}${fim}${erro}<p class="pd-efeito" role="status">A campanha nasce pausada: não aparece para ninguém e não gasta. Ativar é outro pedido, com outra aprovação.</p>${como}${limites}${nota}</div></div>`;
+  const acoes = semLogo
+    ? `${fechar}<button class="btn btn--primary" type="button" data-p45-bloqueado aria-disabled="true" aria-describedby="p45-falha-txt">Pedir a criação</button>`
+    : '<button class="btn" type="button" data-fechar>Cancelar</button><button class="btn btn--primary" type="submit">Pedir a criação</button>';
+  return `${cab}<div class="dialogo-corpo">${corpo}</div><div class="dialogo-acoes">${acoes}</div>`;
+}
+function p45Desenhar() { if (p45?.m) formP45.innerHTML = p45Html(); }
+
+/* O que a tela confere antes de pedir: as regras do Google (asset-requirements) e as da campanha nova. */
+function p45Conferir(m) {
+  const ts = m.titulos.map((t) => t.trim()).filter(Boolean), ds = m.descricoes.map((t) => t.trim()).filter(Boolean), tam = (t) => [...t].length;
+  if (p45.semLogo) return { erro: 'Falta a logo da loja: envie a logo em Minha marca antes.', campo: 'logo' };
+  if (ts.length < P45_LIM.titulos[0]) return { erro: `O Google pede pelo menos ${P45_LIM.titulos[0]} títulos.`, campo: 'titulos' };
+  const longoT = ts.find((t) => tam(t) > P45_LIM.titulo);
+  if (longoT) return { erro: `“${longoT}” tem ${tam(longoT)} caracteres: o título vai até ${P45_LIM.titulo}.`, campo: 'titulos' };
+  if (new Set(ts.map((t) => t.toLocaleLowerCase('pt-BR'))).size < ts.length) return { erro: 'Há títulos repetidos: o Google recusa o mesmo título duas vezes.', campo: 'titulos' };
+  if (!m.longo.trim()) return { erro: 'Escreva o título longo.', campo: 'longo' };
+  if (tam(m.longo.trim()) > P45_LIM.longo) return { erro: `O título longo tem ${tam(m.longo.trim())} caracteres: vai até ${P45_LIM.longo}.`, campo: 'longo' };
+  if (ds.length < P45_LIM.descricoes[0]) return { erro: `O Google pede pelo menos ${P45_LIM.descricoes[0]} descrições.`, campo: 'descricoes' };
+  const longaD = ds.find((t) => tam(t) > P45_LIM.descricao);
+  if (longaD) return { erro: `Uma descrição tem ${tam(longaD)} caracteres: vai até ${P45_LIM.descricao}.`, campo: 'descricoes' };
+  const f = p45Foto(m.foto);
+  if (!f) return { erro: 'Escolha a foto do anúncio.', campo: 'foto' };
+  const ruim = p45Recortes(f).find((r) => r.obrigatoria && !r.ok);
+  if (ruim) return { erro: `A foto é pequena para o recorte ${{ deitada: 'deitado', quadrada: 'quadrado', 'em-pe': 'em pé' }[ruim.id]}: o Google pede pelo menos ${ruim.minW} × ${ruim.minH}, e o maior recorte desta foto dá ${ruim.w} × ${ruim.h}. Use outra foto.`, campo: 'foto' };
+  const nome = m.nome.trim(), verba = lerReais(m.verba), L = p9.limites;
+  if (!nome) return { erro: 'Dê um nome à campanha.', campo: 'p45-nome' };
+  if (verba == null || verba <= 0) return { erro: 'Digite a verba diária em reais, como 30,00.', campo: 'p45-verba' };
+  if (L.tetoCampanha != null && verba > L.tetoCampanha) return { erro: `A verba diária passa do teto por campanha, que é de ${moeda(L.tetoCampanha)} por dia. Quem muda o teto é o Dono ou o Administrador, em Verba do mês.`, campo: 'p45-verba' };
+  if (m.fim && m.fim <= '2026-09-29') return { erro: 'A data de fim precisa ser depois de hoje.', campo: 'p45-fim' };
+  return { pedido: { tipo: 'criar', p42: true, google: true, origem: 'google', peca: 'pc-1', versao: versaoDe(p10.pecas['pc-1']).n, foto: f.id, nome, objetivo: 'cardapio', raio: m.raio, verba, fim: m.fim || null, textos: { titulos: ts, longo: m.longo.trim(), descricoes: ds } } };
+}
+function p45Enviar() {
+  const m = p45?.m;
+  if (!m || m.fase !== 'form') return;
+  p45Ler();
+  const r = p45Conferir(m);
+  if (r.erro) {
+    Object.assign(m, { erro: r.erro, campo: r.campo });
+    p45Desenhar();
+    const primeiroRuim = (prefixo) => $$(`#p45-form input[id^="${prefixo}"][aria-invalid="true"]`)[0] || $(`#${prefixo}0`);
+    const alvo = { logo: $('#p45-falha'), titulos: primeiroRuim('p45-t-'), longo: $('#p45-longo'), descricoes: primeiroRuim('p45-d-'), foto: $(`[data-p45-foto="${m.foto}"]`) }[r.campo] ?? ($('#' + r.campo) || $('#p45-erro'));
+    alvo?.focus({ preventScroll: true });
+    alvo?.scrollIntoView({ block: 'nearest' });
+    anunciar(r.erro);
+    return;
+  }
+  const id = `cn-google-${++p10.seq}`;
+  p10.pedidos[id] = { id, ...r.pedido, quem: 'Rodrigo', quando: `hoje, ${AGORA}`, plano: fnv(id + r.pedido.nome).slice(0, 8), estado: 'pendente', sit: null, volta: null };
+  Object.assign(m, { fase: 'criado', criado: id, erro: null, campo: null });
+  p45Desenhar();
+  $('#p45-feito-t')?.focus({ preventScroll: true });
+  anunciar('Pedido criado. Ele espera a aprovação com o código do app.');
+}
+formP45.addEventListener('submit', (e) => { e.preventDefault(); p45Enviar(); });
+formP45.addEventListener('input', (e) => {
+  const t = e.target instanceof HTMLInputElement ? e.target : null, m = p45?.m;
+  if (!t || !m) return;
+  const n = $(`#${t.id}-n`);
+  if (n) { const max = Number(n.textContent.split('/')[1]); const k = [...t.value].length; n.textContent = `${k}/${max}`; n.toggleAttribute('data-passou', k > max); }
+});
+formP45.addEventListener('change', (e) => { const t = e.target; if (t instanceof HTMLInputElement && t.name === 'p45-raio') { p45Ler(); const d = $('#p45-raio-dica'); if (d) d.textContent = `Quem está num raio de ${p42KmTxt(t.value)} em volta da ${P42_LOJA.nome} (${P42_LOJA.endereco}). No Google, o raio vale para quem está ou costuma estar ali.`; } });
+formP45.addEventListener('click', (e) => {
+  const alvo = e.target instanceof Element ? e.target : null, m = p45?.m;
+  if (!alvo || !m) return;
+  const b = (sel) => alvo.closest(sel);
+  if (b('[data-p45-ver]')) { const id = b('[data-p45-ver]').dataset.p45Ver; dlgP45.close('ver'); p8.sel = id; p8.ui = uiBase(); p8.mostraDetalhe = true; irParaTela('aprovacoes'); $('#ap-det-titulo')?.focus({ preventScroll: true }); return; }
+  if (m.fase !== 'form') return;
+  if (b('[data-p45-bloqueado]')) { $('#p45-falha')?.focus({ preventScroll: true }); $('#p45-falha')?.scrollIntoView({ block: 'nearest' }); anunciar('Falta a logo da loja: envie a logo em Minha marca antes de pedir a campanha.'); return; }
+  const foto = b('[data-p45-foto]');
+  if (foto) { p45Ler(); m.foto = foto.dataset.p45Foto; if (m.campo === 'foto') Object.assign(m, { erro: null, campo: null }); p45Desenhar(); $(`[data-p45-foto="${m.foto}"]`)?.focus(); const f = p45Foto(m.foto); anunciar(`Foto escolhida: ${f.desc}.${p45Recortes(f).some((r) => r.obrigatoria && !r.ok) ? ' Ela é pequena para um dos recortes do Google.' : ''}`); return; }
+  const aba = b('[data-p45-aba]');
+  if (aba) { p45Ler(); m.aba = aba.dataset.p45Aba; p45Desenhar(); $(`[data-p45-aba="${m.aba}"]`)?.focus(); return; }
+  const mais = b('[data-p45-mais]');
+  if (mais) { p45Ler(); const k = mais.dataset.p45Mais; m[k].push(''); p45Desenhar(); $(`#${k === 'titulos' ? 'p45-t' : 'p45-d'}-${m[k].length - 1}`)?.focus(); return; }
+  const tirar = b('[data-p45-tirar]');
+  if (tirar) { p45Ler(); const [k, i] = tirar.dataset.p45Tirar.split(':'); m[k].splice(Number(i), 1); p45Desenhar(); $(`[data-p45-mais="${k}"]`)?.focus(); anunciar(k === 'titulos' ? 'Título tirado.' : 'Descrição tirada.'); return; }
+  if (b('[data-p45-criativo]')) { p45Ler(); m.proposta = P45_PROPOSTA; p45Desenhar(); $('#p45-proposta-t')?.focus({ preventScroll: true }); anunciar('O Criativo propôs os textos: confira e use, se quiser.'); return; }
+  if (b('[data-p45-usar-proposta]')) { Object.assign(m, { titulos: [...m.proposta.titulos], longo: m.proposta.longo, descricoes: [...m.proposta.descricoes], proposta: null, erro: null, campo: null }); p45Desenhar(); $('#p45-t-0')?.focus(); anunciar('Os textos do Criativo entraram nos campos.'); return; }
+  if (b('[data-p45-sem-proposta]')) { p45Ler(); m.proposta = null; p45Desenhar(); $('[data-p45-criativo]')?.focus(); }
+});
+
+/* ---------- a entrada: o botão ao lado do "Usar numa campanha nova" da peça aprovada ---------- */
+function p45PorBotao() {
+  const meta = $('[data-p10-usar="pc-1"]');
+  if (!meta || $('[data-p45-usar]')) return;
+  meta.insertAdjacentHTML('afterend', ` <button class="btn" type="button" data-p45-usar="pc-1" aria-haspopup="dialog" aria-expanded="false">${ic('i-external', 'ic ic-sm')}Campanha no Google</button>`);
+}
+document.addEventListener('click', (e) => {
+  const b = e.target instanceof Element ? e.target.closest('[data-p45-usar]') : null;
+  if (!b || !p45?.ativo) return;
+  p45AbrirGaveta({ gatilho: b });
+});
+
+/* ---------- Aprovações: o pedido do Google (as funções do P42 que a camada troca, guardando a original) ---------- */
+const p45DoGoogle = (id) => { const q = pedidoP10(id); return !!(q && campanhaDe(q)?.google); };
+const tituloDaCampanhaP45 = tituloDaCampanha;
+tituloDaCampanha = function (q) { const c = campanhaDe(q); return c?.google && q.tipo === 'criar' ? `Criar a campanha “${c.nome}” no Google, pausada` : tituloDaCampanhaP45(q); };
+function p45NoGoogle(c) {
+  const t = c.textos, item = (rot, nome, extra) => `<li>${ic('i-check-circle')}<span><b>${rot}</b> ${nome}<small>${extra}</small></span><span class="st st--espera">${ic('i-pause', 'ic ic-sm')}Pausada</span></li>`;
+  return `<div class="secao"><p class="rotulo-marca">O que existe no Google</p><ul class="p45-no-google">
+      ${item('Campanha', `“${esc(c.nome)}”`, `Performance Max, maximizar conversões, ${moeda(c.verba)} por dia só depois de ativada`)}
+      <li>${ic('i-check-circle')}<span><b>Raio</b> ${p42KmTxt(c.raio)} em volta da ${P42_LOJA.nome}<small>na campanha</small></span><span></span></li>
+      <li>${ic('i-check-circle')}<span><b>Grupo de recursos</b> “${esc(c.nome)} · grupo 1”<small>${t.titulos.length} títulos, 1 título longo, ${t.descricoes.length} descrições, os recortes da foto, o nome e a logo</small></span><span></span></li></ul>
+    <div class="p42-gerenciador"><a class="btn btn--sm" href="https://ads.google.com/aw/campaigns?campaignId=21000000009" target="_blank" rel="noopener noreferrer">${ic('i-external', 'ic ic-sm')}Abrir no Google Ads<span class="sr-only"> (abre em outra aba)</span></a><p class="campo-dica">Link de exemplo. Lá dá para ver as combinações do anúncio antes de ativar.</p></div></div>`;
+}
+function p45SecaoAnuncio(c) {
+  const m = { titulos: c.textos.titulos, longo: c.textos.longo, descricoes: c.textos.descricoes, foto: c.foto, aba: p45?.abaAp ?? 'busca' };
+  const abas = `<div class="seg" role="group" aria-label="Ver a prévia na">${[['busca', 'Pesquisa'], ['display', 'Display']].map(([id, rot]) => `<button type="button" data-p45-aba-ap="${id}" aria-pressed="${m.aba === id}">${rot}</button>`).join('')}</div>`;
+  const resumo = `<dl class="pd-agora p42-resumo"><dt>Quem assina</dt><dd>${P45_NOME}<small>o nome e a logo de Minha marca</small></dd><dt>Quem vê</dt><dd>${p42KmTxt(c.raio)} em volta da ${P42_LOJA.nome}<small>${P42_LOJA.endereco}</small></dd><dt>Verba diária</dt><dd>${moeda(c.verba)}<small>só gasta depois de ativada</small></dd></dl>`;
+  return `<div class="secao"><p class="rotulo-marca">O anúncio</p><div class="cn-previa"><div class="p42-ap-previa">${abas}${p45Previa(m)}</div><div class="cn-previa-txt">${resumo}
+    ${linha('i-check-circle', 'Os textos saem da peça “Sexta é dia de combo”, aprovada em Criativos, nos tamanhos do Google.')}
+    ${linha('i-camera', 'As imagens são os recortes de uma foto de Fotos, como a loja enviou: deitada e quadrada (e em pé, quando cabe). Sem imagem feita por IA.')}
+    ${linha('i-info', 'O Google combina os textos e as imagens sozinho, em cada lugar onde mostra o anúncio.')}</div></div></div>`;
+}
+function p45Tabela(c) {
+  const t = c.textos;
+  return [
+    ['Orçamento', 'não existe', `${moeda(c.verba)} por dia (só gasta depois de ativada)`],
+    ['Campanha', 'não existe', `“${esc(c.nome)}”, Performance Max, pausada`],
+    ['Lance', '—', 'maximizar conversões, sem alvo de custo por pedido'],
+    ['Quem vê', '—', `${p42KmTxt(c.raio)} em volta da ${P42_LOJA.nome} (${P42_LOJA.endereco})`],
+    ['Textos', '—', `${t.titulos.length} títulos, 1 título longo e ${t.descricoes.length} descrições`],
+    ['Imagens', '—', 'os recortes deitado e quadrado da foto (e o em pé, quando cabe), o nome e a logo da loja'],
+    ['Leva para', '—', 'o cardápio online da Loja Centro, com o rastreio do Liame'],
+    ['Termina em', '—', c.fim ? dataCurta(c.fim) : 'sem data de fim'],
+  ];
+}
+function p45HtmlPedido(id) {
+  const q = pedidoP10(id), c = campanhaDe(q), u = p8.ui, pro = shell.modo === 'pro', detalhado = pro || u.detalhes, h = horasDaCampanha(q);
+  const cab = `${VOLTAR()}<div class="det-cab"><span><b>${esc(q.quem)}</b> pediu</span><span>· ${q.quando} · no Google, com uma peça aprovada em Criativos e uma foto da loja</span></div><h2 class="det-titulo" id="ap-det-titulo" tabindex="-1">${esc(tituloDaCampanha(q))}</h2>`;
+  const idPlano = (vale) => `<p class="plano-id">Plano ${q.plano} · hash <b>${curto(fnv(JSON.stringify([q.plano, c.nome, c.verba, c.foto, c.raio, c.textos])))}</b>${vale ? ' · a aprovação vale só para este plano' : ''}</p>`;
+  const colunas = q.estado === 'executado' ? ['Antes', 'Depois'] : ['Agora', 'Depois'];
+  const rot = q.estado === 'executado' ? 'O que foi criado' : q.estado === 'nao_criada' ? 'O que o pedido queria criar' : 'O que será criado';
+  const mud = `<div class="secao"><p class="rotulo-marca">${rot}</p><div class="table-wrap"><table class="tabela p42-tabela"><caption class="sr-only">${rot} no Google</caption><thead><tr><th scope="col">Item</th><th scope="col">${colunas[0]}</th><th scope="col">${colunas[1]}</th></tr></thead><tbody>
+      ${p45Tabela(c).map(([i, a, d]) => `<tr><th scope="row">${i}</th><td class="ap-antes" data-col="${colunas[0]}">${a}</td><td class="ap-depois" data-col="${colunas[1]}">${d}</td></tr>`).join('')}</tbody></table></div></div>`;
+  const anuncio = p45SecaoAnuncio(c);
+  if (q.estado === 'executando') return `${cab}<div class="secao"><div class="resultado resultado--espera" role="status">${ic('i-clock')}<span><b>Aprovado por Rodrigo às ${h.aprovado}.</b> O Liame confere com o Google e cria tudo numa requisição só: o orçamento, a campanha, o raio e o grupo de recursos, pausados.</span></div></div>${anuncio}${mud}`;
+  if (q.estado === 'executado') {
+    const res = `<div class="resultado resultado--ok">${ic('i-check')}<span><b>Aprovado por Rodrigo às ${h.aprovado} e criada às ${h.feito}.</b> O Google confirmou: a campanha “${esc(c.nome)}” existe e está <b>pausada</b>. Não aparece para ninguém e não gasta.</span></div>`;
+    const ativar = `<div class="desfazer">${linha('i-play', 'Ativar é outro pedido, com outra aprovação e o código do app, como na Meta: é quando a campanha começa a aparecer e a gastar.')}</div>`;
+    return `${cab}${idPlano(false)}<div class="secao">${res}</div><div class="secao">${p45NoGoogle(c)}${ativar}</div>${anuncio}${mud}`;
+  }
+  if (q.estado === 'nao_criada') {
+    const res = `<div class="resultado resultado--falha" role="alert">${ic('i-alert')}<span><b id="p45-nao-criada" tabindex="-1">Aprovado por Rodrigo às ${h.aprovado}, e a campanha não foi criada.</b> O que o Google respondeu: “${esc(q.motivoGoogle)}” <b>Nada foi criado no Google:</b> a requisição é uma só, e o Google cria tudo ou nada.</span></div>`;
+    const extra = `<div class="desfazer">${linha('i-info', 'Para tentar de novo, peça a campanha outra vez pela peça, com outra foto.')}<button class="btn btn--primary" type="button" data-p10-abrir-peca="${c.peca}">${ic('i-image', 'ic ic-sm')}Abrir a peça em Criativos</button></div>`;
+    return `${cab}${idPlano(false)}<div class="secao">${res}</div><div class="secao">${extra}</div>${anuncio}${mud}`;
+  }
+  if (q.estado === 'recusado') return `${cab}<div class="secao"><div class="resultado resultado--falha">${ic('i-x')}<span>Recusado por Rodrigo: “${esc(q.motivo)}”. Nada foi criado. A peça continua aprovada, na biblioteca.</span></div></div>${anuncio}${mud}`;
+  const frase = `Uma campanha nova no Google (Performance Max), com os textos da peça <b>“Sexta é dia de combo”</b> e uma foto da loja, para quem está a até ${p42KmTxt(c.raio)} da ${P42_LOJA.nome}. <b>Ela nasce pausada:</b> não aparece para ninguém e não gasta. Ativar é outro pedido, com outra aprovação. Se você aprovar, o Liame confere com o Google e cria tudo numa requisição só.`;
+  const lite = pro ? '' : `<div class="secao secao--lite"><p class="lite-frase lite-frase--grande">${frase}</p><div class="lite-chips"><span class="risco risco--baixo">${ROT_RISCO.baixo}</span><span class="lite-chip">Nasce pausada</span><span class="lite-chip">${PRAZO}</span></div>${botaoDetalhes(u)}</div>`;
+  const risco = `<div class="secao"><p class="rotulo-marca">Risco e limites</p><div class="politica">${ic('i-shield')}<span><b class="risco risco--baixo">${ROT_RISCO.baixo}.</b> Nasce pausada: nada aparece e nada é gasto até alguém ativar, com outra aprovação e o código do app.</span></div>
+      ${linha('i-check-circle', 'O Google confere antes: o Liame manda a requisição para ele validar, sem criar nada, e só então cria. Se ele recusar, nada é criado e o motivo aparece aqui.')}
+      ${linha('i-info', 'O Liame não apaga nada no Google. Se você desistir depois de criar, a campanha fica pausada, ou você remove no Google Ads.')}
+      ${linha('i-clock', `Prazo: ${PRAZO}. Se ninguém decidir, o pedido expira e nada é feito.`)}</div>`;
+  return `${cab}${lite}${anuncio}<div id="ap-detalhes"${detalhado ? '' : ' hidden'}>${idPlano(true)}${mud}${risco}</div>${htmlDecisao(MOTIVOS_PEDIDO, 'O código de 6 números que o app autenticador mostra agora. A aprovação vale só para este plano.')}`;
+}
+const htmlCampanhaNovaP45 = htmlCampanhaNova;
+htmlCampanhaNova = function (id) { return p45DoGoogle(id) ? p45HtmlPedido(id) : htmlCampanhaNovaP45(id); };
+const aprovarCampanhaP45 = aprovarCampanha;
+aprovarCampanha = function (id) {
+  if (!p45DoGoogle(id)) { aprovarCampanhaP45(id); return; }
+  const q = pedidoP10(id), c = campanhaDe(q), estadoDeAgora = p10;
+  Object.assign(q, { estado: 'executando' });
+  p8.ui = uiBase(); p10.ui = uiP10();
+  desenharP8();
+  $('#ap-det-titulo')?.focus({ preventScroll: true });
+  toast('Aprovado. O Liame cria a campanha no Google, numa requisição só, tudo pausado.');
+  setTimeout(() => {
+    if (p10 !== estadoDeAgora || q.estado !== 'executando') return;
+    Object.assign(q, { estado: 'executado' }); c.sit = 'pausada';
+    const comFoco = $('#aprovacoes')?.contains(document.activeElement);
+    desenharP8();
+    if (comFoco && p8.sel === id) $('#ap-det-titulo')?.focus({ preventScroll: true });
+    const aviso = 'Criada: o orçamento, a campanha e o grupo de recursos estão no Google, pausados.';
+    toast(aviso); anunciar(aviso);
+  }, reduzido() ? 150 : 900);
+};
+document.addEventListener('click', (e) => {
+  const alvo = e.target instanceof Element ? e.target.closest('[data-p45-aba-ap]') : null;
+  if (!alvo || !p45) return;
+  p45.abaAp = alvo.dataset.p45AbaAp;
+  desenharP8();
+  $(`[data-p45-aba-ap="${p45.abaAp}"]`)?.focus();
+});
+
+/* ---------- as decisões propostas (um cartão em cima de Criativos) ---------- */
+const P45_DECISOES = [
+  { id: 'D-A5-21', titulo: 'No Google, a campanha nova é uma Performance Max com o raio em volta da loja',
+    oque: 'A mesma peça aprovada vira uma campanha Performance Max: ela usa as fotos e a logo que o Liame já guarda e mostra o anúncio na Pesquisa, no YouTube, no Display, no Gmail, no Maps e no Discover. Quem vê é o mesmo raio em volta da loja da campanha da Meta (só com o ponto da loja no endereço).',
+    porque: 'A campanha de Pesquisa precisaria de palavras-chave, e o planejador de palavras-chave fica bloqueado no nível de acesso que o Liame tem hoje (Explorer). A Performance Max funciona com o que a loja já tem.',
+    rec: 'assim; a campanha de Pesquisa fica para depois do nível Básico.' },
+  { id: 'D-A5-22', titulo: 'Os textos: os da peça, nos tamanhos do Google, e o Criativo completa',
+    oque: 'O Google pede de 3 a 15 títulos de até 30 caracteres, de 1 a 5 títulos longos de até 90 e de 2 a 5 descrições de até 90. A gaveta traz os textos da peça já nos tamanhos, a pessoa edita, e "Pedir ao Criativo" propõe mais, a partir da peça, conferidos pelo Compliance. A tela confere os tamanhos antes de pedir.',
+    porque: 'A peça aprovada é a fonte do que a marca diz; o Google só pede mais variações curtas. A IA escreve dentro das regras já conferidas, e a pessoa decide.',
+    rec: 'assim; o "Pedir ao Criativo" entra com o prompt e o eval, e a rota do modelo depois da rodada paga, como no vídeo montado.' },
+  { id: 'D-A5-23', titulo: 'As imagens: a foto de Fotos, recortada pelo Liame nas proporções do Google',
+    oque: 'O Google pede uma imagem deitada (1,91:1, pelo menos 600 × 314) e uma quadrada (1:1, pelo menos 300 × 300); a em pé (4:5) é opcional. O Liame recorta a foto escolhida pelo centro, mostra os recortes, e a foto pequena demais é recusada antes. A logo e o nome vêm de Minha marca. Sem vídeo na primeira versão (o Google não exige).',
+    porque: 'É a foto de verdade da loja, sem edição de IA; o recorte pelo centro é previsível e a pessoa vê antes. O Google confere a proporção só ao ligar a imagem, e a recusa ali derrubaria a criação inteira.',
+    rec: 'assim; escolher o ponto do recorte fica para depois, se fizer falta.' },
+  { id: 'D-A5-24', titulo: 'O lance: maximizar conversões, sem alvo',
+    oque: 'A Performance Max só aceita "maximizar conversões" ou "maximizar o valor das conversões". Sem o valor das vendas informado ao Google (a Y1 ficou para depois), o Liame usa "maximizar conversões", sem alvo de custo por pedido.',
+    porque: 'Sem o valor das vendas, o lance por valor não tem com o que trabalhar. O alvo de custo pode entrar depois, com os números das primeiras semanas.',
+    rec: 'assim; com a Y1 ligada, a escolha do lance por valor entra como opção.' },
+  { id: 'D-A5-25', titulo: 'A criação é uma requisição só: o Google cria tudo ou nada',
+    oque: 'Depois da aprovação, o Liame manda ao Google, numa requisição só, o orçamento, a campanha pausada, o raio e o grupo de recursos com os textos, os recortes, o nome e a logo; antes, a mesma requisição só para conferir. Se o Google recusar, nada é criado, e o motivo aparece em Aprovações. Ativar é outro pedido, como na Meta.',
+    porque: 'É como o Google pede que a Performance Max seja criada (o grupo de recursos e os recursos juntos). Diferente da Meta, não sobra campanha vazia quando algo é recusado.',
+    rec: 'assim.' },
+  { id: 'D-A5-26', titulo: 'No Google, o destino é o cardápio',
+    oque: 'O anúncio leva ao cardápio online da loja, com o rastreio do Liame no sufixo do URL final. O objetivo de conversas no WhatsApp fica só na Meta.',
+    porque: 'Na Performance Max, o destino é uma página; o WhatsApp exigiria outro tipo de recurso, fora do que o Liame acompanha hoje.',
+    rec: 'assim.' },
+];
+const P45_PERGUNTA = { txt: 'As diretrizes da marca do Google (o nome e a logo ligados na campanha, que o Google liga por padrão nas campanhas novas) ficam ligadas?', rec: 'ligadas, como o Google recomenda; o Liame manda o nome e a logo de Minha marca.' };
+function p45DecisoesHtml() {
+  const lista = P45_DECISOES.map((d) => `<li><div><b>${d.id} · ${esc(d.titulo)}</b><span><b>O que é:</b> ${esc(d.oque)}</span><span><b>Por quê:</b> ${esc(d.porque)}</span><span><b>Recomendação:</b> ${esc(d.rec)}</span></div><span class="st st--concluido">Aprovada</span></li>`).join('');
+  return `<section class="card p42-decisoes p45-decisoes" id="p45-decisoes" aria-labelledby="p45-dec-t"><div class="card-cab"><div><h2 id="p45-dec-t" tabindex="-1">Decisões da campanha nova no Google</h2><p class="card-sub">Pela documentação do Google lida em 12/11/2026 (a criação da Performance Max, os grupos de recursos e os requisitos de cada recurso). Pré-aprovadas por você em 12/11/2026, com as recomendações.</p></div></div><ul class="rev-decisoes">${lista}</ul><p class="lite-frase"><b>A pergunta aberta:</b> ${esc(P45_PERGUNTA.txt)} <b>Recomendação:</b> ${esc(P45_PERGUNTA.rec)}</p></section>`;
+}
+
+/* ---------- o seletor "Google" (faixa do protótipo) ---------- */
+$('#rev-p42')?.closest('label')?.insertAdjacentHTML('beforebegin', '<label>Google <select id="rev-p45"></select></label>');
+const selP45 = $('#rev-p45');
+selP45.replaceChildren(...Object.entries(P45_ESTADOS).map(([grupo, itens]) => {
+  const g = document.createElement('optgroup'); g.label = grupo;
+  g.append(...Object.entries(itens).map(([id, rot]) => new Option(rot, id)));
+  return g;
+}));
+selP45.selectedIndex = -1;
+const marcaP45 = $('.revisao-marca b');
+if (marcaP45) marcaP45.textContent = 'Protótipo aprovado em 11/11/2026 · A4 · P42 · e A5 · P45 (Google), pré-aprovado em 12/11/2026';
+function p45Desligar() {
+  if (p45) p45.ativo = false;
+  $('#p45-decisoes')?.remove();
+  $$('[data-p45-usar]').forEach((b) => b.remove());
+  if (dlgP45.open) dlgP45.close('estado');
+  selP45.selectedIndex = -1;
+}
+const p42EstadoP45 = p42Estado;
+p42Estado = function (v, opts) { p45Desligar(); p42EstadoP45(v, opts); };
+const definirP10P45 = definirP10;
+definirP10 = function (v, opts) { p45Desligar(); definirP10P45(v, opts); };
+const desenharP8P45 = desenharP8;
+desenharP8 = function () { desenharP8P45(); if (p45?.ativo) p45PorBotao(); };
+function p45Estado(v, { focar = false } = {}) {
+  if (!P45_TODOS[v]) v = 'google-gaveta';
+  p45Desligar();
+  // A base é a do P42 sem gaveta aberta (a de "Decisões" é Criativos com a peça aprovada; a de Aprovações, o pedido de criar).
+  p42EstadoP45(P45_APROV.includes(v) ? 'aprovacoes-criar' : 'decisoes');
+  $('#p42-decisoes')?.remove();
+  selP42.selectedIndex = -1;
+  p45 = { ativo: true, estado: v, semLogo: v === 'google-sem-logo', pequena: v === 'google-foto-pequena', abaAp: 'busca', m: null };
+  if (selP45.value !== v) selP45.value = v;
+  if (P45_APROV.includes(v)) {
+    const c = p10.pedidos['cn-criar-1'];
+    Object.assign(c, { p42: true, google: true, origem: 'google', nome: 'Combo sexta · Google · outubro', foto: 'f2', raio: '5', textos: { ...P45_TEXTOS } });
+    if (v === 'google-criada') Object.assign(c, { estado: 'executado', sit: 'pausada' });
+    if (v === 'google-nao-criada') Object.assign(c, { estado: 'nao_criada', motivoGoogle: 'A imagem quadrada não tem a proporção que o Google aceita (ASPECT_RATIO_NOT_ALLOWED).' });
+    desenharP8();
+    if (focar) $('#ap-det-titulo')?.focus({ preventScroll: true });
+    return;
+  }
+  if (v === 'google-decisoes') {
+    desenharP8();
+    $('#criativos .view-cab')?.insertAdjacentHTML('afterend', p45DecisoesHtml());
+    if (focar) $('#p45-dec-t')?.focus({ preventScroll: true });
+    return;
+  }
+  Object.assign(p10, { vista: 'peca', sel: 'pc-1' });
+  desenharP8();
+  const gatilho = $('[data-p45-usar="pc-1"]');
+  const textos = v === 'google-erro-titulo' ? { ...P45_TEXTOS, titulos: ['Combo de sexta com smash, batata e refrigerante', ...P45_TEXTOS.titulos.slice(1)] } : P45_TEXTOS;
+  p45AbrirGaveta({ gatilho, foto: v === 'google-foto-pequena' ? 'f7' : 'f2', textos });
+  if (v === 'google-criativo') formP45.querySelector('[data-p45-criativo]')?.click();
+  if (['google-erro-titulo', 'google-foto-pequena', 'google-pedido'].includes(v)) p45Enviar();
+}
+selP45.addEventListener('change', () => p45Estado(selP45.value, { focar: true }));
+
+/* ---------- cenários do P45 para a conferência no navegador sem janela ---------- */
+(() => {
+  const todas = [1920, 1440, 1024, 768, 375, 320], pontas = [1440, 375];
+  const exige = (cond, msg) => { if (!cond) throw new Error(msg); };
+  const abrir = async (v) => { definirModo('lite', { silencioso: true }); p45Estado(v); await esperar(400); };
+  const texto = (sel) => ($(sel)?.textContent ?? '').replace(/\s+/g, ' ');
+  const tem = (sel, ...frases) => frases.every((f) => texto(sel).includes(f));
+  const codigo = async () => { $('#ap-codigo').value = '482913'; $('[data-p8-aprovar]').requestSubmit(); await esperar(150); };
+  for (const id of Object.keys(P45_TODOS)) {
+    window.uiuxCenarios['p45-' + id] = { larguras: todas, executar: async () => {
+      await abrir(id);
+      exige(selP45.value === id && selP42.selectedIndex === -1 && selP10.selectedIndex === -1, 'os seletores: ' + selP45.value);
+      const gaveta = P45_GAVETA.includes(id);
+      exige(dlgP45.open === gaveta && !dlgMontar.open, gaveta ? 'a gaveta do Google não abriu' : 'uma gaveta ficou aberta');
+      if (gaveta) exige(tem('#p45-form', 'Campanha nova no Google, pausada'), 'a gaveta não é a do P45');
+      if (gaveta && !['google-erro-titulo', 'google-foto-pequena', 'google-pedido', 'google-criativo'].includes(id)) exige(document.activeElement?.id === 'dlg-p45-t', 'o foco não foi para o título: ' + document.activeElement?.id);
+      if (id === 'google-gaveta') {
+        exige($$('#p45-form .p45-lista input[id^="p45-t-"]').length === 3 && $$('#p45-form input[id^="p45-d-"]').length === 2 && !!$('#p45-longo'), 'os campos dos textos');
+        exige($$('#p45-form .p45-recortes figure').length === 3 && tem('#p45-form .p45-recortes', '1440 × 754', '1440 × 1440', '1440 × 1800'), 'os recortes');
+        exige(tem('#p45-form', 'Performance Max', 'Maximizar conversões', 'O nome e a logo da loja', 'Mister Burgers', 'Raio de entrega (4 km)', 'numa requisição só', 'Se o Google recusar, nada é criado.') && !!$('#p45-form .p45-busca') && $$('[data-p45-aba]').length === 2, 'os blocos da gaveta');
+        exige($('#p45-fim')?.type === 'date' && texto('#p45-form [type="submit"]') === 'Pedir a criação', 'a data ou o pedir');
+      }
+      if (id === 'google-criativo') exige(document.activeElement?.id === 'p45-proposta-t' && tem('#p45-form .p45-proposta', 'Entrega rápida no Centro', 'Usar estes'), 'a proposta do Criativo');
+      if (id === 'google-erro-titulo') exige(tem('#p45-titulos-erro', 'tem 47 caracteres: o título vai até 30.') && document.activeElement?.id === 'p45-t-0' && $('#p45-t-0').getAttribute('aria-invalid') === 'true' && !!$('#p45-t-0-n[data-passou]'), 'o título longo demais');
+      if (id === 'google-foto-pequena') exige(tem('#p45-foto-erro', 'o Google pede pelo menos 600 × 314', '520 × 272') && document.activeElement?.dataset?.p45Foto === 'f7' && tem('#p45-form .p45-recortes', 'fica de fora: pequena'), 'a foto pequena');
+      if (id === 'google-sem-logo') exige(tem('#p45-falha', 'Falta a logo da loja') && !$('#p45-form [type="submit"]') && !!$('[data-p45-bloqueado]') && !!$('#p45-falha a[href]'), 'sem a logo');
+      if (id === 'google-pedido') exige(document.activeElement?.id === 'p45-feito-t' && tem('#p45-form', 'Nada é criado no Google antes disso.', 'Ver em Aprovações'), 'o pedido criado');
+      if (P45_APROV.includes(id)) exige(!$('#tela-aprovacoes').hidden && texto('#ap-det-titulo').includes('no Google') && p45DoGoogle(p8.sel), 'o pedido do Google em Aprovações');
+      if (id === 'google-aprovar') exige(!!$('#aprovacoes .p45-busca') && tem('#aprovacoes', 'Performance Max', 'Nasce pausada', 'numa requisição só') && !!$('#ap-codigo'), 'o pedido de criar');
+      if (id === 'google-criada') exige($$('#aprovacoes .p45-no-google li').length === 3 && !!$('#aprovacoes a[href^="https://ads.google.com"]') && tem('#aprovacoes', 'está pausada'), 'a criada');
+      if (id === 'google-nao-criada') exige(tem('#aprovacoes', 'ASPECT_RATIO_NOT_ALLOWED', 'Nada foi criado no Google'), 'a não criada');
+      if (id === 'google-decisoes') exige($$('#p45-decisoes li').length === 6 && ['21', '22', '23', '24', '25', '26'].every((n) => texto('#p45-decisoes').includes('D-A5-' + n)) && tem('#p45-decisoes', 'Recomendação'), 'as decisões');
+    } };
+  }
+  window.uiuxCenarios['p45-fluxo-gaveta'] = { larguras: pontas, executar: async () => {
+    await abrir('google-gaveta');
+    $('[data-p45-mais="titulos"]').click(); await esperar(100);
+    exige(document.activeElement?.id === 'p45-t-3', 'mais um título');
+    const t = $('#p45-t-3'); t.value = 'Combo sexta: R$ 34,90'; t.dispatchEvent(new Event('input', { bubbles: true }));
+    formP45.requestSubmit(); await esperar(120);
+    exige(tem('#p45-titulos-erro', 'títulos repetidos'), 'o título repetido');
+    $('[data-p45-tirar="titulos:3"]').click(); await esperar(100);
+    exige($$('#p45-form input[id^="p45-t-"]').length === 3 && document.activeElement?.dataset?.p45Mais === 'titulos', 'tirar o título');
+    $('[data-p45-aba="display"]').click(); await esperar(100);
+    exige(!!$('#p45-form .p45-display img') && document.activeElement?.dataset?.p45Aba === 'display', 'a prévia do Display');
+    $('[data-p45-foto="f3"]').click(); await esperar(100);
+    exige(tem('#p45-form .p45-recortes', '1600 × 838', '1200 × 1200', '960 × 1200'), 'os recortes da outra foto');
+    formP45.requestSubmit(); await esperar(150);
+    const q = p10.pedidos[p45.m.criado];
+    exige(q && q.google && q.foto === 'f3' && q.textos.titulos.length === 3, 'o pedido não guardou a foto e os textos');
+    $('[data-p45-ver]').click(); await esperar(300);
+    exige(!dlgP45.open && !$('#tela-aprovacoes').hidden && texto('#ap-det-titulo').includes('no Google, pausada'), 'Ver em Aprovações');
+    await codigo(); await esperar(1300);
+    exige(pedidoP10(q.id).estado === 'executado' && $$('#aprovacoes .p45-no-google li').length === 3, 'a criação no Google');
+  } };
+  window.uiuxCenarios['p45-fluxo-criativo'] = { larguras: pontas, executar: async () => {
+    await abrir('google-criativo');
+    $('[data-p45-usar-proposta]').click(); await esperar(100);
+    exige($$('#p45-form input[id^="p45-t-"]').length === 5 && $$('#p45-form input[id^="p45-d-"]').length === 3 && !$('#p45-form .p45-proposta') && document.activeElement?.id === 'p45-t-0', 'usar os textos do Criativo');
+  } };
+  window.uiuxCenarios['p45-fluxo-fechar'] = { larguras: pontas, executar: async () => {
+    await abrir('google-gaveta');
+    $('#p45-form [data-fechar]').click(); await esperar(300);
+    exige(!dlgP45.open && document.activeElement?.dataset?.p45Usar === 'pc-1', 'o foco não voltou ao botão');
+    $('[data-p45-usar="pc-1"]').click(); await esperar(200);
+    exige(dlgP45.open && document.activeElement?.id === 'dlg-p45-t', 'abrir pela peça');
+  } };
+  window.uiuxCenarios['p45-fluxo-p42'] = { larguras: pontas, executar: async () => {
+    await abrir('google-gaveta');
+    p42Estado('gaveta-foto'); await esperar(300);
+    exige(!dlgP45.open && dlgMontar.open && selP45.selectedIndex === -1 && !$('[data-p45-usar]'), 'o P42 não voltou como era');
+  } };
+})();
+if (params.get('p45')) p45Estado(params.get('p45'));
+</script>
 </body>
 </html>
