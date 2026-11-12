@@ -11,6 +11,7 @@
     "deps-check": "node --enable-source-maps dist/verify/deps.js",
     "start:api": "node --enable-source-maps --import ./dist/telemetry.js dist/main.api.js",
     "start:worker": "node --enable-source-maps --import ./dist/telemetry.js dist/main.worker.js",
+    "start:render": "node --enable-source-maps --import ./dist/telemetry.js dist/main.render.js",
     "openapi": "node dist/scripts/openapi.js ../../docs/openapi.json",
     "trace-check": "node --enable-source-maps dist/scripts/trace-check.js",
     "ia:lock": "node --enable-source-maps dist/scripts/ia-lock.js"
@@ -32,6 +33,7 @@
     "@openfeature/core": "catalog:",
     "@openfeature/server-sdk": "catalog:",
     "@opentelemetry/api": "catalog:",
+    "@remotion/renderer": "catalog:",
     "@simplewebauthn/server": "catalog:",
     "ai": "catalog:",
     "drizzle-orm": "catalog:",

@@ -8,6 +8,33 @@ ecosystem = "npm"
 license.override = ["MIT"]
 reason = "MIT conferido no LICENSE (26/09/2026); o package.json usa o campo antigo `licenses`, que o scanner não lê"
 
+# O vídeo montado pelo Liame (A6 · Z15; D-A6-137): o Remotion tem licença própria ("Remotion License", conferida no
+# LICENSE.md do `remotion` e do `@remotion/renderer` em 12/11/2026): grátis, também para uso comercial, para empresa com
+# fins lucrativos de até 3 funcionários (a DMS tem 1); acima disso, a licença de empresa, que pede a aprovação do dono.
+# Só a licença fica de fora da conferência, e só nesta versão: as vulnerabilidades continuam conferidas. Versão nova do
+# Remotion = conferir o LICENSE de novo e trocar a versão aqui.
+[[PackageOverrides]]
+name = "remotion|@remotion/.*"
+nameIsRegex = true
+version = "4.0.539"
+ecosystem = "npm"
+license.ignore = true
+reason = "Remotion License conferida no LICENSE.md (12/11/2026): grátis para empresa de até 3 funcionários (D-A6-137); revisar ao passar disso"
+
+[[PackageOverrides]]
+name = "memfs"
+version = "3.4.3"
+ecosystem = "npm"
+license.ignore = true
+reason = "Unlicense (domínio público) conferido no LICENSE (12/11/2026); vem do @remotion/bundler, só no build dos modelos do vídeo"
+
+[[PackageOverrides]]
+name = "fs-monkey"
+version = "1.0.3"
+ecosystem = "npm"
+license.ignore = true
+reason = "Unlicense (domínio público) conferido no LICENSE (12/11/2026); vem do @remotion/bundler, só no build dos modelos do vídeo"
+
 [[PackageOverrides]]
 name = "streamsearch"
 version = "1.1.0"

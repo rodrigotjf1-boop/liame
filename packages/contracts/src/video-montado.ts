@@ -92,3 +92,29 @@ export const VideoMontageListResponse = z.strictObject({
   items: z.array(VideoMontageResponse),
 });
 export type VideoMontageListResponse = z.infer<typeof VideoMontageListResponse>;
+
+/**
+ * O que o serviço de montagem (`liame-render`, A6 · Z15 parte 2b; D-A6-139) passa ao modelo do Remotion
+ * (`packages/video-modelos`). Interno: não sai na API. As fotos, o vídeo e a logo vão por endereços de leitura assinados
+ * e curtos do armazenamento; os textos já passaram pelo Compliance no pedido.
+ */
+export type VideoRenderProps = {
+  template: VideoTemplate;
+  format: VideoFormat;
+  duration_s: 6 | 10 | 15;
+  /** Na ordem do pedido. */
+  media: { url: string; kind: 'foto' | 'video' }[];
+  title: string;
+  price_line: string | null;
+  cta: string;
+  logo_url: string | null;
+  sound: 'sem' | 'original';
+};
+
+/** As medidas de cada formato, em pixels, e os quadros por segundo do vídeo montado. */
+export const VIDEO_RENDER_SIZES: Record<VideoFormat, { width: number; height: number }> = {
+  '9x16': { width: 1080, height: 1920 },
+  '4x5': { width: 1080, height: 1350 },
+  '1x1': { width: 1080, height: 1080 },
+};
+export const VIDEO_RENDER_FPS = 30;

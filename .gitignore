@@ -1,6 +1,8 @@
 # dependências e builds
 node_modules/
 dist/
+# os modelos do vídeo montado empacotados pelo build (packages/video-modelos)
+packages/video-modelos/build/
 .next/
 out/
 .turbo/
