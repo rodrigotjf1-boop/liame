@@ -9,8 +9,17 @@ import { contaConectada, estaConectada } from '../connections/conectada.js';
 import type { CredencialGuardada } from '../connections/oauth.js';
 import { ClienteConector, ErroConector } from '../connectors/cliente-http.js';
 import { enderecosDasPlataformas } from '../connectors/enderecos.js';
-import { estimarPublico, lerModelos, lerPublicos, rascunharCampanha } from '../connectors/regemcast/conector-regemcast.js';
-import { credencialDaConta, podeGravar, SO_LEITURA_PELA_AUTORIZACAO } from '../connectors/regemcast/credencial-da-conta.js';
+import { estimarPublico, lerModelos, lerPublicos, PERMISSOES_DA_ESCRITA_PELO_CLIQUE, rascunharCampanha } from '../connectors/regemcast/conector-regemcast.js';
+import {
+  type AcessoAoRegemcast,
+  comAcessoDaConta,
+  type CredencialDaConta,
+  credencialDaConta,
+  FLAG_DO_PEDIDO_AO_DESTINO,
+  ligacaoGrava,
+  podeGravar,
+  SO_LEITURA_PELA_AUTORIZACAO,
+} from '../connectors/regemcast/credencial-da-conta.js';
 import { currentTx } from '../context/request-context.js';
 import { DATABASE } from '../database/database.module.js';
 import { AppProblem } from '../errors/problems.js';
@@ -41,7 +50,13 @@ const TEMPO_DO_REGEMCAST_MS = 20_000;
 export type Proponente = { tenantId: string; agentKey: string; agentLabel: string; emNomeDe: string };
 export type PedidoMontado = { id: string; action_id: string; campaign_id: string };
 
-type Preparado = { conta: { id: string; external_id: string }; token: string; apiUrl: string };
+export { FLAG_DO_PEDIDO_AO_DESTINO };
+/** O que a conta ligada pelo clique precisa para montar e pedir o envio (as opcionais que o dono liga no RegemCast). */
+const PERMISSOES_PARA_PEDIR = ['campanhas.rascunhar', 'campanhas.disparar'] as const;
+const SEM_AS_OPCOES_DE_CAMPANHA =
+  'O dono da conta ainda não liberou, no RegemCast, as opções de campanha do Liame ("Criar rascunho de campanha" e "Pedir o disparo de campanha"). Peça a ele para conectar o RegemCast de novo em Contas conectadas e ligar essas opções.';
+
+type Preparado = { conta: { id: string; external_id: string }; credencial: CredencialDaConta; peloDestino: boolean; apiUrl: string };
 
 const recusada = (motivo: string) => new AppProblem(422, 'proposta-recusada', 'A proposta não pode virar pedido', motivo);
 
@@ -73,11 +88,14 @@ export class PedidoDeMensagemService {
 
     // ---- 2. O RegemCast: o modelo, o público, quem recebe e o rascunho. Nenhuma mensagem sai.
     const ctx = { cliente: this.cliente(), apiUrl: preparado.apiUrl };
-    const acesso = { token: preparado.token, contaChave: `proposta:${preparado.conta.external_id}` };
+    // Pelo token, direto; pela ligação do clique, com o token do DMS ID das permissões de gravar (à parte do das leituras).
+    const contaChave = `proposta:${preparado.conta.external_id}`;
+    const comAcesso = <T>(fn: (a: AcessoAoRegemcast) => Promise<T>): Promise<T> =>
+      preparado.credencial.via === 'token' ? fn({ token: preparado.credencial.token, contaChave }) : comAcessoDaConta(preparado.credencial, this.config, contaChave, fn, PERMISSOES_DA_ESCRITA_PELO_CLIQUE);
     let montado;
     try {
       const janela = janelaDaProposta(p.janela);
-      const [modelos, publicos] = await Promise.all([lerModelos(ctx, acesso), lerPublicos(ctx, acesso)]);
+      const [modelos, publicos] = await Promise.all([comAcesso((a) => lerModelos(ctx, a)), comAcesso((a) => lerPublicos(ctx, a))]);
       const modelo = modeloDaProposta(modelos, p.modelo);
       conferirVariaveis(modelo, p.variaveis, p.variavel_do_titulo);
       if (p.cupom && !citaOCupom(modelo, p.variaveis, p.variavel_do_titulo, p.cupom.codigo)) {
@@ -85,10 +103,10 @@ export class PedidoDeMensagemService {
       }
       const publico = publicoDaProposta(publicos, p.publico);
       const categoria = modelo.categoria === 'utilidade' ? 'utilidade' : 'marketing';
-      const estimativa = await estimarPublico(ctx, { ...acesso, publico: publico.doRegemcast, categoria });
+      const estimativa = await comAcesso((a) => estimarPublico(ctx, { ...a, publico: publico.doRegemcast, categoria }));
       if (estimativa.pessoas === 0) throw new PropostaRecusada('Ninguém deste público pode receber esta mensagem agora.');
       const campanha = campanhaDoRascunho(p, modelo, publico.doRegemcast, janela);
-      const rascunho = await rascunharCampanha(ctx, { ...acesso, chave: chaveDoRascunho(quem.tenantId, preparado.conta.id, campanha), campanha });
+      const rascunho = await comAcesso((a) => rascunharCampanha(ctx, { ...a, chave: chaveDoRascunho(quem.tenantId, preparado.conta.id, campanha), campanha }));
       montado = { janela, modelo, publico, estimativa, rascunho };
     } catch (err) {
       if (err instanceof PropostaRecusada) throw recusada(err.message);
@@ -127,7 +145,8 @@ export class PedidoDeMensagemService {
         throw err;
       }
       const acao = await this.actions.pedirMensagemPeloFuncionario(quem, {
-        tool: 'mensagem_disparar',
+        // Com a flag da parte D, a aprovação é no RegemCast (F5-9): o Liame não pede a própria.
+        tool: preparado.peloDestino ? 'mensagem_pedir_ao_destino' : 'mensagem_disparar',
         brand_id: p.marca,
         provider: 'regemcast',
         account_id: preparado.conta.id,
@@ -185,14 +204,18 @@ export class PedidoDeMensagemService {
     const guardada = conta.credential_secret_id && estaConectada(conta) ? await this.vault.readSecret(tx, conta.credential_secret_id) : null;
     const credencial = credencialDaConta(guardada ? (JSON.parse(guardada) as CredencialGuardada) : null, conta.external_id);
     if (!credencial) throw new AppProblem(409, 'regemcast-sem-autorizacao', 'Conecte o RegemCast de novo', 'O RegemCast não tem mais a conexão desta conta. Conecte o RegemCast de novo em Contas conectadas.');
-    // A conta ligada pela autorização do dono (Hub DMS, B1) libera só leitura até a F5: montar a campanha e pedir o
-    // disparo gravam no RegemCast.
-    if (!podeGravar(credencial)) throw new AppProblem(409, 'regemcast-so-leitura', 'A conexão só deixa ler', SO_LEITURA_PELA_AUTORIZACAO);
-    const token = credencial.token;
+    // A conta ligada pela autorização do dono (Hub DMS, B1) lia só, até a F5. Com a flag da parte D, ela monta o
+    // rascunho e PEDE o disparo (aprovado no RegemCast), se o dono ligou lá as opções de campanha do Liame. Com a flag,
+    // o envio vai como pedido ao destino também pela conta do token: uma aprovação por ação (F5-9).
+    const peloDestino = await this.flags.isEnabled(FLAG_DO_PEDIDO_AO_DESTINO, contexto);
+    if (!podeGravar(credencial)) {
+      if (!peloDestino) throw new AppProblem(409, 'regemcast-so-leitura', 'A conexão só deixa ler', SO_LEITURA_PELA_AUTORIZACAO);
+      if (!ligacaoGrava(credencial, PERMISSOES_PARA_PEDIR)) throw new AppProblem(409, 'regemcast-sem-opcoes-de-campanha', 'Falta a liberação do dono', SEM_AS_OPCOES_DE_CAMPANHA);
+    }
     const apiUrl = this.config.produtos.regemcastApiUrl;
     if (!apiUrl) throw new AppProblem(502, 'plataforma-indisponivel', 'O RegemCast não está disponível', 'O envio de mensagens pelo RegemCast não está disponível neste ambiente.');
     if (p.cupom) await this.conferirALojaDoCupom(quem.tenantId, p.marca, p.cupom.loja, p.cupom.codigo);
-    return { conta: { id: conta.id, external_id: conta.external_id }, token, apiUrl };
+    return { conta: { id: conta.id, external_id: conta.external_id }, credencial, peloDestino, apiUrl };
   }
 
   /** O cupom nasce numa loja do Regem da mesma marca, que liberou "criar cupom de campanha", e com um código que ela não tem. */

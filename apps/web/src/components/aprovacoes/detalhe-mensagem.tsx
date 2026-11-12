@@ -202,7 +202,7 @@ export function DetalheMensagem({ acao, grupo, agora, pro, podeDecidir, podeOper
   if (grupo !== 'pendente') {
     const campanha = leitura.tipo === 'ok' ? leitura.dados.campaign : null;
     const detalhe = leitura.tipo === 'ok' ? detalheDaMensagem(leitura.dados, agora) : null;
-    const r = ehPausa ? resultadoDaPausa(acao) : resultadoDoEnvio(acao, campanha, leitura.tipo === 'ok' ? leitura.dados.cost : null, pausa);
+    const r = ehPausa ? resultadoDaPausa(acao) : resultadoDoEnvio(acao, campanha, leitura.tipo === 'ok' ? leitura.dados.cost : null, pausa, agora);
     // A pausa já foi pedida (o worker a executa em instantes): o botão não aparece de novo.
     const pausaPedida = voltaDaPausa !== null && voltaDaPausa !== 'cancelada' && voltaDaPausa !== 'expirada' && voltaDaPausa !== 'falhou';
     return (
@@ -218,6 +218,14 @@ export function DetalheMensagem({ acao, grupo, agora, pro, podeDecidir, podeOper
             <span>
               {r.forte && <b>{r.forte}</b>}
               {r.texto}
+              {r.link && (
+                <>
+                  {' '}
+                  <a href={r.link.href} target="_blank" rel="noopener noreferrer">
+                    {r.link.rotulo}
+                  </a>
+                </>
+              )}
             </span>
           </div>
           {noRegemcast && leitura.tipo === 'carregando' && (

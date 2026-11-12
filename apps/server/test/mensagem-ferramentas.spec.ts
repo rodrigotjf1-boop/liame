@@ -55,8 +55,12 @@ describe('pedido de mensagem: as ferramentas e o plano (A5 · Y5)', () => {
     expect(resumo).toEqual({
       // Custa dinheiro, fala com clientes e não tem volta: o risco mais alto, e nunca sem uma pessoa.
       mensagem_disparar: ['R3', 'regemcast', 'pausar_o_que_ainda_nao_saiu', true, true],
+      // O mesmo envio com a aprovação no destino (Hub DMS F5, parte D): a pessoa aprova no RegemCast, não aqui.
+      mensagem_pedir_ao_destino: ['R3', 'regemcast', 'pausar_o_que_ainda_nao_saiu', false, true],
       mensagem_pausar: ['R1', 'regemcast', 'sem_volta_pelo_liame', false, false],
     });
+    // A aprovação no destino: só esta ferramenta, sempre com a flag da parte D.
+    expect(Object.values(TOOLS).filter((t) => t.aprovacaoNoDestino).map((t) => [t.name, t.flag])).toEqual([['mensagem_pedir_ao_destino', 'regemcast_pede_ao_destino']]);
     expect(TOOLS.mensagem_disparar!.undo!({})).toEqual({ tool: 'mensagem_pausar', params: {} });
     // Fora das mensagens, só a campanha nova na Meta (A4, X5), a resposta a uma avaliação do Google (A6, Z2), o post da
     // marca (A6, Z5b) e apagar o post das redes (A6, Z5d, parte 6: o P19 pede o código do app) têm a trava; e as duas das

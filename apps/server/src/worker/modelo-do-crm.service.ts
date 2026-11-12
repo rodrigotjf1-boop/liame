@@ -9,8 +9,8 @@ import { pessoaPode } from '../auth/pessoa-pode.js';
 import { APP_CONFIG, type AppConfig } from '../config.js';
 import { ClienteConector, ErroConector } from '../connectors/cliente-http.js';
 import { enderecosDasPlataformas } from '../connectors/enderecos.js';
-import { lerModelos, rascunharModelo } from '../connectors/regemcast/conector-regemcast.js';
-import { podeGravar } from '../connectors/regemcast/credencial-da-conta.js';
+import { lerModelos, PERMISSOES_DA_ESCRITA_PELO_CLIQUE, rascunharModelo } from '../connectors/regemcast/conector-regemcast.js';
+import { type AcessoAoRegemcast, comAcessoDaConta, type CredencialDaConta, ligacaoGrava, podeGravar } from '../connectors/regemcast/credencial-da-conta.js';
 import { currentTx } from '../context/request-context.js';
 import { marcaDoCriativo } from '../criativo/base.js';
 import { DATABASE } from '../database/database.module.js';
@@ -18,7 +18,7 @@ import { AppProblem } from '../errors/problems.js';
 import { FlagService } from '../flags/flag.service.js';
 import { type ContaDoRegemcast, lerContaDoRegemcast } from '../mensageria/conta-do-regemcast.js';
 import { FLAG_MENSAGERIA } from '../mensageria/mensageria.service.js';
-import { FLAG_DO_ENVIO, PedidoDeMensagemService, type PedidoMontado } from '../mensageria/pedido-de-mensagem.service.js';
+import { FLAG_DO_ENVIO, FLAG_DO_PEDIDO_AO_DESTINO, PedidoDeMensagemService, type PedidoMontado } from '../mensageria/pedido-de-mensagem.service.js';
 import type { CupomDaMensagem } from '../mensageria/proposta-de-mensagem.js';
 import {
   adiarProposta,
@@ -101,7 +101,10 @@ export type Acompanhamento =
   | { status: 'sem_leitura'; motivo: string }
   | { status: 'fora' };
 
-type Acesso = { conta: ContaDoRegemcast; token: string; apiUrl: string };
+type Acesso = { conta: ContaDoRegemcast; credencial: CredencialDaConta; apiUrl: string };
+
+/** O que a conta ligada pelo clique precisa para o CRM montar o modelo, a campanha e pedir o envio (Hub DMS F5, D). */
+const PERMISSOES_DO_CRM_PELO_CLIQUE = ['modelos.rascunhar', 'campanhas.rascunhar', 'campanhas.disparar'] as const;
 type ParaRascunhar = Acesso & { p: PropostaGuardada; corpo: string; codigoDoCupom: string };
 type ParaAcompanhar = Acesso & { p: PropostaGuardada; nome: string; idioma: string };
 type ParaPedir = { responsavel: string; hoje: string; nome: string; cupom: CupomDaMensagem; modelo: string };
@@ -132,7 +135,7 @@ export class ModeloDoCrmService {
     const modelo = modeloParaRascunhar({ id: lido.p.id, motivo: lido.p.motive, corpo: lido.corpo, codigoDoCupom: lido.codigoDoCupom });
     let r: Awaited<ReturnType<typeof rascunharModelo>>;
     try {
-      r = await rascunharModelo({ cliente: this.cliente(database), apiUrl: lido.apiUrl }, { token: lido.token, contaChave: `rotina:${lido.conta.external_id}`, chave: chaveDoModelo(lido.p.id), modelo });
+      r = await this.comAcesso(lido, (a) => rascunharModelo({ cliente: this.cliente(database), apiUrl: lido.apiUrl }, { ...a, chave: chaveDoModelo(lido.p.id), modelo }));
     } catch (err) {
       if (!(err instanceof ErroConector)) throw err;
       // O motivo fica no log (sem token e sem dado pessoal: a mensagem do conector traz só a ferramenta e o campo).
@@ -179,7 +182,7 @@ export class ModeloDoCrmService {
 
     let modelos: Awaited<ReturnType<typeof lerModelos>>;
     try {
-      modelos = await lerModelos({ cliente: this.cliente(database), apiUrl: lido.apiUrl }, { token: lido.token, contaChave: `rotina:${lido.conta.external_id}` });
+      modelos = await this.comAcesso(lido, (a) => lerModelos({ cliente: this.cliente(database), apiUrl: lido.apiUrl }, a));
     } catch (err) {
       if (!(err instanceof ErroConector)) throw err;
       this.logger.warn(`proposta ${alvo.id}: os modelos não foram lidos no RegemCast (conta ${lido.conta.id}): ${err.tipo}: ${err.message}`);
@@ -271,10 +274,11 @@ export class ModeloDoCrmService {
       if (!(await adiarProposta(tx, alvo, new Date(agora.getTime() + minutosAteATentativa(p.attempts) * MINUTO_MS)))) return { status: 'fora' };
       return { status: 'falhou', motivo: 'regemcast_fora_do_ar', deVez: false };
     }
-    // A conta passou a ser lida pela autorização do dono (Hub DMS, B1), que só libera leitura até a F5: o rascunho e o
-    // pedido não têm por onde ser gravados, e a proposta para aqui (o mesmo motivo da rotina quando a conta não grava).
-    if (!podeGravar(conta.credencial)) return this.encerrar(tx, alvo, 'descartada', 'sem_permissao');
-    return { p, conta, token: conta.credencial.token, apiUrl, corpo: p.body, codigoDoCupom: p.coupon.codigo };
+    // A conta lida pela autorização do dono (Hub DMS, B1) lia só, até a F5. Com a flag da parte D e as opções de
+    // campanha ligadas pelo dono no RegemCast, ela grava (o rascunho, a campanha e o pedido ao destino); sem isso, a
+    // proposta para aqui (o mesmo motivo da rotina quando a conta não grava).
+    if (!(await this.grava(alvo, p, conta.credencial))) return this.encerrar(tx, alvo, 'descartada', 'sem_permissao');
+    return { p, conta, credencial: conta.credencial, apiUrl, corpo: p.body, codigoDoCupom: p.coupon.codigo };
   }
 
   private async lerParaAcompanhar(tx: Tx, alvo: DonoDaProposta, agora: Date): Promise<ParaAcompanhar | Acompanhamento> {
@@ -288,9 +292,25 @@ export class ModeloDoCrmService {
     if (desligado) return this.semLeitura(tx, alvo, p, desligado, agora);
     const apiUrl = this.config.produtos.regemcastApiUrl;
     if (!conta.credencial || !apiUrl) return this.semLeitura(tx, alvo, p, conta.credencial ? 'regemcast_fora_do_ar' : 'sem_autorizacao', agora);
-    // Lida pela autorização do dono, a conta não deixa montar o pedido de envio no fim: a proposta para aqui.
-    if (!podeGravar(conta.credencial)) return this.descartar(tx, alvo, 'sem_permissao');
-    return { p, conta, token: conta.credencial.token, apiUrl, nome: p.template_name, idioma: p.template_language ?? IDIOMA_DO_MODELO };
+    // Lida pela autorização do dono sem as opções de campanha (ou sem a flag da parte D), a conta não deixa montar o
+    // pedido de envio no fim: a proposta para aqui.
+    if (!(await this.grava(alvo, p, conta.credencial))) return this.descartar(tx, alvo, 'sem_permissao');
+    return { p, conta, credencial: conta.credencial, apiUrl, nome: p.template_name, idioma: p.template_language ?? IDIOMA_DO_MODELO };
+  }
+
+  /**
+   * A conta grava no RegemCast? Pelo token da distribuição, sim. Pela ligação do clique, só com a flag da parte D do Hub
+   * DMS e as opções de campanha que o dono ligou lá.
+   */
+  private async grava(alvo: DonoDaProposta, p: PropostaGuardada, credencial: CredencialDaConta): Promise<boolean> {
+    if (podeGravar(credencial)) return true;
+    if (!ligacaoGrava(credencial, PERMISSOES_DO_CRM_PELO_CLIQUE)) return false;
+    return this.flags.isEnabled(FLAG_DO_PEDIDO_AO_DESTINO, this.flags.context({ tenantId: alvo.tenantId, brandId: p.brand_id }));
+  }
+
+  /** Chama o RegemCast pela credencial da conta: pelo token, direto; pela ligação, com o token do DMS ID das de gravar. */
+  private comAcesso<T>(lido: Acesso, fn: (a: AcessoAoRegemcast) => Promise<T>): Promise<T> {
+    return comAcessoDaConta(lido.credencial, this.config, `rotina:${lido.conta.external_id}`, fn, PERMISSOES_DA_ESCRITA_PELO_CLIQUE);
   }
 
   /** Não deu para ler o modelo agora: passado o prazo, a proposta é descartada; senão, olha de novo no próximo intervalo. */

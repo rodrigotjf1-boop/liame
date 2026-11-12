@@ -62,6 +62,7 @@ import { RelatorioDaAgenciaRotina } from './relatorio-da-agencia.service.js';
 import { RevisaoSemanalLoop } from './revisao-semanal-loop.js';
 import { RevisaoSemanalService } from './revisao-semanal.service.js';
 import { PedidosDoGestor } from './pedidos-do-gestor.js';
+import { avisoDoRegemcast, PedidosNoDestino } from './pedidos-no-destino.js';
 import { PedidosQueEsperam } from './pedidos-que-esperam.js';
 import { SombraLoop } from './sombra-loop.js';
 import { SombraService } from './sombra.service.js';
@@ -120,6 +121,8 @@ import { WebhookDeliverer } from './webhook-deliverer.js';
       useValue: new Map<string, InboxHandler>([
         ['regem', eventoDoRegem],
         ['asaas', avisoDoAsaas],
+        // O RegemCast (Hub DMS F5, parte D): o pedido de envio que mudou lá fica devido para a rotina ler.
+        ['regemcast', avisoDoRegemcast],
       ]),
     },
     // O hub da DMS (Hub DMS, A4, etapa 3; desligado por padrão): o worker bate, lê a lista de parada e manda os erros dos laços.
@@ -218,6 +221,9 @@ import { WebhookDeliverer } from './webhook-deliverer.js';
     // A conferência dos pedidos que esperam (A5, Y5): o pedido de mensagem com impedimento é lido de novo de tempos em
     // tempos, pelo Action Service, e quem pode aprovar é avisado quando o impedimento sai.
     PedidosQueEsperam,
+    // O pedido de envio que espera o destino (Hub DMS F5, parte D): lido no RegemCast de tempos em tempos; o que termina
+    // sem envio tem o cupom desativado no Regem.
+    PedidosNoDestino,
     // As leituras da IA incluem a de Sua equipe (só da conversa): o serviço dela entra aqui pela injeção, sem rota.
     // Ela lê o custo das peças para dizer por que o Criativo não pode escrever (A4, P12).
     CustoDasPecasService,

@@ -24,6 +24,7 @@ import { DirectLoop } from './direct-loop.js';
 import { DirectAutomaticoLoop } from './direct-automatico.js';
 import { EstrategistaAgenda, MARCAS_POR_VOLTA } from './estrategista-agenda.js';
 import { EstrategistaLoop } from './estrategista-loop.js';
+import { PedidosNoDestino } from './pedidos-no-destino.js';
 import { PedidosQueEsperam } from './pedidos-que-esperam.js';
 import { PerfilLoop } from './perfil-loop.js';
 import { PesquisaLoop } from './pesquisa-loop.js';
@@ -85,6 +86,7 @@ export class EventsLoopService implements OnApplicationBootstrap, OnApplicationS
     private readonly conferencia: ConferenciaDoGasto,
     private readonly conversoes: ConversoesLoop,
     private readonly esperam: PedidosQueEsperam,
+    private readonly noDestino: PedidosNoDestino,
     private readonly rotinaDoCrm: RotinaDoCrmLoop,
     private readonly perfil: PerfilLoop,
     private readonly searchConsole: SearchConsoleLoop,
@@ -154,6 +156,7 @@ export class EventsLoopService implements OnApplicationBootstrap, OnApplicationS
       this.loop('conversoes-google', 2, 300_000, async (n) => (await this.conversoes.executarLote(n)).length),
       // Os pedidos que esperam com um impedimento: cada um é conferido de 15 em 15 minutos; a fila é olhada a cada minuto.
       this.loop('pedidos-que-esperam', 20, 60_000, async (n) => (await this.esperam.executarLote(n)).length),
+      this.loop('pedidos-no-destino', 20, 60_000, async (n) => (await this.noDestino.executarLote(n)).length),
       // A rotina do CRM e mensageria: cada marca é olhada uma vez por dia; a fila das marcas é olhada de 5 em 5 minutos.
       this.loop('rotina-do-crm', 5, 300_000, async (n) => (await this.rotinaDoCrm.olharLote(n)).length),
       // A proposta aberta espera o texto: a fila da escrita é olhada a cada minuto.

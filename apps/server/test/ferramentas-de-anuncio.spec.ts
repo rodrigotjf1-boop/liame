@@ -182,7 +182,8 @@ describe('ferramentas de anúncio (A4 · X2)', () => {
     // Nenhuma ferramenta de anúncio na Meta fica sem volta; o cupom do Regem não se desfaz pelo Liame (desativa-se no Regem).
     // A mensagem enviada não volta: a volta do envio é pausar o que ainda não saiu, e a pausa não tem volta pelo Liame.
     // A resposta automática a um comentário (A6, Z11, parte 2e-1) tem a mesma volta da resposta: apagar a resposta.
-    const comVolta = ['mensagem_disparar', 'avaliacao_responder', 'comentario_responder', 'comentario_responder_auto', 'comentario_ocultar'];
+    // O envio pedido ao RegemCast (Hub DMS F5, parte D) tem a mesma volta do envio: pausar o que ainda não saiu.
+    const comVolta = ['mensagem_disparar', 'mensagem_pedir_ao_destino', 'avaliacao_responder', 'comentario_responder', 'comentario_responder_auto', 'comentario_ocultar'];
     // A campanha nova (A4, X5; D-A4-31) é a exceção na Meta: a compensação é ela ficar pausada (não aparece e não gasta),
     // e apagar sempre escala para uma pessoa; o teste de banco (`campanha-nova.spec.ts`) prova que fica pausada.
     const semVoltaNaMeta = ['campanha_criar'];

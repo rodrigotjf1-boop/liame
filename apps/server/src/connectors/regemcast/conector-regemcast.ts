@@ -13,7 +13,9 @@ import {
   ModelosRegemcast,
   OrcamentoRegemcast,
   PaginaConversas,
+  AvisoRegistradoRegemcast,
   PausaRegemcast,
+  PedidoDeAcaoRegemcast,
   PedidoDeAutorizacaoRegemcast,
   PlanoDoDisparoRegemcast,
   PublicosRegemcast,
@@ -263,7 +265,7 @@ export function estimarPublico(ctx: Contexto, a: Acesso & { publico: PublicoDaCa
 export function rascunharModelo(ctx: Contexto, a: Acesso & { chave: string; modelo: ModeloParaRascunhar }): Promise<RascunhoDeModeloRegemcast> {
   exigir(FORMATO_DA_CHAVE_REGEMCAST.test(a.chave), 'chave de idempotência');
   exigir(a.modelo.id === undefined || UUID.test(a.modelo.id), 'id do rascunho');
-  return chamarFerramenta(ctx, { token: a.token, contaChave: a.contaChave, ferramenta: 'modelo_rascunhar', argumentos: { chaveIdempotencia: a.chave, ...semVazios(a.modelo) }, schema: RascunhoDeModeloRegemcast });
+  return chamarFerramenta(ctx, { token: a.token, contaChave: a.contaChave, ligacao: a.ligacao, ferramenta: 'modelo_rascunhar', argumentos: { chaveIdempotencia: a.chave, ...semVazios(a.modelo) }, schema: RascunhoDeModeloRegemcast });
 }
 
 /** Monta uma campanha em rascunho (modelo aprovado, público, variáveis, janela e ritmo). Nenhuma mensagem sai. `campanhas.rascunhar`. */
@@ -273,6 +275,7 @@ export function rascunharCampanha(ctx: Contexto, a: Acesso & { chave: string; ca
   return chamarFerramenta(ctx, {
     token: a.token,
     contaChave: a.contaChave,
+    ligacao: a.ligacao,
     ferramenta: 'campanha_rascunhar',
     argumentos: { chaveIdempotencia: a.chave, ...semVazios(resto), publico: semVazios(publico) },
     schema: RascunhoDeCampanhaRegemcast,
@@ -301,7 +304,51 @@ export function dispararCampanha(ctx: Contexto, a: Acesso & { chave: string; id:
 export function pausarCampanha(ctx: Contexto, a: Acesso & { chave: string; id: string }): Promise<PausaRegemcast> {
   exigir(FORMATO_DA_CHAVE_REGEMCAST.test(a.chave), 'chave de idempotência');
   exigir(UUID.test(a.id), 'id da campanha');
-  return chamarFerramenta(ctx, { token: a.token, contaChave: a.contaChave, ferramenta: 'campanha_pausar', argumentos: { chaveIdempotencia: a.chave, id: a.id }, schema: PausaRegemcast });
+  return chamarFerramenta(ctx, { token: a.token, contaChave: a.contaChave, ligacao: a.ligacao, ferramenta: 'campanha_pausar', argumentos: { chaveIdempotencia: a.chave, id: a.id }, schema: PausaRegemcast });
+}
+
+/** Quem pediu, como o destino compara (F5-3): o agente, sem pessoa; ou o resumo do e-mail da pessoa, nunca o e-mail. */
+export type PedidoPor = { tipo: 'agente' } | { tipo: 'pessoa'; pessoa: string };
+
+/**
+ * PEDE o disparo (Hub DMS F5, parte D; decisão F5-9): nada sai agora. Uma pessoa da conta aprova no RegemCast, com o
+ * código do aplicativo autenticador e o teto de gasto; só então as mensagens saem, uma vez. Exige a confirmação do plano
+ * (o pedido fica preso a ele). A mesma chave devolve o mesmo pedido como está agora. Pela ligação do clique, é o único
+ * caminho do disparo (o RegemCast recusa `campanha_disparar` a ela). `campanhas.disparar`.
+ */
+export function pedirDisparo(
+  ctx: Contexto,
+  a: Acesso & { chave: string; id: string; confirmacao: string; pedidoPor: PedidoPor; cupom?: { codigo: string; descricao?: string } },
+): Promise<PedidoDeAcaoRegemcast> {
+  exigir(FORMATO_DA_CHAVE_REGEMCAST.test(a.chave), 'chave de idempotência');
+  exigir(UUID.test(a.id), 'id da campanha');
+  exigir(a.confirmacao.length >= 16 && a.confirmacao.length <= 64, 'confirmação do plano');
+  exigir(a.pedidoPor.tipo === 'agente' || /^[0-9a-f]{64}$/.test(a.pedidoPor.pessoa), 'quem pediu');
+  return chamarFerramenta(ctx, {
+    token: a.token,
+    contaChave: a.contaChave,
+    ligacao: a.ligacao,
+    ferramenta: 'campanha_disparo_pedir',
+    argumentos: { chaveIdempotencia: a.chave, id: a.id, confirmacao: a.confirmacao, pedidoPor: a.pedidoPor, ...(a.cupom ? { cupom: semVazios(a.cupom) } : {}) },
+    schema: PedidoDeAcaoRegemcast,
+  });
+}
+
+/**
+ * Registra (ou troca) o endereço e o segredo do aviso assinado `acao.alterada` deste aplicativo na conta (RegemCast #131;
+ * Padrão DMS §9). O endereço só vale dentro da base do Liame que o RegemCast fixou (a caixa por conexão); o segredo
+ * (`whsec_`) é da conexão no Liame e nunca volta. Registrar de novo religa o aviso pausado lá. Qualquer credencial.
+ */
+export function registrarAvisoNoRegemcast(ctx: Contexto, a: Acesso & { url: string; segredo: string }): Promise<AvisoRegistradoRegemcast> {
+  exigir(/^https:\/\//.test(a.url) && a.url.length <= 500, 'endereço do aviso');
+  exigir(/^whsec_[A-Za-z0-9+/=]{24,}$/.test(a.segredo), 'segredo do aviso');
+  return chamarFerramenta(ctx, { token: a.token, contaChave: a.contaChave, ligacao: a.ligacao, ferramenta: 'aviso_registrar', argumentos: { url: a.url, segredo: a.segredo }, schema: AvisoRegistradoRegemcast });
+}
+
+/** O pedido de disparo como está agora (aguardando, aprovado, executado, recusado com o motivo, vencido…). `campanhas.disparar`. */
+export function lerPedidoDeAcao(ctx: Contexto, a: Acesso & { id: string }): Promise<PedidoDeAcaoRegemcast> {
+  exigir(UUID.test(a.id), 'id do pedido');
+  return chamarFerramenta(ctx, { token: a.token, contaChave: a.contaChave, ligacao: a.ligacao, ferramenta: 'acao_pedido_ler', argumentos: { id: a.id }, schema: PedidoDeAcaoRegemcast });
 }
 
 /**
@@ -324,6 +371,16 @@ export const NECESSARIAS_DO_CLIQUE = ['conta.ler', 'campanhas.ler', 'publicos.le
 export const OPCIONAIS_DO_CLIQUE = ['conversas.anuncio.ler'] as const;
 /** As permissões do token do DMS ID nas chamadas da autorização por clique: as mesmas do pedido, nenhuma de gravar. */
 export const PERMISSOES_DO_CLIQUE = [...NECESSARIAS_DO_CLIQUE, ...OPCIONAIS_DO_CLIQUE] as const;
+/**
+ * As de gravar (Hub DMS F5, parte D; RegemCast #132): opcionais no clique, que o dono liga; só com a flag
+ * `regemcast_pede_ao_destino`. Pela ligação, `campanhas.disparar` só PEDE o disparo.
+ */
+export const OPCIONAIS_DE_ESCRITA_DO_CLIQUE = ['modelos.rascunhar', 'campanhas.rascunhar', 'campanhas.disparar'] as const;
+/**
+ * As permissões do token do DMS ID nas chamadas que GRAVAM pela ligação (e nas que precisam de `campanhas.disparar`,
+ * como o plano e a leitura do pedido). À parte das de leitura: as leituras seguem pedindo só `PERMISSOES_DO_CLIQUE`.
+ */
+export const PERMISSOES_DA_ESCRITA_PELO_CLIQUE = [...PERMISSOES_DO_CLIQUE, ...OPCIONAIS_DE_ESCRITA_DO_CLIQUE] as const;
 
 /** A conta que pede, no Liame: o que a página do RegemCast mostra ao dono antes de ele decidir. */
 export type ContaQuePede = { nome: string; cnpj: string | null; email: string; marca: string | null };
@@ -335,7 +392,17 @@ export type ContaQuePede = { nome: string; cnpj: string | null; email: string; m
  */
 export function pedirAutorizacao(
   ctx: Contexto,
-  a: { tokenDmsId: string; contaChave: string; clientId: string; redirectUri: string; estado: string; desafio: string; conta: ContaQuePede },
+  a: {
+    tokenDmsId: string;
+    contaChave: string;
+    clientId: string;
+    redirectUri: string;
+    estado: string;
+    desafio: string;
+    conta: ContaQuePede;
+    /** As permissões pedidas; sem elas, as de leitura (`PERMISSOES_DO_CLIQUE`). Com a flag da parte D, também as de gravar. */
+    permissoes?: readonly string[];
+  },
 ): Promise<PedidoDeAutorizacaoRegemcast> {
   return ctx.cliente
     .requisitar({
@@ -348,7 +415,7 @@ export function pedirAutorizacao(
         response_type: 'code',
         client_id: a.clientId,
         redirect_uri: a.redirectUri,
-        scope: PERMISSOES_DO_CLIQUE.join(' '),
+        scope: (a.permissoes ?? PERMISSOES_DO_CLIQUE).join(' '),
         state: a.estado,
         code_challenge: a.desafio,
         code_challenge_method: 'S256',

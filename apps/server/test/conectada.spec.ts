@@ -45,6 +45,7 @@ const LISTA: Record<string, { usos: number; porque: string }> = {
   'connections/conectada.ts': { usos: 2, porque: 'a definição de "conectada" (a primeira parte dela é "ligada") e o comentário que explica a reconexão' },
   'actions/action.service.ts': { usos: 1, porque: 'a marca do pedido: de quem é a conta, não se ela pode agir (o conector confere na hora)' },
   'actions/regemcast-mensagem.ts': { usos: 1, porque: ACHA_E_CONFERE },
+  'worker/pedidos-no-destino.ts': { usos: 1, porque: ACHA_E_CONFERE },
   'mensageria/conta-do-regemcast.ts': { usos: 1, porque: ACHA_E_CONFERE },
   'mensageria/mensageria.service.ts': { usos: 1, porque: ACHA_E_CONFERE },
   'mensageria/pedido-de-mensagem.service.ts': { usos: 1, porque: ACHA_E_CONFERE },

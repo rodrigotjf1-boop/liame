@@ -186,6 +186,28 @@ export const ActionMessage = z.strictObject({
       created: z.boolean(),
     })
     .nullable(),
+  /**
+   * O pedido no destino (Hub DMS F5, parte D): a aprovação do envio é de uma pessoa no RegemCast, com o código do
+   * aplicativo autenticador e o teto de gasto. Nulo (ou ausente) enquanto o pedido não foi feito, ou quando o envio é
+   * aprovado no Liame.
+   */
+  destination: z
+    .strictObject({
+      /** `aguardando`, `aprovado`, `executando`, `executado`, `recusado`, `vencido`, `cancelado` ou `falhou`. */
+      status: Slug,
+      /** Até quando a pessoa pode aprovar lá (24 horas desde o pedido). */
+      expires_at: z.string().nullable(),
+      /** A tela de aprovação no RegemCast. */
+      url: z.string().nullable(),
+      /** O que quem recusou escreveu, ou o motivo do RegemCast (o plano mudou, o teto de gasto…). */
+      reason: z.string().nullable(),
+      /** Quando o Liame leu o pedido pela última vez. */
+      checked_at: z.string().nullable(),
+      /** O cupom da mensagem foi desativado no Regem porque a mensagem não saiu (F5-5). */
+      coupon_deactivated: z.boolean(),
+    })
+    .nullable()
+    .optional(),
   /** O plano do disparo guardado no pedido; nulo se o estado guardado não é o de uma mensagem. */
   plan: z
     .strictObject({

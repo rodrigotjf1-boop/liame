@@ -179,8 +179,27 @@ export function identidadeDoPlano(a: Pick<ActionResponse, 'id' | 'plan_hash'>): 
 
 // ─────────────────────────── grupos da lista ───────────────────────────
 
-export type Grupo = 'pendente' | 'auto' | 'feito';
-export const ROTULO_GRUPO: Record<Grupo, string> = { pendente: 'Precisa de você', auto: 'Feito sozinho, dentro dos limites', feito: 'Decididas hoje' };
+/** As situações em que o pedido no destino (o RegemCast) ainda pode mudar e o envio, sair (Hub DMS F5, parte D). */
+export const PEDIDO_NO_DESTINO_ABERTO: readonly string[] = ['aguardando', 'aprovado', 'executando'];
+
+/** O envio espera a aprovação de uma pessoa no RegemCast (o Liame já pediu, e nada saiu ainda). */
+export function esperaODestino(a: Pick<ActionResponse, 'message'>): boolean {
+  const d = a.message?.destination;
+  return Boolean(d && PEDIDO_NO_DESTINO_ABERTO.includes(d.status));
+}
+
+/** O prazo do pedido no destino (até quando a pessoa aprova lá); sem ele, o do pedido no Liame. */
+export const prazoNoDestino = (a: Pick<ActionResponse, 'message' | 'expires_at'>): string => a.message?.destination?.expires_at ?? a.expires_at;
+
+// `destino`: o envio que espera a aprovação de uma pessoa no RegemCast (Hub DMS F5, parte D): o Liame já pediu, e quem
+// decide é a pessoa lá. Fica à vista enquanto o pedido está aberto, de qualquer dia.
+export type Grupo = 'pendente' | 'destino' | 'auto' | 'feito';
+export const ROTULO_GRUPO: Record<Grupo, string> = {
+  pendente: 'Precisa de você',
+  destino: 'Esperando a aprovação no RegemCast',
+  auto: 'Feito sozinho, dentro dos limites',
+  feito: 'Decididas hoje',
+};
 
 const PREFIXO_RECUSA = 'recusada por ';
 
@@ -198,6 +217,7 @@ export function recusaDe(a: Pick<ActionResponse, 'status' | 'status_reason'>): {
  */
 export function grupoDe(a: ActionResponse, agora: Date): Grupo | null {
   if (a.status === 'aguardando_aprovacao') return 'pendente';
+  if (a.status === 'executada' && esperaODestino(a)) return 'destino';
   if (a.status === 'sombra' || diasAte(a.updated_at, agora) !== 0) return null;
   // A pausa de um envio de mensagem e a nova tentativa de um post no canal que não saiu (A6, Z5d) são pedidas e feitas por
   // uma pessoa, direto (sem aprovação): não é "feito sozinho".
@@ -207,13 +227,14 @@ export function grupoDe(a: ActionResponse, agora: Date): Grupo | null {
 }
 
 export function agrupar(itens: ActionResponse[], agora: Date): Record<Grupo, ActionResponse[]> {
-  const grupos: Record<Grupo, ActionResponse[]> = { pendente: [], auto: [], feito: [] };
+  const grupos: Record<Grupo, ActionResponse[]> = { pendente: [], destino: [], auto: [], feito: [] };
   for (const a of itens) {
     const g = grupoDe(a, agora);
     if (g) grupos[g].push(a);
   }
   // Na fila, o que expira primeiro vem primeiro; nas decididas, a mais recente.
   grupos.pendente.sort((x, y) => x.expires_at.localeCompare(y.expires_at));
+  grupos.destino.sort((x, y) => prazoNoDestino(x).localeCompare(prazoNoDestino(y)));
   for (const g of ['auto', 'feito'] as const) grupos[g].sort((x, y) => y.updated_at.localeCompare(x.updated_at));
   return grupos;
 }

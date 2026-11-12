@@ -19456,6 +19456,55 @@
                           ],
                           "additionalProperties": false
                         },
+                        "destination": {
+                          "type": [
+                            "object",
+                            "null"
+                          ],
+                          "properties": {
+                            "status": {
+                              "type": "string",
+                              "maxLength": 60,
+                              "pattern": "^[a-z0-9_]+$"
+                            },
+                            "expires_at": {
+                              "type": [
+                                "string",
+                                "null"
+                              ]
+                            },
+                            "url": {
+                              "type": [
+                                "string",
+                                "null"
+                              ]
+                            },
+                            "reason": {
+                              "type": [
+                                "string",
+                                "null"
+                              ]
+                            },
+                            "checked_at": {
+                              "type": [
+                                "string",
+                                "null"
+                              ]
+                            },
+                            "coupon_deactivated": {
+                              "type": "boolean"
+                            }
+                          },
+                          "required": [
+                            "status",
+                            "expires_at",
+                            "url",
+                            "reason",
+                            "checked_at",
+                            "coupon_deactivated"
+                          ],
+                          "additionalProperties": false
+                        },
                         "plan": {
                           "type": [
                             "object",
@@ -21526,6 +21575,55 @@
                                   "valid_from",
                                   "valid_until",
                                   "created"
+                                ],
+                                "additionalProperties": false
+                              },
+                              "destination": {
+                                "type": [
+                                  "object",
+                                  "null"
+                                ],
+                                "properties": {
+                                  "status": {
+                                    "type": "string",
+                                    "maxLength": 60,
+                                    "pattern": "^[a-z0-9_]+$"
+                                  },
+                                  "expires_at": {
+                                    "type": [
+                                      "string",
+                                      "null"
+                                    ]
+                                  },
+                                  "url": {
+                                    "type": [
+                                      "string",
+                                      "null"
+                                    ]
+                                  },
+                                  "reason": {
+                                    "type": [
+                                      "string",
+                                      "null"
+                                    ]
+                                  },
+                                  "checked_at": {
+                                    "type": [
+                                      "string",
+                                      "null"
+                                    ]
+                                  },
+                                  "coupon_deactivated": {
+                                    "type": "boolean"
+                                  }
+                                },
+                                "required": [
+                                  "status",
+                                  "expires_at",
+                                  "url",
+                                  "reason",
+                                  "checked_at",
+                                  "coupon_deactivated"
                                 ],
                                 "additionalProperties": false
                               },
@@ -24254,6 +24352,55 @@
                           ],
                           "additionalProperties": false
                         },
+                        "destination": {
+                          "type": [
+                            "object",
+                            "null"
+                          ],
+                          "properties": {
+                            "status": {
+                              "type": "string",
+                              "maxLength": 60,
+                              "pattern": "^[a-z0-9_]+$"
+                            },
+                            "expires_at": {
+                              "type": [
+                                "string",
+                                "null"
+                              ]
+                            },
+                            "url": {
+                              "type": [
+                                "string",
+                                "null"
+                              ]
+                            },
+                            "reason": {
+                              "type": [
+                                "string",
+                                "null"
+                              ]
+                            },
+                            "checked_at": {
+                              "type": [
+                                "string",
+                                "null"
+                              ]
+                            },
+                            "coupon_deactivated": {
+                              "type": "boolean"
+                            }
+                          },
+                          "required": [
+                            "status",
+                            "expires_at",
+                            "url",
+                            "reason",
+                            "checked_at",
+                            "coupon_deactivated"
+                          ],
+                          "additionalProperties": false
+                        },
                         "plan": {
                           "type": [
                             "object",
@@ -26142,6 +26289,55 @@
                           ],
                           "additionalProperties": false
                         },
+                        "destination": {
+                          "type": [
+                            "object",
+                            "null"
+                          ],
+                          "properties": {
+                            "status": {
+                              "type": "string",
+                              "maxLength": 60,
+                              "pattern": "^[a-z0-9_]+$"
+                            },
+                            "expires_at": {
+                              "type": [
+                                "string",
+                                "null"
+                              ]
+                            },
+                            "url": {
+                              "type": [
+                                "string",
+                                "null"
+                              ]
+                            },
+                            "reason": {
+                              "type": [
+                                "string",
+                                "null"
+                              ]
+                            },
+                            "checked_at": {
+                              "type": [
+                                "string",
+                                "null"
+                              ]
+                            },
+                            "coupon_deactivated": {
+                              "type": "boolean"
+                            }
+                          },
+                          "required": [
+                            "status",
+                            "expires_at",
+                            "url",
+                            "reason",
+                            "checked_at",
+                            "coupon_deactivated"
+                          ],
+                          "additionalProperties": false
+                        },
                         "plan": {
                           "type": [
                             "object",
@@ -28009,6 +28205,55 @@
                             "valid_from",
                             "valid_until",
                             "created"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "destination": {
+                          "type": [
+                            "object",
+                            "null"
+                          ],
+                          "properties": {
+                            "status": {
+                              "type": "string",
+                              "maxLength": 60,
+                              "pattern": "^[a-z0-9_]+$"
+                            },
+                            "expires_at": {
+                              "type": [
+                                "string",
+                                "null"
+                              ]
+                            },
+                            "url": {
+                              "type": [
+                                "string",
+                                "null"
+                              ]
+                            },
+                            "reason": {
+                              "type": [
+                                "string",
+                                "null"
+                              ]
+                            },
+                            "checked_at": {
+                              "type": [
+                                "string",
+                                "null"
+                              ]
+                            },
+                            "coupon_deactivated": {
+                              "type": "boolean"
+                            }
+                          },
+                          "required": [
+                            "status",
+                            "expires_at",
+                            "url",
+                            "reason",
+                            "checked_at",
+                            "coupon_deactivated"
                           ],
                           "additionalProperties": false
                         },
@@ -29987,6 +30232,55 @@
                             "valid_from",
                             "valid_until",
                             "created"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "destination": {
+                          "type": [
+                            "object",
+                            "null"
+                          ],
+                          "properties": {
+                            "status": {
+                              "type": "string",
+                              "maxLength": 60,
+                              "pattern": "^[a-z0-9_]+$"
+                            },
+                            "expires_at": {
+                              "type": [
+                                "string",
+                                "null"
+                              ]
+                            },
+                            "url": {
+                              "type": [
+                                "string",
+                                "null"
+                              ]
+                            },
+                            "reason": {
+                              "type": [
+                                "string",
+                                "null"
+                              ]
+                            },
+                            "checked_at": {
+                              "type": [
+                                "string",
+                                "null"
+                              ]
+                            },
+                            "coupon_deactivated": {
+                              "type": "boolean"
+                            }
+                          },
+                          "required": [
+                            "status",
+                            "expires_at",
+                            "url",
+                            "reason",
+                            "checked_at",
+                            "coupon_deactivated"
                           ],
                           "additionalProperties": false
                         },
@@ -31979,6 +32273,55 @@
                                   "valid_from",
                                   "valid_until",
                                   "created"
+                                ],
+                                "additionalProperties": false
+                              },
+                              "destination": {
+                                "type": [
+                                  "object",
+                                  "null"
+                                ],
+                                "properties": {
+                                  "status": {
+                                    "type": "string",
+                                    "maxLength": 60,
+                                    "pattern": "^[a-z0-9_]+$"
+                                  },
+                                  "expires_at": {
+                                    "type": [
+                                      "string",
+                                      "null"
+                                    ]
+                                  },
+                                  "url": {
+                                    "type": [
+                                      "string",
+                                      "null"
+                                    ]
+                                  },
+                                  "reason": {
+                                    "type": [
+                                      "string",
+                                      "null"
+                                    ]
+                                  },
+                                  "checked_at": {
+                                    "type": [
+                                      "string",
+                                      "null"
+                                    ]
+                                  },
+                                  "coupon_deactivated": {
+                                    "type": "boolean"
+                                  }
+                                },
+                                "required": [
+                                  "status",
+                                  "expires_at",
+                                  "url",
+                                  "reason",
+                                  "checked_at",
+                                  "coupon_deactivated"
                                 ],
                                 "additionalProperties": false
                               },
@@ -34013,6 +34356,55 @@
                           ],
                           "additionalProperties": false
                         },
+                        "destination": {
+                          "type": [
+                            "object",
+                            "null"
+                          ],
+                          "properties": {
+                            "status": {
+                              "type": "string",
+                              "maxLength": 60,
+                              "pattern": "^[a-z0-9_]+$"
+                            },
+                            "expires_at": {
+                              "type": [
+                                "string",
+                                "null"
+                              ]
+                            },
+                            "url": {
+                              "type": [
+                                "string",
+                                "null"
+                              ]
+                            },
+                            "reason": {
+                              "type": [
+                                "string",
+                                "null"
+                              ]
+                            },
+                            "checked_at": {
+                              "type": [
+                                "string",
+                                "null"
+                              ]
+                            },
+                            "coupon_deactivated": {
+                              "type": "boolean"
+                            }
+                          },
+                          "required": [
+                            "status",
+                            "expires_at",
+                            "url",
+                            "reason",
+                            "checked_at",
+                            "coupon_deactivated"
+                          ],
+                          "additionalProperties": false
+                        },
                         "plan": {
                           "type": [
                             "object",
@@ -36008,6 +36400,55 @@
                             "valid_from",
                             "valid_until",
                             "created"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "destination": {
+                          "type": [
+                            "object",
+                            "null"
+                          ],
+                          "properties": {
+                            "status": {
+                              "type": "string",
+                              "maxLength": 60,
+                              "pattern": "^[a-z0-9_]+$"
+                            },
+                            "expires_at": {
+                              "type": [
+                                "string",
+                                "null"
+                              ]
+                            },
+                            "url": {
+                              "type": [
+                                "string",
+                                "null"
+                              ]
+                            },
+                            "reason": {
+                              "type": [
+                                "string",
+                                "null"
+                              ]
+                            },
+                            "checked_at": {
+                              "type": [
+                                "string",
+                                "null"
+                              ]
+                            },
+                            "coupon_deactivated": {
+                              "type": "boolean"
+                            }
+                          },
+                          "required": [
+                            "status",
+                            "expires_at",
+                            "url",
+                            "reason",
+                            "checked_at",
+                            "coupon_deactivated"
                           ],
                           "additionalProperties": false
                         },
@@ -38009,6 +38450,55 @@
                           ],
                           "additionalProperties": false
                         },
+                        "destination": {
+                          "type": [
+                            "object",
+                            "null"
+                          ],
+                          "properties": {
+                            "status": {
+                              "type": "string",
+                              "maxLength": 60,
+                              "pattern": "^[a-z0-9_]+$"
+                            },
+                            "expires_at": {
+                              "type": [
+                                "string",
+                                "null"
+                              ]
+                            },
+                            "url": {
+                              "type": [
+                                "string",
+                                "null"
+                              ]
+                            },
+                            "reason": {
+                              "type": [
+                                "string",
+                                "null"
+                              ]
+                            },
+                            "checked_at": {
+                              "type": [
+                                "string",
+                                "null"
+                              ]
+                            },
+                            "coupon_deactivated": {
+                              "type": "boolean"
+                            }
+                          },
+                          "required": [
+                            "status",
+                            "expires_at",
+                            "url",
+                            "reason",
+                            "checked_at",
+                            "coupon_deactivated"
+                          ],
+                          "additionalProperties": false
+                        },
                         "plan": {
                           "type": [
                             "object",
@@ -39876,6 +40366,55 @@
                             "valid_from",
                             "valid_until",
                             "created"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "destination": {
+                          "type": [
+                            "object",
+                            "null"
+                          ],
+                          "properties": {
+                            "status": {
+                              "type": "string",
+                              "maxLength": 60,
+                              "pattern": "^[a-z0-9_]+$"
+                            },
+                            "expires_at": {
+                              "type": [
+                                "string",
+                                "null"
+                              ]
+                            },
+                            "url": {
+                              "type": [
+                                "string",
+                                "null"
+                              ]
+                            },
+                            "reason": {
+                              "type": [
+                                "string",
+                                "null"
+                              ]
+                            },
+                            "checked_at": {
+                              "type": [
+                                "string",
+                                "null"
+                              ]
+                            },
+                            "coupon_deactivated": {
+                              "type": "boolean"
+                            }
+                          },
+                          "required": [
+                            "status",
+                            "expires_at",
+                            "url",
+                            "reason",
+                            "checked_at",
+                            "coupon_deactivated"
                           ],
                           "additionalProperties": false
                         },

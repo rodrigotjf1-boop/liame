@@ -100,6 +100,13 @@ export interface ToolDefinition {
    */
   directByPerson?: boolean;
   /**
+   * A aprovação desta ação é de uma pessoa NO DESTINO (Hub DMS, F5 parte D; decisão F5-9; Padrão DMS §8, item 10): o
+   * Liame não pede a própria aprovação. O pedido sai `aprovada` (fora da sombra) e o executor o leva ao destino, que
+   * cria lá o pedido que uma pessoa da conta aprova com o código do aplicativo autenticador. A ferramenta tem a sua
+   * `flag` (conferida no pedido e na execução), e o conector só aceita pelo caminho do pedido ao destino.
+   */
+  aprovacaoNoDestino?: boolean;
+  /**
    * Só o dono da empresa decide este pedido: aprovar, recusar e alterar (A6, D-A6-4; P17: a resposta a uma avaliação
    * de 1 ou 2 estrelas). Lido do estado que o pedido guardou. Os outros leem o pedido e não mexem nele. A política põe
    * a mesma ação em ESCALATE, para a aprovação de outro papel nunca bastar; isto barra a tentativa antes. A volta de um
@@ -278,6 +285,37 @@ const retomada = (alvo: TipoDeAnuncio, providers: readonly string[]): ToolDefini
   undo: () => ({ tool: `${alvo}_pausar`, params: {} }),
 });
 
+/** O que impede o envio da mensagem em rascunho agora (as frases do RegemCast e o teto do mês); nulo se nada. */
+function impedimentoDoRascunho(before: ResourceState): string | null {
+  const lido = EstadoDaMensagem.safeParse(before);
+  return lido.success && faseDaMensagem(lido.data.situacao) === 'rascunho' ? impedimentoDaMensagem(lido.data) : null;
+}
+
+/** O plano do envio de uma mensagem em rascunho no RegemCast: o mesmo para o disparo aprovado aqui e o pedido ao destino. */
+function planoDoEnvio(before: ResourceState, action: 'mensagem.disparar' | 'mensagem.pedir_ao_destino'): ToolPlan {
+  const lido = EstadoDaMensagem.safeParse(before);
+  if (!lido.success) throw new PlanoRecusado('Esta ferramenta é para uma mensagem montada no RegemCast.');
+  const e = lido.data;
+  const fase = faseDaMensagem(e.situacao);
+  if (fase === 'pausada') throw new PlanoRecusado('Esta mensagem já foi enviada e está pausada. Quem retoma é uma pessoa, no RegemCast.');
+  if (fase !== 'rascunho') throw new PlanoRecusado('Esta mensagem já foi enviada ou cancelada: não dá para enviar de novo.');
+  if (e.pessoas === 0) throw new PlanoRecusado('Ninguém deste público pode receber esta mensagem agora.');
+  return {
+    action,
+    // O dinheiro das mensagens não é verba de mídia: vale o teto do RegemCast, conferido acima, e nada entra no
+    // envelope do mês (D-A5-12). O custo vai no estado (`custo_centavos`), que é o que a pessoa aprova.
+    budgetImpact: 'none',
+    valueMicros: null,
+    currentValueMicros: null,
+    reserveMicros: 0,
+    desiredState: { ...e, situacao: 'enviando' },
+    // O que impede não recusa o pedido (P15, escolha 6; critério A5-12): ele espera em Aprovações com o motivo. São
+    // as frases do RegemCast (o modelo ainda em análise na Meta, a conta sem teto de gasto…) e o envio que não cabe no
+    // teto de gasto de mensagens do mês.
+    blocked: impedimentoDaMensagem(e),
+  };
+}
+
 export const TOOLS: Record<string, ToolDefinition> = {
   orcamento_ajustar: {
     name: 'orcamento_ajustar',
@@ -452,34 +490,31 @@ export const TOOLS: Record<string, ToolDefinition> = {
     alwaysApproval: true,
     revalidateOnApproval: true,
     params: NoParams,
-    blockedBy(before) {
-      const lido = EstadoDaMensagem.safeParse(before);
-      return lido.success && faseDaMensagem(lido.data.situacao) === 'rascunho' ? impedimentoDaMensagem(lido.data) : null;
-    },
-    plan(before) {
-      const lido = EstadoDaMensagem.safeParse(before);
-      if (!lido.success) throw new PlanoRecusado('Esta ferramenta é para uma mensagem montada no RegemCast.');
-      const e = lido.data;
-      const fase = faseDaMensagem(e.situacao);
-      if (fase === 'pausada') throw new PlanoRecusado('Esta mensagem já foi enviada e está pausada. Quem retoma é uma pessoa, no RegemCast.');
-      if (fase !== 'rascunho') throw new PlanoRecusado('Esta mensagem já foi enviada ou cancelada: não dá para enviar de novo.');
-      if (e.pessoas === 0) throw new PlanoRecusado('Ninguém deste público pode receber esta mensagem agora.');
-      return {
-        action: 'mensagem.disparar',
-        // O dinheiro das mensagens não é verba de mídia: vale o teto do RegemCast, conferido acima, e nada entra no
-        // envelope do mês (D-A5-12). O custo vai no estado (`custo_centavos`), que é o que a pessoa aprova.
-        budgetImpact: 'none',
-        valueMicros: null,
-        currentValueMicros: null,
-        reserveMicros: 0,
-        desiredState: { ...e, situacao: 'enviando' },
-        // O que impede não recusa o pedido (P15, escolha 6; critério A5-12): ele espera em Aprovações com o motivo. São
-        // as frases do RegemCast (o modelo ainda em análise na Meta, a conta sem teto de gasto…) e o envio que não cabe no
-        // teto de gasto de mensagens do mês.
-        blocked: impedimentoDaMensagem(e),
-      };
-    },
+    blockedBy: impedimentoDoRascunho,
+    plan: (before) => planoDoEnvio(before, 'mensagem.disparar'),
     // A volta possível é pausar o que ainda não saiu; o que já foi entregue, fica.
+    undo: () => ({ tool: 'mensagem_pausar', params: {} }),
+  },
+  // O mesmo envio quando a aprovação é do RegemCast (Hub DMS F5, parte D; decisão F5-9): a conta ligada pela autorização
+  // por clique, com a flag `regemcast_pede_ao_destino`. O Liame não pede a própria aprovação: o executor cria o cupom e
+  // PEDE o disparo ao RegemCast, onde uma pessoa da conta aprova com o código do aplicativo autenticador e o teto de
+  // gasto. A mensagem fica "esperando o destino" (`message_request.destination_*`), e a rotina `pedidos-no-destino`
+  // acompanha o pedido. O que impede o plano agora não espera: o RegemCast recusaria o pedido, e a ação falha com a
+  // frase dele (o funcionário pode propor de novo depois).
+  mensagem_pedir_ao_destino: {
+    name: 'mensagem_pedir_ao_destino',
+    version: 1,
+    owner: 'mensageria',
+    description:
+      'Pede ao RegemCast o envio de uma mensagem de WhatsApp já montada lá. Uma pessoa da conta do RegemCast aprova lá, com o código do aplicativo autenticador e o teto de gasto; só então a mensagem sai.',
+    risk: 'R3',
+    providers: ['regemcast'],
+    compensation: 'pausar_o_que_ainda_nao_saiu',
+    aprovacaoNoDestino: true,
+    flag: 'regemcast_pede_ao_destino',
+    params: NoParams,
+    // Sem `blockedBy`: ela nunca espera aprovação aqui (o que impede vira a recusa do RegemCast, com a frase dele).
+    plan: (before) => planoDoEnvio(before, 'mensagem.pedir_ao_destino'),
     undo: () => ({ tool: 'mensagem_pausar', params: {} }),
   },
   mensagem_pausar: {

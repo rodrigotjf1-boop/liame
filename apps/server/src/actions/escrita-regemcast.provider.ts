@@ -1,5 +1,8 @@
-import { type Database, withTenant } from '@liame/database';
+import { type Database, type Tx, withTenant } from '@liame/database';
 import { Inject, Injectable, type OnModuleInit } from '@nestjs/common';
+import { sql } from 'drizzle-orm';
+import { writeAudit } from '../audit/audit.js';
+import { newWebhookSecret } from '../events/standard-webhooks.js';
 import { APP_CONFIG, type AppConfig } from '../config.js';
 import { ClienteConector } from '../connectors/cliente-http.js';
 import { enderecosDasPlataformas } from '../connectors/enderecos.js';
@@ -46,6 +49,42 @@ export class EscritaRegemcast implements OnModuleInit {
       // As datas do cupom contam do dia do envio: fixadas numa transação da empresa à parte, que confirma antes de o
       // cupom ser criado no Regem (a execução que cair depois repete com a mesma regra).
       fixarDatasDoCupom: (alvo) => withTenant(database.db, alvo.tenantId, (tx) => fixarDatasDoCupom(tx, alvo)),
+      // Hub DMS F5, parte D: a conta ligada pela autorização por clique grava com o token do DMS ID do aplicativo do Liame,
+      // e o cupom da mensagem cujo pedido não vai sair é desativado no Regem (F5-5).
+      config: this.config,
+      desativarCupom: (tx, alvo) => regemCupomConnector.desativarCupomDaMensagem(tx, alvo),
+      segredoDaCaixa: (tx, alvo) => this.segredoDaCaixa(tx, alvo),
     });
+  }
+
+  /**
+   * O segredo dos avisos do RegemCast de uma conexão (um por conexão, no cofre; o mesmo desenho do aviso do Regem):
+   * criado na primeira vez, com a trilha. Nulo quando a conexão não está ativa (nada se registra para ela).
+   */
+  private async segredoDaCaixa(tx: Tx, alvo: { tenantId: string; connectionId: string }): Promise<string | null> {
+    const r = await tx.execute<{ inbox_secret_id: string | null }>(sql`
+      select inbox_secret_id from liame.oauth_connection
+       where id = ${alvo.connectionId} and tenant_id = ${alvo.tenantId} and provider = 'regemcast' and status in ('aguardando_escolha', 'ativa')
+       for update`);
+    const conexao = r.rows[0];
+    if (!conexao) return null;
+    const guardado = conexao.inbox_secret_id ? await this.vault.readSecret(tx, conexao.inbox_secret_id) : null;
+    if (guardado) return guardado;
+    const novo = newWebhookSecret();
+    const id = await this.vault.putSecret(tx, { tenantId: alvo.tenantId, purpose: 'inbox_regemcast', plaintext: novo });
+    await tx.execute(sql`update liame.oauth_connection set inbox_secret_id = ${id}, updated_at = now() where id = ${alvo.connectionId} and tenant_id = ${alvo.tenantId}`);
+    await writeAudit(tx, {
+      tenantId: alvo.tenantId,
+      actorType: 'system',
+      actorId: null,
+      actorLabel: 'Liame (pedido ao RegemCast)',
+      action: 'conexao.ativar_aviso',
+      resourceType: 'oauth_connection',
+      resourceId: alvo.connectionId,
+      before: null,
+      after: { aviso: 'segredo criado para os avisos do RegemCast' },
+      origin: 'worker',
+    });
+    return novo;
   }
 }

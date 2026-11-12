@@ -61,7 +61,10 @@ describe.skipIf(!hasDb)('feature flags (A1-12) e kill switch (A1-10)', () => {
     // `comentarios_responder` (A6, Z11, parte 2): responder, ocultar e mostrar um comentário dos posts da marca.
     // `comentarios_automatico` (A6, Z11, parte 2e-1): o atendimento automático publica sem pedido de aprovação.
     // `direct_responder` (A6, Z12, parte 2): uma pessoa da equipe manda a resposta numa conversa do Direct.
-    expect(seeded.map((f) => f.key)).toEqual(['autopilot', 'comentarios_automatico', 'comentarios_responder', 'conversoes_google', 'creative_generation', 'direct_automatico', 'direct_responder', 'google_write', 'mcp_write', 'meta_write', 'perfil_google_write', 'regem_write', 'social_write', 'whatsapp_campaign']);
+    // `regemcast_pede_ao_destino` (Hub DMS F5, parte D): o envio de mensagem vai como pedido ao RegemCast.
+    // Ordenado aqui, e não pelo `order by` do banco: `regem_write` × `regemcast_…` muda de ordem com a collation (o
+    // banco do CI ignora o sublinhado; o local, não).
+    expect(seeded.map((f) => f.key).sort()).toEqual(['autopilot', 'comentarios_automatico', 'comentarios_responder', 'conversoes_google', 'creative_generation', 'direct_automatico', 'direct_responder', 'google_write', 'mcp_write', 'meta_write', 'perfil_google_write', 'regem_write', 'regemcast_pede_ao_destino', 'social_write', 'whatsapp_campaign']);
     expect(seeded.every((f) => f.default_value === false)).toBe(true);
     await expect(
       ownerQuery(`insert into liame.feature_flag (key, kind, default_value, description, owner, is_write) values ('ligada_errada', 'boolean', 'true', 'x', 'x', true)`),

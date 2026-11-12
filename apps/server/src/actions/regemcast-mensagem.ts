@@ -1,12 +1,30 @@
 import type { Tx } from '@liame/database';
+import { Logger } from '@nestjs/common';
 import { sql } from 'drizzle-orm';
 import { canonicalJson, sha256 } from '../audit/audit.js';
 import { contaConectada } from '../connections/conectada.js';
 import type { CredencialGuardada } from '../connections/oauth.js';
 import { type ClienteConector, ErroConector } from '../connectors/cliente-http.js';
-import { dispararCampanha, pausarCampanha, planejarDisparo } from '../connectors/regemcast/conector-regemcast.js';
-import type { CampanhaRegemcast, PlanoDoDisparoRegemcast } from '../connectors/regemcast/contrato-regemcast.js';
-import { credencialDaConta, podeGravar, SO_LEITURA_PELA_AUTORIZACAO } from '../connectors/regemcast/credencial-da-conta.js';
+import type { AppConfig } from '../config.js';
+import {
+  dispararCampanha,
+  pausarCampanha,
+  PERMISSOES_DA_ESCRITA_PELO_CLIQUE,
+  type PedidoPor,
+  pedirDisparo,
+  planejarDisparo,
+  registrarAvisoNoRegemcast,
+} from '../connectors/regemcast/conector-regemcast.js';
+import { type CampanhaRegemcast, PEDIDO_EM_ABERTO, type PedidoDeAcaoRegemcast, type PlanoDoDisparoRegemcast } from '../connectors/regemcast/contrato-regemcast.js';
+import {
+  type AcessoAoRegemcast,
+  comAcessoDaConta,
+  type CredencialDaConta,
+  credencialDaConta,
+  ligacaoGrava,
+  podeGravar,
+  SO_LEITURA_PELA_AUTORIZACAO,
+} from '../connectors/regemcast/credencial-da-conta.js';
 import type { ApplyOptions, ApplyResult, Connector, PreparedRead, ReadResult, ResourceRef } from './connectors.js';
 import { type EstadoDaMensagem, faseDaMensagem } from './mensagem-plano.js';
 import type { RegraDoCupom } from './regem-cupom.js';
@@ -140,12 +158,40 @@ export type DependenciasDaEscritaRegemcast = {
    * execução caia depois: a nova tentativa cria o cupom com a mesma regra. Nulo quando o pedido não tem cupom.
    */
   fixarDatasDoCupom?: (alvo: { tenantId: string; pedidoId: string }) => Promise<RegraDoCupom | null>;
+  /**
+   * O aplicativo do Liame no DMS ID e o endereço do RegemCast: a conta ligada pela autorização por clique grava com o
+   * token do DMS ID (Hub DMS F5, parte D). Sem isto, só a conta do token da distribuição grava.
+   */
+  config?: Pick<AppConfig, 'dmsId' | 'produtos' | 'apiUrl'>;
+  /**
+   * O segredo dos avisos de uma conexão (um por conexão, no cofre), criado na primeira vez; nulo sem a conexão ativa. É o
+   * que a caixa de entrada confere no aviso assinado do RegemCast (`/v1/inbox/regemcast/<conexão>`).
+   */
+  segredoDaCaixa?: (tx: Tx, alvo: { tenantId: string; connectionId: string }) => Promise<string | null>;
+  /** Desativa no Regem o cupom de uma mensagem que não vai sair (F5-5). Sem isto, a recusa pede para desativar à mão. */
+  desativarCupom?: (tx: Tx, alvo: { tenantId: string; cupomId: string }) => Promise<{ ok: true } | { ok: false; mensagem: string }>;
 };
 
 type Conta = { id: string; tenant_id: string; external_id: string; credential_secret_id: string | null };
 type Lido = { estado: EstadoDaMensagem; versao: number };
-/** A parte do banco de uma leitura: a conta e o token dela. O token fica só na memória de quem lê. */
-type Preparada = PreparedRead & { conta: Conta; token: string; campanha: string; apiUrl: string; deps: DependenciasDaEscritaRegemcast };
+/** A parte do banco de uma leitura: a conta e a credencial dela. A credencial fica só na memória de quem lê. */
+type Preparada = PreparedRead & { conta: Conta; credencial: CredencialDaConta; campanha: string; apiUrl: string; deps: DependenciasDaEscritaRegemcast };
+
+/** A ferramenta do pedido ao destino (Hub DMS F5, parte D): a aprovação é de uma pessoa no RegemCast. */
+export const FERRAMENTA_DO_PEDIDO_AO_DESTINO = 'mensagem_pedir_ao_destino';
+/** A situação da mensagem no resultado do pedido ao destino: nada saiu ainda; uma pessoa aprova no RegemCast. */
+export const SITUACAO_ESPERANDO_O_DESTINO = 'esperando_destino';
+/** Quando a rotina lê o pedido aberto pela primeira vez (o aviso do destino, quando houver, adianta). */
+export const PRIMEIRA_LEITURA_DO_PEDIDO_S = 300;
+
+/** O motivo do pedido no destino, para a tela: o que quem recusou escreveu, ou o motivo do RegemCast. Nulo sem nenhum. */
+export function motivoDoPedido(d: PedidoDeAcaoRegemcast['pedido']): string | null {
+  const m = (d.motivo_da_recusa ?? d.motivo ?? '').replace(/\s+/g, ' ').trim();
+  return m ? m.slice(0, 600) : null;
+}
+/** O que a pessoa lê quando a conta ligada pela autorização do dono tenta o disparo direto (pela ligação, só o pedido). */
+const SO_PELO_PEDIDO_NO_DESTINO =
+  'Esta conta do RegemCast foi ligada pela autorização do dono: o envio vai como pedido, aprovado por uma pessoa da conta no RegemCast. Nada foi enviado.';
 
 const recusado = (mensagem: string): ApplyResult => ({ ok: false, reason: 'recusado', mensagem });
 
@@ -164,7 +210,7 @@ type CupomPorCriar = { pedidoId: string; lojaId: string | null; codigo: string; 
  * A recusa definitiva do RegemCast em palavras; nulo para o que é passageiro (limite, fora do ar): isso sobe para quem
  * executa adiar. A frase do RegemCast vem depois do nome da ferramenta (`campanha_disparar: …`), sem telefone nem token.
  */
-export function recusaDoRegemcast(err: unknown, passo: 'leitura' | 'disparo' | 'pausa'): string | null {
+export function recusaDoRegemcast(err: unknown, passo: 'leitura' | 'disparo' | 'pausa' | 'pedido'): string | null {
   if (!(err instanceof ErroConector)) return null;
   if (err.tipo === 'autenticacao') return SEM_ACESSO;
   if (err.tipo === 'permissao') return err.codigoProvider === SO_LEITURA ? SO_LEITURA_PELA_AUTORIZACAO : SEM_PERMISSAO;
@@ -172,11 +218,13 @@ export function recusaDoRegemcast(err: unknown, passo: 'leitura' | 'disparo' | '
   const frase = err.message.replace(/^[a-z_]+:\s*/, '').replace(/[.!?]\s*$/, '');
   if (passo === 'leitura') return `O RegemCast não deixou ler o plano do envio: ${frase}. Nada foi enviado.`;
   if (passo === 'pausa') return `O RegemCast não pausou o envio: ${frase}.`;
+  if (passo === 'pedido') return `O RegemCast recusou o pedido de envio: ${frase}. Nada foi enviado.`;
   return `O RegemCast recusou o envio: ${frase}. Nada foi enviado.`;
 }
 
 export class RegemcastMensagemConnector implements Connector {
   readonly provider = PROVIDER;
+  private readonly logger = new Logger('regemcast-mensagem');
   readonly writeFlag = 'whatsapp_campaign';
   // O dinheiro das mensagens não é verba de mídia: vale o teto de gasto do próprio RegemCast, e não soma à Verba do mês (D-A5-12).
   readonly requiresSpendLimits = false;
@@ -202,20 +250,32 @@ export class RegemcastMensagemConnector implements Connector {
     const guardada = conta.credential_secret_id && conectada ? await deps.lerSegredo(tx, conta.credential_secret_id) : null;
     const credencial = credencialDaConta(guardada ? (JSON.parse(guardada) as CredencialGuardada) : null, conta.external_id);
     if (!credencial) throw new ErroConector('autenticacao', PROVIDER, 'autorização revogada ou sem a credencial desta conta');
-    // A conta ligada pela autorização do dono (Hub DMS, B1) libera só leitura até a F5: o plano, o disparo e a pausa
-    // passam pelas ferramentas de envio, que essa autorização não tem.
-    if (!podeGravar(credencial)) throw new ErroConector('permissao', PROVIDER, 'a conta foi ligada pela autorização do dono, que só libera leitura', null, null, SO_LEITURA);
-    return { conector: PROVIDER, conta, token: credencial.token, campanha, apiUrl: deps.apiUrl, deps };
+    // A conta ligada pela autorização do dono (Hub DMS, B1) lia só, até a F5. Na parte D, ela grava quando o dono ligou
+    // as opcionais de gravar no RegemCast (o plano, o pedido e a pausa pedem `campanhas.disparar`) e o ambiente tem o
+    // aplicativo do Liame no DMS ID; a flag da ferramenta e a da escrita são do trilho. O disparo direto, ela não faz
+    // (`apply` recusa: pela ligação, só o pedido ao destino).
+    const ligacaoDaParteD = ligacaoGrava(credencial, ['campanhas.disparar']) && Boolean(deps.config?.dmsId);
+    if (!podeGravar(credencial) && !ligacaoDaParteD) {
+      throw new ErroConector('permissao', PROVIDER, 'a conta foi ligada pela autorização do dono, que só libera leitura', null, null, SO_LEITURA);
+    }
+    return { conector: PROVIDER, conta, credencial, campanha, apiUrl: deps.apiUrl, deps };
   }
 
-  /** A chave da cota e do disjuntor: à parte da leitura das conversas e da tela Mensagens da mesma conta. */
-  private acesso(p: Preparada): { token: string; contaChave: string } {
-    return { token: p.token, contaChave: `pedido:${p.conta.external_id}` };
+  /**
+   * Chama o RegemCast com o acesso da conta: pelo token, direto; pela ligação, com o token do DMS ID das permissões de
+   * gravar (à parte do das leituras). A chave da cota e do disjuntor fica à parte da leitura das conversas e da tela
+   * Mensagens da mesma conta.
+   */
+  private chamar<T>(p: Preparada, fn: (a: AcessoAoRegemcast) => Promise<T>): Promise<T> {
+    const contaChave = `pedido:${p.conta.external_id}`;
+    if (p.credencial.via === 'token') return fn({ token: p.credencial.token, contaChave });
+    if (!p.deps.config) throw new ErroConector('definitivo', PROVIDER, 'a ligação do RegemCast pede o aplicativo do Liame no DMS ID');
+    return comAcessoDaConta(p.credencial, p.deps.config, contaChave, fn, PERMISSOES_DA_ESCRITA_PELO_CLIQUE);
   }
 
   /** O plano do disparo, lido no RegemCast. Não muda nada lá. */
   private async lerPlano(p: Preparada, tempoLimiteMs?: number): Promise<Lido> {
-    const plano = await planejarDisparo({ cliente: p.deps.cliente(tempoLimiteMs), apiUrl: p.apiUrl }, { ...this.acesso(p), id: p.campanha });
+    const plano = await this.chamar(p, (a) => planejarDisparo({ cliente: p.deps.cliente(tempoLimiteMs), apiUrl: p.apiUrl }, { ...a, id: p.campanha }));
     const estado = estadoDoPlano(plano);
     return { estado, versao: versaoDaMensagem(estado) };
   }
@@ -229,6 +289,100 @@ export class RegemcastMensagemConnector implements Connector {
     const linha = r.rows[0];
     if (!linha?.coupon_code || !linha.coupon_rule || linha.coupon_created_at) return null;
     return { pedidoId: linha.id, lojaId: linha.coupon_account_id, codigo: linha.coupon_code, regra: linha.coupon_rule };
+  }
+
+  /**
+   * Quem pediu, como o destino compara (F5-3): o funcionário de IA vai como agente; a pessoa, pelo resumo do e-mail
+   * (SHA-256 do e-mail sem espaços e em minúsculas), nunca o e-mail. A pessoa sem e-mail legível: nulo (não se pede).
+   */
+  private async quemPediu(tx: Tx, options: ApplyOptions): Promise<PedidoPor | null> {
+    if (options.actorType !== 'human') return { tipo: 'agente' };
+    if (!options.requestedBy) return null;
+    const r = await tx.execute<{ email: string }>(sql`select email from liame.app_user where id = ${options.requestedBy}`);
+    const email = r.rows[0]?.email;
+    return email ? { tipo: 'pessoa', pessoa: sha256(email.trim().toLowerCase()) } : null;
+  }
+
+  /**
+   * O cupom que nasceu para a mensagem e não vai ser usado (o RegemCast recusou o pedido): desativado no Regem agora
+   * (F5-5). Devolve o complemento da frase de recusa: o que foi feito, ou o "desative-o lá" de quando não deu.
+   */
+  private async desfazerCupom(tx: Tx, p: Preparada, cupom: CupomPorCriar | null, seNaoDer: string): Promise<string> {
+    if (!cupom) return '';
+    const r = await tx.execute<{ coupon_id: string | null }>(sql`
+      select coupon_id from liame.message_request where id = ${cupom.pedidoId} and tenant_id = ${p.conta.tenant_id}`);
+    const cupomId = r.rows[0]?.coupon_id;
+    if (!cupomId || !p.deps.desativarCupom) return seNaoDer;
+    const feito = await p.deps.desativarCupom(tx, { tenantId: p.conta.tenant_id, cupomId });
+    if (!feito.ok) return seNaoDer;
+    await tx.execute(sql`update liame.message_request set coupon_deactivated_at = now(), updated_at = now() where id = ${cupom.pedidoId} and tenant_id = ${p.conta.tenant_id}`);
+    return ` O cupom ${cupom.codigo}, que tinha sido criado, foi desativado no Regem.`;
+  }
+
+  /**
+   * Registra o aviso assinado do RegemCast para a conexão desta conta: a caixa `{API_URL}/v1/inbox/regemcast/<conexão>`
+   * com o segredo dela (criado na primeira vez). Registrar de novo é idempotente lá e religa o aviso pausado. A falha só
+   * vai para o log (o motivo, sem segredo): o pedido segue, e a leitura cobre o aviso que não vier.
+   */
+  private async registrarAviso(tx: Tx, p: Preparada, ctx: { cliente: ClienteConector; apiUrl: string }): Promise<void> {
+    const apiPublica = p.deps.config?.apiUrl;
+    if (!apiPublica || !p.deps.segredoDaCaixa) return;
+    try {
+      const r = await tx.execute<{ connection_id: string | null }>(sql`select connection_id from liame.connected_account where id = ${p.conta.id} and tenant_id = ${p.conta.tenant_id}`);
+      const connectionId = r.rows[0]?.connection_id;
+      if (!connectionId) return;
+      // Num ponto de salvamento: a falha do cofre não estraga a transação do pedido.
+      const segredoDaCaixa = p.deps.segredoDaCaixa;
+      const segredo = await tx.transaction((sp) => segredoDaCaixa(sp as Tx, { tenantId: p.conta.tenant_id, connectionId }));
+      if (!segredo) return;
+      const url = `${apiPublica.replace(/\/+$/, '')}/v1/inbox/regemcast/${connectionId}`;
+      await this.chamar(p, (a) => registrarAvisoNoRegemcast(ctx, { ...a, url, segredo }));
+    } catch (err) {
+      const motivo = err instanceof ErroConector ? `${err.tipo}${err.codigoProvider ? `:${err.codigoProvider}` : ''}: ${err.message}` : err instanceof Error ? err.name : 'erro';
+      this.logger.warn(`conta ${p.conta.id}: o aviso do RegemCast não foi registrado (${motivo}); a leitura do pedido cobre`);
+    }
+  }
+
+  /**
+   * O pedido ao destino (Hub DMS F5, parte D; F5-9): com o cupom já criado, PEDE o disparo ao RegemCast. Nada sai agora;
+   * uma pessoa da conta aprova lá. O pedido fica na mensagem (`destination_*`), e a rotina `pedidos-no-destino` o
+   * acompanha. A chave sai do pedido (a conta, a campanha e o plano): a mesma execução repetida devolve o mesmo pedido.
+   */
+  private async pedirAoDestino(
+    tx: Tx,
+    p: Preparada,
+    lido: Lido,
+    a: { confirmacao: string; cupom: CupomPorCriar | null; cupomCriado: string; options: ApplyOptions },
+  ): Promise<ApplyResult> {
+    const pedidoPor = await this.quemPediu(tx, a.options);
+    if (!pedidoPor) return recusado(`Não deu para saber quem pediu o envio, e o RegemCast precisa disso para quem pediu não aprovar o próprio pedido. Nada foi enviado.${await this.desfazerCupom(tx, p, a.cupom, a.cupomCriado)}`);
+    const chave = `liame:pedido:${sha256(canonicalJson([p.conta.id, p.campanha, a.confirmacao])).slice(0, 48)}`;
+    const ctx = { cliente: p.deps.cliente(), apiUrl: p.apiUrl };
+    // O aviso assinado (`acao.alterada`): registrado antes do pedido, para a primeira mudança já chegar. Não segura o
+    // pedido: sem ele, a rotina lê o pedido de 5 em 5 minutos (F5-7, "pela consulta se o aviso não chegar").
+    await this.registrarAviso(tx, p, ctx);
+    const cupom = a.cupom ? { codigo: a.cupom.codigo, ...(a.cupom.regra.nome ? { descricao: a.cupom.regra.nome.slice(0, 200) } : {}) } : undefined;
+    let feito: PedidoDeAcaoRegemcast;
+    try {
+      feito = await this.chamar(p, (ac) => pedirDisparo(ctx, { ...ac, chave, id: p.campanha, confirmacao: a.confirmacao, pedidoPor, ...(cupom ? { cupom } : {}) }));
+    } catch (err) {
+      const motivo = recusaDoRegemcast(err, 'pedido');
+      if (motivo) return recusado(`${motivo}${await this.desfazerCupom(tx, p, a.cupom, a.cupomCriado)}`);
+      throw err;
+    }
+    const d = feito.pedido;
+    const aberto = PEDIDO_EM_ABERTO.includes(d.situacao);
+    // Aberto: a rotina lê de novo daqui a pouco (o aviso do destino adianta). Já final (a mesma chave devolveu um pedido
+    // decidido): a rotina trata agora (o cupom de quem não saiu).
+    await tx.execute(sql`
+      update liame.message_request
+         set destination_request_id = ${d.id}, destination_status = ${d.situacao}, destination_expires_at = ${d.vence_em}::timestamptz,
+             destination_url = ${d.tela ?? null}, destination_reason = ${motivoDoPedido(d)},
+             destination_requested_at = coalesce(destination_requested_at, now()), destination_checked_at = now(),
+             destination_next_check_at = ${aberto ? sql`now() + ${`${PRIMEIRA_LEITURA_DO_PEDIDO_S} seconds`}::interval` : sql`now()`}, updated_at = now()
+       where tenant_id = ${p.conta.tenant_id} and connected_account_id = ${p.conta.id} and campaign_id = ${p.campanha}`);
+    const estado: EstadoDaMensagem = { ...lido.estado, situacao: SITUACAO_ESPERANDO_O_DESTINO, pode_disparar: false, impedimentos: [], confirmacao: null };
+    return { ok: true, state: estado, version: versaoDaMensagem(estado) };
   }
 
   /** A leitura da hora do pedido, com o tempo curto de quem tem uma pessoa esperando. A do executor é a de `apply`. */
@@ -277,6 +431,9 @@ export class RegemcastMensagemConnector implements Connector {
 
     const ctx = { cliente: p.deps.cliente(), apiUrl: p.apiUrl };
     if (mudanca.tipo === 'disparar') {
+      const peloDestino = options.tool === FERRAMENTA_DO_PEDIDO_AO_DESTINO;
+      // Pela ligação do clique, o disparo direto não existe (o RegemCast também o recusa): só o pedido ao destino.
+      if (!peloDestino && p.credencial.via !== 'token') return recusado(SO_PELO_PEDIDO_NO_DESTINO);
       const confirmacao = lido.estado.confirmacao;
       // Sem a confirmação não há disparo; e ela precisa ser a do plano que a pessoa aprovou.
       if (!lido.estado.pode_disparar || !confirmacao) return recusado(`O RegemCast não deixa enviar agora: ${lido.estado.impedimentos.join(' ') || 'o plano do envio veio sem a confirmação'}`);
@@ -302,10 +459,11 @@ export class RegemcastMensagemConnector implements Connector {
         // Se o RegemCast recusar o disparo agora, o cupom já existe: a recusa diz isso.
         cupomCriado = ` O cupom ${cupom.codigo} já foi criado no Regem: se a mensagem não for enviada, desative-o lá.`;
       }
+      if (peloDestino) return this.pedirAoDestino(tx, p, lido, { confirmacao, cupom, cupomCriado, options });
       try {
         // A chave sai do pedido (a conta, a campanha e o plano aprovado): a mesma execução repetida não dispara de novo.
         const chave = `liame:disparo:${sha256(canonicalJson([p.conta.id, p.campanha, confirmacao])).slice(0, 48)}`;
-        const feito = await dispararCampanha(ctx, { ...this.acesso(p), chave, id: p.campanha, confirmacao });
+        const feito = await this.chamar(p, (a) => dispararCampanha(ctx, { ...a, chave, id: p.campanha, confirmacao }));
         const estado: EstadoDaMensagem = {
           ...lido.estado,
           ...daCampanha(feito.campanha),
@@ -331,7 +489,7 @@ export class RegemcastMensagemConnector implements Connector {
       // A fila anda enquanto a campanha sai: a chave leva o tamanho dela, para uma segunda pausa (depois de alguém
       // retomar no RegemCast) não cair na resposta guardada da primeira.
       const chave = `liame:pausa:${sha256(canonicalJson([p.conta.id, p.campanha, lido.estado.pessoas, lido.estado.enviadas])).slice(0, 48)}`;
-      const feito = await pausarCampanha(ctx, { ...this.acesso(p), chave, id: p.campanha });
+      const feito = await this.chamar(p, (a) => pausarCampanha(ctx, { ...a, chave, id: p.campanha }));
       const estado: EstadoDaMensagem = { ...lido.estado, ...daCampanha(feito.campanha), pode_disparar: false, impedimentos: [], confirmacao: null };
       if (faseDaMensagem(estado.situacao) !== 'pausada') estado.situacao = 'pausada';
       return { ok: true, state: estado, version: versaoDaMensagem(estado) };
