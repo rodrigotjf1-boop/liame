@@ -68,7 +68,7 @@ describe.skipIf(!hasDb)('escrita no Google Ads: o conector (A5 · Y2)', () => {
 
   it('o conector está no registro e nasce desligado: sem a flag de escrita, o pedido é recusado sem falar com o Google e nada é gravado', async () => {
     expect(CONNECTORS.google_ads?.writeFlag).toBe('google_write');
-    expect(Object.values(TOOLS).filter((t) => t.providers.includes('google_ads')).map((t) => t.name).sort()).toEqual(['campanha_pausar', 'campanha_retomar', 'orcamento_ajustar']);
+    expect(Object.values(TOOLS).filter((t) => t.providers.includes('google_ads')).map((t) => t.name).sort()).toEqual(['campanha_google_criar', 'campanha_pausar', 'campanha_retomar', 'orcamento_ajustar']);
     // Pela API, com a função desligada para a empresa, o pedido numa conta do Google não entra.
     const c = google.novaCampanha(e.cliente);
     await campanhaLida(e, c);

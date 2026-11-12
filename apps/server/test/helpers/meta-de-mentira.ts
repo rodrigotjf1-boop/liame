@@ -384,6 +384,7 @@ export async function ligarFlagDaEmpresa(
     | 'messenger'
     | 'stories'
     | 'campanha_nova'
+    | 'campanha_google'
     | 'video_montado'
     | 'regiao'
     | 'ia',

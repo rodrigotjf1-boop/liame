@@ -57,8 +57,9 @@ describe('ferramentas de anúncio (A4 · X2)', () => {
   });
 
   it('no Google (A5 · Y3): só a campanha, com a verba do orçamento que é só dela; a verba dividida nunca vira pedido', () => {
-    // As ferramentas que aceitam o Google: a verba e pausar e retomar a campanha. Grupo de anúncios e anúncio, não.
-    expect(Object.values(TOOLS).filter((t) => t.providers.includes('google_ads')).map((t) => t.name).sort()).toEqual(['campanha_pausar', 'campanha_retomar', 'orcamento_ajustar']);
+    // As ferramentas que aceitam o Google: a verba e pausar e retomar a campanha, e a campanha nova (A5, Y9). Grupo de anúncios e
+    // anúncio, não.
+    expect(Object.values(TOOLS).filter((t) => t.providers.includes('google_ads')).map((t) => t.name).sort()).toEqual(['campanha_google_criar', 'campanha_pausar', 'campanha_retomar', 'orcamento_ajustar']);
     // O estado de uma campanha do Google, como o conector entrega: os mesmos campos da Meta, mais o orçamento.
     const doGoogle = (over: Record<string, unknown> = {}) => ({
       ...objeto('campanha', { status_efetivo: 'ELIGIBLE' }),

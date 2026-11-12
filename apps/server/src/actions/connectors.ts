@@ -1,6 +1,8 @@
 import type { Tx } from '@liame/database';
 import { sql } from 'drizzle-orm';
+import { campanhaGoogleDoRecurso } from '../campanhas/campanha-google-plano.js';
 import { campanhaNovaDoRecurso } from '../campanhas/campanha-nova-plano.js';
+import { campanhaGoogleConnector } from './campanha-google-no-google.js';
 import { campanhaNovaNaMetaConnector } from './campanha-nova-na-meta.js';
 import { comentarioDoRecurso, comentarioNaPaginaConnector, comentarioNoInstagramConnector } from './comentario-na-rede.js';
 import { directNoInstagramConnector, directNoMessengerConnector } from './direct-na-rede.js';
@@ -184,7 +186,12 @@ export class ConectorDaMeta implements Connector {
   }
 
   de(resourceId: string): Connector {
-    return campanhaNovaDoRecurso(resourceId) ? this.daCampanhaNova : this.dosObjetos;
+    return this.ehDaCampanhaNova(resourceId) ? this.daCampanhaNova : this.dosObjetos;
+  }
+
+  /** O recurso da campanha nova do Liame nesta plataforma (`campanha_nova:<id>` na Meta). */
+  protected ehDaCampanhaNova(resourceId: string): boolean {
+    return campanhaNovaDoRecurso(resourceId) !== null;
   }
 
   read(tx: Tx, ref: ResourceRef): Promise<ReadResult | null> {
@@ -209,12 +216,24 @@ export class ConectorDaMeta implements Connector {
   }
 }
 
+/**
+ * O Google Ads (A5): os objetos que já existem no Google, como sempre, e a campanha nova do Liame no Google
+ * (`campanha_google:<id>`, Y9), pelo mesmo provedor, com a mesma trava, a mesma flag de escrita (`google_write`) e os
+ * mesmos limites.
+ */
+export class ConectorDoGoogle extends ConectorDaMeta {
+  protected override ehDaCampanhaNova(resourceId: string): boolean {
+    return campanhaGoogleDoRecurso(resourceId) !== null;
+  }
+}
+
 export const CONNECTORS: Record<string, Connector> = {
   sandbox: new SandboxConnector(),
   regem: regemCupomConnector,
   // A4, X5: a campanha nova (`campanha_nova:<id>`) pelo mesmo provedor; os objetos que já existem, como sempre.
   meta_ads: new ConectorDaMeta(metaAnunciosConnector, campanhaNovaNaMetaConnector),
-  google_ads: googleAnunciosConnector,
+  // A5, Y9: a campanha nova no Google (`campanha_google:<id>`) pelo mesmo provedor; os objetos que já existem, como sempre.
+  google_ads: new ConectorDoGoogle(googleAnunciosConnector, campanhaGoogleConnector),
   // A5, Y5: o pedido de mensagem de WhatsApp. Só com a flag de escrita `whatsapp_campaign` ligada para a empresa.
   regemcast: regemcastMensagemConnector,
   // A6, Z2: a resposta a uma avaliação do perfil no Google. Só com a flag de escrita `perfil_google_write` ligada.

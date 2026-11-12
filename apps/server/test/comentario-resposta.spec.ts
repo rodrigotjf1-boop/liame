@@ -164,7 +164,7 @@ describe('as ferramentas, a política e o conector da conta', () => {
     // Só elas, a resposta no Direct (A6, Z12, parte 2), a campanha nova na Meta (A4, X5) e o envio pedido ao RegemCast
     // (Hub DMS F5, parte D) têm flag própria.
     expect(Object.values(TOOLS).filter((t) => t.flag).map((t) => t.name).sort()).toEqual(
-      [...doComentario.map((t) => t.name), 'direct_responder', 'direct_responder_auto', 'campanha_criar', 'campanha_nova_ativar', 'campanha_nova_pausar', 'mensagem_pedir_ao_destino'].sort(),
+      [...doComentario.map((t) => t.name), 'direct_responder', 'direct_responder_auto', 'campanha_criar', 'campanha_nova_ativar', 'campanha_nova_pausar', 'campanha_google_criar', 'mensagem_pedir_ao_destino'].sort(),
     );
     // A sugestão do Social media só o funcionário preenche.
     expect(TOOLS.comentario_responder!.agentParams).toEqual(['sugestoes']);

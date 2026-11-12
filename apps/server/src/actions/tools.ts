@@ -22,6 +22,7 @@ import {
   planoDaRespostaNoDirect,
 } from './direct-plano.js';
 import { EstadoDaMensagem, faseDaMensagem, impedimentoDaMensagem } from './mensagem-plano.js';
+import { planoDaCampanhaGoogle } from '../campanhas/campanha-google-plano.js';
 import { planoDaCampanhaNova, planoDeAtivar, planoDePausar } from '../campanhas/campanha-nova-plano.js';
 import { EstadoDoPost, planoDeApagarOPost, planoDeTentarDeNovo, planoDoPost, quandoSai } from '../posts/post-plano.js';
 import { motivoDoCompartilhado, orcamentoCompartilhado } from './orcamento-compartilhado.js';
@@ -430,6 +431,31 @@ export const TOOLS: Record<string, ToolDefinition> = {
       return { action: 'campanha.pausar', budgetImpact: 'decrease', valueMicros: null, currentValueMicros: null, reserveMicros: 0, desiredState: plano.desejado as unknown as ResourceState };
     },
     undo: () => ({ tool: 'campanha_nova_ativar', params: {} }),
+  },
+  // A campanha nova no Google, criada pausada (A5, Y9, parte 2; P45; D-A5-21 a D-A5-26): a peça aprovada, com os textos
+  // nos tamanhos do Google e uma foto da loja recortada, vira uma Performance Max pausada, numa requisição só (o Google
+  // cria tudo ou nada). Não gasta (ativar é outro pedido); sempre com a aprovação de uma pessoa e o código do app. Só
+  // pela rota da campanha nova no Google (`POST /v1/google-campaigns`) e só com a função `campanha_google`, além da
+  // escrita no Google. A criação no Google é a parte 3: até lá, o conector recusa sem ir ao Google.
+  campanha_google_criar: {
+    name: 'campanha_google_criar',
+    version: 1,
+    owner: 'midia',
+    description:
+      'Cria no Google uma campanha Performance Max nova com a peça aprovada em Criativos, nos tamanhos do Google, e uma foto da loja recortada: o orçamento, a campanha (o raio em volta da loja e a verba diária) e o grupo de recursos nascem pausados, numa requisição só, e não gastam. Ativar é outro pedido, com outra aprovação.',
+    risk: 'R1',
+    providers: ['google_ads'],
+    compensation: 'fica_pausada_no_google',
+    alwaysApproval: true,
+    onlyByRoute: true,
+    flag: 'campanha_google',
+    params: NoParams,
+    plan(before) {
+      const plano = planoDaCampanhaGoogle(before);
+      if (!plano.ok) throw new PlanoRecusado(plano.motivo);
+      // Nasce pausada: não gasta nada até ser ativada, então nada a reservar no envelope do mês.
+      return { action: 'campanha.criar', budgetImpact: 'none', valueMicros: null, currentValueMicros: null, reserveMicros: 0, desiredState: plano.desejado as unknown as ResourceState };
+    },
   },
   regem_cupom_criar: {
     name: 'regem_cupom_criar',
