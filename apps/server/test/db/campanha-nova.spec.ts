@@ -178,6 +178,51 @@ describe.skipIf(!hasDb)('a campanha nova na Meta (A4 · X5, parte 1)', () => {
     expect((await pedir(e, { media_id: foto.id })).status).toBe(201);
   }, 120_000);
 
+  it('as opções da gaveta (parte 2): quem assina, as lojas com o endereço e o cardápio, o teto, o que impede e a campanha de cada peça', async () => {
+    const e = await cenario('Brasa Opcoes da Gaveta');
+    const opcoes = (emp: Cenario) => api.call('GET', `/v1/new-campaigns/options?brand_id=${emp.brandId}`, { cookie: emp.cookie });
+    // Uma segunda loja, sem o ponto no endereço e sem cardápio, com o raio de entrega.
+    const { unitId: outra } = await lojaComCardapio(e, 'Loja Tijuca', null);
+    await ownerQuery(`update liame.unit set delivery_radius_km = 4.5 where id = $1`, [outra]);
+
+    const r = await opcoes(e);
+    expect(r.status, JSON.stringify(r.body)).toBe(200);
+    expect(r.body).toMatchObject({ enabled: true, blocks: [], page: { name: 'Mister Burgers' }, instagram: { name: '@misterburgers' }, campaign_cap_micros: null, by_piece: [] });
+    expect(r.body.ad_account).toMatchObject({ name: expect.any(String) });
+    expect(r.body.units).toEqual([
+      { id: e.unitId, name: 'Loja Centro', address: 'Rua da Assembleia, 10, Centro', has_address: true, delivery_radius_km: null, menu_available: true, menu_block: null },
+      {
+        id: outra,
+        name: 'Loja Tijuca',
+        address: null,
+        has_address: false,
+        delivery_radius_km: 4.5,
+        menu_available: false,
+        menu_block: 'O cardápio online ligado à marca é o de outra loja: escolha a loja do cardápio, ou o objetivo de conversas no WhatsApp.',
+      },
+    ]);
+
+    // O pedido aparece na peça; o teto por campanha aparece quando a empresa define.
+    const p = await pedir(e, { media_id: (await fotoGuardada(e, armazem, { largura: 1080, altura: 1080 })).id });
+    expect(p.status, JSON.stringify(p.body)).toBe(201);
+    await ownerQuery(`update liame.app_user set totp_last_step = null where id = $1`, [e.userId]);
+    expect((await api.call('PUT', '/v1/budget/limits', { cookie: e.cookie, body: { month_micros: 3_000_000_000, campaign_daily_micros: 50_000_000 } })).status).toBe(200);
+    const depois = (await opcoes(e)).body;
+    expect(depois.by_piece).toEqual([{ piece_id: e.peca, campaign_id: p.body.id, status: 'pedida', active: false, action_id: p.body.action_id }]);
+    expect(depois.campaign_cap_micros).toBe(50_000_000);
+
+    // A função desligada e a Página que saiu: o que impede, com as palavras da recusa do pedido.
+    const sem = await cenario('Brasa Opcoes Sem Pagina', { ligada: false });
+    await ownerQuery(`update liame.connected_account set disconnected_at = now() where tenant_id = $1 and provider = 'facebook_page'`, [sem.tenantId]);
+    const s = (await opcoes(sem)).body;
+    expect(s.enabled).toBe(false);
+    expect(s.blocks.map((b: { code: string }) => b.code)).toEqual(['funcao-desligada', 'sem-pagina']);
+    expect([s.page, s.instagram]).toEqual([null, null]);
+    expect((await pedir(sem, { media_id: randomUUID() })).body.code).toBe('funcao-desligada');
+    // Marca de outra empresa: 404.
+    expect((await api.call('GET', `/v1/new-campaigns/options?brand_id=${e.brandId}`, { cookie: sem.cookie })).status).toBe(404);
+  }, 120_000);
+
   it('criar com a foto e o cardápio: os quatro objetos, cada um validado antes, com a chave, tudo pausado', async () => {
     const e = await cenario('Brasa Campanha Foto');
     const foto = await fotoGuardada(e, armazem, { largura: 1080, altura: 1350 });
@@ -216,6 +261,9 @@ describe.skipIf(!hasDb)('a campanha nova na Meta (A4 · X5, parte 1)', () => {
     expect(meta.defeitos).toEqual([]);
     const lida = await api.call('GET', `/v1/new-campaigns/${id}`, { cookie: e.cookie });
     expect(lida.body).toMatchObject({ status: 'criada', meta: { campaign_id: campanha!.id, ad_id: anuncio!.id } });
+    // A conta de anúncios na Meta, para o link do Gerenciador (a tela tira o `act_`).
+    const [externa] = await ownerQuery<{ external_id: string }>(`select external_id from liame.connected_account where id = $1`, [e.conta]);
+    expect(lida.body.meta.account_id).toBe(externa!.external_id);
   }, 120_000);
 
   it('a Meta manda esperar no meio: a tentativa seguinte continua de onde parou, e a resposta perdida não cria de novo', async () => {

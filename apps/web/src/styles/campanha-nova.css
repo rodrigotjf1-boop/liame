@@ -1,0 +1,76 @@
+/* ===================== A4 · X5 · A campanha nova na Meta (protótipo P42, aprovado em 11/11/2026) =====================
+   Nenhuma cor nova: os tokens do tema. A gaveta reaproveita a do pedido (pd-*), a lista de Fotos (po-*) e a prévia de
+   Criativos (previa, pv-*); aqui fica só o que é da campanha nova: a prévia ao lado, a mídia da loja e o passo a passo. */
+
+/* a gaveta: mais larga, para a prévia ficar ao lado; no estreito, ocupa a tela */
+.cn-gaveta { width: min(880px, 100vw); }
+@media (max-width: 880px) { .cn-gaveta { border-width: 0; border-radius: 0; } }
+.cn-gaveta .dialogo-corpo { container: cng / inline-size; }
+.cn-gaveta h2:focus, .cn-bloqueio:focus { outline: none; }
+/* o pedido que não pode sair (a conta, a Página, a loja sem o endereço): o botão parece desligado e o clique leva ao aviso */
+.cn-gaveta .btn[aria-disabled="true"] { opacity: .62; cursor: not-allowed; }
+/* "Quem assina" e "Para onde leva": o rótulo não toma a largura do valor no estreito */
+.cn-destino { grid-template-columns: fit-content(38%) minmax(0, 1fr); }
+.cn-destino dt { overflow-wrap: anywhere; }
+.cn-op video { display: block; width: 100%; aspect-ratio: 1 / 1; object-fit: cover; }
+.cn-midia video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.cn-gaveta fieldset.campo { min-width: 0; margin: 0; padding: 0; border: 0; }
+.cn-gaveta .campo > legend { margin-bottom: var(--sp-2); font-weight: 600; }
+.cn-grade { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--sp-5); min-width: 0; }
+.cn-f1, .cn-f2 { display: grid; gap: var(--sp-5); align-content: start; min-width: 0; }
+.cn-lado { display: grid; gap: var(--sp-3); align-content: start; min-width: 0; }
+.cn-lado > .seg { justify-self: start; max-width: 100%; }
+.cn-lado .pd-nota { font-size: var(--text-xs); }
+@container cng (min-width: 700px) {
+  .cn-grade { grid-template-columns: minmax(0, 1fr) minmax(0, 300px); column-gap: var(--sp-6); }
+  .cn-f1 { grid-column: 1; grid-row: 1; }
+  .cn-f2 { grid-column: 1; grid-row: 2; }
+  .cn-lado { grid-column: 2; grid-row: 1 / span 2; position: sticky; top: 0; align-self: start; }
+}
+
+/* a peça (o texto aprovado em Criativos) */
+.cn-peca { display: grid; gap: 4px; padding: var(--sp-3) var(--sp-4); border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface-2); font-size: var(--text-sm); }
+.cn-peca b { font-weight: 600; overflow-wrap: anywhere; }
+.cn-peca p { margin: 0; overflow-wrap: anywhere; white-space: pre-line; }
+.cn-peca small { color: var(--text-muted); font-size: var(--text-xs); }
+
+/* "Foto ou Vídeo" e a lista de Fotos */
+.cn-tipo { flex-wrap: wrap; max-width: 100%; justify-self: start; }
+.cn-tipo button { display: inline-flex; align-items: center; gap: 6px; white-space: normal; }
+.cn-op { position: relative; }
+.cn-op-tag { position: absolute; left: 4px; top: 4px; padding: 0 5px; border-radius: var(--radius-sm); background: var(--warning-soft); color: var(--warning); font-size: 11px; font-weight: 600; line-height: 1.5; pointer-events: none; }
+.cn-aviso { display: flex; gap: var(--sp-2); margin: 0; padding: var(--sp-2) var(--sp-3); border-radius: var(--radius); background: var(--warning-soft); color: var(--text); font-size: var(--text-sm); overflow-wrap: anywhere; }
+.cn-aviso .ic { flex: none; margin-top: 2px; color: var(--warning); }
+
+/* a prévia: o Feed, com a foto ou a capa do vídeo da loja */
+.cn-previa { max-width: 300px; width: 100%; }
+.cn-midia { position: relative; overflow: hidden; background: var(--bg-subtle); }
+.cn-midia img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.cn-midia--alta { aspect-ratio: 4 / 5; }
+.cn-midia--quadrada { aspect-ratio: 1 / 1; }
+.cn-midia--deitada { aspect-ratio: 16 / 9; }
+.cn-midia--vazia { display: grid; place-items: center; aspect-ratio: 1 / 1; padding: var(--sp-4); border-block: 1px dashed var(--border-strong); color: var(--text-muted); font-size: var(--text-xs); text-align: center; }
+.cn-midia--vazia > span { display: grid; justify-items: center; gap: var(--sp-2); max-width: 24ch; }
+.cn-play { position: absolute; inset: 0; z-index: 1; margin: auto; width: 44px; height: 44px; display: grid; place-items: center; border-radius: var(--radius-full); background: color-mix(in srgb, var(--text) 62%, transparent); color: var(--surface); }
+.cn-play .ic { width: 20px; height: 20px; margin-left: 2px; fill: currentColor; }
+
+/* a peça aberta em Criativos: o bloco da campanha nova */
+.cn-na-peca .card-cab { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--sp-2); }
+.cn-na-peca .vazio-acoes { justify-content: flex-start; }
+
+/* Aprovações: a criação passo a passo e o que existe na Meta */
+.cn-passos { display: grid; margin: 0; padding: 0; list-style: none; }
+.cn-passos li { display: grid; grid-template-columns: 20px minmax(0, 1fr); align-items: start; gap: var(--sp-1) var(--sp-3); padding: var(--sp-2) 0; border-bottom: 1px solid var(--border); font-size: var(--text-sm); }
+.cn-passos li:last-child { border-bottom: 0; }
+.cn-passos li > .ic { width: 18px; height: 18px; margin-top: 1px; color: var(--text-subtle); }
+.cn-passos li[data-estado="feito"] > .ic { color: var(--success); }
+.cn-passos li[data-estado="agora"] > .ic { color: var(--warning); }
+.cn-passos li > span { min-width: 0; overflow-wrap: anywhere; }
+.cn-passos b { font-weight: 600; }
+.cn-passos small { display: block; color: var(--text-muted); font-size: var(--text-xs); }
+.cn-ap-previa { display: grid; gap: var(--sp-2); justify-items: center; min-width: 0; }
+.cn-gerenciador { display: grid; gap: var(--sp-2); justify-items: start; }
+.cn-acoes { display: flex; flex-wrap: wrap; gap: var(--sp-2); min-width: 0; max-width: 100%; }
+/* os botões com texto longo ("Abrir no Gerenciador de Anúncios") quebram a linha no estreito */
+.cn-gerenciador .btn, .cn-acoes .btn { max-width: 100%; height: auto; white-space: normal; text-align: left; }
+.cn-na-peca .btn[aria-disabled="true"] { opacity: .62; cursor: progress; }

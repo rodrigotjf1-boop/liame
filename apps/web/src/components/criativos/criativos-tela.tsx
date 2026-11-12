@@ -1,6 +1,14 @@
 'use client';
 
-import type { AdPieceOptionsResponse, AdPieceRequestResponse, AdPieceResponse, BrandResponse, CreateAdPieceRequest } from '@liame/contracts';
+import type {
+  AdPieceOptionsResponse,
+  AdPieceRequestResponse,
+  AdPieceResponse,
+  BrandPhoto,
+  BrandResponse,
+  CreateAdPieceRequest,
+  NewCampaignOptionsResponse,
+} from '@liame/contracts';
 import { useSearchParams } from 'next/navigation';
 import { type ReactNode, useCallback, useEffect, useRef, useState } from 'react';
 import { useAvisar } from '@/components/ui/avisos';
@@ -12,6 +20,7 @@ import { useContadorCriativos } from '@/lib/contador-criativos';
 import { disparar } from '@/lib/disparar';
 import { useModo } from '@/lib/modo';
 import { useSessao } from '@/lib/sessao';
+import { GavetaCampanhaNova } from './gaveta-campanha-nova';
 import { CriativosLista } from './lista';
 import { PecaAberta } from './peca';
 import { DialogoPedirPeca } from './pedir-peca';
@@ -50,6 +59,9 @@ export function CriativosTela() {
   const [pedindo, setPedindo] = useState<{ anuncio: string | null } | null>(null);
   const [ocupado, setOcupado] = useState<string | null>(null);
   const [anuncio, setAnuncio] = useState('');
+  /** A campanha nova (A4, X5; P42): as opções da gaveta e a campanha de cada peça; nulo quando não abriu. */
+  const [campanhas, setCampanhas] = useState<NewCampaignOptionsResponse | null>(null);
+  const [montando, setMontando] = useState<{ peca: AdPieceResponse; midias: BrandPhoto[] | null } | null>(null);
   /** O elemento que recebe o foco depois do próximo desenho (pelo id), ou o título da tela. */
   const focar = useRef<string | null>(null);
   const seq = useRef(0);
@@ -89,13 +101,16 @@ export function CriativosTela() {
     const id = ++seq.current;
     if (!quieto) setCarga({ tipo: 'carregando' });
     const query = { brand_id: brandId };
-    const [o, p, r] = await Promise.all([
+    const [o, p, r, c] = await Promise.all([
       chamar(() => api.GET('/v1/ad-pieces/options', { params: { query } })),
       chamar(() => api.GET('/v1/ad-pieces', { params: { query } })),
       // Os pedidos só enfeitam a tela (de onde a peça veio, o pedido que não deu certo): sem eles, ela abre do mesmo jeito.
       chamar(() => api.GET('/v1/ad-pieces/requests', { params: { query } })),
+      // A campanha nova (P42): sem as opções, a peça só não mostra o botão.
+      chamar(() => api.GET('/v1/new-campaigns/options', { params: { query } })),
     ]);
     if (id !== seq.current) return null;
+    setCampanhas(c.ok ? c.data : null);
     if (!o.ok || !p.ok) {
       // A releitura que falha não derruba a tela que já está aberta.
       if (!quieto) setCarga({ tipo: 'erro', problema: !o.ok ? o.problema : !p.ok ? p.problema : ({} as Problema) });
@@ -125,6 +140,15 @@ export function CriativosTela() {
       if (!comFoco || comFoco === document.body || comFoco.id === 'pc-titulo') focar.current = 'pc-titulo';
     }
     setDetalhe((d) => (d?.id === id ? (r.ok ? { id, estado: 'ok', peca: r.data } : { id, estado: 'erro', problema: r.problema }) : d));
+  }, []);
+
+  /** Abre a gaveta da campanha nova com as fotos e os vídeos prontos de Fotos (sem eles, a gaveta diz por quê). */
+  const [abrindoCampanha, setAbrindoCampanha] = useState(false);
+  const abrirCampanha = useCallback(async (p: AdPieceResponse, brandId: string) => {
+    setAbrindoCampanha(true);
+    const r = await chamar(() => api.GET('/v1/brand-photos', { params: { query: { brand_id: brandId } } }));
+    setAbrindoCampanha(false);
+    setMontando({ peca: p, midias: r.ok && r.data.enabled ? r.data.items : null });
   }, []);
 
   // A peça do endereço (`/criativos?peca=…`) abre assim que a lista chega.
@@ -440,6 +464,16 @@ export function CriativosTela() {
         aoPedirOutra={pedirOutra}
         aoContestar={contestar}
         aoAvisar={(texto, tipo = 'perigo') => avisar(texto, { tipo })}
+        campanha={
+          campanhas?.enabled
+            ? {
+                atual: campanhas.by_piece.find((x) => x.piece_id === detalhe.id) ?? null,
+                podePedir: podeOperar,
+                abrindo: abrindoCampanha,
+                aoUsar: (p) => disparar(abrirCampanha(p, carga.marca)),
+              }
+            : null
+        }
       />
     );
   } else {
@@ -478,6 +512,18 @@ export function CriativosTela() {
           reserva={titulo}
           aoFechar={() => setPedindo(null)}
           aoPedir={pedir}
+        />
+      )}
+      {montando && campanhas && (
+        <GavetaCampanhaNova
+          brandId={carga.marca}
+          peca={montando.peca}
+          opcoes={campanhas}
+          midias={montando.midias}
+          hoje={new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Sao_Paulo', year: 'numeric', month: '2-digit', day: '2-digit' }).format(agora)}
+          reserva={titulo}
+          aoFechar={() => setMontando(null)}
+          aoCriado={() => disparar(ler(carga.marca, true))}
         />
       )}
       <p className="sr-only" role="status" aria-live="polite">

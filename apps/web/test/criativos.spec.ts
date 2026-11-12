@@ -355,7 +355,7 @@ describe('a peça aberta', () => {
       tom: 'ok',
       icone: 'check',
       forte: 'Aprovada por Rodrigo hoje, 14:40 (versão 1).',
-      texto: ' Está na biblioteca. Nada foi para a Meta: criar a campanha com a peça chega numa próxima fase.',
+      texto: ' Está na biblioteca. Nada foi para a Meta.',
     });
     expect(resultadoDaPeca(recusada, recusada.current, AGORA, true, 'Mister Burgers')).toEqual({
       tom: 'neutro',

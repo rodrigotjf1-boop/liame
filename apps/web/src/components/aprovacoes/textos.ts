@@ -97,7 +97,48 @@ function desconhecido(a: ActionResponse): PedidoApresentado {
   };
 }
 
-const POR_FERRAMENTA: Record<string, (a: ActionResponse) => PedidoApresentado> = { regem_cupom_criar: cupom, orcamento_ajustar: orcamento, anuncio_pausar: pausar };
+// A campanha nova na Meta (A4, X5; P42): o detalhe próprio mostra o nome, a prévia e o passo a passo; aqui, a linha da lista.
+function campanhaNova(a: ActionResponse): PedidoApresentado {
+  const conta = a.account_name ? ` em ${a.account_name}` : '';
+  const verba = a.value_micros === null ? null : `até ${reaisDeMicros(String(a.value_micros))}/dia`;
+  if (a.tool === 'campanha_nova_ativar') {
+    return {
+      titulo: `Ativar a campanha nova${conta}`,
+      resumo: `${a.requested_by.name} pediu para ativar a campanha nova criada pausada. Ativada, ela gasta ${verba ?? 'a verba diária'}, depois que a Meta revisar o anúncio.`,
+      impacto: verba,
+      mudancas: [['Situação', 'pausada', 'ativa']],
+      desfazer: 'A volta é pausar a campanha, também com aprovação.',
+      depoisDeAprovar: 'O Liame ativa o anúncio, o conjunto e a campanha em instantes; a Meta revisa o anúncio antes de mostrar.',
+    };
+  }
+  if (a.tool === 'campanha_nova_pausar') {
+    return {
+      titulo: `Pausar a campanha nova${conta}`,
+      resumo: `${a.requested_by.name} pediu para pausar a campanha nova. Pausada, ela para de aparecer e de gastar.`,
+      impacto: null,
+      mudancas: [['Situação', 'ativa', 'pausada']],
+      desfazer: 'Dá para ativar de novo, com outro pedido.',
+      depoisDeAprovar: 'O Liame pausa a campanha em instantes.',
+    };
+  }
+  return {
+    titulo: `Criar uma campanha nova${conta}, pausada`,
+    resumo: `${a.requested_by.name} pediu uma campanha nova na Meta com uma peça aprovada em Criativos. Ela nasce pausada: não aparece para ninguém e não gasta.`,
+    impacto: null,
+    mudancas: [['Campanha na Meta', 'não existe', 'criada, pausada']],
+    desfazer: 'A campanha fica pausada na Meta; quem apaga é uma pessoa, no Gerenciador de Anúncios.',
+    depoisDeAprovar: 'O Liame cria a campanha, o conjunto e o anúncio na Meta, tudo pausado.',
+  };
+}
+
+const POR_FERRAMENTA: Record<string, (a: ActionResponse) => PedidoApresentado> = {
+  regem_cupom_criar: cupom,
+  orcamento_ajustar: orcamento,
+  anuncio_pausar: pausar,
+  campanha_criar: campanhaNova,
+  campanha_nova_ativar: campanhaNova,
+  campanha_nova_pausar: campanhaNova,
+};
 
 export function apresentar(a: ActionResponse): PedidoApresentado {
   return (Object.hasOwn(POR_FERRAMENTA, a.tool) ? POR_FERRAMENTA[a.tool]! : desconhecido)(a);

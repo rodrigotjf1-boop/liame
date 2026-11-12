@@ -1,4 +1,4 @@
-import type { CreateNewCampaignRequest, NewCampaignResponse } from '@liame/contracts';
+import type { CreateNewCampaignRequest, NewCampaignOptionsQuery, NewCampaignOptionsResponse, NewCampaignResponse } from '@liame/contracts';
 import { uuidv7 } from '@liame/database';
 import { Injectable } from '@nestjs/common';
 import { sql } from 'drizzle-orm';
@@ -35,6 +35,40 @@ function conflito(code: string, title: string, detail: string): AppProblem {
   return new AppProblem(409, code, title, detail);
 }
 
+type Conta = { id: string; provider: string; name: string; currency: string | null; instagram_id: string | null };
+
+/** A conta de anúncios da Meta e a Página da marca, conectadas (D-A4-35). */
+async function contasDaMarca(tx: ReturnType<typeof currentTx>, tenantId: string, brandId: string): Promise<{ anuncios: Conta[]; paginas: Conta[] }> {
+  const contas = (
+    await tx.execute<Conta>(sql`
+      select a.id, a.provider, a.name, a.currency, a.provider_attributes->>'instagram_id' as instagram_id from liame.connected_account a
+       where a.tenant_id = ${tenantId} and a.brand_id = ${brandId} and a.provider in ('meta_ads', 'facebook_page') and ${contaConectada('a')}
+       order by a.provider, a.id`)
+  ).rows;
+  return { anuncios: contas.filter((c) => c.provider === 'meta_ads'), paginas: contas.filter((c) => c.provider === 'facebook_page') };
+}
+
+/** O que impede pela conta de anúncios e pela Página: uma de cada. A mesma regra no pedido e nas opções da gaveta. */
+function bloqueioDasContas(anuncios: Conta[], paginas: Conta[]): AppProblem | null {
+  if (anuncios.length === 0) return conflito('sem-conta-de-anuncios', 'Sem conta de anúncios', 'Conecte a conta de anúncios da Meta da marca em Contas conectadas.');
+  if (anuncios.length > 1) return conflito('varias-contas-de-anuncios', 'Mais de uma conta de anúncios', 'A marca tem mais de uma conta de anúncios da Meta: deixe uma só em Contas conectadas.');
+  if (paginas.length === 0) {
+    return conflito('sem-pagina', 'Falta a Página do Facebook', 'Na Meta, todo anúncio sai em nome de uma Página do Facebook. Conecte a Meta de novo em Contas conectadas e escolha a Página da marca.');
+  }
+  if (paginas.length > 1) return conflito('varias-paginas', 'Mais de uma Página', 'A marca tem mais de uma Página do Facebook ligada: deixe uma só em Contas conectadas.');
+  return null;
+}
+
+/** Por que "pedidos pelo cardápio" não vale para a loja; `null` quando vale. A mesma regra no pedido e nas opções. */
+function motivoSemCardapio(destino: Awaited<ReturnType<typeof destinoDoPost>>, unitId: string): string | null {
+  if (destino.ok && destino.unitId === unitId) return null;
+  if (destino.ok || destino.motivo === 'varias_lojas') {
+    return 'O cardápio online ligado à marca é o de outra loja: escolha a loja do cardápio, ou o objetivo de conversas no WhatsApp.';
+  }
+  if (destino.motivo === 'outra_plataforma') return 'A loja recebe os pedidos online por outra plataforma: use o objetivo de conversas no WhatsApp.';
+  return 'A loja não tem o cardápio online ligado ao Liame: ligue o Regem em Contas conectadas, ou use o objetivo de conversas no WhatsApp.';
+}
+
 /** O dia de hoje no fuso da empresa (`AAAA-MM-DD`). */
 function hojeNoFuso(agora: Date, fuso: string): string {
   return new Intl.DateTimeFormat('en-CA', { timeZone: fuso, year: 'numeric', month: '2-digit', day: '2-digit' }).format(agora);
@@ -64,6 +98,7 @@ type LinhaDaCampanhaNova = {
   meta_video_id: string | null;
   meta_creative_id: string | null;
   meta_ad_id: string | null;
+  meta_account_id: string | null;
   created_at: Date;
 };
 
@@ -87,7 +122,7 @@ function resposta(l: LinhaDaCampanhaNova): NewCampaignResponse {
     active: l.active,
     activated_at: l.activated_at ? new Date(l.activated_at).toISOString() : null,
     pending_action_id: l.pending_action_id,
-    meta: { campaign_id: l.meta_campaign_id, adset_id: l.meta_adset_id, video_id: l.meta_video_id, creative_id: l.meta_creative_id, ad_id: l.meta_ad_id },
+    meta: { account_id: l.meta_account_id, campaign_id: l.meta_campaign_id, adset_id: l.meta_adset_id, video_id: l.meta_video_id, creative_id: l.meta_creative_id, ad_id: l.meta_ad_id },
     created_at: new Date(l.created_at).toISOString(),
   };
 }
@@ -137,20 +172,9 @@ export class CampanhasNovasService {
     }
 
     // A conta de anúncios da Meta e a Página da marca (D-A4-35): uma de cada.
-    const contas = (
-      await tx.execute<{ id: string; provider: string; currency: string | null }>(sql`
-        select a.id, a.provider, a.currency from liame.connected_account a
-         where a.tenant_id = ${quem.tenantId} and a.brand_id = ${body.brand_id} and a.provider in ('meta_ads', 'facebook_page') and ${contaConectada('a')}
-         order by a.provider, a.id`)
-    ).rows;
-    const anuncios = contas.filter((c) => c.provider === 'meta_ads');
-    const paginas = contas.filter((c) => c.provider === 'facebook_page');
-    if (anuncios.length === 0) throw conflito('sem-conta-de-anuncios', 'Sem conta de anúncios', 'Conecte a conta de anúncios da Meta da marca em Contas conectadas.');
-    if (anuncios.length > 1) throw conflito('varias-contas-de-anuncios', 'Mais de uma conta de anúncios', 'A marca tem mais de uma conta de anúncios da Meta: deixe uma só em Contas conectadas.');
-    if (paginas.length === 0) {
-      throw conflito('sem-pagina', 'Falta a Página do Facebook', 'Na Meta, todo anúncio sai em nome de uma Página do Facebook. Conecte a Meta de novo em Contas conectadas e escolha a Página da marca.');
-    }
-    if (paginas.length > 1) throw conflito('varias-paginas', 'Mais de uma Página', 'A marca tem mais de uma Página do Facebook ligada: deixe uma só em Contas conectadas.');
+    const { anuncios, paginas } = await contasDaMarca(tx, quem.tenantId, body.brand_id);
+    const bloqueio = bloqueioDasContas(anuncios, paginas);
+    if (bloqueio) throw bloqueio;
     const contaDeAnuncios = anuncios[0]!;
     if (emMenorUnidade(body.daily_budget_micros, contaDeAnuncios.currency) === null) {
       throw recusa('verba-invalida', 'Verba inválida', 'A verba diária não pode ter fração de centavo.', 'daily_budget_micros');
@@ -175,18 +199,8 @@ export class CampanhasNovasService {
     let link: string | null = null;
     if (body.objective === 'cardapio') {
       const destino = await destinoDoPost(tx, quem.tenantId, body.brand_id);
-      if (!destino.ok || destino.unitId !== body.unit_id) {
-        throw recusa(
-          'sem-cardapio',
-          'Sem o cardápio da loja',
-          destino.ok || destino.motivo === 'varias_lojas'
-            ? 'O cardápio online ligado à marca é o de outra loja: escolha a loja do cardápio, ou o objetivo de conversas no WhatsApp.'
-            : destino.motivo === 'outra_plataforma'
-              ? 'A loja recebe os pedidos online por outra plataforma: use o objetivo de conversas no WhatsApp.'
-              : 'A loja não tem o cardápio online ligado ao Liame: ligue o Regem em Contas conectadas, ou use o objetivo de conversas no WhatsApp.',
-          'objective',
-        );
-      }
+      const motivo = motivoSemCardapio(destino, body.unit_id);
+      if (motivo || !destino.ok) throw recusa('sem-cardapio', 'Sem o cardápio da loja', motivo ?? '', 'objective');
       link = destino.url;
     }
 
@@ -245,6 +259,69 @@ export class CampanhasNovasService {
   }
 
   /**
+   * As opções da gaveta da campanha nova (A4, X5, parte 2; P42): se a função está ligada, o que impede pedir agora (as
+   * mesmas regras e palavras do pedido), quem assina o anúncio, as lojas (o endereço, o raio de entrega e se o cardápio
+   * vale para cada uma), o teto por campanha e em que pé está a campanha nova de cada peça. Só leitura.
+   */
+  async opcoes(auth: AuthContext, query: NewCampaignOptionsQuery): Promise<NewCampaignOptionsResponse> {
+    const tx = currentTx();
+    const quem = this.quem(auth);
+    const marca = await tx.execute(sql`select 1 from liame.brand where id = ${query.brand_id} and tenant_id = ${quem.tenantId} and archived_at is null`);
+    if (!marca.rows[0]) throw new AppProblem(404, 'nao-encontrado', 'Não encontramos', 'Marca não encontrada nesta empresa.');
+    const enabled = await this.flags.isEnabled(FLAG_DA_CAMPANHA_NOVA, this.flags.context({ tenantId: quem.tenantId, userId: quem.userId, brandId: query.brand_id }));
+
+    const blocks: NewCampaignOptionsResponse['blocks'] = [];
+    if (!enabled) blocks.push({ code: 'funcao-desligada', title: 'Função desligada', detail: 'A campanha nova não está ligada para esta empresa.' });
+    const { anuncios, paginas } = await contasDaMarca(tx, quem.tenantId, query.brand_id);
+    const bloqueio = bloqueioDasContas(anuncios, paginas);
+    if (bloqueio) blocks.push({ code: bloqueio.code, title: bloqueio.title, detail: bloqueio.detail });
+    const pagina = paginas.length === 1 ? paginas[0]! : null;
+    const instagram = pagina?.instagram_id
+      ? (
+          await tx.execute<{ name: string }>(sql`
+            select a.name from liame.connected_account a
+             where a.tenant_id = ${quem.tenantId} and a.brand_id = ${query.brand_id} and a.provider = 'instagram' and a.external_id = ${pagina.instagram_id} and ${contaConectada('a')}
+             limit 1`)
+        ).rows[0] ?? null
+      : null;
+
+    const destino = await destinoDoPost(tx, quem.tenantId, query.brand_id);
+    const lojas = (
+      await tx.execute<{ id: string; name: string; street: string | null; number: string | null; district: string | null; precision: string | null; radius: string | null }>(sql`
+        select id, name, address_street as street, address_number as number, address_district as district,
+               location_precision as precision, delivery_radius_km::text as radius
+          from liame.unit where tenant_id = ${quem.tenantId} and brand_id = ${query.brand_id}
+         order by name, id`)
+    ).rows;
+    const units = lojas.map((u) => {
+      const motivo = motivoSemCardapio(destino, u.id);
+      const rua = [u.street, u.number].filter(Boolean).join(', ');
+      const address = [rua, u.district].filter(Boolean).join(', ') || null;
+      return { id: u.id, name: u.name, address, has_address: u.precision === 'endereco', delivery_radius_km: u.radius === null ? null : Number(u.radius), menu_available: motivo === null, menu_block: motivo };
+    });
+
+    const { policies } = await this.policies.load(tx, quem.tenantId, query.brand_id);
+    const by_piece = (
+      await tx.execute<{ piece_id: string; campaign_id: string; status: NewCampaignResponse['status']; active: boolean; action_id: string | null }>(sql`
+        select distinct on (piece_id) piece_id, id as campaign_id, status, active, action_id
+          from liame.ad_campaign_new
+         where tenant_id = ${quem.tenantId} and brand_id = ${query.brand_id} and status <> 'cancelada'
+         order by piece_id, created_at desc, id desc`)
+    ).rows;
+
+    return {
+      enabled,
+      blocks,
+      ad_account: anuncios.length === 1 ? { name: anuncios[0]!.name, currency: anuncios[0]!.currency } : null,
+      page: pagina ? { name: pagina.name } : null,
+      instagram,
+      units,
+      campaign_cap_micros: tetoDaVerba(policies, 'meta_ads'),
+      by_piece,
+    };
+  }
+
+  /**
    * Pede para ativar a campanha nova criada e pausada (A4, X5, parte 3; D-A4-31): o pedido `campanha_nova_ativar`
    * espera a aprovação com o código do app, com os limites da empresa e a verba do mês (volta a gastar). Um pedido de
    * ativar ou pausar em aberto por campanha.
@@ -299,6 +376,7 @@ export class CampanhasNovasService {
              case when c.status = 'criando' and r.status in ${ENCERRADOS} then coalesce(r.status_reason, 'A criação parou antes do fim.') else c.error end as error,
              c.meta_campaign_id, c.meta_adset_id, c.meta_video_id, c.meta_creative_id, c.meta_ad_id, c.created_at,
              c.active, c.activated_at,
+             (select x.external_id from liame.connected_account x where x.id = c.ad_account_id and x.tenant_id = c.tenant_id) as meta_account_id,
              (select a.id from liame.action_request a
                where a.tenant_id = c.tenant_id and a.resource_id = ${recursoDaCampanhaNova(id)} and a.tool in ('campanha_nova_ativar', 'campanha_nova_pausar')
                  and a.status in ${EM_ABERTO}

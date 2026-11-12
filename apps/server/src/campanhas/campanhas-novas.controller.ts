@@ -1,5 +1,5 @@
-import { CreateNewCampaignRequest, NewCampaignResponse, ProblemDetails, ResourceId } from '@liame/contracts';
-import { Body, Controller, Get, HttpCode, Param, Post } from '@nestjs/common';
+import { CreateNewCampaignRequest, NewCampaignOptionsQuery, NewCampaignOptionsResponse, NewCampaignResponse, ProblemDetails, ResourceId } from '@liame/contracts';
+import { Body, Controller, Get, HttpCode, Param, Post, Query } from '@nestjs/common';
 import {
   ApiBadRequestResponse,
   ApiConflictResponse,
@@ -63,6 +63,21 @@ export class CampanhasNovasController {
   @ApiUnprocessableEntityResponse({ standardSchema: ProblemDetails })
   ativar(@Auth() auth: AuthContext, @Param('id', { schema: ResourceId }) id: string): Promise<NewCampaignResponse> {
     return this.campanhas.ativar(auth, id);
+  }
+
+  @Get('options')
+  @Permissao('campanhas.ver')
+  @ApiOperation({
+    summary: 'As opções da gaveta da campanha nova',
+    description:
+      'Para a gaveta "Campanha nova, pausada" (P42): se a função `campanha_nova` está ligada para a marca; o que impede pedir agora (`blocks`, com o mesmo `code` e as mesmas palavras da recusa do pedido: `funcao-desligada`, `sem-conta-de-anuncios`, `varias-contas-de-anuncios`, `sem-pagina`, `varias-paginas`); a conta de anúncios, a Página que assina o anúncio e o Instagram ligado a ela; as lojas da marca, cada uma com o endereço, se o ponto está no endereço (a campanha só nasce assim), o raio de entrega e se "pedidos pelo cardápio" vale para ela (com o porquê, quando não); o teto por campanha da Meta; e a campanha nova mais recente de cada peça (a cancelada fica fora). Só leitura. Marca de outra empresa, 404.',
+  })
+  @ApiOkResponse({ standardSchema: NewCampaignOptionsResponse })
+  @ApiBadRequestResponse({ standardSchema: ProblemDetails })
+  @ApiForbiddenResponse({ standardSchema: ProblemDetails })
+  @ApiNotFoundResponse({ standardSchema: ProblemDetails })
+  opcoes(@Auth() auth: AuthContext, @Query({ schema: NewCampaignOptionsQuery }) query: NewCampaignOptionsQuery): Promise<NewCampaignOptionsResponse> {
+    return this.campanhas.opcoes(auth, query);
   }
 
   @Get(':id')
