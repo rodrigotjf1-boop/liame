@@ -1,4 +1,4 @@
--- 0143 · A previsão do tempo por município (plano da região, R2, parte 5: a semana que vem; protótipo P40, aprovado pelo
+-- 0144 · A previsão do tempo por município (plano da região, R2, parte 5: a semana que vem; protótipo P40, aprovado pelo
 -- dono em 11/11/2026; base de conhecimento §19.2). A rotina `regiao-fontes` do worker lê a previsão por dia do CPTEC/INPE,
 -- pela BrasilAPI, para cada município com loja no mapa (a cada 6 horas) e guarda aqui os próximos dias; o código da
 -- cidade no CPTEC fica na `region_fact` (`cptec_cidade`). Tabela do SISTEMA, no padrão da 0137 (D-RG-1): sem empresa,
@@ -38,13 +38,13 @@ grant select, insert, update, delete on liame.region_weather to liame_app;
 
 do $$ begin
   if not exists (select 1 from information_schema.tables where table_schema = 'liame' and table_name = 'region_weather') then
-    raise exception '0143: a tabela da previsão do tempo não entrou';
+    raise exception '0144: a tabela da previsão do tempo não entrou';
   end if;
   if (select count(*) from pg_policies where schemaname = 'liame' and tablename = 'region_weather') <> 2 then
-    raise exception '0143: as regras de acesso da previsão do tempo não entraram';
+    raise exception '0144: as regras de acesso da previsão do tempo não entraram';
   end if;
   if not exists (select 1 from pg_class c join pg_namespace n on n.oid = c.relnamespace
                   where n.nspname = 'liame' and c.relname = 'region_weather' and c.relrowsecurity and c.relforcerowsecurity) then
-    raise exception '0143: a RLS da previsão do tempo não está forçada';
+    raise exception '0144: a RLS da previsão do tempo não está forçada';
   end if;
 end $$;
