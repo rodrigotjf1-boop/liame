@@ -427,6 +427,21 @@ export class InstagramDeMentira {
   }
 
   /**
+   * A pessoa apaga uma mensagem que mandou (o "cancelar envio" do Instagram): ela deixa de vir na conversa. A hora da
+   * mudança da conversa anda (suposição do teste: a documentação lida em 11/11/2026 não diz; o primeiro uso real confere).
+   * Sem o texto, apaga a última da pessoa. Devolve quantas mensagens ficaram.
+   */
+  apagouNoDirect(conversa: string, texto?: string): number {
+    const c = this.conversasDoDirect.find((x) => x.id === conversa);
+    if (!c) throw new Error(`conversa ${conversa} não existe`);
+    const alvo = texto === undefined ? [...c.mensagens].reverse().find((m) => !m.daMarca) : c.mensagens.find((m) => !m.daMarca && m.texto === texto);
+    if (!alvo) throw new Error(`a mensagem da pessoa não existe na conversa ${conversa}`);
+    c.mensagens = c.mensagens.filter((m) => m !== alvo);
+    c.updated_time = new Date().toISOString();
+    return c.mensagens.length;
+  }
+
+  /**
    * O Direct (A6, Z12), pela documentação lida em 11/11/2026: as conversas da conta do Instagram ligada à Página
    * (`GET /{page-id}/conversations?platform=instagram`, o token dela, de quem tem a tarefa MODERATE) e as mensagens de
    * uma conversa (`GET /{conversation-id}?fields=messages{…}`, só as 20 mais novas, a mais nova primeiro). Nulo para o

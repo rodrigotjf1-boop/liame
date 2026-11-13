@@ -184,6 +184,52 @@ describe.skipIf(!hasDb)('o Direct do Instagram: a leitura e o ajuste (A6 · Z12,
     expect(meta.defeitos).toEqual([]);
   }, 120_000);
 
+  it('a mensagem que a pessoa apaga sai do Liame na leitura seguinte da conversa; a conversa que fica sem mensagem sai inteira; a resposta gravada no meio da leitura e o que é mais antigo que o trecho relido ficam (D-A6-112; ERR-231)', async () => {
+    const e = await empresa('Casa Brasa Direct Apagada');
+    const pagina = e.pagina!.externo;
+    const bia = meta.escreveuNoDirect(pagina, { usuario: 'bia_m', texto: 'Qual o horário de vocês?', minutos: 30 });
+    meta.marcaNoDirect(bia, 'Das 18h às 23h, todo dia.', 25);
+    meta.escreveuNoDirect(pagina, { usuario: 'bia_m', texto: 'Anota o meu número, por favor', minutos: 5 });
+    const caio = meta.escreveuNoDirect(pagina, { usuario: 'caio.s', texto: 'Mandei errado, desculpa', minutos: 8 });
+    expect((await mudar(e, { enabled: true, no_other_app: true, code: await codigo(e) })).status).toBe(200);
+    expect((await ler(e))[0]).toMatchObject({ status: 'ok', conversas: 2, relidas: 2, mensagens: 4 });
+    const textos = async (id: string) => ((await conversa(e, id)).body as { messages: { text: string }[] }).messages.map((m) => m.text);
+    expect(await textos(bia)).toEqual(['Qual o horário de vocês?', 'Das 18h às 23h, todo dia.', 'Anota o meu número, por favor']);
+    // As duas esperam; a do Caio fecha a janela antes e vem primeiro.
+    expect(((await lista(e, 'todas')).body as Lista).items.map((i) => [i.username, i.status, i.unread])).toEqual([
+      ['caio.s', 'espera', true],
+      ['bia_m', 'espera', true],
+    ]);
+
+    // A Bia apaga a última mensagem e o Caio, a única: na leitura seguinte, a mensagem dela sai (a conversa volta a ser a
+    // respondida, sem nada por abrir) e a conversa dele sai inteira. Antes, a leitura só acrescentava.
+    expect(meta.apagouNoDirect(bia)).toBe(2);
+    expect(meta.apagouNoDirect(caio)).toBe(0);
+    expect((await ler(e, emMinutos(2)))[0]).toMatchObject({ status: 'ok', relidas: 1 });
+    expect(await textos(bia)).toEqual(['Qual o horário de vocês?', 'Das 18h às 23h, todo dia.']);
+    expect(((await lista(e, 'todas')).body as Lista).items.map((i) => [i.username, i.status, i.unread])).toEqual([['bia_m', 'respondida', false]]);
+    expect(problema(await conversa(e, caio))).toEqual([404, 'nao-encontrado']);
+    expect(await ownerQuery<{ n: number }>(`select count(*)::int as n from liame.direct_message where tenant_id = $1 and body in ('Anota o meu número, por favor', 'Mandei errado, desculpa')`, [e.tenantId])).toEqual([{ n: 0 }]);
+
+    // O que a releitura não tira: (1) a resposta que o Liame gravou depois de a leitura começar (a Meta ainda não a tinha
+    // quando respondeu); (2) o que é mais antigo que o trecho que a Meta devolve (fica até o expurgo dos 90 dias). O que
+    // está dentro do trecho, foi lido antes e não veio, sai.
+    const [c] = await ownerQuery<{ connected_account_id: string; brand_id: string }>(`select connected_account_id, brand_id from liame.direct_conversation where tenant_id = $1 and conversation_id = $2`, [e.tenantId, bia]);
+    const guardar = (id: string, texto: string, enviada: string, lida: string) =>
+      ownerQuery(
+        `insert into liame.direct_message (connected_account_id, tenant_id, brand_id, conversation_id, message_id, direction, kind, body, sent_at, read_at)
+         values ($1, $2, $3, $4, $5, 'saida', 'texto', $6, now() + $7::interval, now() + $8::interval)`,
+        [c!.connected_account_id, e.tenantId, c!.brand_id, bia, id, texto, enviada, lida],
+      );
+    await guardar('mid.acabou-de-sair', 'Resposta que acabou de sair', '0 minutes', '1 hour');
+    await guardar('mid.antiga', 'Mensagem de dez dias atrás', '-10 days', '-10 days');
+    await guardar('mid.sumiu-na-meta', 'Lida antes e apagada na Meta', '-1 minute', '-1 hour');
+    meta.escreveuNoDirect(pagina, { usuario: 'bia_m', texto: 'Obrigada!' });
+    expect((await ler(e, emMinutos(4)))[0]).toMatchObject({ status: 'ok', relidas: 1 });
+    expect((await textos(bia)).sort()).toEqual(['Das 18h às 23h, todo dia.', 'Mensagem de dez dias atrás', 'Obrigada!', 'Qual o horário de vocês?', 'Resposta que acabou de sair'].sort());
+    expect(meta.defeitos).toEqual([]);
+  }, 120_000);
+
   it('parte 4a (D-A6-118): o tipo de cada conversa pela regra e a sugestão sem IA; respondida ou concluída, sem tipo nem sugestão; o contador do menu', async () => {
     const e = await empresa('Casa Brasa Direct Tipos');
     const pagina = e.pagina!.externo;

@@ -177,8 +177,9 @@ export class SincronizadorDoDirect {
     // 3. As conversas e as mensagens das que mudaram, sem transação aberta.
     let lidas: ConversaLida[];
     let relidas: Relida[];
+    let vazias: string[];
     try {
-      ({ lidas, relidas } = await this.ler(conta, token, daConta, guardadas, canal));
+      ({ lidas, relidas, vazias } = await this.ler(conta, token, daConta, guardadas, canal));
     } catch (err) {
       if (!(err instanceof ErroConector)) throw err;
       this.logger.warn(`conta ${contaId}: o Direct não veio (${err.tipo}): ${err.message}`);
@@ -190,6 +191,7 @@ export class SincronizadorDoDirect {
     const ultimaDaPessoa = new Map(guardadas.map((g) => [g.conversation_id, g.last_inbound_at ? iso(g.last_inbound_at) : null]));
     await withTenant(db, tenantId, async (tx) => {
       for (const r of relidas) await this.gravarConversa(tx, conta, canal, tenantId, r, ultimaDaPessoa.get(r.conversa.conversation_id) ?? null, agora);
+      for (const conversa of vazias) await this.tirarAConversaVazia(tx, contaId, conversa, agora.toISOString());
       await this.marcar(
         tx,
         contaId,
@@ -221,7 +223,7 @@ export class SincronizadorDoDirect {
   }
 
   /** As conversas mais recentes e, das que mudaram (ou que o Liame não tem), as mensagens, até 10 por leitura. */
-  private async ler(conta: LinhaDaConta, token: string, daConta: ContaDoDirect, guardadas: Guardada[], canal: CanalDoDirect): Promise<{ lidas: ConversaLida[]; relidas: Relida[] }> {
+  private async ler(conta: LinhaDaConta, token: string, daConta: ContaDoDirect, guardadas: Guardada[], canal: CanalDoDirect): Promise<{ lidas: ConversaLida[]; relidas: Relida[]; vazias: string[] }> {
     const pagina = conta.pagina_id!;
     const capacidade: Capacidade = canal === 'messenger' ? 'messenger_conversas' : 'instagram_conversas';
     const contas = await this.chamar(conta.external_id, token, 'pages', 'me/accounts', { fields: 'id,access_token,tasks', limit: '100' });
@@ -239,6 +241,8 @@ export class SincronizadorDoDirect {
     const conhecidas = new Map(guardadas.map((g) => [g.conversation_id, iso(g.meta_updated_at)]));
     const mudaram = lidas.filter((c) => (conhecidas.get(c.conversation_id) ?? '') < c.meta_updated_at).slice(0, RELIDAS_POR_LEITURA);
     const relidas: Relida[] = [];
+    // As guardadas que a Meta devolve sem mensagem nenhuma (a pessoa apagou o que tinha escrito): saem do Liame.
+    const vazias: string[] = [];
     for (const conversa of mudaram) {
       try {
         const doFio = await this.chamar(conta.external_id, daPagina.token, capacidade, conversa.conversation_id, {
@@ -246,6 +250,7 @@ export class SincronizadorDoDirect {
         });
         const mensagens = mensagensDaConversa(doFio, daConta);
         if (mensagens.length) relidas.push({ conversa, mensagens });
+        else if (conhecidas.has(conversa.conversation_id)) vazias.push(conversa.conversation_id);
       } catch (err) {
         if (!(err instanceof ErroConector)) throw err;
         if (err.tipo === 'permissao' || err.tipo === 'autenticacao') throw err;
@@ -256,7 +261,7 @@ export class SincronizadorDoDirect {
         this.logger.warn(`conta ${conta.id}: uma conversa fica para a próxima vez (${err.tipo}, HTTP ${err.status ?? '?'}, código ${err.codigoProvider ?? '?'})`);
       }
     }
-    return { lidas, relidas };
+    return { lidas, relidas, vazias };
   }
 
   /**
@@ -292,6 +297,46 @@ export class SincronizadorDoDirect {
       select ${conta.id}, ${tenantId}, ${conta.brand_id}, ${r.conversa.conversation_id}, x.message_id, x.direction, x.kind, x.body, x.sent_at, ${quando}::timestamptz
         from jsonb_to_recordset(${JSON.stringify(r.mensagens)}::jsonb) as x (message_id text, direction text, kind text, body text, sent_at timestamptz)
       on conflict (connected_account_id, message_id) do update set kind = excluded.kind, body = excluded.body, read_at = excluded.read_at`);
+    await this.tirarAsApagadas(tx, conta.id, r.conversa.conversation_id, r.mensagens, quando);
+  }
+
+  /**
+   * A mensagem que a pessoa apagou não volta mais da Meta, e sai do Liame também (D-A6-112; a Meta manda apagar o que a
+   * pessoa apagou; ERR-231: a leitura só acrescentava). Dentro do trecho relido (da mais antiga que veio em diante), o que
+   * está guardado e não veio sai; o que é mais antigo que o trecho fica até o expurgo dos 90 dias, porque a Meta só
+   * devolve as mais novas. A mensagem gravada depois de esta leitura começar (a resposta que o Liame acabou de mandar,
+   * `direct-na-rede.ts`) fica: a Meta ainda não a tinha quando respondeu. Saindo alguma, a última mensagem, a última da
+   * pessoa e de quem é a última voltam a sair do que ficou guardado.
+   */
+  private async tirarAsApagadas(tx: Tx, contaId: string, conversa: string, vieram: Relida['mensagens'], quando: string): Promise<void> {
+    const lista = JSON.stringify(vieram.map((m) => ({ message_id: m.message_id, sent_at: m.sent_at })));
+    const apagadas = await tx.execute(sql`
+      delete from liame.direct_message m
+       where m.connected_account_id = ${contaId} and m.conversation_id = ${conversa} and m.read_at < ${quando}::timestamptz
+         and m.sent_at >= (select min(x.sent_at) from jsonb_to_recordset(${lista}::jsonb) as x (sent_at timestamptz))
+         and m.message_id not in (select x.message_id from jsonb_to_recordset(${lista}::jsonb) as x (message_id text))
+      returning m.message_id`);
+    if (!apagadas.rows.length) return;
+    await tx.execute(sql`
+      update liame.direct_conversation c
+         set last_message_at = s.ultima, last_inbound_at = s.ultima_da_pessoa, last_direction = s.direcao,
+             unread = c.unread and s.direcao = 'entrada'
+        from (select max(sent_at) as ultima, max(sent_at) filter (where direction = 'entrada') as ultima_da_pessoa,
+                     (array_agg(direction order by sent_at desc, message_id desc))[1] as direcao
+                from liame.direct_message where connected_account_id = ${contaId} and conversation_id = ${conversa}) s
+       where c.connected_account_id = ${contaId} and c.conversation_id = ${conversa} and s.ultima is not null`);
+  }
+
+  /**
+   * A conversa guardada que a Meta devolve sem mensagem nenhuma: a pessoa apagou tudo o que tinha escrito. Sai do Liame,
+   * com as mensagens (em cascata), como a conversa sem mensagem do expurgo.
+   */
+  private async tirarAConversaVazia(tx: Tx, contaId: string, conversa: string, quando: string): Promise<void> {
+    await tx.execute(sql`
+      delete from liame.direct_conversation c
+       where c.connected_account_id = ${contaId} and c.conversation_id = ${conversa}
+         and not exists (select 1 from liame.direct_message m
+                          where m.connected_account_id = c.connected_account_id and m.conversation_id = c.conversation_id and m.read_at >= ${quando}::timestamptz)`);
   }
 
   /** A credencial da loja do Regem, como a leitura das vendas a monta (o token ou a ligação do Hub DMS). */
