@@ -10,7 +10,7 @@ import type { PedidoDeExplicacao } from '@/components/explicar/pedir';
 import { useExplicacao } from '@/components/explicar/use-explicacao';
 import { Icone } from '@/components/ui/icone';
 import { disparar } from '@/lib/disparar';
-import { acaoDoAviso, destinoDasVendasAoGoogle, destinoDoAviso, destinoPedeVendas, gravidadeDe, oQueFazer, type RecomendacaoDoAviso, rotuloDaGravidade } from './textos';
+import { acaoDoAviso, destinoDasVendasAoGoogle, destinoDoAviso, destinoDoRitmo, destinoPedeVendas, gravidadeDe, oQueFazer, type RecomendacaoDoAviso, rotuloDaGravidade } from './textos';
 
 // Um aviso (protótipo aprovado): gravidade, plataforma, o que aconteceu, o motivo e o que fazer. Os do ciclo
 // fechado (F9) levam à tela onde se resolve, para quem vê as vendas. Os de campanha, de medição e os fora do
@@ -49,6 +49,8 @@ export function ItemAviso({ item, podeVerContas, podeConectar, podeVerVendas, ao
   const reconecta = acao === 'reconectar' && podeConectar;
   // O envio das vendas ao Google parou: o atalho abre Contas conectadas no cartão da conta (só para quem as vê).
   const vendasAoGoogle = podeVerContas ? destinoDasVendasAoGoogle(item) : null;
+  // O aviso do ritmo da semana leva ao ritmo em Aprovações (plano da região, R7).
+  const doRitmo = destinoDoRitmo(item);
 
   // A tela pede a explicação com o que identifica o aviso (ele é calculado na hora e não tem id).
   const pedido: PedidoDeExplicacao | null =
@@ -106,7 +108,7 @@ export function ItemAviso({ item, podeVerContas, podeConectar, podeVerVendas, ao
           <span>{rec.estado.nota}</span>
         </p>
       )}
-      {(pedido || abreContas || destino || reconecta || vendasAoGoogle || (rec && rec.estado.tipo !== 'manual')) && (
+      {(pedido || abreContas || destino || reconecta || vendasAoGoogle || doRitmo || (rec && rec.estado.tipo !== 'manual')) && (
         <div className="aviso-acoes">
           {rec?.estado.tipo === 'aberta' && (
             <>
@@ -146,6 +148,11 @@ export function ItemAviso({ item, podeVerContas, podeConectar, podeVerVendas, ao
           {vendasAoGoogle && (
             <Link className="btn btn--sm" href={vendasAoGoogle.href}>
               {vendasAoGoogle.rotulo}
+            </Link>
+          )}
+          {doRitmo && (
+            <Link className="btn btn--sm" href={doRitmo.href}>
+              {doRitmo.rotulo}
             </Link>
           )}
           {reconecta && (

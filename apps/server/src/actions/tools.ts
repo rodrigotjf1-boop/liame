@@ -479,10 +479,10 @@ export const TOOLS: Record<string, ToolDefinition> = {
   // função `ritmo_da_semana`, e só a rotina do Gestor pede (`onlyByAgent`): o ritmo recusado não volta por outro pedido.
   ritmo_da_semana: {
     name: 'ritmo_da_semana',
-    version: 1,
+    version: 2,
     owner: 'midia',
     description:
-      'Aprova o ritmo da semana que o Gestor de tráfego montou: a verba de cada dia das campanhas da Meta, pelos pedidos da loja, a chuva prevista e as datas, sem gastar mais na semana. Aprovar não muda nada na Meta: cada dia sai depois como um passo próprio, dentro do que foi aprovado.',
+      'Aprova o ritmo da semana que o Gestor de tráfego montou: a verba de cada dia das campanhas da Meta, pelos pedidos da loja, a chuva prevista e as datas, sem aumentar a soma das verbas da semana. Aprovar não muda nada na Meta: cada dia sai depois como um passo próprio, dentro do que foi aprovado.',
     // Muda a verba de várias campanhas ao longo da semana, mas não aumenta o gasto dela e cada passo tem os limites dele.
     risk: 'R2',
     providers: ['meta_ads'],

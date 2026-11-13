@@ -24,6 +24,10 @@ export type TipoCiclo =
   | 'custo_por_pedido_fora_do_normal'
   // A conferência do gasto de uma mudança do Liame (A4, X4): o texto está em `actions/conferencia-do-gasto.ts`.
   | 'gasto_acima_da_verba'
+  // O ritmo da semana (plano da região, R7): as contas e as frases estão em `campanhas/ritmo-avisos.ts`.
+  | 'ritmo_gasto_acima'
+  | 'ritmo_sem_volta'
+  | 'ritmo_campanha_saiu'
   // As vendas informadas ao Google que pararam sem ninguém mandar parar (A5, Y1; protótipo P14, parte B).
   | 'vendas_google_sem_permissao'
   | 'vendas_google_recusadas'
@@ -377,6 +381,9 @@ const PRIORIDADE: TipoCiclo[] = [
   'campanha_sem_cupom',
   'campanha_sem_pedido',
   'gasto_acima_da_verba',
+  'ritmo_gasto_acima',
+  'ritmo_sem_volta',
+  'ritmo_campanha_saiu',
   'gasto_da_campanha_fora_do_normal',
   'custo_por_pedido_fora_do_normal',
   'sugestao_pausar_campanha',

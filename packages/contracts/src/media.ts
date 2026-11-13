@@ -119,7 +119,10 @@ export const AttentionItem = z.strictObject({
    * `campanha_sem_cupom`, `vendas_nao_medidas`, `campanha_sem_pedido`, `cupom_sem_uso`, `margem_desconhecida`
    * ou `plataforma_x_caixa`. Fora do normal (A3, I6): `vendas_fora_do_normal`,
    * `gasto_da_campanha_fora_do_normal` e `custo_por_pedido_fora_do_normal`. A conferência do gasto de uma mudança do
-   * Liame (A4, X4): `gasto_acima_da_verba`. A recomendação da sombra numa ação
+   * Liame (A4, X4): `gasto_acima_da_verba`. O ritmo da semana (plano da região, R7), por campanha ou conjunto da Meta:
+   * `ritmo_gasto_acima` (os 7 dias até ontem gastaram mais do que a soma da verba de cada dia, com a folga),
+   * `ritmo_sem_volta` (o ritmo acabou ou foi parado e a verba ainda não voltou à de antes) e `ritmo_campanha_saiu`
+   * (alguém mexeu por fora e o Liame não muda mais a verba dela na semana). A recomendação da sombra numa ação
    * que saiu de Sombra (A3, I13): `sugestao_pausar_campanha`, `sugestao_reduzir_verba` e `sugestao_aumentar_verba`.
    * As vendas informadas ao Google que pararam sem ninguém mandar parar (A5, Y1): `vendas_google_sem_permissao` e
    * `vendas_google_recusadas`, com a conta do Google Ads em `connected_account_id`. O Perfil da Empresa no Google (A6,
@@ -147,6 +150,11 @@ export const AttentionItem = z.strictObject({
    * pedido que a pessoa pode fazer por ela e o pedido mais recente que já nasceu dela.
    */
   recommendation: AttentionRecommendation.optional(),
+  /**
+   * Só nos avisos do ritmo da semana, e só na leitura da tela (plano da região, R7): o ritmo de que o aviso fala e o
+   * pedido dele em Aprovações, que é onde se acompanha e se para (nulo para quem não vê os pedidos).
+   */
+  rhythm: z.strictObject({ id: z.uuid(), action_id: z.uuid().nullable() }).optional(),
 });
 export type AttentionItem = z.infer<typeof AttentionItem>;
 

@@ -1,4 +1,6 @@
-import type { ActionResponse, BudgetMonthChange, BudgetMonthResponse, RegionRhythmDetailResponse } from '@liame/contracts';
+import type { ActionResponse, AttentionItem, BudgetMonthChange, BudgetMonthResponse, RegionRhythmDetailResponse } from '@liame/contracts';
+import { createElement } from 'react';
+import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 import { type AcaoDeAnuncio, avisoDoDesfazerNoRitmo, origemDoAnuncio } from '@/components/aprovacoes/anuncio-textos';
 import {
@@ -17,6 +19,8 @@ import {
   variacaoDoDia,
 } from '@/components/aprovacoes/ritmo-textos';
 import { apresentar } from '@/components/aprovacoes/textos';
+import { ItemAviso } from '@/components/atencao/item-aviso';
+import { acaoDoAviso, destinoDoRitmo } from '@/components/atencao/textos';
 import { tituloDoPedido } from '@/components/pedir/textos';
 import { mudancasDaVerba, ritmosDaVerba } from '@/components/verba/textos';
 
@@ -111,10 +115,10 @@ describe('o ritmo da semana em Aprovações (R7, parte 1b-3b)', () => {
     expect(porqueDoDia({ kind: 'setor', share_pct: null, text: null, min: null, max: null, eve: null }).texto).toContain('referência do setor');
   });
 
-  it('a frase do pedido: onde desce, onde sobe e a semana sem gastar mais', () => {
+  it('a frase do pedido: onde desce, onde sobe e a soma das verbas da semana sem aumentar', () => {
     const f = fraseDoRitmo(ritmo());
     expect(f.dias).toBe('Nesta semana, a verba de cada dia segue os pedidos da loja: menos na segunda, na terça, na quarta e na quinta; mais na sexta, no sábado e no domingo.');
-    expect(f.semana).toBe(nbsp('A semana não gasta mais: R$ 700,10 nos 7 dias (sem o ritmo, R$ 700,00), em 2 campanhas.').replace('700,10', (ritmo().week_micros / REAL).toFixed(2).replace('.', ',')));
+    expect(f.semana).toBe(nbsp('A soma das verbas da semana não aumenta: R$ 700,10 nos 7 dias (sem o ritmo, R$ 700,00), em 2 campanhas.').replace('700,10', (ritmo().week_micros / REAL).toFixed(2).replace('.', ',')));
     // Sem diferença que valha, a frase diz que fica igual; com a referência do setor, cita o setor.
     const igual = ritmo({ days: ritmo().days.map((d) => ({ ...d, weight: 1 })), source: 'setor' });
     expect(fraseDoRitmo(igual).dias).toBe('Nesta semana, a verba de cada dia fica igual à de hoje: a referência do setor não pede mudança.');
@@ -312,5 +316,45 @@ describe('desfazer um passo do ritmo (R7, parte 1b-3b)', () => {
     );
     expect(avisoDoDesfazerNoRitmo(pedido('orcamento_ajustar', 'campanha'))).toBeNull();
     expect(avisoDoDesfazerNoRitmo(pedido('orcamento_aumentar', 'campanha'))).toBeNull();
+  });
+});
+
+describe('os avisos do ritmo na Atenção (R7, parte 1b-3c)', () => {
+  const aviso = (o: Partial<AttentionItem>): AttentionItem => ({
+    kind: 'ritmo_gasto_acima',
+    severity: 'atencao',
+    title: 'A campanha "Smash em dobro" gastou mais do que o ritmo da semana permite',
+    detail: 'De 16/11 a 22/11, ela gastou R$ 880,00. Com a verba de cada dia, esses dias iriam até R$ 717,00.',
+    action: 'Veja na Meta o gasto dela nesses dias. Se preferir, pare o ritmo em Aprovações.',
+    connected_account_id: ID,
+    campaign_id: null,
+    provider: 'meta_ads',
+    brand_id: ID,
+    ...o,
+  });
+  const cartao = (item: AttentionItem) => renderToStaticMarkup(createElement(ItemAviso, { item, podeVerContas: true, podeConectar: true, podeVerVendas: false, aoReconectar: () => {} }));
+
+  it('o botão leva ao ritmo em Aprovações, só para quem recebeu o pedido dele', () => {
+    const comPedido = { id: ID, action_id: '0190d2b0-0000-7000-8000-0000000000b2' };
+    for (const kind of ['ritmo_gasto_acima', 'ritmo_sem_volta', 'ritmo_campanha_saiu']) {
+      expect(destinoDoRitmo(aviso({ kind, rhythm: comPedido }))).toEqual({ href: '/aprovacoes?pedido=0190d2b0-0000-7000-8000-0000000000b2', rotulo: 'Ver o ritmo em Aprovações', curto: 'Ver o ritmo' });
+      // Os avisos do ritmo não têm outra tela onde se resolvem.
+      expect(acaoDoAviso(kind)).toBeNull();
+    }
+    // Quem não vê os pedidos recebe o aviso sem o pedido: fica só o texto.
+    expect(destinoDoRitmo(aviso({ rhythm: { id: ID, action_id: null } }))).toBeNull();
+    expect(destinoDoRitmo(aviso({}))).toBeNull();
+    // Outro aviso nunca leva ao ritmo, mesmo que venha com o campo.
+    expect(destinoDoRitmo(aviso({ kind: 'gasto_acima_da_verba', rhythm: comPedido }))).toBeNull();
+  });
+
+  it('o cartão: a etiqueta da Meta, o que fazer e o botão do ritmo', () => {
+    const html = cartao(aviso({ rhythm: { id: ID, action_id: '0190d2b0-0000-7000-8000-0000000000b2' } }));
+    expect(html).toContain('gastou mais do que o ritmo da semana permite');
+    expect(html).toContain('>Meta Ads<');
+    expect(html).toContain('<b>O que fazer:</b> veja na Meta o gasto dela nesses dias.');
+    expect(html).toContain('href="/aprovacoes?pedido=0190d2b0-0000-7000-8000-0000000000b2"');
+    expect(html).toContain('Ver o ritmo em Aprovações');
+    expect(cartao(aviso({ rhythm: { id: ID, action_id: null } }))).not.toContain('href=');
   });
 });
