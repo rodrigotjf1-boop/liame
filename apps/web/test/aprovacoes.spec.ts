@@ -118,6 +118,18 @@ describe('como cada pedido se apresenta', () => {
     // Nome de ferramenta igual a uma propriedade de todo objeto não vira função chamada por engano.
     expect(apresentar(acao({ tool: 'constructor', action: 'x.y', params: {} })).titulo).toBe('x.y (constructor)');
   });
+
+  it('a campanha nova no Google (A5, Y9; P45): criar pausada, ativar com a verba e pausar', () => {
+    const criar = apresentar(acao({ tool: 'campanha_google_criar', account_name: 'Hamburgueria Ads', value_micros: null, params: {} }));
+    expect(criar.titulo).toBe('Criar uma campanha nova no Google em Hamburgueria Ads, pausada');
+    expect(criar.mudancas).toEqual([['Campanha no Google', 'não existe', 'criada, pausada']]);
+    expect(criar.depoisDeAprovar).toContain('numa requisição só');
+    const ativar = apresentar(acao({ tool: 'campanha_google_ativar', account_name: 'Hamburgueria Ads', value_micros: 30_000_000, params: {} }));
+    expect(ativar.titulo).toBe('Ativar a campanha nova no Google em Hamburgueria Ads');
+    expect(ativar.impacto).toBe(`até R$${NBSP}30,00/dia`);
+    expect(ativar.mudancas).toEqual([['Situação', 'pausada', 'ativa']]);
+    expect(apresentar(acao({ tool: 'campanha_google_pausar', account_name: null, value_micros: null, params: {} })).titulo).toBe('Pausar a campanha nova no Google');
+  });
 });
 
 describe('risco, política, prazo e plano', () => {

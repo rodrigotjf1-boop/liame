@@ -22,8 +22,10 @@ import { useSessao } from '@/lib/sessao';
 import { type AcaoDeAnuncio, anuncioApresentado, ehPedidoDeAnuncio, erroAoDesfazer, etiquetaDoAnuncio, mesDoPedido, quemPediu, textosDoAnuncio } from './anuncio-textos';
 import type { Decisao } from './barra-da-decisao';
 import { marcasAtivas, planosDasMarcas } from './buscar-planos';
+import { FERRAMENTAS_DA_CAMPANHA_GOOGLE } from '@/components/criativos/campanha-google-textos';
 import { FERRAMENTAS_DA_CAMPANHA_NOVA } from '@/components/criativos/campanha-nova-textos';
 import { DetalheAnuncio, type Volta } from './detalhe-anuncio';
+import { DetalheCampanhaGoogle } from './detalhe-campanha-google';
 import { DetalheCampanhaNova } from './detalhe-campanha-nova';
 import { DetalheMensagem, type Feito } from './detalhe-mensagem';
 import { type AcaoDeMensagem, ehPedidoDeMensagem, etiquetaDaMensagem, mensagemApresentada } from './mensagem-textos';
@@ -60,6 +62,7 @@ type CargaDoRascunho = { tipo: 'carregando' } | { tipo: 'ok'; rascunho: Rascunho
 const chaveDoRascunho = (avaliacaoId: string) => `r:${avaliacaoId}`;
 /** O pedido da campanha nova na Meta (A4, X5; P42): criar pausada, ativar e a volta, pausar. */
 const ehPedidoDeCampanhaNova = (a: { tool: string }) => (FERRAMENTAS_DA_CAMPANHA_NOVA as readonly string[]).includes(a.tool);
+const ehPedidoDeCampanhaGoogle = (a: { tool: string }) => (FERRAMENTAS_DA_CAMPANHA_GOOGLE as readonly string[]).includes(a.tool);
 
 const GRUPOS: Grupo[] = ['pendente', 'destino', 'auto', 'feito'];
 /** A fila anda sozinha: outra pessoa pode decidir, o worker executa, o Estrategista manda a versão nova, o prazo vence. */
@@ -225,7 +228,7 @@ export function AprovacoesTela() {
   const releuFotosEm = useRef(0);
   // E a mídia da campanha nova (P42): a foto ou o vídeo de Fotos da marca do pedido.
   const marcasDosPosts = [
-    ...new Set([...acoes, ...(avulso ? [avulso] : [])].flatMap((a) => ((ehPedidoDePost(a) || ehPedidoDeCampanhaNova(a)) && a.brand_id ? [a.brand_id] : []))),
+    ...new Set([...acoes, ...(avulso ? [avulso] : [])].flatMap((a) => ((ehPedidoDePost(a) || ehPedidoDeCampanhaNova(a) || ehPedidoDeCampanhaGoogle(a)) && a.brand_id ? [a.brand_id] : []))),
   ]
     .sort()
     .join(',');
@@ -428,6 +431,16 @@ export function AprovacoesTela() {
   // ---- a campanha nova (P42): pedir para ativar a criada e pausada; o pedido novo abre na lista.
   async function pedirAtivarCampanha(campanha: string): Promise<Problema | null> {
     const r = await chamar(() => api.POST('/v1/new-campaigns/{id}/activate', { params: { path: { id: campanha } } }));
+    if (!r.ok) return r.problema;
+    avisar('Pedido de ativação criado. Ele espera a aprovação com o código do app.');
+    await carregar();
+    if (r.data.pending_action_id) setSel(chaveDaAcao(r.data.pending_action_id));
+    focarOTitulo();
+    return null;
+  }
+  // ---- a campanha nova no Google (P45): o mesmo, pela rota do Google.
+  async function pedirAtivarCampanhaGoogle(campanha: string): Promise<Problema | null> {
+    const r = await chamar(() => api.POST('/v1/google-campaigns/{id}/activate', { params: { path: { id: campanha } } }));
     if (!r.ok) return r.problema;
     avisar('Pedido de ativação criado. Ele espera a aprovação com o código do app.');
     await carregar();
@@ -920,6 +933,25 @@ export function AprovacoesTela() {
         aoSalvarTexto={salvarTextoDaResposta}
         aoApagar={apagarResposta}
         aoEscreverOutra={escreverOutra}
+      />
+    );
+  } else if (aberta?.tipo === 'acao' && ehPedidoDeCampanhaGoogle(aberta.acao)) {
+    detalhe = (
+      <DetalheCampanhaGoogle
+        acao={aberta.acao}
+        grupo={grupoDe(aberta.acao, agora)}
+        agora={agora}
+        podeDecidir={podeDecidir}
+        podeOperar={pode('campanhas.operar')}
+        temApp={temApp}
+        temChave={temChave}
+        fotos={fotos}
+        titulo={tituloDoDetalhe}
+        campoCodigo={campoCodigo}
+        aoVoltar={voltarParaALista}
+        aoAprovar={aprovar}
+        aoRecusar={recusar}
+        aoPedirAtivar={pedirAtivarCampanhaGoogle}
       />
     );
   } else if (aberta?.tipo === 'acao' && ehPedidoDeCampanhaNova(aberta.acao)) {
