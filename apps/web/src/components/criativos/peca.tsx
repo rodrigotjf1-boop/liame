@@ -1,6 +1,6 @@
 'use client';
 
-import type { AdPieceOptionsResponse, AdPieceRequestResponse, AdPieceResponse, AdPieceVersion, NewCampaignOptionsResponse } from '@liame/contracts';
+import type { AdPieceOptionsResponse, AdPieceRequestResponse, AdPieceResponse, AdPieceVersion, GoogleCampaignOptionsResponse, NewCampaignOptionsResponse } from '@liame/contracts';
 import Link from 'next/link';
 import { type FormEvent, useEffect, useId, useRef, useState } from 'react';
 import { ListaDeFontes, TextoComNumeros, useFontes } from '@/components/resumo/numeros';
@@ -10,6 +10,7 @@ import { Icone } from '@/components/ui/icone';
 import { mensagemDe, type Problema } from '@/lib/api';
 import { disparar } from '@/lib/disparar';
 import { quandoComHora } from '@/lib/formato';
+import { situacaoDaCampanhaGoogle } from './campanha-google-textos';
 import { situacaoDaCampanha } from './campanha-nova-textos';
 import {
   BOTOES,
@@ -66,6 +67,13 @@ interface Props {
     atual: NewCampaignOptionsResponse['by_piece'][number] | null;
     podePedir: boolean;
     /** A gaveta está abrindo (lendo as Fotos). */
+    abrindo?: boolean;
+    aoUsar: (p: AdPieceResponse) => void;
+  } | null;
+  /** A campanha nova no Google (P45), quando a função está ligada: a campanha mais recente da peça e o botão da gaveta. */
+  campanhaGoogle?: {
+    atual: GoogleCampaignOptionsResponse['by_piece'][number] | null;
+    podePedir: boolean;
     abrindo?: boolean;
     aoUsar: (p: AdPieceResponse) => void;
   } | null;
@@ -234,7 +242,53 @@ function BlocoDaCampanha({ p, campanha }: { p: AdPieceResponse; campanha: NonNul
   );
 }
 
-function Corpo({ p, pedido, opcoes, nomeDaMarca, pro, pode, agora, ocupado, campanha, aoAprovar, aoRecusar, aoSalvar, aoPedirOutra, aoContestar, aoAvisar }: Props & { p: AdPieceResponse }) {
+/** A campanha nova no Google a partir da peça aprovada (A5, Y9; P45): o botão da gaveta, ou em que pé está a campanha. */
+function BlocoDaCampanhaGoogle({ p, campanha }: { p: AdPieceResponse; campanha: NonNullable<Props['campanhaGoogle']> }) {
+  const atual = campanha.atual;
+  const andando = atual && (atual.status === 'pedida' || atual.status === 'criando');
+  const situacao = atual ? situacaoDaCampanhaGoogle(atual) : null;
+  return (
+    <div className="secao cn-na-peca">
+      <div className="card-cab">
+        <p className="rotulo-marca">Campanha nova no Google</p>
+        {situacao && <span className={`st st--${situacao.tom}`}>{situacao.rotulo}</span>}
+      </div>
+      <p className="campo-dica">
+        {atual
+          ? andando
+            ? 'Esta peça já tem um pedido de campanha no Google: decida em Aprovações antes de pedir outro.'
+            : atual.status === 'nao_criada'
+              ? 'A última campanha no Google com esta peça não foi criada: o motivo está em Aprovações. Dá para pedir de novo.'
+              : 'A campanha no Google com esta peça já existe. Ativar e pausar ficam em Aprovações.'
+          : 'A peça vira uma Performance Max no Google, com os textos nos tamanhos do Google e uma foto da loja, criada pausada: não aparece para ninguém e não gasta até você ativar.'}
+      </p>
+      <div className="vazio-acoes">
+        {campanha.podePedir && !andando && (
+          <button
+            className="btn btn--sm"
+            type="button"
+            aria-haspopup="dialog"
+            aria-busy={campanha.abrindo || undefined}
+            aria-disabled={campanha.abrindo || undefined}
+            onClick={() => {
+              if (!campanha.abrindo) campanha.aoUsar(p);
+            }}
+          >
+            <Icone nome="external" pequeno />
+            {campanha.abrindo ? 'Abrindo…' : 'Campanha no Google'}
+          </button>
+        )}
+        {atual?.action_id && (
+          <Link className="btn btn--sm" href={`/aprovacoes?pedido=${atual.action_id}`}>
+            Ver em Aprovações
+          </Link>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function Corpo({ p, pedido, opcoes, nomeDaMarca, pro, pode, agora, ocupado, campanha, campanhaGoogle, aoAprovar, aoRecusar, aoSalvar, aoPedirOutra, aoContestar, aoAvisar }: Props & { p: AdPieceResponse }) {
   const ids = useId();
   const versoes = p.versions ?? [p.current];
   const [vista, setVista] = useState<number | null>(null);
@@ -408,6 +462,7 @@ function Corpo({ p, pedido, opcoes, nomeDaMarca, pro, pode, agora, ocupado, camp
         )}
 
         {campanha && p.status === 'aprovada' && atual && <BlocoDaCampanha p={p} campanha={campanha} />}
+        {campanhaGoogle && p.status === 'aprovada' && atual && <BlocoDaCampanhaGoogle p={p} campanha={campanhaGoogle} />}
 
         <div className="secao">
           <div className="card-cab">
