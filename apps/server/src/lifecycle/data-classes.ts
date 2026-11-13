@@ -133,6 +133,7 @@ export const DATA_CLASSES: Record<string, TableClassification> = {
   // conta desligada leva junto o que foi lido dela. O nome dos lugares do Google é dado público, do produto.
   ad_hour_daily: { class: 'CONFIDENTIAL', retention: 'com a conta conectada (as 4 semanas mais novas de cada conta de anúncio)' },
   ad_city_daily: { class: 'CONFIDENTIAL', retention: 'com a conta conectada (as 4 semanas mais novas de cada conta de anúncio)' },
+  ad_local_daily: { class: 'CONFIDENTIAL', retention: 'com a conta conectada (as 4 semanas mais novas de cada conta de anúncio)' },
   social_audience: { class: 'CONFIDENTIAL', retention: 'com a conta conectada (a última leitura de cada Instagram e Página)' },
   social_follower_daily: { class: 'CONFIDENTIAL', retention: 'com a conta conectada (400 dias por conta)' },
   region_geo_target: { class: 'PUBLIC', retention: 'do produto (o nome dos lugares do Google Ads, públicos)' },

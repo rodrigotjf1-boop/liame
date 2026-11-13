@@ -380,18 +380,32 @@ export class ConectorGoogleAds implements ConectorLeitura {
    * `segments.geo_target_city`), por dia. O nome sai de `lerLugares`. Fatias de 30 dias.
    */
   async lerCidades(conta: ContextoConta, janela: { inicio: string; fim: string }): Promise<CidadeLida[]> {
+    return this.lerPorLugar(conta, janela, 'geo_target_city');
+  }
+
+  /**
+   * O local mais específico de quem viu e clicou (R4, medição dos bairros): `segments.geo_target_most_specific_location`
+   * na mesma `user_location_view`. É o bairro ou o CEP quando o Google tem o lugar; senão, a cidade. O tipo de cada lugar
+   * sai de `lerLugares`. Fatias de 30 dias.
+   */
+  async lerLocais(conta: ContextoConta, janela: { inicio: string; fim: string }): Promise<CidadeLida[]> {
+    return this.lerPorLugar(conta, janela, 'geo_target_most_specific_location');
+  }
+
+  /** A `user_location_view` por dia e por um dos campos de lugar (a lista é fechada: nada de texto de fora na consulta). */
+  private async lerPorLugar(conta: ContextoConta, janela: { inicio: string; fim: string }, campo: 'geo_target_city' | 'geo_target_most_specific_location'): Promise<CidadeLida[]> {
     clienteValido(conta.externalId, 'cliente');
-    type Linha = { metrics?: Metricas; segments?: { date?: string; geoTargetCity?: string } };
+    type Linha = { metrics?: Metricas; segments?: { date?: string; geoTargetCity?: string; geoTargetMostSpecificLocation?: string } };
     const cidades: CidadeLida[] = [];
     for (const f of fatias(dataValida(this.provider, janela.inicio), dataValida(this.provider, janela.fim), 30)) {
       const linhas = await this.consultar<Linha>(
         conta.credencial,
         conta.externalId,
         conta.loginCustomerId,
-        `SELECT segments.date, segments.geo_target_city, metrics.impressions, metrics.clicks, metrics.cost_micros, metrics.conversions FROM user_location_view WHERE segments.date BETWEEN '${dataValida(this.provider, f.since)}' AND '${dataValida(this.provider, f.until)}'`,
+        `SELECT segments.date, segments.${campo}, metrics.impressions, metrics.clicks, metrics.cost_micros, metrics.conversions FROM user_location_view WHERE segments.date BETWEEN '${dataValida(this.provider, f.since)}' AND '${dataValida(this.provider, f.until)}'`,
       );
       for (const l of linhas) {
-        const lugar = idDoLugar(l.segments?.geoTargetCity);
+        const lugar = idDoLugar(campo === 'geo_target_city' ? l.segments?.geoTargetCity : l.segments?.geoTargetMostSpecificLocation);
         if (typeof l.segments?.date !== 'string' || !lugar) continue;
         const m = l.metrics ?? {};
         cidades.push({ dia: l.segments.date, lugar, impressoes: contagem(m.impressions), cliques: contagem(m.clicks), gasto: deMicros(m.costMicros), conversoes: decimal(m.conversions ?? 0) });

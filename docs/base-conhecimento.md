@@ -1958,6 +1958,7 @@ Lido na documentação oficial em 12/11/2026. [O] = conferido na página oficial
 **Regras que viram código:**
 - a região da Meta (o estado) não vai para a tela de região: a tela diz "a Meta só informa o estado";
 - a cidade dos cliques vem do Google;
+- o bairro dos cliques, se houver, vem do Google pelo local mais específico (`segments.geo_target_most_specific_location`, listado entre os campos de lugar da `user_location_view` na referência da v25 [O]; que ele traga bairro do Brasil [NC]: a medição da R4, migration 0152, responde na conta da loja); o mesmo município pode ter dois lugares "City" (o antigo e o novo): a tela agrupa pelo nome com o estado (ERR-225);
 - a hora dos anúncios vem das duas plataformas, no fuso de cada conta;
 - os números da conta do Instagram e da Página entram só depois das permissões aprovadas para clientes de fora; até lá, só nas contas com papel no app.
 - na referência do Instagram (conferida de novo em 12/11/2026, para a R4, parte 3) [O]: `follows_and_unfollows` e `profile_links_taps` só aceitam `metric_type=total_value` com `period=day`, e a janela vem por `since` e `until` (sem eles, as últimas 24 horas), e a quebra é uma por pedido; `follower_demographics` é `period=lifetime` com `timeframe` obrigatório, e desde a v20.0 só `this_week` e `this_month` valem (o `timeframe` passa por cima de `since` e `until`); `follows_and_unfollows` e `follower_demographics` não vêm com menos de 100 seguidores; os números podem atrasar até 48 horas.
