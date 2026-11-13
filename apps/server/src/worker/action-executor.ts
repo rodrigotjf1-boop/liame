@@ -225,13 +225,13 @@ export class ActionExecutor {
     const stop = (await this.switches.check(tx, alvo)) ?? (tambem ? await this.switches.check(tx, { ...alvo, tool: tambem }) : null);
     if (stop) return { status: 'bloqueada', reason: `trava ativa (${stop.level}): ${stop.reason}` };
     // A resposta automática (A6, Z11, parte 2e-1): o portão do atendimento de novo, agora; desligar ou tirar o tipo segura.
-    if (TOOLS[row.tool]?.atendimentoAutomatico) {
+    if (TOOLS[row.tool]?.decisaoJaTomada === 'atendimento_automatico') {
       const segura = await this.portaoDoAutomatico(tx, row);
       if (segura) return { status: 'bloqueada', reason: `atendimento automático: ${segura}` };
     }
     // O passo do ritmo da semana (plano da região, R7): o portão do ritmo de novo, agora; parar o ritmo ou desligar a
     // função segura na hora o que está na fila.
-    if (TOOLS[row.tool]?.ritmoDaSemana) {
+    if (TOOLS[row.tool]?.decisaoJaTomada === 'ritmo_da_semana') {
       const segura = await this.portaoDoRitmo(tx, row);
       if (segura) return { status: 'bloqueada', reason: `ritmo da semana: ${segura}` };
     }
