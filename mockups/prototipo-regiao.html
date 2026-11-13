@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Região P40</title>
 <!--
-@prototipo Liame · Região · P40 · A loja no mapa (R1) e Sua região (R2) (APROVADO PELO DONO em 11/11/2026, com as D-RG-11 a D-RG-20 como recomendadas) · REVISÃO de 12/11/2026, APROVADA PELO DONO em 12/11/2026: a demanda da loja (R3, parte 1; estados 19 a 22; D-RG-21 a D-RG-25 como recomendadas) · REVISÃO R4 de 12/11/2026: a mídia na região (estados 23 a 25; D-RG-32 a D-RG-35 como recomendadas), aprovada pelo dono antecipadamente pela autorização geral da noite de 12/11/2026 · REVISÃO R3, parte 2 de 12/11/2026: os bairros para atacar e para defender (estados 26 e 27; D-RG-36 a D-RG-39 como recomendadas), aprovada da mesma forma · REVISÃO R4, parte 3 de 12/11/2026: o público nas redes (estados 28 a 30; D-RG-40 a D-RG-43 como recomendadas), APROVADA PELO DONO em 12/11/2026
+@prototipo Liame · Região · P40 · A loja no mapa (R1) e Sua região (R2) (APROVADO PELO DONO em 11/11/2026, com as D-RG-11 a D-RG-20 como recomendadas) · REVISÃO de 12/11/2026, APROVADA PELO DONO em 12/11/2026: a demanda da loja (R3, parte 1; estados 19 a 22; D-RG-21 a D-RG-25 como recomendadas) · REVISÃO R4 de 12/11/2026: a mídia na região (estados 23 a 25; D-RG-32 a D-RG-35 como recomendadas), aprovada pelo dono antecipadamente pela autorização geral da noite de 12/11/2026 · REVISÃO R3, parte 2 de 12/11/2026: os bairros para atacar e para defender (estados 26 e 27; D-RG-36 a D-RG-39 como recomendadas), aprovada da mesma forma · REVISÃO R4, parte 3 de 12/11/2026: o público nas redes (estados 28 a 30; D-RG-40 a D-RG-43 como recomendadas), APROVADA PELO DONO em 12/11/2026 · REVISÃO R4, os bairros, de 13/11/2026: os cliques por bairro e de fora da área de entrega (estados 31 a 33; D-RG-44 a D-RG-47 como recomendadas), PARA O DONO APROVAR
 pedido: o plano "tráfego pela região" (docs/plano-regiao.md), aprovado pelo dono em 11/11/2026 com as decisões D-RG-1 a
       D-RG-10 na recomendação. Cada entrega tem protótipo aprovado antes de tela nova: este é o das duas primeiras, R1
       (a loja no mapa) e R2 (o raio-x da região). Acréscimo do mesmo dia: a marca sem loja (sem o Regem), vários Perfis
@@ -676,12 +676,13 @@ select.input { padding-right: var(--sp-2); }
 .p40-duas { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--sp-4); }
 .p40-duas > div { display: grid; align-content: start; gap: var(--sp-2); min-width: 0; }
 .p40-duas h4 { font-size: var(--text-sm); font-weight: 600; }
+.p40-cliques-cab { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--sp-2); min-width: 0; }
 @container p40card (max-width: 620px) { .p40-duas { grid-template-columns: minmax(0, 1fr); } }
 /* A demanda da loja (R3, parte 1; revisão aguardando aprovação): os dias em barras e as horas em colunas. */
 .p40-barras-dia { display: grid; gap: 6px; }
 .p40-barras-dia .p40-barra { grid-template-columns: 2.6rem minmax(0, 1fr) 2.8rem; }
 .p40-barras-dia .p40-barra-trilho { grid-column: auto; grid-row: auto; }
-.p40-horas { display: grid; grid-template-columns: repeat(13, minmax(0, 1fr)); gap: 3px; align-items: end; margin: 0; padding: 0; list-style: none; }
+.p40-horas { display: grid; grid-template-columns: repeat(var(--n, 13), minmax(0, 1fr)); gap: 3px; align-items: end; margin: 0; padding: 0; list-style: none; }
 .p40-hora { display: grid; gap: 4px; justify-items: center; min-width: 0; }
 .p40-hora-trilho { display: flex; align-items: flex-end; width: 100%; height: 96px; border-radius: 3px; background: var(--chart-grade); overflow: hidden; }
 .p40-hora-trilho i { display: block; width: 100%; height: var(--v, 0%); border-radius: 3px 3px 0 0; background: var(--chart-cinza-2); }
@@ -694,6 +695,7 @@ select.input { padding-right: var(--sp-2); }
 .p40-ref { display: grid; gap: var(--sp-2); margin: 0; padding: 0; list-style: none; }
 .p40-ref li { display: grid; gap: 2px; padding: var(--sp-3) var(--sp-4); border-left: 3px solid var(--border-strong); background: var(--surface-2); border-radius: 0 var(--radius) var(--radius) 0; font-size: var(--text-sm); min-width: 0; overflow-wrap: anywhere; }
 .p40-ref small { font-size: var(--text-xs); color: var(--text-subtle); }
+.p40-ref li > span:first-child { display: flex; flex-wrap: wrap; align-items: baseline; column-gap: var(--sp-2); min-width: 0; }
 .p40-ainda { display: grid; gap: var(--sp-2); margin: 0; padding: 0; list-style: none; }
 .p40-ainda li { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: var(--sp-1) var(--sp-3); align-items: start; padding: var(--sp-3) var(--sp-4); border: 1px dashed var(--border-strong); border-radius: var(--radius); font-size: var(--text-sm); }
 .p40-ainda li > span:last-child { min-width: 0; overflow-wrap: anywhere; }
@@ -1170,6 +1172,14 @@ window.P40_DECISOES_R4 = [
   { id: 'D-RG-35', titulo: 'A leitura', texto: 'Uma vez por dia, para cada conta de anúncio da marca com a região ligada, as 4 semanas até ontem; a leitura nova substitui a anterior (os números de anúncio mudam por até 28 dias). A conta desligada leva junto o que foi lido dela. Os números da conta do Instagram e da Página (seguidores, a cidade do público) ficam para depois das permissões aprovadas pela Meta para clientes de fora.', rec: 'assim.', porque: 'É o ritmo dos outros números de anúncio do Liame; ler mais vezes não muda a decisão do dia e gasta a cota.' },
 ];
 
+/* A revisão R4, os bairros, de 13/11/2026 (os cliques por bairro e de fora da área), para o dono aprovar. */
+window.P40_DECISOES_R4C = [
+  { id: 'D-RG-44', titulo: 'De onde vem o bairro', texto: 'Do Google: o lugar mais específico de quem viu o anúncio (segments.geo_target_most_specific_location, na mesma leitura da cidade). O bairro e o distrito do Google entram como bairro; o CEP entra como CEP (os 5 primeiros dígitos), sem traduzir: o Liame não tem a base que liga o CEP ao bairro. A Meta não informa bairro. Medido na Mister Burgers em 13/11/2026: o Google localiza abaixo da cidade cerca de 1 clique em cada 6.', rec: 'assim, sem prometer o bairro de todos os cliques.', porque: 'É o que a plataforma entrega; o resto fica dito como "só a cidade".' },
+  { id: 'D-RG-45', titulo: 'Município | Bairro', texto: 'A lista "De onde vêm os cliques (Google)" ganha a escolha Município | Bairro; o município é o padrão (a maior parte dos cliques só tem a cidade). Na visão por bairro: quantos cliques do município da loja o Google localizou, os bairros e os CEPs com os cliques, se o bairro está dentro ou fora da área de entrega e o papel dele em "Bairros para atacar e para defender".', rec: 'assim; a escolha vale na tela aberta, sem guardar.', porque: 'O município responde "de onde"; o bairro, "onde perto da loja", quando o Google sabe.' },
+  { id: 'D-RG-46', titulo: 'Os cliques de fora da área de entrega', texto: 'Um número a mais em "A mídia na região": a parte dos cliques do Google que veio de fora da área de entrega — os de outros municípios e os de bairros localizados que não estão na área de entrega da loja (pelo nome, como os bairros dos pedidos). O CEP e o clique só com a cidade da loja não contam como fora: nunca "fora" por suposição. Sem a área de entrega cadastrada, só os outros municípios, e a tela diz isso.', rec: 'assim.', porque: 'Clique de fora da área é verba que não vira pedido; é o achado que leva ao ajuste da campanha (R6 e R7).' },
+  { id: 'D-RG-47', titulo: 'Quem vê e quando lê', texto: 'A mesma régua da mídia na região (D-RG-34): só quem vê Resultados, sem dinheiro. A leitura é a da mídia, uma vez por dia (já no ar desde 13/11/2026, migration 0152), só com a função regiao ligada.', rec: 'assim.', porque: 'São números das campanhas.' },
+];
+
 /* A revisão R4, parte 3 de 12/11/2026 (o público nas redes), aprovada pelo dono em 12/11/2026, com as D-RG-40 a D-RG-43 como recomendadas. */
 window.P40_DECISOES_R4B = [
   { id: 'D-RG-40', titulo: 'O que se lê do Instagram', texto: 'Por dia: os seguidores (o Liame guarda a própria série, porque o Instagram só devolve 30 dias), quem seguiu e quem deixou de seguir, e os toques nos botões do perfil (ligar, como chegar, mensagem). Por semana: a cidade dos seguidores (as 45 maiores, só com 100 seguidores ou mais).', rec: 'assim.', porque: 'É o que mostra se o reconhecimento e os seguidores (as etapas do funil) estão funcionando e se o público é da região da loja.' },
@@ -1242,6 +1252,9 @@ const P40_ESTADOS = {
   publico: '28 · R4, parte 3: O público nas redes (Instagram e Página)',
   'publico-poucos': '29 · R4, parte 3: Instagram com menos de 100 seguidores (sem a cidade)',
   'publico-sem-redes': '30 · R4, parte 3: Sem o Instagram e a Página ligados',
+  'midia-bairro': '31 · R4, os bairros: Os cliques por bairro (Município | Bairro) e de fora da área',
+  'midia-bairro-poucos': '32 · R4, os bairros: Poucos cliques com o bairro localizado',
+  'midia-sem-area': '33 · R4, os bairros: A loja sem a área de entrega cadastrada',
 };
 
 const km = (v) => numero(v, Number.isInteger(v) ? 0 : 1);
@@ -1272,6 +1285,9 @@ function p40Base() {
     bairros: 'pronto',
     // R4, parte 3: o Instagram e a Página (`pronto`, `poucos`: menos de 100 seguidores, `sem`: nenhum ligado).
     redes: 'pronto',
+    // R4, os bairros: a lista dos cliques por `municipio` (o padrão) ou por `bairro`, e quantos o Google localizou
+    // (`pronto` ou `poucos`).
+    cliquesPor: 'municipio', cliquesBairro: 'pronto',
   };
 }
 const p40Loja = (id) => p40.lojas.find((l) => l.id === id) || null;
@@ -1442,7 +1458,65 @@ const P40_MIDIA = {
   // Do Google: a cidade, os cliques e a parte dos cliques do Google.
   cidades: [['Rio de Janeiro', 412, 78], ['Duque de Caxias', 48, 9], ['Niterói', 31, 6], ['São Gonçalo', 22, 4], ['Nova Iguaçu', 15, 3]],
 };
-function p40Midia() {
+/* ---------- Os cliques por bairro e de fora da área (R4, os bairros; D-RG-44 a D-RG-47) ---------- */
+// O local mais específico que o Google informa nos 412 cliques do Rio de Janeiro (dos 528 do Google): o nome, o tipo
+// (`bairro`: o bairro ou o distrito do Google; `cep`: só os 5 primeiros dígitos do CEP) e os cliques. Os outros 116
+// cliques do Google vieram de outros municípios (a lista por município).
+const P40_CLIQUES_BAIRRO = {
+  pronto: [['Tijuca', 'bairro', 21], ['Cordovil', 'bairro', 17], ['Vila Isabel', 'bairro', 14], ['Praça da Bandeira', 'bairro', 10], ['CEP 20550', 'cep', 9], ['Maré', 'bairro', 8], ['CEP 21941', 'cep', 5]],
+  poucos: [['Tijuca', 'bairro', 2], ['CEP 20550', 'cep', 1]],
+};
+const P40_CLIQUES_DA_CIDADE = 412;
+const P40_CLIQUES_DE_FORA_DO_MUNICIPIO = 116;
+const P40_CLIQUES_DO_GOOGLE = 528;
+
+/** Os bairros dos cliques da loja: dentro e fora da área de entrega pelo nome; o CEP fica sem saber. */
+function p40BairrosDosCliques(loja) {
+  const itens = P40_CLIQUES_BAIRRO[p40.cliquesBairro === 'poucos' ? 'poucos' : 'pronto'];
+  const areas = loja.areas || [];
+  const dentro = (nome, tipo) => (tipo !== 'bairro' || !areas.length ? null : areas.includes(nome));
+  const localizados = itens.reduce((t, [, , n]) => t + n, 0);
+  const fora = itens.filter(([nome, tipo]) => dentro(nome, tipo) === false);
+  return { itens, areas, dentro, localizados, fora, foraCliques: fora.reduce((t, [, , n]) => t + n, 0) };
+}
+
+function p40Fora(loja) {
+  const b = p40BairrosDosCliques(loja);
+  const fora = P40_CLIQUES_DE_FORA_DO_MUNICIPIO + b.foraCliques;
+  const pct = Math.round((fora * 100) / P40_CLIQUES_DO_GOOGLE);
+  const nomes = b.fora.map(([nome]) => nome);
+  const obs = !b.areas.length
+    ? `dos cliques do Google vieram de outros municípios (${P40_CLIQUES_DE_FORA_DO_MUNICIPIO}); com a área de entrega cadastrada, os bairros de fora entram na conta`
+    : b.foraCliques
+      ? `dos cliques do Google vieram de fora da área de entrega: ${P40_CLIQUES_DE_FORA_DO_MUNICIPIO} de outros municípios e ${b.foraCliques} de bairros do ${esc(loja.end.municipio)} fora da área (${nomes.map(esc).join(' e ')})`
+      : `dos cliques do Google vieram de outros municípios (${P40_CLIQUES_DE_FORA_DO_MUNICIPIO}); dos bairros do ${esc(loja.end.municipio)}, o Google localizou poucos`;
+  return p40Num(`${pct}%`, obs, 'Google · o lugar de quem clicou × a área de entrega da loja', { pro: 'ad_city_daily (outros municípios) e ad_local_daily (geo_target_most_specific_location) × as áreas de entrega da loja, pelo nome do bairro; o CEP e o clique sem bairro não contam como fora' });
+}
+
+function p40CliquesPorBairro(loja) {
+  const b = p40BairrosDosCliques(loja);
+  const papelDe = (nome) => (P40_BAIRROS.find((x) => x[0] === nome) || [])[4] || null;
+  const lista = b.itens
+    .map(([nome, tipo, n]) => {
+      const d = b.dentro(nome, tipo);
+      const onde = tipo === 'cep' ? '<small>o Google deu só o CEP</small>' : d === true ? '<small>na área de entrega</small>' : d === false ? '<small>fora da área de entrega</small>' : '';
+      const papel = tipo === 'bairro' && d !== false ? papelDe(nome) : null;
+      const selo = papel ? `<span class="st ${papel === 'defender' ? 'st--concluido' : papel === 'atacar' ? 'st--perigo' : 'st--espera'}">${papel === 'defender' ? 'Defender' : papel === 'atacar' ? 'Atacar' : 'Manter'}</span> ` : '';
+      return `<li><span><b>${esc(nome)}</b>${onde}</span><span>${selo}<b class="num">${n}</b> ${n === 1 ? 'clique' : 'cliques'}</span></li>`;
+    })
+    .join('');
+  const parte = Math.round((b.localizados * 100) / P40_CLIQUES_DA_CIDADE);
+  const frase = p40.cliquesBairro === 'poucos'
+    ? `O Google localizou o bairro de só ${b.localizados} dos ${P40_CLIQUES_DA_CIDADE} cliques no ${esc(loja.end.municipio)}: é pouco para tirar conclusão. Nos outros, ele só sabe a cidade.`
+    : `O Google localizou o bairro de ${b.localizados} dos ${P40_CLIQUES_DA_CIDADE} cliques no ${esc(loja.end.municipio)} (${parte}%). Nos outros, ele só sabe a cidade.`;
+  const semArea = !b.areas.length
+    ? `<p class="p40-nota">${ic('i-info')}<span>Sem a área de entrega cadastrada, o Liame não diz se o bairro está dentro ou fora dela.</span></p><p><button class="btn btn--sm" type="button" data-fora-p40="Abre a loja no mapa, na área de entrega.">Cadastrar a área de entrega</button></p>`
+    : '';
+  return `<p class="lite-frase">${frase}</p><ul class="p40-ref">${lista}</ul>${semArea}
+    <p class="p40-nota">${ic('i-info')}<span>O bairro é o lugar mais específico que o Google informa de quem viu o anúncio: o bairro, o distrito ou só o CEP. A Meta não informa bairro. O papel (atacar, defender, manter) é o de "Bairros para atacar e para defender".</span></p>`;
+}
+
+function p40Midia(loja) {
   const cab = (sub) => `<div class="p40-grupo-cab"><h3 id="g-midia">A mídia na região</h3><p>${sub}</p></div>`;
   if (!p40.vendas) {
     return `<section class="p40-grupo" aria-labelledby="g-midia">${cab('os anúncios da marca')}<p class="p40-nota">${ic('i-lock')}<span>Os números das campanhas ficam para quem vê Resultados. Peça ao dono a permissão, se precisar deles.</span></p></section>`;
@@ -1467,11 +1541,13 @@ function p40Midia() {
       ${p40Num(`${numero(total, 0)} <small>cliques</small>`, `de 15/10 a 11/11, nos anúncios da ${contas}`, `${contas} · cliques por hora, no fuso das contas`, { pro: 'ad_hour_daily · Meta: hourly_stats_aggregated_by_advertiser_time_zone · Google: segments.hour em customer' })}
       ${p40Num('41%', 'dos cliques caem das 11h às 15h, o bloco mais forte dos anúncios', 'Conta do sistema com os cliques por hora', { pro: 'a janela de 4 horas seguidas com mais cliques' })}
       ${p40Num('34%', 'dos cliques caem das 19h às 23h, o bloco mais forte dos pedidos da loja', 'Conta do sistema: os cliques por hora e os pedidos do Regem (A demanda da loja)', { pro: 'o bloco mais forte dos pedidos (R3) × os cliques das mesmas horas' })}
+      ${google ? p40Fora(loja) : ''}
     </div>
     <div class="p40-duas">
-      <div><h4>Cliques por hora</h4><ul class="p40-horas" role="img" aria-label="${esc(descricao)}">${horas}</ul></div>
-      <div><h4>De onde vêm os cliques${google ? ' (Google)' : ''}</h4>${cidades}</div>
+      <div><h4>Cliques por hora</h4><ul class="p40-horas" role="img" aria-label="${esc(descricao)}" style="--n:${P40_MIDIA.horas.length}">${horas}</ul></div>
+      <div>${google ? `<div class="p40-cliques-cab"><h4>De onde vêm os cliques (Google)</h4><div class="seg" role="group" aria-label="Ver os cliques por"><button type="button" data-p40-cliques="municipio" aria-pressed="${p40.cliquesPor !== 'bairro'}">Município</button><button type="button" data-p40-cliques="bairro" aria-pressed="${p40.cliquesPor === 'bairro'}">Bairro</button></div></div>${p40.cliquesPor === 'bairro' ? p40CliquesPorBairro(loja) : cidades}` : `<h4>De onde vêm os cliques</h4>${cidades}`}</div>
     </div>
+    ${google && p40.cliquesPor === 'bairro' && p40.cliquesBairro !== 'poucos' && loja.areas.length ? `<p class="p40-pico">${ic('i-map-pin')}<span><b>Cordovil, fora da área de entrega, recebeu 17 cliques; Vila Isabel, um bairro para atacar, 14.</b> O clique de fora da área é verba que não vira pedido: o plano de mídia mira o raio da loja, e o ritmo por horário e região (R7) vai propor tirar a verba de lá.</span></p>` : ''}
     <p class="p40-pico">${ic('i-clock')}<span><b>Os anúncios rendem mais no almoço, e os pedidos vêm à noite.</b> O plano de mídia (R5) põe a verba de pedido 1 hora antes do bloco dos pedidos; o ritmo por horário (R7) vai propor a mudança na campanha.</span></p>
   </section>`;
 }
@@ -1585,7 +1661,7 @@ function p40Grupos(loja, falhou) {
         <li><span class="st st--espera">Ainda não</span><span><b>Pessoas no raio, na Meta</b><small>Aparece com a conta de anúncios: a Meta estima quantas pessoas há no raio, por faixa de idade, antes de gastar (R6).</small></span></li>
         <li><span class="st st--espera">Ainda não</span><span><b>Concorrentes no raio</b><small>Aparece com o servidor de mapas próprio (R8). Hoje, a conta é a do município.</small></span></li>
       </ul></section>`;
-  return `<div class="p40-grupos">${gente}${bolso}${conc}${p40Demanda(loja)}${p40Bairros()}${p40Midia()}${p40Publico(loja)}${preco}${semana}${ref}${ainda}</div>`;
+  return `<div class="p40-grupos">${gente}${bolso}${conc}${p40Demanda(loja)}${p40Bairros()}${p40Midia(loja)}${p40Publico(loja)}${preco}${semana}${ref}${ainda}</div>`;
 }
 
 function p40Lendo(loja) {
@@ -1702,8 +1778,10 @@ function p40Decisoes() {
   const novas = window.P40_DECISOES_R3.map((d) => `<li class="p40-dec"><p class="p40-dec-cab"><code>${esc(d.id)}</code><b>${esc(d.titulo)}</b></p><p>${esc(d.texto)}</p>${d.porque ? `<p>Por quê: ${esc(d.porque)}</p>` : ''}<p class="rec">Recomendo: ${esc(d.rec)}</p></li>`).join('');
   const r4 = window.P40_DECISOES_R4.map((d) => `<li class="p40-dec"><p class="p40-dec-cab"><code>${esc(d.id)}</code><b>${esc(d.titulo)}</b></p><p>${esc(d.texto)}</p>${d.porque ? `<p>Por quê: ${esc(d.porque)}</p>` : ''}<p class="rec">Recomendo: ${esc(d.rec)}</p></li>`).join('');
   const r3b = window.P40_DECISOES_R3B.map((d) => `<li class="p40-dec"><p class="p40-dec-cab"><code>${esc(d.id)}</code><b>${esc(d.titulo)}</b></p><p>${esc(d.texto)}</p>${d.porque ? `<p>Por quê: ${esc(d.porque)}</p>` : ''}<p class="rec">Recomendo: ${esc(d.rec)}</p></li>`).join('');
+  const r4c = window.P40_DECISOES_R4C.map((d) => `<li class="p40-dec"><p class="p40-dec-cab"><code>${esc(d.id)}</code><b>${esc(d.titulo)}</b></p><p>${esc(d.texto)}</p>${d.porque ? `<p>Por quê: ${esc(d.porque)}</p>` : ''}<p class="rec">Recomendo: ${esc(d.rec)}</p></li>`).join('');
   const r4b = window.P40_DECISOES_R4B.map((d) => `<li class="p40-dec"><p class="p40-dec-cab"><code>${esc(d.id)}</code><b>${esc(d.titulo)}</b></p><p>${esc(d.texto)}</p>${d.porque ? `<p>Por quê: ${esc(d.porque)}</p>` : ''}<p class="rec">Recomendo: ${esc(d.rec)}</p></li>`).join('');
-  return `<section class="card p40-proto p40-decisoes" aria-labelledby="p40-dec-r4b-t"><h2 id="p40-dec-r4b-t">Revisão R4, parte 3: o público nas redes (D-RG-40 a D-RG-43)</h2><p class="lite-frase">Aprovada pelo dono em 12/11/2026. Estados 28 a 30 do menu.</p><ul class="p40-dec-lista">${r4b}</ul></section>
+  return `<section class="card p40-proto p40-decisoes" aria-labelledby="p40-dec-r4c-t"><h2 id="p40-dec-r4c-t">Revisão R4, os bairros: os cliques por bairro e de fora da área (D-RG-44 a D-RG-47)</h2><p class="lite-frase">Para o dono aprovar. Estados 31 a 33 do menu. A leitura já está no ar (migration 0152); falta a tela.</p><ul class="p40-dec-lista">${r4c}</ul></section>
+  <section class="card p40-proto p40-decisoes" aria-labelledby="p40-dec-r4b-t"><h2 id="p40-dec-r4b-t">Revisão R4, parte 3: o público nas redes (D-RG-40 a D-RG-43)</h2><p class="lite-frase">Aprovada pelo dono em 12/11/2026. Estados 28 a 30 do menu.</p><ul class="p40-dec-lista">${r4b}</ul></section>
   <section class="card p40-proto p40-decisoes" aria-labelledby="p40-dec-r3b-t"><h2 id="p40-dec-r3b-t">Revisão R3, parte 2: os bairros dos pedidos (D-RG-36 a D-RG-39)</h2><p class="lite-frase">Aprovadas antecipadamente pelo dono pela autorização da noite de 12/11/2026, todas como recomendadas. Estados 26 e 27 do menu. A rota do Regem é aditiva, sob a permissão de pedidos que o Liame já tem.</p><ul class="p40-dec-lista">${r3b}</ul></section>
   <section class="card p40-proto p40-decisoes" aria-labelledby="p40-dec-r4-t"><h2 id="p40-dec-r4-t">Revisão R4: a mídia na região (D-RG-32 a D-RG-35)</h2><p class="lite-frase">Aprovadas antecipadamente pelo dono pela autorização da noite de 12/11/2026, todas como recomendadas. Estados 23 a 25 do menu.</p><ul class="p40-dec-lista">${r4}</ul></section>
   <section class="card p40-proto p40-decisoes" aria-labelledby="p40-dec-r3-t"><h2 id="p40-dec-r3-t">Revisão R3, parte 1: a demanda da loja (D-RG-21 a D-RG-25)</h2><p class="lite-frase">Aprovadas pelo dono em 12/11/2026, todas como recomendadas. Estados 19 a 22 do menu. A seção usa os pedidos que o Liame já lê do Regem; nada muda no Regem.</p><ul class="p40-dec-lista">${novas}</ul></section>
@@ -1971,6 +2049,9 @@ function p40Aplicar(estado, { focar = false } = {}) {
     case 'bairros-poucos': s.bairros = 'poucos'; break;
     case 'publico-poucos': s.redes = 'poucos'; break;
     case 'publico-sem-redes': s.redes = 'sem'; break;
+    case 'midia-bairro': s.cliquesPor = 'bairro'; break;
+    case 'midia-bairro-poucos': s.cliquesPor = 'bairro'; s.cliquesBairro = 'poucos'; break;
+    case 'midia-sem-area': s.cliquesPor = 'bairro'; t.areas = []; break;
     default: break;
   }
   const sel = $('#rev-p40'); if (sel && sel.value !== estado) sel.value = estado;
@@ -2018,6 +2099,8 @@ function p40Iniciar() {
     if (aj) { p40AbrirGaveta({ lojaId: aj.dataset.p40Ajustar, modo: 'cep', ajustar: true }, aj); return; }
     const sl = alvo.closest('[data-p40-sel]');
     if (sl) { p40.sel = sl.dataset.p40Sel; p40Render({ focar: `[data-p40-sel="${p40.sel}"]` }); return; }
+    const cp = alvo.closest('[data-p40-cliques]');
+    if (cp) { p40.cliquesPor = cp.dataset.p40Cliques; p40Render({ focar: `[data-p40-cliques="${p40.cliquesPor}"]` }); return; }
     const fo = alvo.closest('[data-p40-fontes]');
     if (fo) { p40AbrirFontes(fo); return; }
     if (alvo.closest('[data-p40-ir-regiao]')) { const h = $('#p40-b-t'); h.scrollIntoView({ block: 'start', behavior: reduzido() ? 'auto' : 'smooth' }); h.focus({ preventScroll: true }); return; }
