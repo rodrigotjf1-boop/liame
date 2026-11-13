@@ -20,6 +20,35 @@
 .cn-estimativa .ic { flex: none; margin-top: 2px; }
 .cn-estimativa b { font-weight: 600; }
 .cn-estimativa-aviso { margin-top: var(--sp-2); }
+/* quem vê por bairros (R6, parte 3; revisão R6-3 da P42) */
+.cn-quem { display: flex; width: fit-content; max-width: 100%; flex-wrap: wrap; margin-bottom: var(--sp-3); }
+.cn-quem button { display: inline-flex; align-items: center; gap: 6px; white-space: normal; }
+.cn-bairros-origem { display: block; margin: 0 0 var(--sp-2); }
+.cn-bairros { display: grid; gap: var(--sp-2); margin: 0; padding: 0; list-style: none; }
+.cn-bairro { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: start; column-gap: var(--sp-3); row-gap: 2px; padding: var(--sp-2) var(--sp-3); border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); cursor: pointer; }
+.cn-bairro input { margin-top: 3px; }
+.cn-bairro-nome { min-width: 0; }
+.cn-bairro-nome b { font-weight: 600; overflow-wrap: anywhere; }
+.cn-bairro-nome small { display: block; color: var(--text-muted); font-size: var(--text-xs); overflow-wrap: anywhere; }
+.cn-bairro-como { grid-column: 2; display: inline-flex; align-items: flex-start; gap: 6px; color: var(--text-muted); font-size: var(--text-xs); overflow-wrap: anywhere; }
+.cn-bairro-como .ic { flex: none; margin-top: 1px; }
+.cn-bairros-outro { margin-top: var(--sp-2); }
+.cn-bairros-busca { margin-top: var(--sp-3); }
+.cn-bairros-achados { display: flex; flex-wrap: wrap; gap: var(--sp-2); margin: var(--sp-2) 0 0; padding: 0; list-style: none; }
+.cn-bairros-achados .btn { display: inline-flex; align-items: center; gap: 6px; white-space: normal; text-align: left; }
+.cn-bairros-previa { margin: var(--sp-3) 0 0; padding: var(--sp-3); border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface-2); }
+.cn-bairros-previa svg { display: block; width: 100%; max-height: 260px; }
+.cn-bairros-previa text { fill: var(--text); font-family: inherit; }
+.cn-c-liame { fill: var(--primary-soft); fill-opacity: .75; stroke: var(--primary); stroke-width: .035; }
+.cn-c-meta { fill: var(--success-soft); fill-opacity: .75; stroke: var(--success); stroke-width: .035; stroke-dasharray: .12 .08; }
+.cn-c-loja { fill: var(--text); }
+.cn-c-regua { stroke: var(--text); stroke-width: .04; }
+.cn-bairros-previa figcaption { display: flex; flex-wrap: wrap; gap: var(--sp-2) var(--sp-4); margin-top: var(--sp-2); color: var(--text-muted); font-size: var(--text-xs); }
+.cn-bairros-previa figcaption span { display: inline-flex; align-items: center; gap: 6px; }
+.cn-leg { display: inline-block; width: 12px; height: 12px; border-radius: 50%; }
+.cn-leg--liame { background: var(--primary-soft); border: 1.5px solid var(--primary); }
+.cn-leg--meta { background: var(--success-soft); border: 1.5px dashed var(--success); }
+.cn-leg--loja { width: 8px; height: 8px; background: var(--text); }
 .cn-gaveta .campo > legend { margin-bottom: var(--sp-2); font-weight: 600; }
 .cn-grade { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--sp-5); min-width: 0; }
 .cn-f1, .cn-f2 { display: grid; gap: var(--sp-5); align-content: start; min-width: 0; }

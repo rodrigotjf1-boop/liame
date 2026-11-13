@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Campanha nova · Liame</title>
 <!--
-@prototipo Liame · A4 · P42 · Campanha nova com a foto ou o vídeo da loja (APROVADO PELO DONO EM 11/11/2026, com as recomendações D-A4-42 a D-A4-46) · REVISÃO R6 de 13/11/2026 (plano da região: a campanha com raio, os objetivos de alcance e de seguidores, a estimativa de público no raio, o teto de 25% e a frequência; D-RG-48 a D-RG-52 como recomendadas), APROVADA PELO DONO em 13/11/2026
+@prototipo Liame · A4 · P42 · Campanha nova com a foto ou o vídeo da loja (APROVADO PELO DONO EM 11/11/2026, com as recomendações D-A4-42 a D-A4-46) · REVISÃO R6 de 13/11/2026 (plano da região: a campanha com raio, os objetivos de alcance e de seguidores, a estimativa de público no raio, o teto de 25% e a frequência; D-RG-48 a D-RG-52 como recomendadas), APROVADA PELO DONO em 13/11/2026 · REVISÃO R6-3 de 13/11/2026 (quem vê por bairros, além do raio: pedido do dono em 13/11/2026; D-RG-53 a D-RG-57 como recomendadas), APROVADA PELO DONO em 13/11/2026
 base: o P10 (prototipo-criativos.html, aprovado em 05/10/2026): Criativos, a peça aprovada, a gaveta "Campanha nova,
       pausada" e os pedidos em Aprovações ficam como estão lá, no seletor "Criativos"; o P42 entra por cima, no
       seletor "Campanha nova".
@@ -1551,6 +1551,37 @@ select.input { padding-right: var(--sp-2); }
 #p42-dec-t:focus { outline: none; }
 .p42-estimativa { display: flex; gap: var(--sp-2); align-items: flex-start; margin: var(--sp-2) 0 0; font-size: var(--text-sm); }
 .p42-estimativa .ic { flex: none; margin-top: 2px; }
+/* R6-3: quem vê por bairros */
+.r6b-modo { display: flex; width: fit-content; margin-bottom: var(--sp-3); max-width: 100%; }
+.r6b-modo button { display: inline-flex; align-items: center; gap: 6px; white-space: normal; }
+.r6b-de-onde { margin: 0 0 var(--sp-2); }
+.r6b-lista { display: grid; gap: var(--sp-2); margin: 0; padding: 0; list-style: none; }
+.r6b-bairro { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: start; column-gap: var(--sp-3); row-gap: 2px; padding: var(--sp-2) var(--sp-3); border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); cursor: pointer; }
+.r6b-bairro input { margin-top: 3px; }
+.r6b-nome { min-width: 0; }
+.r6b-nome b { font-weight: 600; overflow-wrap: anywhere; }
+.r6b-nome small { display: block; color: var(--text-muted); font-size: var(--text-xs); overflow-wrap: anywhere; }
+.r6b-como { grid-column: 2; display: inline-flex; align-items: flex-start; gap: 6px; color: var(--text-muted); font-size: var(--text-xs); overflow-wrap: anywhere; }
+.r6b-como .ic { flex: none; width: 14px; height: 14px; margin-top: 1px; }
+.r6b-outro { margin-top: var(--sp-2); }
+.r6b-busca { margin-top: var(--sp-3); }
+.r6b-achados { display: flex; flex-wrap: wrap; gap: var(--sp-2); margin: var(--sp-2) 0 0; padding: 0; list-style: none; }
+.r6b-achados .btn { display: inline-flex; align-items: center; gap: 6px; flex-wrap: wrap; white-space: normal; text-align: left; }
+.r6b-achados .btn small { color: var(--text-muted); font-size: var(--text-xs); font-weight: 400; }
+.r6b-previa { margin: var(--sp-3) 0 0; padding: var(--sp-3); border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface-2); }
+.r6b-previa svg { display: block; width: 100%; max-height: 260px; }
+.r6b-previa text { fill: var(--text); font-family: inherit; }
+.r6b-c-liame { fill: var(--primary-soft); fill-opacity: .75; stroke: var(--primary); stroke-width: .035; }
+.r6b-c-meta { fill: var(--success-soft); fill-opacity: .75; stroke: var(--success); stroke-width: .035; stroke-dasharray: .12 .08; }
+.r6b-loja { fill: var(--text); }
+.r6b-regua { stroke: var(--text); stroke-width: .04; }
+.r6b-previa figcaption { display: flex; flex-wrap: wrap; gap: var(--sp-2) var(--sp-4); margin-top: var(--sp-2); color: var(--text-muted); font-size: var(--text-xs); }
+.r6b-previa figcaption span { display: inline-flex; align-items: center; gap: 6px; }
+.r6b-leg { display: inline-block; width: 12px; height: 12px; border-radius: 50%; }
+.r6b-leg--liame { background: var(--primary-soft); border: 1.5px solid var(--primary); }
+.r6b-leg--meta { background: var(--success-soft); border: 1.5px dashed var(--success); }
+.r6b-leg--loja { width: 8px; height: 8px; background: var(--text); }
+#r6b-nenhum { margin-top: var(--sp-3); }
 </style>
 </head>
 <body data-pagina="resultados">
@@ -7108,6 +7139,13 @@ const P42_ESTADOS = {
     'r6-teto': 'Alcance e seguidores passam de 25% da verba do mês (não pede)',
     'r6-aprovacoes': 'Em Aprovações: a campanha de alcance',
   },
+  'R6-3 · Quem vê por bairros': {
+    'r6-bairros': 'Bairros: as áreas de entrega e os bairros dos pedidos, com a prévia em escala',
+    'r6-bairros-outro': 'Bairros: outro bairro da cidade (a busca)',
+    'r6-bairros-nenhum': 'Bairros: nenhum marcado (não pede)',
+    'r6-bairros-aprovacoes': 'Em Aprovações: a campanha por bairros',
+    'decisoes-r6-3': 'As decisões aprovadas (D-RG-53 a D-RG-57)',
+  },
   'Decisões': {
     decisoes: 'As decisões propostas (D-A4-42 a D-A4-46)',
   },
@@ -7193,7 +7231,121 @@ function r6Teto(m) {
     ? `<p class="campo-erro" id="r6-teto" role="alert">${ic('i-alert-circle')} Passa do teto de 25% para alcance e seguidores (${moeda(teto)} em ${MES.nome}). Diminua a verba diária ou deixe esta campanha para ${MES.proximo}.</p>`
     : `<p class="campo-dica" id="r6-teto">${linha}</p>`;
 }
-const r6Bloqueia = (m) => !!p42?.r6?.pequeno || (r6Topo(m.objetivo) && !!p42?.r6?.teto);
+const r6Bloqueia = (m) => !!p42?.r6?.pequeno || (r6Topo(m.objetivo) && !!p42?.r6?.teto) || (r6bAtiva() && m.quem === 'bairros' && !(m.bairros ?? []).length);
+/* ---------- R6, parte 3 (plano da região): quem vê por bairros, além do raio (pedido do dono em 13/11/2026) ---------- */
+/* O ícone do lugar (o mesmo traço dos outros). */
+$('#i-x')?.parentNode.insertAdjacentHTML('beforeend', '<symbol id="i-map-pin" viewBox="0 0 24 24"><path d="M20 10c0 4.99-5.54 10.19-7.4 11.8a1 1 0 0 1-1.2 0C9.54 20.19 4 14.99 4 10a8 8 0 0 1 16 0"/><circle cx="12" cy="10" r="3"/></symbol>');
+/* Os bairros que a gaveta sugere: as áreas de entrega da loja (Minha marca › Região) e os bairros com pedidos nos últimos
+   30 dias (Sua região). De cada um: o centro (pelo OpenStreetMap, em km a partir da loja: x para leste, y para norte), o
+   círculo pelo tamanho do bairro no IBGE (de 1 a 3 km), as pessoas de 18 anos ou mais (mil, para a estimativa de exemplo)
+   e se a busca de lugares da Meta acha o bairro na cidade da loja. */
+const R6B_SUGERIDOS = [
+  { id: 'centro', nome: 'Centro', area: true, pedidos: 312, meta: true, x: 0.2, y: 0.1, r: 2, mil: 34 },
+  { id: 'lapa', nome: 'Lapa', area: true, pedidos: 128, meta: true, x: -0.6, y: -0.9, r: 1, mil: 9 },
+  { id: 'gloria', nome: 'Glória', area: true, pedidos: 64, meta: false, x: -0.8, y: -2.2, r: 1, mil: 8 },
+  { id: 'santa-teresa', nome: 'Santa Teresa', area: true, pedidos: 41, meta: false, x: -1.7, y: -1.4, r: 1.5, mil: 33 },
+  { id: 'saude', nome: 'Saúde', area: false, pedidos: 37, meta: true, x: -0.3, y: 1.3, r: 1, mil: 5 },
+  { id: 'cidade-nova', nome: 'Cidade Nova', area: false, pedidos: 22, meta: false, x: -2.3, y: -0.2, r: 1, mil: 4 },
+];
+/* A busca de outro bairro: os bairros do município no IBGE (os mesmos de Sua região), com o centro e o tamanho. */
+const R6B_CIDADE = [
+  { id: 'catete', nome: 'Catete', meta: false, x: -0.9, y: -3.0, r: 1, mil: 20 },
+  { id: 'estacio', nome: 'Estácio', meta: false, x: -2.8, y: -0.8, r: 1, mil: 15 },
+  { id: 'flamengo', nome: 'Flamengo', meta: true, x: -0.7, y: -3.6, r: 1.5, mil: 45 },
+  { id: 'gamboa', nome: 'Gamboa', meta: false, x: -1.1, y: 1.6, r: 1, mil: 11 },
+  { id: 'laranjeiras', nome: 'Laranjeiras', meta: true, x: -1.9, y: -3.4, r: 1.5, mil: 40 },
+  { id: 'rio-comprido', nome: 'Rio Comprido', meta: false, x: -3.6, y: -1.3, r: 1.5, mil: 37 },
+  { id: 'santo-cristo', nome: 'Santo Cristo', meta: false, x: -1.6, y: 1.2, r: 1, mil: 10 },
+];
+const R6B_MAXIMO = 20;
+const r6bAtiva = () => !!p42?.r6?.bairros;
+const r6bLugar = (id) => R6B_SUGERIDOS.find((b) => b.id === id) ?? R6B_CIDADE.find((b) => b.id === id) ?? null;
+const r6bOrigem = (b) => [b.area ? 'área de entrega' : '', b.pedidos ? `${numero(b.pedidos)} pedidos em 30 dias` : '', !b.area && !b.pedidos ? 'da busca' : ''].filter(Boolean).join(' · ');
+const r6bComo = (b) => (b.meta ? 'na Meta, o bairro dela' : `na Meta, um círculo de ${numero(b.r, b.r % 1 ? 1 : 0)} km no centro`);
+/* Os bairros marcados, na ordem da lista (os sugeridos e depois os da busca). */
+function r6bMarcados(m) {
+  const ids = new Set(m.bairros ?? []);
+  return [...R6B_SUGERIDOS, ...R6B_CIDADE].filter((b) => ids.has(b.id));
+}
+/* A estimativa de exemplo para os bairros juntos (em mil): o círculo pega um pedaço do vizinho, então conta um pouco mais. */
+function r6bFaixa(ids) {
+  const soma = ids.map(r6bLugar).filter(Boolean).reduce((t, b) => t + b.mil * (b.meta ? 1 : 1.15), 0);
+  return [Math.round(soma * 0.9), Math.round(soma * 1.08)];
+}
+function r6bEstimativa(m) {
+  const bs = r6bMarcados(m);
+  if (!bs.length) return '';
+  const [de, ate] = r6bFaixa(bs.map((b) => b.id));
+  return `<p class="p42-estimativa" id="r6b-estimativa" role="status">${ic('i-user-plus')}<span><b>Cerca de ${numero(de)} mil a ${numero(ate)} mil pessoas</b> de 18 anos ou mais nos ${bs.length === 1 ? 'bairro escolhido' : `${bs.length} bairros escolhidos`}, pela estimativa da Meta (lida agora, todos os lugares juntos). Com menos de ${numero(R6_MINIMO)} pessoas, o pedido não sai.</span></p>`;
+}
+/* A prévia em escala, sem mapa de fundo (como os anéis de Minha marca › Região): a loja, os círculos do Liame e os bairros
+   da Meta, cada um no centro dele. A divisa do bairro da Meta é a dela; aqui ele aparece aproximado por um círculo. */
+function r6bPrevia(m) {
+  const bs = r6bMarcados(m);
+  if (!bs.length) return '';
+  const xs = bs.flatMap((b) => [b.x - b.r, b.x + b.r]).concat([0]), ys = bs.flatMap((b) => [b.y - b.r, b.y + b.r]).concat([0]);
+  const pad = 0.6, x0 = Math.min(...xs) - pad, x1 = Math.max(...xs) + pad, y0 = Math.min(...ys) - pad, y1 = Math.max(...ys) + pad;
+  const w = x1 - x0, h = y1 - y0, fs = Math.max(w, h) * 0.04;
+  const circ = bs.map((b) => `<circle class="${b.meta ? 'r6b-c-meta' : 'r6b-c-liame'}" cx="${b.x}" cy="${-b.y}" r="${b.r}"/>`).join('');
+  const nomes = bs.map((b) => `<text x="${b.x}" y="${-b.y - b.r * 0.55}" font-size="${fs}" text-anchor="middle">${esc(b.nome)}</text>`).join('');
+  const titulo = `Prévia em escala: a ${P42_LOJA.nome} e ${bs.length === 1 ? 'o bairro escolhido' : `os ${bs.length} bairros escolhidos`}. ${bs.filter((b) => b.meta).map((b) => b.nome).join(', ') || 'Nenhum'} pelo bairro da Meta; ${bs.filter((b) => !b.meta).map((b) => b.nome).join(', ') || 'nenhum'} por um círculo no centro.`;
+  const regua = `<line class="r6b-regua" x1="${x0 + w * 0.05}" y1="${y1 - h * 0.06}" x2="${x0 + w * 0.05 + 1}" y2="${y1 - h * 0.06}"/><text x="${x0 + w * 0.05}" y="${y1 - h * 0.06 - fs * 0.5}" font-size="${fs}">1 km</text>`;
+  return `<figure class="r6b-previa"><svg viewBox="${x0} ${-y1} ${w} ${h}" role="img" aria-labelledby="r6b-previa-t"><title id="r6b-previa-t">${esc(titulo)}</title>${circ}${nomes}<circle class="r6b-loja" cx="0" cy="0" r="${Math.max(w, h) * 0.018}"/>${regua}</svg>
+    <figcaption><span><i class="r6b-leg r6b-leg--liame" aria-hidden="true"></i>círculo do Liame, no centro do bairro</span><span><i class="r6b-leg r6b-leg--meta" aria-hidden="true"></i>bairro da Meta (a divisa é a dela; aqui, aproximada)</span><span><i class="r6b-leg r6b-leg--loja" aria-hidden="true"></i>${P42_LOJA.nome}</span></figcaption></figure>`;
+}
+/* "Quem vê" com a escolha entre o raio (como já era) e os bairros. */
+function r6bQuemVe(m, semEndereco) {
+  const modo = m.quem ?? 'raio';
+  const seg = `<div class="seg r6b-modo" role="group" aria-label="Como escolher quem vê">${[['raio', 'Raio em volta da loja', 'i-compass'], ['bairros', 'Bairros', 'i-map-pin']].map(([id, rot, icone]) => `<button type="button" data-r6b-modo="${id}" aria-pressed="${modo === id}"${semEndereco ? ' disabled' : ''}>${ic(icone)}${rot}</button>`).join('')}</div>`;
+  if (modo === 'raio') {
+    return `<fieldset class="campo"><legend>Quem vê</legend>${seg}<div class="pd-escolha">${P42_RAIOS.map(([id, rot]) => `<label class="pd-opcao"><input type="radio" name="p42-raio" value="${id}"${m.raio === id ? ' checked' : ''}${semEndereco ? ' disabled' : ''} aria-describedby="p42-raio-dica">${rot}</label>`).join('')}</div><p class="campo-dica" id="p42-raio-dica">${p42RaioDica(m)}</p>${!semEndereco ? r6Estimativa(m) : ''}</fieldset>`;
+  }
+  const marcados = new Set(m.bairros ?? []);
+  const extras = R6B_CIDADE.filter((b) => marcados.has(b.id));
+  const linha = (b) => `<li><label class="r6b-bairro"><input type="checkbox" name="r6b-bairro" value="${b.id}"${marcados.has(b.id) ? ' checked' : ''}${!marcados.has(b.id) && marcados.size >= R6B_MAXIMO ? ' disabled' : ''} aria-describedby="r6b-dica"><span class="r6b-nome"><b>${esc(b.nome)}</b><small>${esc(r6bOrigem(b))}</small></span><span class="r6b-como">${b.meta ? ic('i-check-circle') : ic('i-compass')}${esc(r6bComo(b))}</span></label></li>`;
+  const lista = `<ul class="r6b-lista" aria-label="Bairros">${[...R6B_SUGERIDOS, ...extras].map(linha).join('')}</ul>`;
+  const busca = m.busca == null
+    ? `<button class="btn btn--sm btn--ghost r6b-outro" type="button" data-r6b-outro>${ic('i-plus')}Outro bairro da cidade</button>`
+    : (() => {
+        const q = m.busca.trim().toLowerCase();
+        const achados = R6B_CIDADE.filter((b) => !marcados.has(b.id) && (!q || b.nome.toLowerCase().includes(q)));
+        return `<div class="campo r6b-busca"><label for="r6b-busca">Outro bairro do Rio de Janeiro</label><input class="input" id="r6b-busca" autocomplete="off" maxlength="80" value="${esc(m.busca)}" aria-describedby="r6b-busca-dica" aria-controls="r6b-achados"><p class="campo-dica" id="r6b-busca-dica">Os bairros do município no IBGE, os mesmos de Sua região.</p><ul class="r6b-achados" id="r6b-achados" aria-label="Bairros achados">${achados.length ? achados.map((b) => `<li><button class="btn btn--sm" type="button" data-r6b-add="${b.id}">${ic('i-plus')}${esc(b.nome)}<small>${esc(r6bComo(b))}</small></button></li>`).join('') : '<li class="campo-dica">Nenhum bairro com esse nome no Rio de Janeiro.</li>'}</ul></div>`;
+      })();
+  const nenhum = marcados.size === 0
+    ? `<div class="pd-aviso pd-aviso--perigo" id="r6b-nenhum" role="alert" tabindex="-1">${ic('i-alert-circle')}<div><b>Nenhum bairro marcado</b><span>Marque pelo menos um bairro, ou volte para o raio em volta da loja.</span></div></div>`
+    : '';
+  const dica = `<p class="campo-dica" id="r6b-dica">${marcados.size} de até ${R6B_MAXIMO} bairros. Pessoas de 18 anos ou mais que estão nos bairros marcados. Onde a Meta tem o bairro (a busca de lugares dela acha o nome na mesma cidade), o anúncio vai para o bairro dela; onde não tem, o Liame usa um círculo no centro do bairro, do tamanho dele pelo IBGE (de 1 a 3 km), que pode pegar um pedaço do vizinho. O público ampliado da Meta fica desligado.</p>`;
+  return `<fieldset class="campo"><legend>Quem vê</legend>${seg}<p class="campo-dica r6b-de-onde">Marcadas ao abrir: as áreas de entrega da ${P42_LOJA.nome} (Minha marca › Região). Os bairros com pedidos vêm de Sua região, nos últimos 30 dias.</p>${lista}${busca}${dica}${nenhum}${r6bPrevia(m)}${r6bEstimativa(m)}</fieldset>`;
+}
+/* Quem vê, no pedido em Aprovações (a tabela e o resumo). */
+function r6bQuemVeTxt(c) {
+  if (c.quem !== 'bairros') return `${p42KmTxt(c.raio)} em volta da ${P42_LOJA.nome} (${P42_LOJA.endereco}) · 18 anos ou mais · sem o público ampliado da Meta`;
+  const bs = (c.bairros ?? []).map(r6bLugar).filter(Boolean);
+  return `${bs.length} bairros: ${bs.map((b) => `${b.nome} (${b.meta ? 'o bairro da Meta' : `círculo de ${numero(b.r, b.r % 1 ? 1 : 0)} km`})`).join(', ')} · 18 anos ou mais · sem o público ampliado da Meta`;
+}
+function r6bResumo(c) {
+  if (c.quem !== 'bairros') return `<dt>Quem vê</dt><dd>${p42KmTxt(c.raio)} em volta da ${P42_LOJA.nome}<small>${P42_LOJA.endereco} · 18 anos ou mais</small></dd>`;
+  const bs = (c.bairros ?? []).map(r6bLugar).filter(Boolean);
+  return `<dt>Quem vê</dt><dd>${bs.length} bairros<small>${esc(bs.map((b) => b.nome).join(', '))} · 18 anos ou mais</small></dd>`;
+}
+const r6bPessoas = (c) => {
+  if (c.quem !== 'bairros') return ['Pessoas no raio', 'de 182 mil a 214 mil, pela estimativa da Meta ao pedir'];
+  const [de, ate] = r6bFaixa(c.bairros ?? []);
+  return ['Pessoas nos bairros', `de ${numero(de)} mil a ${numero(ate)} mil, pela estimativa da Meta ao pedir`];
+};
+/* As decisões propostas da R6-3. */
+const P42_DECISOES_R6_3 = [
+  { id: 'D-RG-53', titulo: 'Raio ou bairros, na mesma gaveta', oque: '"Quem vê" ganha a escolha "Raio em volta da loja | Bairros". O raio fica como está; nos bairros, a campanha vai para 1 a 20 bairros marcados. O resto da gaveta (objetivo, verba, teto, estimativa, aprovação com o código) não muda.', porque: 'O pedido do dono em 13/11/2026: a loja entrega por bairro, e o círculo pega bairros onde ela não entrega (os cliques de fora da área que a R4 mostrou).', rec: 'Assim.' },
+  { id: 'D-RG-54', titulo: 'Como cada bairro vai para a Meta', oque: 'O Liame procura o bairro na busca de lugares da Meta (tipo bairro, na cidade da loja). Se achar o mesmo nome na mesma cidade, o anúncio vai para o bairro da Meta, com a divisa dela. Se não achar, vai um círculo no centro do bairro (o ponto pelo OpenStreetMap, como o da loja na R1), com o raio pelo tamanho do bairro no IBGE (o raio de um círculo da mesma área, arredondado para cima de meio em meio km, de 1 a 3 km). A tela diz qual dos dois em cada bairro.', porque: 'A Meta aceita até 200 círculos de 1 a 80 km num conjunto; o bairro dela segue a divisa, mas a documentação não diz se há bairros do Brasil. A conferir antes do código, com uma busca de verdade (Cordovil, Centro, Lapa).', rec: 'Assim; sem bairros do Brasil na Meta, todos vão por círculo, e a tela já diz isso.' },
+  { id: 'D-RG-55', titulo: 'Os bairros sugeridos', oque: 'Primeiro as áreas de entrega da loja (Minha marca › Região, até 20), marcadas ao abrir; depois os bairros com pedidos nos últimos 30 dias (Sua região), com o número de pedidos, desmarcados. "Outro bairro da cidade" busca nos bairros do município no IBGE.', porque: 'A área de entrega é onde a loja atende; os pedidos mostram onde já tem cliente. A busca cobre o bairro que ainda não aparece em nenhum dos dois.', rec: 'Assim.' },
+  { id: 'D-RG-56', titulo: 'A estimativa e a prévia valem para os bairros juntos', oque: 'A estimativa de público (D-RG-50) pergunta à Meta pelos lugares marcados numa vez só; com menos de 1.000 pessoas, o pedido não sai. A prévia em escala, sem mapa de fundo (como os anéis da Região, D-RG-15), mostra a loja, os círculos e os bairros da Meta. Em Aprovações, "Quem vê" lista os bairros, cada um com o jeito que vai para a Meta.', porque: 'A aprovação vê o mesmo que a gaveta viu.', rec: 'Assim.' },
+  { id: 'D-RG-57', titulo: 'O Google fica para a R9', oque: 'O Google tem bairros do Brasil: no Liame já aparecem 12 bairros, 62 distritos e 112 CEPs de 5 dígitos, lidos dos cliques em 13/11/2026. A mesma escolha entra na campanha do Google na R9, pelo bairro do Google, ou pelo CEP quando ele não tiver o bairro.', porque: 'A campanha desta gaveta é da Meta; a do Google (P45) ganha a escolha com a R9, que já trata das buscas por bairro.', rec: 'Na R9.' },
+];
+function r6bDecisoesHtml() {
+  const lista = P42_DECISOES_R6_3.map((d) => `<li><div><b>${d.id} · ${esc(d.titulo)}</b><span><b>O que é:</b> ${esc(d.oque)}</span><span><b>Por quê:</b> ${esc(d.porque)}</span><span><b>Recomendação:</b> ${esc(d.rec)}</span></div><span class="st st--concluido">Aprovada</span></li>`).join('');
+  return `<section class="card p42-decisoes" id="p42-decisoes-r6-3" aria-labelledby="p42-dec-r6-3-t"><div class="card-cab"><div><h2 id="p42-dec-r6-3-t" tabindex="-1">Revisão R6-3: quem vê por bairros (D-RG-53 a D-RG-57)</h2><p class="card-sub">Pedido do dono em 13/11/2026 ("é possível escolher como na Meta por raio ou por bairro?"). Aprovada pelo dono em 13/11/2026, com as recomendações. Estados do grupo "R6-3" no seletor.</p></div></div><ul class="rev-decisoes">${lista}</ul></section>`;
+}
+
 
 /* ---------- utilidades ---------- */
 const P42_DUR = (s) => `${Math.floor(s / 60)}:${String(Math.round(s) % 60).padStart(2, '0')}`;
@@ -7299,7 +7451,7 @@ function p42HtmlMontar() {
     ? `<p class="p42-aviso" id="p42-obj-dica">${ic('i-info')}<span><b>Só o WhatsApp.</b> A loja recebe os pedidos online por outra plataforma: use o objetivo de conversas no WhatsApp.</span></p>`
     : `<p class="campo-dica" id="p42-obj-dica">${m.objetivo === 'alcance' ? `Mostra o anúncio para o máximo de pessoas do raio, no máximo 2 vezes por pessoa a cada 7 dias; o botão leva ao cardápio. Conta no teto de 25% da verba do mês para alcance e seguidores.` : m.objetivo === 'seguidores' ? `Leva ao perfil ${esc(ASSINA_P10.instagram)} no Instagram, para a pessoa seguir; a Meta mostra para quem costuma visitar perfis. Conta no teto de 25%. ${p42Conferir('A combinação do objetivo com o perfil do Instagram')}: o Liame confere com a Meta antes de criar.` : zap ? `Abre uma conversa no WhatsApp da Página ${esc(ASSINA_P10.pagina)}. A Página precisa ter o número do WhatsApp ligado, e a Meta confere ao criar.` : `Leva ao cardápio online da ${P42_LOJA.nome}, onde a pessoa faz o pedido.`}</p>`;
   const objetivo = `<fieldset class="campo"><legend>O que você quer do anúncio</legend><div class="pd-escolha">${Object.entries(objetivos).map(([id, x]) => `<label class="pd-opcao"><input type="radio" name="mc-objetivo" value="${id}"${m.objetivo === id ? ' checked' : ''}${id === 'cardapio' && semCardapio ? ' disabled' : ''} aria-describedby="p42-obj-dica">${ic(x.ic)}${x.rot}</label>`).join('')}</div>${objDica}</fieldset>`;
-  const publico = `<fieldset class="campo"><legend>Quem vê</legend><div class="pd-escolha">${P42_RAIOS.map(([id, rot]) => `<label class="pd-opcao"><input type="radio" name="p42-raio" value="${id}"${m.raio === id ? ' checked' : ''}${semEndereco ? ' disabled' : ''} aria-describedby="p42-raio-dica">${rot}</label>`).join('')}</div><p class="campo-dica" id="p42-raio-dica">${p42RaioDica(m)}</p>${r6Ativa() && !semEndereco ? r6Estimativa(m) : ''}</fieldset>`;
+  const publico = r6bAtiva() ? r6bQuemVe(m, semEndereco) : `<fieldset class="campo"><legend>Quem vê</legend><div class="pd-escolha">${P42_RAIOS.map(([id, rot]) => `<label class="pd-opcao"><input type="radio" name="p42-raio" value="${id}"${m.raio === id ? ' checked' : ''}${semEndereco ? ' disabled' : ''} aria-describedby="p42-raio-dica">${rot}</label>`).join('')}</div><p class="campo-dica" id="p42-raio-dica">${p42RaioDica(m)}</p>${r6Ativa() && !semEndereco ? r6Estimativa(m) : ''}</fieldset>`;
   const verba = `<div class="campo"><label for="mc-verba">Verba diária</label><div class="pd-valor"><span aria-hidden="true">R$</span><input id="mc-verba" inputmode="decimal" autocomplete="off" maxlength="10" value="${esc(m.verba)}" aria-describedby="mc-verba-dica${m.erro && m.campo === 'mc-verba' ? ' mc-erro' : ''}"${inv('mc-verba')}></div><p class="campo-dica" id="mc-verba-dica">${L.tetoCampanha == null ? 'A empresa ainda não definiu o teto por campanha.' : `Teto por campanha: ${moeda(L.tetoCampanha)} por dia.`} Enquanto estiver pausada, ela não gasta.</p>${r6Ativa() ? r6Teto(m) : ''}</div>`;
   const fim = `<div class="campo"><label for="mc-fim">Termina em <span class="campo-dica">Opcional.</span></label><input class="input" type="date" id="mc-fim" min="2026-09-30" value="${esc(m.fim)}" aria-describedby="mc-fim-dica"${inv('mc-fim')}><p class="campo-dica" id="mc-fim-dica">Em branco, não tem data de fim. Ela começa quando você ativar.</p></div>`;
   const erro = m.erro && m.campo !== 'midia' ? `<p class="campo-erro" id="mc-erro" role="alert" tabindex="-1">${m.erro}${m.ver ? ` <button class="link-bt" type="button" data-p10-ver="${m.ver}">Ver o pedido</button>` : ''}</p>` : '';
@@ -7318,7 +7470,7 @@ function p42HtmlMontar() {
   const nota = `<p class="pd-nota">${ic('i-shield')}<span>O pedido vai para Aprovações, com a prévia do anúncio. Depois da aprovação com o código do app, o Liame confere com a Meta e cria ${partes}, tudo pausado.${video ? ' A Meta prepara o vídeo antes (até 15 minutos).' : ''}${reels ? ' Antes, o Liame pergunta à Meta se este Reels pode virar anúncio: o Reels com música do Instagram ou com filtro interativo não pode.' : ''}</span></p>`;
   const corpo = `${aviso}${origem}<div class="p42-grade"><div class="p42-f1">${peca}${reels ? '' : p42CampoMidia(m)}</div>${lado}<div class="p42-f2">${nome}${objetivo}${publico}${verba}${fim}${erro}<p class="pd-efeito" id="mc-efeito" role="status">${efeitoDaCampanha(m)}</p>${assina}${destino}${limites}${nota}</div></div>`;
   const acoes = semEndereco || r6Bloqueia(m)
-    ? `${fechar}<button class="btn btn--primary" type="button" data-p42-bloqueado aria-disabled="true" aria-describedby="${semEndereco ? 'p42-falha-txt' : p42?.r6?.pequeno ? 'r6-pequeno' : 'r6-teto'}">Pedir a criação</button>`
+    ? `${fechar}<button class="btn btn--primary" type="button" data-p42-bloqueado aria-disabled="true" aria-describedby="${semEndereco ? 'p42-falha-txt' : p42?.r6?.pequeno ? 'r6-pequeno' : r6bAtiva() && m.quem === 'bairros' && !(m.bairros ?? []).length ? 'r6b-nenhum' : 'r6-teto'}">Pedir a criação</button>`
     : '<button class="btn" type="button" data-fechar>Cancelar</button><button class="btn btn--primary" type="submit">Pedir a criação</button>';
   return so(corpo, acoes);
 }
@@ -7376,7 +7528,7 @@ function p42ConferirPedido(m) {
   const igual = Object.values(p10.pedidos).find((q) => q.tipo === 'criar' && q.estado === 'pendente' && (m.peca ? q.peca === m.peca : q.origem === 'reels'));
   if (igual) return { erro: 'Já existe um pedido de campanha com esta peça esperando aprovação. Decida esse antes de pedir outro.', ver: igual.id };
   const versao = m.peca ? versaoDe(p10.pecas[m.peca]).n : null;
-  return { pedido: { tipo: 'criar', p42: true, origem: m.origem, peca: m.peca, versao, foto: m.origem === 'reels' ? null : m.foto, nome, objetivo: m.objetivo, raio: m.raio, verba, fim: m.fim || null } };
+  return { pedido: { tipo: 'criar', p42: true, origem: m.origem, peca: m.peca, versao, foto: m.origem === 'reels' ? null : m.foto, nome, objetivo: m.objetivo, raio: m.raio, quem: m.quem ?? 'raio', bairros: m.quem === 'bairros' ? [...(m.bairros ?? [])] : null, verba, fim: m.fim || null } };
 }
 const enviarCampanhaP42 = enviarCampanha;
 enviarCampanha = function () {
@@ -7440,6 +7592,40 @@ document.addEventListener('change', (e) => {
   m.raio = t.value;
   const d = $('#p42-raio-dica'); if (d) d.textContent = p42RaioDica(m);
 });
+/* R6-3: o modo de quem vê, os bairros marcados, a busca de outro bairro e o adicionar (o resto da gaveta fica como está). */
+document.addEventListener('click', (e) => {
+  const t = e.target instanceof Element ? e.target : null, m = p10?.montar;
+  if (!t || !m?.p42 || !r6bAtiva()) return;
+  const modo = t.closest('[data-r6b-modo]');
+  if (modo) { lerMontar(); m.quem = modo.dataset.r6bModo; desenharMontar(); $(`[data-r6b-modo="${m.quem}"]`)?.focus(); anunciar(m.quem === 'bairros' ? `Quem vê: ${(m.bairros ?? []).length} bairros marcados.` : 'Quem vê: o raio em volta da loja.'); return; }
+  if (t.closest('[data-r6b-outro]')) { lerMontar(); m.busca = ''; desenharMontar(); $('#r6b-busca')?.focus(); return; }
+  const add = t.closest('[data-r6b-add]');
+  if (add) {
+    lerMontar();
+    const b = r6bLugar(add.dataset.r6bAdd);
+    if ((m.bairros ?? []).length >= R6B_MAXIMO) { anunciar(`Já são ${R6B_MAXIMO} bairros: desmarque um antes.`); return; }
+    m.bairros = [...(m.bairros ?? []), b.id]; m.busca = null; desenharMontar();
+    $(`input[name="r6b-bairro"][value="${b.id}"]`)?.focus();
+    anunciar(`${b.nome} entrou: ${r6bComo(b)}.`);
+  }
+});
+document.addEventListener('change', (e) => {
+  const t = e.target instanceof Element ? e.target : null, m = p10?.montar;
+  if (!t || !m?.p42 || !r6bAtiva() || !t.matches('input[name="r6b-bairro"]')) return;
+  lerMontar();
+  const ids = new Set(m.bairros ?? []);
+  if (t.checked) ids.add(t.value); else ids.delete(t.value);
+  m.bairros = [...ids];
+  desenharMontar();
+  $(`input[name="r6b-bairro"][value="${t.value}"]`)?.focus();
+});
+document.addEventListener('input', (e) => {
+  const t = e.target instanceof Element ? e.target : null, m = p10?.montar;
+  if (!t || !m?.p42 || t.id !== 'r6b-busca') return;
+  const pos = t.selectionStart;
+  lerMontar(); m.busca = t.value; desenharMontar();
+  const n = $('#r6b-busca'); if (n) { n.focus(); n.setSelectionRange(pos, pos); }
+});
 /* Fechar e abrir de novo na mesma hora: o "fechou" que chega depois, com a gaveta já aberta de novo, não vale. */
 dlgMontar.addEventListener('close', (e) => { if (dlgMontar.open) e.stopImmediatePropagation(); }, true);
 /* ---------- Aprovações: a campanha nova com a foto ou o vídeo da loja ---------- */
@@ -7502,8 +7688,8 @@ function p42Tabela(q, c) {
   return [
     ['Campanha', 'não existe', `“${esc(c.nome)}”, pausada`],
     ['O que você quer', '—', OBJETIVOS_R6[c.objetivo].rot],
-    ...(c.objetivo === 'alcance' ? [['Frequência', '—', 'no máximo 2 vezes por pessoa a cada 7 dias'], ['Pessoas no raio', '—', 'de 182 mil a 214 mil, pela estimativa da Meta ao pedir']] : []),
-    ['Quem vê', '—', `${p42KmTxt(c.raio)} em volta da ${P42_LOJA.nome} (${P42_LOJA.endereco}) · 18 anos ou mais · sem o público ampliado da Meta`],
+    ...(c.objetivo === 'alcance' ? [['Frequência', '—', 'no máximo 2 vezes por pessoa a cada 7 dias'], [r6bPessoas(c)[0], '—', r6bPessoas(c)[1]]] : []),
+    ['Quem vê', '—', r6bQuemVeTxt(c)],
     ['Quem assina', '—', `a Página ${esc(ASSINA_P10.pagina)} (no Instagram, ${esc(ASSINA_P10.instagram)})`],
     ['Verba diária', '—', `${moeda(c.verba)} (só gasta depois de ativada)`],
     ['Termina em', '—', c.fim ? dataCurta(c.fim) : 'sem data de fim'],
@@ -7516,7 +7702,7 @@ function p42Tabela(q, c) {
 function p42SecaoAnuncio(q, c) {
   const reels = c.origem === 'reels', video = p42EhVideo(c), f = p42MidiaDe(c), { v, p } = p42Texto(c), aba = reels ? 'instagram' : p42?.abaAp ?? 'instagram';
   const resumo = `<dl class="pd-agora p42-resumo"><dt>Quem assina</dt><dd>Página ${esc(ASSINA_P10.pagina)}<small>no Instagram, ${esc(ASSINA_P10.instagram)}</small></dd>
-    <dt>Quem vê</dt><dd>${p42KmTxt(c.raio)} em volta da ${P42_LOJA.nome}<small>${P42_LOJA.endereco} · 18 anos ou mais</small></dd>${c.objetivo === 'alcance' ? '<dt>O que você quer</dt><dd>Ser conhecido no raio<small>no máximo 2 vezes por pessoa a cada 7 dias · de 182 mil a 214 mil pessoas no raio, pela estimativa da Meta ao pedir</small></dd>' : ''}
+    ${r6bResumo(c)}${c.objetivo === 'alcance' ? `<dt>O que você quer</dt><dd>Ser conhecido no raio<small>no máximo 2 vezes por pessoa a cada 7 dias · ${r6bPessoas(c)[1].replace('de ', 'de ').replace(', pela', ' pessoas, pela')}</small></dd>` : ''}
     <dt>Verba diária</dt><dd>${moeda(c.verba)}<small>${q.tipo === 'criar' ? 'só gasta depois de ativada' : 'no máximo, por dia'}</small></dd></dl>`;
   const linhas = [
     q.tipo === 'criar' && q.estado === 'pendente' ? linha('i-pause', '<b>Nasce pausada:</b> não aparece para ninguém e não gasta.') : '',
@@ -7601,7 +7787,7 @@ function p42HtmlPedido(id) {
   }
   const km = p42KmTxt(c.raio), ate = moeda(d2(c.verba * MES.faltam));
   const FRASE = {
-    criar: `Uma campanha nova na Meta, com ${reels ? `o Reels de ${P42_REELS.dia}, como está no post` : `a peça <b>“${esc(v.titulo)}”</b> e ${video ? 'um vídeo' : 'uma foto'} da loja`}, para quem está a até ${km} da ${P42_LOJA.nome}. <b>Ela nasce pausada:</b> não aparece para ninguém e não gasta. Ativar é outro pedido, com outra aprovação. Se você aprovar, o Liame confere com a Meta e cria, passo a passo.`,
+    criar: `Uma campanha nova na Meta, com ${reels ? `o Reels de ${P42_REELS.dia}, como está no post` : `a peça <b>“${esc(v.titulo)}”</b> e ${video ? 'um vídeo' : 'uma foto'} da loja`}, ${c.quem === 'bairros' ? `para quem está nos ${(c.bairros ?? []).length} bairros escolhidos, em volta da ${P42_LOJA.nome}` : `para quem está a até ${km} da ${P42_LOJA.nome}`}. <b>Ela nasce pausada:</b> não aparece para ninguém e não gasta. Ativar é outro pedido, com outra aprovação. Se você aprovar, o Liame confere com a Meta e cria, passo a passo.`,
     ativar: `A campanha <b>“${esc(c.nome)}”</b> começa a aparecer e a gastar <b>até ${moeda(c.verba)} por dia</b>. Até o fim de ${MES.nome} são até ${ate}, dentro da verba do mês. Se você aprovar, o Liame confere com a Meta e ativa.`,
     pausar: `A campanha <b>“${esc(c.nome)}”</b> volta a ficar <b>pausada</b>, como estava antes da ativação que você está desfazendo. Se você aprovar, o Liame confere com a Meta e pausa.`,
   }[q.tipo];
@@ -7743,24 +7929,33 @@ definirP10 = function (v, opts) { p42Desligar(); definirP10P42(v, opts); };
 const P42_BASE = {
   'aprovacoes-criar': 'campanha-aprovar', 'aprovacoes-criando': 'campanha-criando', 'aprovacoes-criada': 'campanha-criada', 'aprovacoes-nao-criada': 'campanha-criada',
   'aprovacoes-ativar': 'ativar-aprovar', 'aprovacoes-ativada': 'ativada', reels: 'criativos-em-dia', decisoes: 'criativos-em-dia',
-  'r6-aprovacoes': 'campanha-aprovar',
+  'r6-aprovacoes': 'campanha-aprovar', 'r6-bairros-aprovacoes': 'campanha-aprovar', 'decisoes-r6-3': 'criativos-em-dia',
 };
 function p42Estado(v, { focar = false } = {}) {
   if (!P42_TODOS[v]) v = 'gaveta-foto';
   $('#p42-decisoes')?.remove();
   $('#p42-decisoes-r6')?.remove();
+  $('#p42-decisoes-r6-3')?.remove();
   if (p42) p42.ativo = false;
   definirP10P42(P42_BASE[v] ?? 'peca-aprovada');
-  const R6 = { 'r6-alcance': { obj: 'alcance' }, 'r6-seguidores': { obj: 'seguidores' }, 'r6-raio-pequeno': { obj: 'alcance', pequeno: true, raio: '3' }, 'r6-teto': { obj: 'alcance', teto: true, verba: 60 }, 'r6-aprovacoes': { obj: 'alcance' } };
+  const R6 = { 'r6-alcance': { obj: 'alcance' }, 'r6-seguidores': { obj: 'seguidores' }, 'r6-raio-pequeno': { obj: 'alcance', pequeno: true, raio: '3' }, 'r6-teto': { obj: 'alcance', teto: true, verba: 60 }, 'r6-aprovacoes': { obj: 'alcance' },
+    'r6-bairros': { obj: 'alcance', bairros: true }, 'r6-bairros-outro': { obj: 'alcance', bairros: true, busca: 'La' }, 'r6-bairros-nenhum': { obj: 'alcance', bairros: true, nenhum: true },
+    'r6-bairros-aprovacoes': { obj: 'alcance', bairros: true } };
   p42 = { ativo: true, estado: v, loja: v === 'gaveta-sem-endereco' ? 'bairro' : 'endereco', semCardapio: v === 'gaveta-sem-cardapio', abaAp: 'instagram', r6: R6[v] ?? null };
   if (selP42.value !== v) selP42.value = v;
   selP10.selectedIndex = -1;
   // As peças ficam só com o texto: a imagem feita por IA (X7) segue adiada, e a mídia vem de Fotos.
   for (const p of Object.values(p10.pecas)) for (const x of p.versoes) x.arte = null;
 
-  if (P42_APROV.includes(v) || v === 'r6-aprovacoes') {
+  if (v === 'decisoes-r6-3') {
+    desenharP8();
+    $('#criativos .view-cab')?.insertAdjacentHTML('afterend', r6bDecisoesHtml());
+    if (focar) $('#p42-dec-r6-3-t')?.focus({ preventScroll: true });
+    return;
+  }
+  if (P42_APROV.includes(v) || v === 'r6-aprovacoes' || v === 'r6-bairros-aprovacoes') {
     const c = p10.pedidos['cn-criar-1'];
-    Object.assign(c, { p42: true, origem: 'peca', foto: v === 'aprovacoes-criando' ? 'v2' : 'f2', raio: '5', ...(v === 'r6-aprovacoes' ? { objetivo: 'alcance' } : {}) });
+    Object.assign(c, { p42: true, origem: 'peca', foto: v === 'aprovacoes-criando' ? 'v2' : 'f2', raio: '5', ...(v === 'r6-aprovacoes' ? { objetivo: 'alcance' } : {}), ...(v === 'r6-bairros-aprovacoes' ? { objetivo: 'alcance', quem: 'bairros', bairros: ['centro', 'lapa', 'gloria', 'santa-teresa'] } : { quem: 'raio', bairros: null }) });
     if (v === 'aprovacoes-criando') c.passo = p42Partes(c).findIndex((x) => x.video);
     if (v === 'aprovacoes-nao-criada') {
       Object.assign(c, { estado: 'nao_criada', sit: 'pausada', falhou: 1, motivoMeta: 'O público deste conjunto é pequeno demais.' });
@@ -7788,6 +7983,11 @@ function p42Estado(v, { focar = false } = {}) {
   const midia = { 'gaveta-video': { midia: 'video', foto: 'v2' }, 'gaveta-sem-capa': { midia: 'video', foto: 'v3' } }[v] ?? {};
   p42AbrirGaveta({ origem: 'peca', peca, gatilho: $(`[data-p10-usar="${peca}"]`), semEspera: true, ...midia });
   if (p42.r6) { Object.assign(p10.montar, { objetivo: p42.r6.obj, ...(p42.r6.raio ? { raio: p42.r6.raio } : {}), ...(p42.r6.verba ? { verba: emTexto(p42.r6.verba) } : {}) }); desenharMontar(); }
+  // R6-3: os bairros, com as áreas de entrega marcadas ao abrir (D-RG-55).
+  if (p42.r6?.bairros) {
+    Object.assign(p10.montar, { quem: 'bairros', bairros: p42.r6.nenhum ? [] : R6B_SUGERIDOS.filter((b) => b.area).map((b) => b.id), busca: p42.r6.busca ?? null });
+    desenharMontar();
+  }
   if (v === 'gaveta-pedido' || v === 'gaveta-sem-capa') enviarCampanha();
 }
 selP42.addEventListener('change', () => p42Estado(selP42.value, { focar: true }));

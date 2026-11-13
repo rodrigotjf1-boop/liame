@@ -2,6 +2,10 @@ import {
   CreateNewCampaignRequest,
   NewCampaignAudienceQuery,
   NewCampaignAudienceResponse,
+  NewCampaignDistrictSearchQuery,
+  NewCampaignDistrictSearchResponse,
+  NewCampaignDistrictsQuery,
+  NewCampaignDistrictsResponse,
   NewCampaignOptionsQuery,
   NewCampaignOptionsResponse,
   NewCampaignResponse,
@@ -102,6 +106,38 @@ export class CampanhasNovasController {
   @ApiNotFoundResponse({ standardSchema: ProblemDetails })
   estimarPublico(@Auth() auth: AuthContext, @Query({ schema: NewCampaignAudienceQuery }) query: NewCampaignAudienceQuery): Promise<NewCampaignAudienceResponse> {
     return this.campanhas.estimarPublico(auth, query);
+  }
+
+  @Get('districts')
+  @Permissao('campanhas.ver')
+  @ApiOperation({
+    summary: 'Os bairros da gaveta da campanha nova',
+    description:
+      'Para "Quem vê: Bairros" (R6, parte 3; D-RG-53 a D-RG-55): os bairros do IBGE do município da loja que a gaveta sugere, as áreas de entrega da loja primeiro (`delivery_area`, marcadas ao abrir), depois os bairros com pedidos na última leitura do Regem (`orders`, nos `orders_days` dela) e os escolhidos pela busca (`extra`). Cada um diz como vai para a Meta (`how`): `meta` (o bairro dela, achado pelo mesmo nome na mesma cidade), `circulo` (um círculo no centro do bairro, pelo OpenStreetMap, com o raio pelo tamanho do bairro no IBGE, de 1 a 3 km), `procurando` (o centro ainda não foi achado: `pending` e a gaveta pergunta de novo) ou `sem_centro` (o mapa não achou o bairro). O centro vem a partir da loja, em km (`x_km` para leste, `y_km` para norte), para a prévia em escala. `unmatched`: as áreas de entrega que não estão entre os bairros do IBGE. A loja sem o ponto no endereço ou sem o município: `sem_cidade`. Marca ou loja de outra empresa, 404.',
+  })
+  @ApiOkResponse({ standardSchema: NewCampaignDistrictsResponse })
+  @ApiBadRequestResponse({ standardSchema: ProblemDetails })
+  @ApiForbiddenResponse({ standardSchema: ProblemDetails })
+  @ApiNotFoundResponse({ standardSchema: ProblemDetails })
+  bairros(@Auth() auth: AuthContext, @Query({ schema: NewCampaignDistrictsQuery }) query: NewCampaignDistrictsQuery): Promise<NewCampaignDistrictsResponse> {
+    return this.campanhas.bairros(auth, query);
+  }
+
+  @Get('districts/search')
+  @Permissao('campanhas.ver')
+  @ApiOperation({
+    summary: 'A busca de outro bairro do município da loja',
+    description: 'Os bairros do IBGE do município da loja com o nome procurado (`q`, sem diferença de acento e de maiúscula), até 10: os que começam com o texto primeiro. Para "Outro bairro da cidade" na gaveta (D-RG-55); o escolhido volta em `GET /v1/new-campaigns/districts?extra=`. Marca ou loja de outra empresa, 404.',
+  })
+  @ApiOkResponse({ standardSchema: NewCampaignDistrictSearchResponse })
+  @ApiBadRequestResponse({ standardSchema: ProblemDetails })
+  @ApiForbiddenResponse({ standardSchema: ProblemDetails })
+  @ApiNotFoundResponse({ standardSchema: ProblemDetails })
+  buscarBairros(
+    @Auth() auth: AuthContext,
+    @Query({ schema: NewCampaignDistrictSearchQuery }) query: NewCampaignDistrictSearchQuery,
+  ): Promise<NewCampaignDistrictSearchResponse> {
+    return this.campanhas.buscarBairros(auth, query);
   }
 
   @Get(':id')

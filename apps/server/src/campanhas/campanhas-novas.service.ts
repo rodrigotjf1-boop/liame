@@ -2,6 +2,10 @@ import type {
   CreateNewCampaignRequest,
   NewCampaignAudienceQuery,
   NewCampaignAudienceResponse,
+  NewCampaignDistrictSearchQuery,
+  NewCampaignDistrictSearchResponse,
+  NewCampaignDistrictsQuery,
+  NewCampaignDistrictsResponse,
   NewCampaignOptionsQuery,
   NewCampaignOptionsResponse,
   NewCampaignResponse,
@@ -9,6 +13,7 @@ import type {
 import { uuidv7 } from '@liame/database';
 import { Injectable, Logger } from '@nestjs/common';
 import { sql } from 'drizzle-orm';
+import { z } from 'zod';
 import { ActionService } from '../actions/action.service.js';
 import { contaConectada } from '../connections/conectada.js';
 import { ErroConector } from '../connectors/cliente-http.js';
@@ -19,6 +24,19 @@ import { FlagService } from '../flags/flag.service.js';
 import { PolicyService } from '../policy/policy.service.js';
 import { tetoDaVerba } from '../policy/teto-da-verba.js';
 import { destinoDoPost } from '../posts/link-do-post.js';
+import { nomeComparavel } from '../regiao/coordenada.js';
+import { centrosDosBairros } from '../worker/centros-dos-bairros.js';
+import {
+  BairroDaCampanha,
+  bairroNaBuscaDaMeta,
+  bairrosEscritos,
+  deslocamentoEmKm,
+  lugaresDoRaio,
+  lugaresDosBairros,
+  MAXIMO_DE_BAIRROS,
+  raioDoBairro,
+  VALIDADE_DA_BUSCA_DA_META_MS,
+} from './bairros-da-campanha.js';
 import { levaAoCardapio, OBJETIVOS_DO_TOPO, type ObjetivoDaCampanhaNova, PARTE_DO_TOPO_NO_MES, PUBLICO_MINIMO_NO_RAIO, recursoDaCampanhaNova } from './campanha-nova-plano.js';
 import { type PublicoEstimado, publicoNoRaio, publicoSuficiente } from './publico-no-raio.js';
 
@@ -95,6 +113,23 @@ export function textoDoPublicoPequeno(p: PublicoEstimado, raioKm: number, loja: 
   return `A Meta estima de ${pessoas(p.de)} a ${pessoas(p.ate)} pessoas de 18 anos ou mais num raio de ${raioEscrito(raioKm)} em volta da ${loja}: com menos de ${pessoas(PUBLICO_MINIMO_NO_RAIO)} pessoas, ela não entrega bem. Aumente o raio.`;
 }
 
+/** O porquê do público pequeno demais nos bairros (R6, parte 3): a mesma régua do raio. */
+export function textoDoPublicoPequenoNosBairros(p: PublicoEstimado, bairros: number): string {
+  const onde = bairros === 1 ? 'no bairro escolhido' : `nos ${bairrosEscritos(bairros)} escolhidos`;
+  return `A Meta estima de ${pessoas(p.de)} a ${pessoas(p.ate)} pessoas de 18 anos ou mais ${onde}: com menos de ${pessoas(PUBLICO_MINIMO_NO_RAIO)} pessoas, ela não entrega bem. Escolha mais bairros.`;
+}
+
+/** O tempo da gaveta para procurar os centros que faltam (uma consulta por segundo) e para perguntar à Meta. */
+const PRAZO_DOS_CENTROS_MS = 6_000;
+const PRAZO_DA_BUSCA_DA_META_MS = 5_000;
+
+/** Os bairros guardados na campanha (`districts`), na resposta: o código, o nome, se vai como o bairro da Meta e o raio. */
+function bairrosDaResposta(v: unknown): NewCampaignResponse['districts'] {
+  const lido = z.array(BairroDaCampanha).safeParse(v);
+  if (!lido.success) return null;
+  return lido.data.map((b) => ({ code: b.codigo, name: b.nome, meta: b.meta !== null, radius_km: b.raio_km }));
+}
+
 /** Os dias que faltam no mês, contando hoje (`AAAA-MM-DD`). */
 export function diasQueFaltamNoMes(hoje: string): number {
   const [a, m, d] = hoje.split('-').map(Number) as [number, number, number];
@@ -133,7 +168,8 @@ type LinhaDaCampanhaNova = {
   unit_id: string;
   name: string;
   objective: ObjetivoDaCampanhaNova;
-  radius_km: string;
+  radius_km: string | null;
+  districts: unknown;
   daily_budget_micros: string;
   end_date: string | null;
   link: string | null;
@@ -169,7 +205,8 @@ function resposta(l: LinhaDaCampanhaNova): NewCampaignResponse {
     unit_id: l.unit_id,
     name: l.name,
     objective: l.objective,
-    radius_km: Number(l.radius_km),
+    radius_km: l.radius_km === null ? null : Number(l.radius_km),
+    districts: bairrosDaResposta(l.districts),
     daily_budget_micros: Number(l.daily_budget_micros),
     end_date: l.end_date,
     link: l.link,
@@ -278,8 +315,8 @@ export class CampanhasNovasService {
 
     // A loja e o ponto dela no endereço (D-A4-41; D-RG-14).
     const loja = (
-      await tx.execute<{ name: string; location_precision: string | null; latitude: string | null; longitude: string | null }>(sql`
-        select name, location_precision, latitude::text, longitude::text from liame.unit
+      await tx.execute<{ name: string; location_precision: string | null; latitude: string | null; longitude: string | null; ibge_city_code: string | null }>(sql`
+        select name, location_precision, latitude::text, longitude::text, ibge_city_code from liame.unit
          where id = ${body.unit_id} and tenant_id = ${quem.tenantId} and brand_id = ${body.brand_id}`)
     ).rows[0];
     if (!loja) throw recusa('loja-nao-encontrada', 'Loja não encontrada', 'A loja não é desta marca.', 'unit_id');
@@ -334,11 +371,18 @@ export class CampanhasNovasService {
       }
     }
 
-    // O público no raio pela estimativa da Meta (R6, D-RG-50): com menos de 1.000 pessoas, ela não entrega bem e o pedido
-    // não é criado. Sem a estimativa agora (a Meta não estimou ou não respondeu), o pedido segue sem ela.
-    const estimativa = await this.estimativa(tx, contaDeAnuncios, loja, body.radius_km);
+    // Quem vê: o raio em volta da loja, ou os bairros do município dela, cada um já com o centro achado (R6, parte 3;
+    // D-RG-53 e D-RG-54). O contrato garante um dos dois.
+    const bairros = body.districts ? await this.bairrosDoPedido(tx, loja.ibge_city_code, body.districts) : null;
+    const lugares = bairros ? lugaresDosBairros(bairros) : lugaresDoRaio(Number(loja.latitude), Number(loja.longitude), body.radius_km!);
+
+    // O público pela estimativa da Meta (R6, D-RG-50): com menos de 1.000 pessoas, ela não entrega bem e o pedido não é
+    // criado. Sem a estimativa agora (a Meta não estimou ou não respondeu), o pedido segue sem ela.
+    const estimativa = await this.estimativa(tx, contaDeAnuncios, lugares);
     if (estimativa.status === 'pronta' && !publicoSuficiente(estimativa.publico)) {
-      throw recusa('publico-pequeno', 'Público pequeno demais no raio', textoDoPublicoPequeno(estimativa.publico, body.radius_km, loja.name), 'radius_km');
+      throw bairros
+        ? recusa('publico-pequeno', 'Público pequeno demais nos bairros', textoDoPublicoPequenoNosBairros(estimativa.publico, bairros.length), 'districts')
+        : recusa('publico-pequeno', 'Público pequeno demais no raio', textoDoPublicoPequeno(estimativa.publico, body.radius_km!, loja.name), 'radius_km');
     }
     const publico = estimativa.status === 'pronta' ? estimativa.publico : null;
 
@@ -359,9 +403,9 @@ export class CampanhasNovasService {
     const id = uuidv7();
     const nova = await tx.execute(sql`
       insert into liame.ad_campaign_new (id, tenant_id, brand_id, ad_account_id, page_account_id, piece_id, piece_version, media_id, instagram_media_id, unit_id,
-                                         name, objective, radius_km, daily_budget_micros, end_date, link, audience_lower, audience_upper, created_by)
+                                         name, objective, radius_km, districts, daily_budget_micros, end_date, link, audience_lower, audience_upper, created_by)
       values (${id}, ${quem.tenantId}, ${body.brand_id}, ${contaDeAnuncios.id}, ${paginas[0]!.id}, ${body.piece_id ?? null}, ${versaoDaPeca}, ${body.media_id ?? null}, ${reels}, ${body.unit_id},
-              ${body.name}, ${body.objective}, ${body.radius_km}, ${body.daily_budget_micros}, ${body.end_date ?? null}, ${link}, ${publico?.de ?? null}, ${publico?.ate ?? null}, ${quem.userId})
+              ${body.name}, ${body.objective}, ${body.radius_km ?? null}, ${bairros ? JSON.stringify(bairros) : null}::jsonb, ${body.daily_budget_micros}, ${body.end_date ?? null}, ${link}, ${publico?.de ?? null}, ${publico?.ate ?? null}, ${quem.userId})
       on conflict do nothing
       returning id`);
     if (!nova.rows[0]) {
@@ -389,7 +433,8 @@ export class CampanhasNovasService {
         instagram_media_id: reels,
         unit_id: body.unit_id,
         objective: body.objective,
-        radius_km: body.radius_km,
+        radius_km: body.radius_km ?? null,
+        districts: body.districts ?? null,
         daily_budget_micros: body.daily_budget_micros,
         end_date: body.end_date ?? null,
         audience: publico ? { lower: publico.de, upper: publico.ate } : null,
@@ -535,13 +580,20 @@ export class CampanhasNovasService {
     const marca = await tx.execute(sql`select 1 from liame.brand where id = ${query.brand_id} and tenant_id = ${quem.tenantId} and archived_at is null`);
     if (!marca.rows[0]) throw new AppProblem(404, 'nao-encontrado', 'Não encontramos', 'Marca não encontrada nesta empresa.');
     const loja = (
-      await tx.execute<{ location_precision: string | null; latitude: string | null; longitude: string | null }>(sql`
-        select location_precision, latitude::text, longitude::text from liame.unit
+      await tx.execute<{ location_precision: string | null; latitude: string | null; longitude: string | null; ibge_city_code: string | null }>(sql`
+        select location_precision, latitude::text, longitude::text, ibge_city_code from liame.unit
          where id = ${query.unit_id} and tenant_id = ${quem.tenantId} and brand_id = ${query.brand_id}`)
     ).rows[0];
     if (!loja) throw new AppProblem(404, 'nao-encontrado', 'Não encontramos', 'A loja não é desta marca.');
     const { anuncios } = await contasDaMarca(tx, quem.tenantId, query.brand_id);
-    const e = anuncios.length === 1 && loja.location_precision === 'endereco' ? await this.estimativa(tx, anuncios[0]!, loja, query.radius_km) : ({ status: 'indisponivel' } as const);
+    if (anuncios.length !== 1 || loja.location_precision !== 'endereco' || loja.latitude === null || loja.longitude === null) {
+      return { status: 'indisponivel', lower: null, upper: null, minimum: PUBLICO_MINIMO_NO_RAIO, enough: null };
+    }
+    // Os bairros (R6, parte 3): os mesmos lugares que o pedido vai mandar à Meta.
+    const lugares = query.districts
+      ? lugaresDosBairros(await this.bairrosDoPedido(tx, loja.ibge_city_code, query.districts.split(',')))
+      : lugaresDoRaio(Number(loja.latitude), Number(loja.longitude), query.radius_km!);
+    const e = await this.estimativa(tx, anuncios[0]!, lugares);
     return e.status === 'pronta'
       ? { status: 'pronta', lower: e.publico.de, upper: e.publico.ate, minimum: PUBLICO_MINIMO_NO_RAIO, enough: publicoSuficiente(e.publico) }
       : { status: e.status, lower: null, upper: null, minimum: PUBLICO_MINIMO_NO_RAIO, enough: null };
@@ -551,25 +603,225 @@ export class CampanhasNovasService {
    * A estimativa da Meta para o raio em volta do ponto da loja. A falha da Meta (fora do ar, sem permissão, demorou) vira
    * `indisponivel` com o motivo no log: a estimativa informa, não decide sozinha quando não há número.
    */
-  private async estimativa(
-    tx: ReturnType<typeof currentTx>,
-    conta: Conta,
-    loja: { latitude: string | null; longitude: string | null },
-    raioKm: number,
-  ): Promise<Estimativa> {
-    if (loja.latitude === null || loja.longitude === null) return { status: 'indisponivel' };
+  private async estimativa(tx: ReturnType<typeof currentTx>, conta: Conta, lugares: Record<string, unknown>): Promise<Estimativa> {
     try {
-      const publico = await publicoNoRaio.estimar(
-        tx,
-        { externalId: conta.external_id, segredo: conta.credential_secret_id },
-        { latitude: Number(loja.latitude), longitude: Number(loja.longitude), raioKm },
-      );
+      const publico = await publicoNoRaio.estimar(tx, { externalId: conta.external_id, segredo: conta.credential_secret_id }, lugares);
       return publico ? { status: 'pronta', publico } : { status: 'sem_estimativa' };
     } catch (e) {
       if (!(e instanceof ErroConector)) throw e;
       this.logger.warn(`estimativa de público indisponível (conta ${conta.id}): ${e.tipo} ${e.status ?? ''} ${e.message}`.trim());
       return { status: 'indisponivel' };
     }
+  }
+
+  /**
+   * Os bairros da gaveta (R6, parte 3; D-RG-54 e D-RG-55): as áreas de entrega da loja (marcadas ao abrir), os bairros
+   * com pedidos na última leitura do Regem e os escolhidos pela busca (`extra`), nos bairros do IBGE do município, cada
+   * um com o jeito de ir para a Meta. O centro que falta é procurado agora (um por segundo, até o prazo); o que não deu
+   * tempo fica `procurando`, e a gaveta pergunta de novo. A busca do bairro na Meta vale 30 dias.
+   */
+  async bairros(auth: AuthContext, query: NewCampaignDistrictsQuery, agora: Date = new Date()): Promise<NewCampaignDistrictsResponse> {
+    const tx = currentTx();
+    const quem = this.quem(auth);
+    const loja = await this.lojaDaMarca(tx, quem.tenantId, query.brand_id, query.unit_id);
+    const vazio = { maximum: MAXIMO_DE_BAIRROS, items: [], pending: false, unmatched: [] };
+    if (loja.location_precision !== 'endereco' || !loja.ibge_city_code || !loja.address_city || !loja.address_state || loja.latitude === null || loja.longitude === null) {
+      return { status: 'sem_cidade', city: null, ...vazio };
+    }
+    const cidade = loja.ibge_city_code;
+
+    // As áreas de entrega (Minha marca › Região) e os bairros com pedidos (Sua região), pelo nome, nos bairros do IBGE.
+    const areas = (Array.isArray(loja.delivery_areas) ? loja.delivery_areas : []).filter((a): a is string => typeof a === 'string').slice(0, MAXIMO_DE_BAIRROS);
+    const pedidos = (
+      await tx.execute<{ district: string; orders: string; dias: number }>(sql`
+        select district, sum(orders)::text as orders, max(day_to - day_from + 1)::int as dias from liame.region_order_district
+         where tenant_id = ${quem.tenantId} and unit_id = ${query.unit_id} and kind = 'bairro' and district is not null
+         group by district order by sum(orders) desc, district limit ${MAXIMO_DE_BAIRROS}`)
+    ).rows;
+    type DoIbge = { name_key: string; district_code: string; name: string; area_km2: string | null };
+    const chaves = [...new Set([...areas, ...pedidos.map((x) => x.district)].map(nomeComparavel))];
+    const porNome = chaves.length
+      ? (
+          await tx.execute<DoIbge>(sql`
+            select distinct on (name_key) name_key, district_code, name, area_km2::text from liame.region_district
+             where city_code = ${cidade} and name_key in (select jsonb_array_elements_text(${JSON.stringify(chaves)}::jsonb))
+             order by name_key, population desc nulls last, district_code`)
+        ).rows
+      : [];
+    const extras = query.extra ? query.extra.split(',') : [];
+    const porCodigo = extras.length
+      ? (
+          await tx.execute<DoIbge>(sql`
+            select name_key, district_code, name, area_km2::text from liame.region_district
+             where city_code = ${cidade} and district_code in (select jsonb_array_elements_text(${JSON.stringify(extras)}::jsonb))
+             order by name, district_code`)
+        ).rows
+      : [];
+
+    // A lista: as áreas de entrega primeiro, depois os bairros dos pedidos (os que mais pedem), depois os da busca.
+    type Candidato = { codigo: string; nome: string; area: number | null; entrega: boolean; pedidos: number | null; dias: number | null };
+    const lista = new Map<string, Candidato>();
+    const doNome = new Map(porNome.map((r) => [r.name_key, r]));
+    const dosPedidos = new Map<string, { orders: number; dias: number }>();
+    for (const x of pedidos) {
+      const k = nomeComparavel(x.district);
+      if (!dosPedidos.has(k)) dosPedidos.set(k, { orders: Number(x.orders), dias: x.dias });
+    }
+    const por = (r: DoIbge, entrega: boolean) => {
+      const ja = lista.get(r.district_code);
+      if (ja) {
+        ja.entrega ||= entrega;
+        return;
+      }
+      const pd = dosPedidos.get(r.name_key);
+      lista.set(r.district_code, { codigo: r.district_code, nome: r.name, area: r.area_km2 === null ? null : Number(r.area_km2), entrega, pedidos: pd?.orders ?? null, dias: pd?.dias ?? null });
+    };
+    const unmatched: string[] = [];
+    for (const a of areas) {
+      const r = doNome.get(nomeComparavel(a));
+      if (r) por(r, true);
+      else unmatched.push(a);
+    }
+    for (const x of pedidos) {
+      const r = doNome.get(nomeComparavel(x.district));
+      if (r) por(r, false);
+    }
+    for (const r of porCodigo) por(r, false);
+
+    // O centro de cada um (o cache; o que falta, procurado agora) e o bairro na Meta (o cache; o que venceu, perguntado).
+    const codigos = [...lista.keys()];
+    type Ponto = { district_code: string; located: string; latitude: string | null; longitude: string | null; meta_location: string | null; meta_checked_at: Date | null };
+    const lerPontos = async () =>
+      new Map(
+        (
+          await tx.execute<Ponto>(sql`
+            select district_code, located, latitude::text, longitude::text, meta_location, meta_checked_at from liame.region_district_point
+             where district_code in (select jsonb_array_elements_text(${JSON.stringify(codigos)}::jsonb))`)
+        ).rows.map((x) => [x.district_code, x]),
+      );
+    let pontos = codigos.length ? await lerPontos() : new Map<string, Ponto>();
+    const semCentro = [...lista.values()].filter((c) => !pontos.has(c.codigo));
+    if (semCentro.length) {
+      await centrosDosBairros.procurarCentros(semCentro, loja.address_city, loja.address_state, Date.now() + PRAZO_DOS_CENTROS_MS);
+      pontos = await lerPontos();
+    }
+    const { anuncios } = await contasDaMarca(tx, quem.tenantId, query.brand_id);
+    const vencida = agora.getTime() - VALIDADE_DA_BUSCA_DA_META_MS;
+    const perguntar = [...lista.values()].filter((c) => {
+      const x = pontos.get(c.codigo);
+      return x?.located === 'achado' && (x.meta_checked_at === null || new Date(x.meta_checked_at).getTime() < vencida);
+    });
+    if (anuncios.length === 1 && perguntar.length) {
+      await this.perguntarBairrosAMeta(tx, anuncios[0]!, perguntar, loja.address_city);
+      pontos = await lerPontos();
+    }
+
+    const daLoja = { latitude: Number(loja.latitude), longitude: Number(loja.longitude) };
+    const items = [...lista.values()].map((c) => {
+      const x = pontos.get(c.codigo);
+      const centro = x?.located === 'achado' && x.latitude !== null && x.longitude !== null ? { latitude: Number(x.latitude), longitude: Number(x.longitude) } : null;
+      const d = centro ? deslocamentoEmKm(daLoja, centro) : null;
+      const how = !x ? 'procurando' : x.located !== 'achado' ? 'sem_centro' : x.meta_location ? 'meta' : 'circulo';
+      return { code: c.codigo, name: c.nome, delivery_area: c.entrega, orders: c.pedidos, orders_days: c.dias, how, radius_km: centro ? raioDoBairro(c.area) : null, x_km: d?.x ?? null, y_km: d?.y ?? null };
+    });
+    return { status: 'pronta', city: loja.address_city, maximum: MAXIMO_DE_BAIRROS, items, pending: items.some((i) => i.how === 'procurando'), unmatched };
+  }
+
+  /** A busca de outro bairro na gaveta (D-RG-55): os bairros do IBGE do município da loja com o nome, até 10. */
+  async buscarBairros(auth: AuthContext, query: NewCampaignDistrictSearchQuery): Promise<NewCampaignDistrictSearchResponse> {
+    const tx = currentTx();
+    const quem = this.quem(auth);
+    const loja = await this.lojaDaMarca(tx, quem.tenantId, query.brand_id, query.unit_id);
+    const chave = nomeComparavel(query.q);
+    if (!loja.ibge_city_code || chave.length < 2) return { items: [] };
+    // O nome que começa com o que foi digitado vem antes; `strpos`, não `like`: o texto da pessoa não vira padrão.
+    const r = await tx.execute<{ district_code: string; name: string }>(sql`
+      select district_code, name from (
+        select distinct on (name_key) name_key, district_code, name from liame.region_district
+         where city_code = ${loja.ibge_city_code} and strpos(name_key, ${chave}) > 0
+         order by name_key, population desc nulls last, district_code) b
+       order by strpos(name_key, ${chave}) = 1 desc, name
+       limit 10`);
+    return { items: r.rows.map((x) => ({ code: x.district_code, name: x.name })) };
+  }
+
+  /** A loja da marca (404 de fora), com o município, o ponto e as áreas de entrega. */
+  private async lojaDaMarca(tx: ReturnType<typeof currentTx>, tenantId: string, brandId: string, unitId: string) {
+    const marca = await tx.execute(sql`select 1 from liame.brand where id = ${brandId} and tenant_id = ${tenantId} and archived_at is null`);
+    if (!marca.rows[0]) throw new AppProblem(404, 'nao-encontrado', 'Não encontramos', 'Marca não encontrada nesta empresa.');
+    const loja = (
+      await tx.execute<{
+        ibge_city_code: string | null;
+        address_city: string | null;
+        address_state: string | null;
+        latitude: string | null;
+        longitude: string | null;
+        location_precision: string | null;
+        delivery_areas: unknown;
+      }>(sql`
+        select ibge_city_code, address_city, address_state, latitude::text, longitude::text, location_precision, delivery_areas from liame.unit
+         where id = ${unitId} and tenant_id = ${tenantId} and brand_id = ${brandId}`)
+    ).rows[0];
+    if (!loja) throw new AppProblem(404, 'nao-encontrado', 'Não encontramos', 'A loja não é desta marca.');
+    return loja;
+  }
+
+  /**
+   * Pergunta à Meta pelos bairros, um por vez, até o prazo, e guarda o que ela achou. A Meta que recusa a busca (pedido
+   * errado: ela não tem bairros aqui) vale como "não achou"; fora do ar ou sem permissão, para e pergunta depois (o
+   * bairro vai como círculo até lá), com o motivo no log.
+   */
+  private async perguntarBairrosAMeta(tx: ReturnType<typeof currentTx>, conta: Conta, bairros: ReadonlyArray<{ codigo: string; nome: string }>, cidade: string): Promise<void> {
+    const prazo = Date.now() + PRAZO_DA_BUSCA_DA_META_MS;
+    for (const b of bairros) {
+      if (Date.now() > prazo) return;
+      try {
+        const corpo = await publicoNoRaio.procurarBairro(tx, { externalId: conta.external_id, segredo: conta.credential_secret_id }, b.nome);
+        if (corpo === null) return;
+        await centrosDosBairros.guardarMeta(b.codigo, bairroNaBuscaDaMeta(corpo, b.nome, cidade));
+      } catch (e) {
+        if (!(e instanceof ErroConector)) throw e;
+        if (e.tipo === 'definitivo') {
+          await centrosDosBairros.guardarMeta(b.codigo, null);
+          continue;
+        }
+        this.logger.warn(`busca de bairro na Meta indisponível (conta ${conta.id}): ${e.tipo} ${e.status ?? ''} ${e.message}`.trim());
+        return;
+      }
+    }
+  }
+
+  /**
+   * Os bairros do pedido (e da estimativa), como vão para a Meta: do município da loja, cada um com o centro achado. O
+   * bairro de outra cidade e o sem centro são recusados com o nome.
+   */
+  private async bairrosDoPedido(tx: ReturnType<typeof currentTx>, cidade: string | null, codigos: readonly string[]): Promise<BairroDaCampanha[]> {
+    const linhas = cidade
+      ? (
+          await tx.execute<{ district_code: string; name: string; area_km2: string | null; located: string | null; latitude: string | null; longitude: string | null; meta_location: string | null }>(sql`
+            select d.district_code, d.name, d.area_km2::text, p.located, p.latitude::text, p.longitude::text, p.meta_location
+              from liame.region_district d left join liame.region_district_point p on p.district_code = d.district_code
+             where d.city_code = ${cidade} and d.district_code in (select jsonb_array_elements_text(${JSON.stringify(codigos)}::jsonb))`)
+        ).rows
+      : [];
+    const porCodigo = new Map(linhas.map((l) => [l.district_code, l]));
+    if (codigos.some((c) => !porCodigo.has(c))) {
+      throw recusa('bairro-fora-da-cidade', 'Bairro fora do município da loja', 'Os bairros são os do município da loja: escolha de novo na lista.', 'districts');
+    }
+    const semCentro = codigos.map((c) => porCodigo.get(c)!).filter((l) => l.located !== 'achado' || l.latitude === null || l.longitude === null);
+    if (semCentro.length) {
+      const nomes = semCentro.map((l) => l.name).join(', ');
+      throw recusa(
+        'bairro-sem-centro',
+        'Bairro sem o centro no mapa',
+        `O Liame ainda não tem o centro de ${nomes} no mapa: espere um pouco e peça de novo, ou tire ${semCentro.length === 1 ? 'esse bairro' : 'esses bairros'}.`,
+        'districts',
+      );
+    }
+    return codigos.map((c) => {
+      const l = porCodigo.get(c)!;
+      return { codigo: c, nome: l.name, meta: l.meta_location, latitude: Number(l.latitude), longitude: Number(l.longitude), raio_km: raioDoBairro(l.area_km2 === null ? null : Number(l.area_km2)) };
+    });
   }
 
   /** O Instagram ligado à Página, conectado na marca (o destino de seguidores); nulo sem ele. */
@@ -615,7 +867,7 @@ export class CampanhasNovasService {
     const r = await currentTx().execute<LinhaDaCampanhaNova>(sql`
       select c.id, c.brand_id, c.piece_id, c.piece_version, c.media_id, c.instagram_media_id,
              im.caption as reels_caption, im.permalink as reels_permalink, im.thumbnail_url as reels_thumbnail_url, im.published_at as reels_published_at,
-             c.unit_id, c.name, c.objective, c.radius_km::text, c.daily_budget_micros::text,
+             c.unit_id, c.name, c.objective, c.radius_km::text, c.districts, c.daily_budget_micros::text,
              c.end_date::text as end_date, c.link, c.audience_lower::text, c.audience_upper::text,
              case when c.status in ('pedida', 'criando') and r.status in ${ENCERRADOS}
                   then (case when c.status = 'criando' then 'nao_criada' else 'cancelada' end) else c.status end as status,

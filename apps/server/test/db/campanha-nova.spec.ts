@@ -1,4 +1,4 @@
-import { randomBytes, randomUUID } from 'node:crypto';
+import { randomBytes, randomInt, randomUUID } from 'node:crypto';
 import { createServer, type Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import type { Database } from '@liame/database';
@@ -8,6 +8,8 @@ import { campanhaNovaNaMetaConnector } from '../../src/actions/campanha-nova-na-
 import { currentStep, totpCode } from '../../src/auth/totp.js';
 import { MELHORIAS_DO_CRIATIVO } from '../../src/campanhas/campanha-nova-plano.js';
 import { publicoNoRaio } from '../../src/campanhas/publico-no-raio.js';
+import { ProcuraDeCoordenada } from '../../src/regiao/coordenada.js';
+import { centrosDosBairros } from '../../src/worker/centros-dos-bairros.js';
 import { ClienteConector } from '../../src/connectors/cliente-http.js';
 import { versaoRegistrada } from '../../src/connectors/tipos.js';
 import { DATABASE } from '../../src/database/database.module.js';
@@ -38,16 +40,38 @@ const CARDAPIO = 'https://cardapio.exemplo.com.br/mister-centro';
  * A estimativa de público da Meta (R6, parte 2), numa Graph de mentira só deste arquivo: `GET /act_{id}/reachestimate`
  * responde a faixa combinada (ou -1, ou a falha) e guarda o que recebeu. Fora do teste da estimativa, a faixa é grande.
  */
+/** Os centros dos bairros no OpenStreetMap de mentira (R6, parte 3); o "Sem Mapa Teste" o mapa não acha. */
+const CENTROS: Record<string, [number, number]> = {
+  'Centro Teste': [-22.9035, -43.1755],
+  'Lapa Teste': [-22.913, -43.18],
+  'Glória Teste': [-22.9205, -43.1765],
+  'Saúde Teste': [-22.8965, -43.1825],
+};
+const nominatim = { consultas: [] as string[] };
+async function nominatimDeMentira(url: string): Promise<unknown> {
+  const q = new URL(url).searchParams.get('q') ?? '';
+  nominatim.consultas.push(q);
+  const nome = q.split(',')[0]!.trim();
+  const c = CENTROS[nome];
+  return c ? [{ lat: String(c[0]), lon: String(c[1]), address: { suburb: nome, city: 'Rio de Janeiro', state: 'Rio de Janeiro' } }] : [];
+}
+
 class EstimativaDeMentira {
   private servidor: Server | null = null;
   base = '';
   faixa: [number, number] | 'falha' = [50_000, 60_000];
+  /** A busca de lugares (`/search`, R6 parte 3): os resultados de cada nome procurado; sem o nome, nenhum. */
+  lugares: Record<string, unknown[]> = {};
   recebidas: { caminho: string; query: URLSearchParams; autorizacao: string | undefined }[] = [];
 
   async ligar(): Promise<void> {
     this.servidor = createServer((req, res) => {
       const url = new URL(req.url ?? '/', 'http://localhost');
       this.recebidas.push({ caminho: url.pathname, query: url.searchParams, autorizacao: req.headers.authorization });
+      if (url.pathname.endsWith('/search')) {
+        res.writeHead(200, { 'content-type': 'application/json' }).end(JSON.stringify({ data: this.lugares[url.searchParams.get('q') ?? ''] ?? [] }));
+        return;
+      }
       const corpo =
         this.faixa === 'falha'
           ? { error: { message: 'Service temporarily unavailable', type: 'OAuthException', code: 2 } }
@@ -94,6 +118,7 @@ describe.skipIf(!hasDb)('a campanha nova na Meta (A4 · X5, parte 1)', () => {
       appSecret: SEGREDO_DO_APP_DA_META,
       versao: (capacidade) => versaoRegistrada(database.db, 'meta_ads', capacidade),
     });
+    centrosDosBairros.ligar({ db: database.db, procura: new ProcuraDeCoordenada(nominatimDeMentira) });
   }, 120_000);
   beforeEach(async () => {
     await resetIpRateLimits();
@@ -329,6 +354,125 @@ describe.skipIf(!hasDb)('a campanha nova na Meta (A4 · X5, parte 1)', () => {
     expect(estimativa.recebidas).toHaveLength(0);
     expect((await estimar(2.3)).status).toBe(400);
     expect((await estimar(5, randomUUID())).status).toBe(404);
+  }, 120_000);
+
+  it('a campanha por bairros (R6, parte 3): os bairros sugeridos, o centro e o bairro da Meta guardados, a busca, a estimativa, o pedido e a criação', async () => {
+    const e = await cenario('Brasa Campanha por Bairros');
+    const foto = await fotoGuardada(e, armazem, { largura: 1080, altura: 1350 });
+    // Um município de mentira (o código começa com 9: o teste da R2 não apaga), com os bairros do IBGE e a área de cada um.
+    const cidade = String(randomInt(9_100_000, 9_999_999));
+    const [centro, lapa, semMapa, gloria, saude] = ['001', '002', '003', '004', '005'].map((n) => cidade + n) as [string, string, string, string, string];
+    await ownerQuery(
+      `insert into liame.region_district (district_code, city_code, name, name_key, area_km2, population) values
+         ($2, $1, 'Centro Teste', 'centro teste', 4.5, 40000), ($3, $1, 'Lapa Teste', 'lapa teste', 1, 10000),
+         ($4, $1, 'Sem Mapa Teste', 'sem mapa teste', 2, 5000), ($5, $1, 'Glória Teste', 'gloria teste', 30, 9000),
+         ($6, $1, 'Saúde Teste', 'saude teste', 2.5, 3000)`,
+      [cidade, centro, lapa, semMapa, gloria, saude],
+    );
+    // As áreas de entrega da loja (uma com outra caixa e sem acento, uma que não é bairro do IBGE) e um bairro com pedidos.
+    await ownerQuery(`update liame.unit set ibge_city_code = $2, delivery_areas = $3::jsonb where id = $1`, [
+      e.unitId,
+      cidade,
+      JSON.stringify(['Centro Teste', 'LAPA TESTE', 'Sem Mapa Teste', 'Bairro Que Não Existe']),
+    ]);
+    const [regem] = await ownerQuery<{ id: string }>(`select id from liame.connected_account where tenant_id = $1 and provider = 'regem' limit 1`, [e.tenantId]);
+    await ownerQuery(
+      `insert into liame.region_order_district (connected_account_id, tenant_id, brand_id, unit_id, position, kind, district, city, uf, orders, day_from, day_to, minimum)
+       values ($1, $2, $3, $4, 0, 'bairro', 'Saúde Teste', 'Rio de Janeiro', 'RJ', 37, current_date - 27, current_date, 5)`,
+      [regem!.id, e.tenantId, e.brandId, e.unitId],
+    );
+    // A Meta tem o "Centro Teste" desta cidade; o "Lapa Teste" dela é de outra cidade (vai o círculo).
+    estimativa.lugares = {
+      'Centro Teste': [{ key: '7001', name: 'Centro Teste', type: 'neighborhood', primary_city: 'Rio de Janeiro', region: 'Rio de Janeiro' }],
+      'Lapa Teste': [{ key: '7002', name: 'Lapa Teste', type: 'neighborhood', primary_city: 'Niterói', region: 'Rio de Janeiro' }],
+    };
+    estimativa.recebidas = [];
+    nominatim.consultas = [];
+    const bairros = (extra?: string) =>
+      api.call('GET', `/v1/new-campaigns/districts?brand_id=${e.brandId}&unit_id=${e.unitId}${extra ? `&extra=${extra}` : ''}`, { cookie: e.cookie });
+
+    // Os sugeridos: as áreas de entrega primeiro, depois o bairro com pedidos; o centro procurado agora e o bairro da Meta.
+    const s = await bairros();
+    expect(s.status, JSON.stringify(s.body)).toBe(200);
+    expect(s.body).toMatchObject({ status: 'pronta', city: 'Rio de Janeiro', maximum: 20, pending: false, unmatched: ['Bairro Que Não Existe'] });
+    const items = s.body.items as Array<Record<string, unknown>>;
+    expect(items.map((i) => [i.name, i.delivery_area, i.how, i.radius_km, i.orders, i.orders_days])).toEqual([
+      ['Centro Teste', true, 'meta', 1.5, null, null],
+      ['Lapa Teste', true, 'circulo', 1, null, null],
+      ['Sem Mapa Teste', true, 'sem_centro', null, null, null],
+      ['Saúde Teste', false, 'circulo', 1, 37, 28],
+    ]);
+    expect(items[1]!.x_km).toBeCloseTo(-0.73, 1);
+    expect(items[1]!.y_km).toBeCloseTo(-0.68, 1);
+    expect(items[2]!.x_km).toBeNull();
+    expect(nominatim.consultas).toHaveLength(4);
+    const buscas = estimativa.recebidas.filter((r) => r.caminho.endsWith('/search'));
+    expect(buscas.map((b) => b.query.get('q'))).toEqual(['Centro Teste', 'Lapa Teste', 'Saúde Teste']);
+    expect(buscas[0]!.query.get('type')).toBe('adgeolocation');
+    expect(buscas[0]!.query.get('location_types')).toBe('["neighborhood"]');
+    expect(buscas[0]!.query.get('country_code')).toBe('BR');
+    expect(buscas[0]!.query.has('access_token')).toBe(false);
+    expect(buscas[0]!.autorizacao).toMatch(/^Bearer .+/);
+    // Guardado: a segunda vez não vai ao mapa nem à Meta.
+    expect((await bairros()).body.items).toEqual(items);
+    expect(nominatim.consultas).toHaveLength(4);
+    expect(estimativa.recebidas.filter((r) => r.caminho.endsWith('/search'))).toHaveLength(3);
+
+    // Outro bairro da cidade: a busca pelo nome (sem acento e sem maiúscula) e o escolhido volta na lista, com o centro.
+    const busca = await api.call('GET', `/v1/new-campaigns/districts/search?brand_id=${e.brandId}&unit_id=${e.unitId}&q=GLO`, { cookie: e.cookie });
+    expect(busca.status, JSON.stringify(busca.body)).toBe(200);
+    expect(busca.body).toEqual({ items: [{ code: gloria, name: 'Glória Teste' }] });
+    const todos = await api.call('GET', `/v1/new-campaigns/districts/search?brand_id=${e.brandId}&unit_id=${e.unitId}&q=teste`, { cookie: e.cookie });
+    expect((todos.body.items as unknown[]).length).toBe(5);
+    const comGloria = await bairros(gloria);
+    expect((comGloria.body.items as Array<Record<string, unknown>>).at(-1)).toMatchObject({ code: gloria, name: 'Glória Teste', delivery_area: false, how: 'circulo', radius_km: 3 });
+
+    // A estimativa dos bairros juntos: o bairro da Meta pela chave e o círculo do outro.
+    estimativa.recebidas = [];
+    const est = await api.call('GET', `/v1/new-campaigns/audience-estimate?brand_id=${e.brandId}&unit_id=${e.unitId}&districts=${centro},${gloria}`, { cookie: e.cookie });
+    expect(est.status, JSON.stringify(est.body)).toBe(200);
+    expect(est.body).toMatchObject({ status: 'pronta', enough: true });
+    expect(JSON.parse(estimativa.recebidas.at(-1)!.query.get('targeting_spec')!).geo_locations).toEqual({
+      custom_locations: [{ latitude: -22.9205, longitude: -43.1765, radius: 3, distance_unit: 'kilometer' }],
+      neighborhoods: [{ key: '7001' }],
+    });
+    expect((await api.call('GET', `/v1/new-campaigns/audience-estimate?brand_id=${e.brandId}&unit_id=${e.unitId}&districts=${centro}&radius_km=5`, { cookie: e.cookie })).status).toBe(400);
+    const semCentro = await api.call('GET', `/v1/new-campaigns/audience-estimate?brand_id=${e.brandId}&unit_id=${e.unitId}&districts=${semMapa}`, { cookie: e.cookie });
+    expect([semCentro.status, semCentro.body.code]).toEqual([422, 'bairro-sem-centro']);
+
+    // O pedido: o raio OU os bairros; o bairro sem centro e o de outra cidade recusados; o público pequeno nos bairros.
+    expect((await pedir(e, { media_id: foto.id, districts: [centro] })).status).toBe(400);
+    const recusaSemCentro = await pedir(e, { media_id: foto.id, radius_km: undefined, districts: [centro, semMapa] });
+    expect([recusaSemCentro.status, recusaSemCentro.body.code]).toEqual([422, 'bairro-sem-centro']);
+    expect(recusaSemCentro.body.detail).toContain('Sem Mapa Teste');
+    const deFora = await pedir(e, { media_id: foto.id, radius_km: undefined, districts: ['3304557001'] });
+    expect([deFora.status, deFora.body.code]).toEqual([422, 'bairro-fora-da-cidade']);
+    estimativa.faixa = [300, 400];
+    const pequeno = await pedir(e, { media_id: foto.id, radius_km: undefined, districts: [lapa] });
+    expect([pequeno.status, pequeno.body.code]).toEqual([422, 'publico-pequeno']);
+    expect(pequeno.body.detail).toBe('A Meta estima de 300 a 400 pessoas de 18 anos ou mais no bairro escolhido: com menos de 1.000 pessoas, ela não entrega bem. Escolha mais bairros.');
+    estimativa.faixa = [90_000, 110_000];
+    const r = await pedir(e, { media_id: foto.id, radius_km: undefined, districts: [centro, gloria] });
+    expect(r.status, JSON.stringify(r.body)).toBe(201);
+    expect(r.body).toMatchObject({ radius_km: null, audience: { lower: 90_000, upper: 110_000 } });
+    expect(r.body.districts).toEqual([
+      { code: centro, name: 'Centro Teste', meta: true, radius_km: 1.5 },
+      { code: gloria, name: 'Glória Teste', meta: false, radius_km: 3 },
+    ]);
+    const antes = (await pedidoDe(r.body.action_id as string)).before_state;
+    expect(antes).toMatchObject({ raio_km: null, bairros: [{ codigo: centro, meta: '7001' }, { codigo: gloria, meta: null, latitude: -22.9205, longitude: -43.1765, raio_km: 3 }] });
+
+    // A criação na Meta: o conjunto vai com o bairro da Meta pela chave e o círculo do outro; o nome diz quantos bairros.
+    await aprovar(e, r.body.action_id as string);
+    await executar(e);
+    expect((await pedidoDe(r.body.action_id as string)).status).toBe('executada');
+    const [conjunto] = daCampanha(r.body.id as string, 'adsets');
+    expect(JSON.parse(conjunto!.params.targeting!).geo_locations).toEqual({
+      custom_locations: [{ latitude: -22.9205, longitude: -43.1765, radius: 3, distance_unit: 'kilometer' }],
+      neighborhoods: [{ key: '7001' }],
+    });
+    expect(conjunto!.params.name).toMatch(/ · 2 bairros$/);
+    await ownerQuery(`delete from liame.region_district where city_code = $1`, [cidade]);
   }, 120_000);
 
   it('as opções da gaveta (parte 2): quem assina, as lojas com o endereço e o cardápio, o teto, o que impede e a campanha de cada peça', async () => {

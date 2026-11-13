@@ -24,6 +24,12 @@ export const NEW_CAMPAIGN_STATUSES = ['pedida', 'criando', 'criada', 'nao_criada
 export const NewCampaignStatus = z.enum(NEW_CAMPAIGN_STATUSES);
 export type NewCampaignStatus = z.infer<typeof NewCampaignStatus>;
 
+/** O código do bairro no IBGE: 10 algarismos (o município e mais 3). Conferido sem regex (V48). */
+const soAlgarismos = (v: string): boolean => v.length > 0 && [...v].every((c) => c >= '0' && c <= '9');
+export const DistrictCode = z.string().length(10).refine(soAlgarismos, 'o código do bairro no IBGE tem 10 algarismos');
+/** Até 20 bairros por campanha (R6, D-RG-53). */
+export const NEW_CAMPAIGN_DISTRICTS_MAX = 20;
+
 /** O id de uma publicação no Instagram (só algarismos). */
 const InstagramMediaId = z.string().regex(/^[0-9]{1,40}$/, 'o id da publicação no Instagram tem só algarismos');
 
@@ -46,12 +52,24 @@ export const CreateNewCampaignRequest = z
     /** O nome da campanha na Meta e em Resultados. */
     name: z.string().trim().min(1).max(80),
     objective: NewCampaignObjective,
-    /** O raio em volta da loja, de 1 a 15 km, em passos de 0,5 km. */
+    /** O raio em volta da loja, de 1 a 15 km, em passos de 0,5 km. Ou o raio, ou os bairros (`districts`). */
     radius_km: z
       .number()
       .min(1)
       .max(15)
-      .refine((v) => Number.isInteger(v * 2), 'o raio vai em passos de 0,5 km'),
+      .refine((v) => Number.isInteger(v * 2), 'o raio vai em passos de 0,5 km')
+      .optional(),
+    /**
+     * Os bairros do município da loja (R6, parte 3; D-RG-53), pelo código do IBGE, de 1 a 20, sem repetir: cada um vai
+     * para a Meta como o bairro dela (quando a busca de lugares da Meta acha o mesmo nome na cidade) ou como um círculo no
+     * centro do bairro (D-RG-54). Os bairros vêm de `GET /v1/new-campaigns/districts`, já com o centro achado.
+     */
+    districts: z
+      .array(DistrictCode)
+      .min(1)
+      .max(NEW_CAMPAIGN_DISTRICTS_MAX)
+      .refine((l) => new Set(l).size === l.length, 'o mesmo bairro duas vezes')
+      .optional(),
     /** A verba diária, em micros da moeda da conta de anúncios (R$ 30,00 = 30000000), sem fração de centavo. */
     daily_budget_micros: z.int().min(10_000).max(100_000_000_000),
     /** O último dia, no fuso da empresa; ausente, a campanha não tem data de fim. */
@@ -61,7 +79,8 @@ export const CreateNewCampaignRequest = z
     (b) =>
       b.instagram_media_id === undefined ? b.piece_id !== undefined && b.media_id !== undefined : b.piece_id === undefined && b.media_id === undefined,
     { error: 'Mande a peça com a foto ou o vídeo de Fotos, ou o Reels do Instagram: um dos dois.' },
-  );
+  )
+  .refine((b) => (b.radius_km === undefined) !== (b.districts === undefined), { error: 'Mande o raio em volta da loja ou os bairros: um dos dois.' });
 export type CreateNewCampaignRequest = z.infer<typeof CreateNewCampaignRequest>;
 
 export const NewCampaignResponse = z.strictObject({
@@ -84,7 +103,13 @@ export const NewCampaignResponse = z.strictObject({
   unit_id: z.uuid(),
   name: z.string(),
   objective: NewCampaignObjective,
-  radius_km: z.number(),
+  /** O raio em volta da loja; nulo na campanha por bairros. */
+  radius_km: z.number().nullable(),
+  /**
+   * Os bairros da campanha por bairros (R6, parte 3), como foram para o pedido: o código e o nome do IBGE, se vai como o
+   * bairro da Meta (`meta`) ou como um círculo no centro, e o raio do círculo. Nulo na campanha com raio.
+   */
+  districts: z.array(z.strictObject({ code: z.string(), name: z.string(), meta: z.boolean(), radius_km: z.number() })).nullable(),
   daily_budget_micros: z.int(),
   end_date: z.iso.date().nullable(),
   /** O cardápio da loja (o destino de "pedidos pelo cardápio" e de "ser conhecido no raio"); nulo no WhatsApp e em seguidores. */
@@ -173,13 +198,23 @@ export const NewCampaignAudienceQuery = z.strictObject({
   brand_id: z.uuid(),
   /** A loja do raio (o ponto dela no endereço). */
   unit_id: z.uuid(),
-  /** O raio em volta da loja, de 1 a 15 km, em passos de 0,5 km. */
+  /** O raio em volta da loja, de 1 a 15 km, em passos de 0,5 km. Ou o raio, ou os bairros. */
   radius_km: z.coerce
     .number()
     .min(1)
     .max(15)
-    .refine((v) => Number.isInteger(v * 2), 'o raio vai em passos de 0,5 km'),
-});
+    .refine((v) => Number.isInteger(v * 2), 'o raio vai em passos de 0,5 km')
+    .optional(),
+  /** Os bairros (R6, parte 3): os códigos do IBGE separados por vírgula, de 1 a 20. */
+  districts: z
+    .string()
+    .max(NEW_CAMPAIGN_DISTRICTS_MAX * 11)
+    .refine((v) => {
+      const l = v.split(',');
+      return l.length <= NEW_CAMPAIGN_DISTRICTS_MAX && l.every((c) => c.length === 10 && soAlgarismos(c));
+    }, 'os bairros vão pelo código do IBGE (10 algarismos), separados por vírgula, até 20')
+    .optional(),
+}).refine((q) => (q.radius_km === undefined) !== (q.districts === undefined), { error: 'Mande o raio ou os bairros: um dos dois.' });
 export type NewCampaignAudienceQuery = z.infer<typeof NewCampaignAudienceQuery>;
 
 /**
@@ -195,3 +230,75 @@ export const NewCampaignAudienceResponse = z.strictObject({
   enough: z.boolean().nullable(),
 });
 export type NewCampaignAudienceResponse = z.infer<typeof NewCampaignAudienceResponse>;
+
+// ---------------------------------------------------------------- os bairros da campanha (R6, parte 3; D-RG-53 a D-RG-56)
+
+export const NewCampaignDistrictsQuery = z.strictObject({
+  brand_id: z.uuid(),
+  /** A loja: os bairros são os do município dela. */
+  unit_id: z.uuid(),
+  /** Os bairros escolhidos pela busca (`/districts/search`), além dos sugeridos: os códigos do IBGE separados por vírgula. */
+  extra: z
+    .string()
+    .max(NEW_CAMPAIGN_DISTRICTS_MAX * 11)
+    .refine((v) => {
+      const l = v.split(',');
+      return l.length <= NEW_CAMPAIGN_DISTRICTS_MAX && l.every((c) => c.length === 10 && soAlgarismos(c));
+    }, 'os bairros vão pelo código do IBGE (10 algarismos), separados por vírgula, até 20')
+    .optional(),
+});
+export type NewCampaignDistrictsQuery = z.infer<typeof NewCampaignDistrictsQuery>;
+
+export const NewCampaignDistrict = z.strictObject({
+  /** O código do bairro no IBGE. */
+  code: z.string(),
+  name: z.string(),
+  /** Uma das áreas de entrega da loja (Minha marca › Região): vem marcado ao abrir (D-RG-55). */
+  delivery_area: z.boolean(),
+  /** Os pedidos do bairro na última leitura do Regem (Sua região) e os dias dela; nulos sem pedidos. */
+  orders: z.int().nullable(),
+  orders_days: z.int().nullable(),
+  /**
+   * Como o bairro vai para a Meta (D-RG-54): `meta` (o bairro dela: a busca de lugares achou o mesmo nome na cidade),
+   * `circulo` (um círculo no centro do bairro, do tamanho dele pelo IBGE), `procurando` (o Liame ainda procura o centro
+   * do bairro: pergunte de novo em alguns segundos) ou `sem_centro` (o mapa não achou o bairro: não dá para escolher).
+   * Texto, para a lista poder crescer.
+   */
+  how: z.string(),
+  /** O raio do círculo, de 1 a 3 km; nulo enquanto o centro não foi achado. */
+  radius_km: z.number().nullable(),
+  /** O centro do bairro a partir da loja, em km (para leste e para norte), para a prévia em escala; nulos sem o centro. */
+  x_km: z.number().nullable(),
+  y_km: z.number().nullable(),
+});
+export type NewCampaignDistrict = z.infer<typeof NewCampaignDistrict>;
+
+/**
+ * Os bairros que a gaveta sugere (D-RG-55): as áreas de entrega da loja, os bairros com pedidos e os da busca, cada um
+ * com o jeito de ir para a Meta. `status`: `pronta` ou `sem_cidade` (a loja sem o ponto no endereço ou sem o município).
+ * `pending`: há bairro `procurando` (a gaveta pergunta de novo). `unmatched`: áreas de entrega que não estão entre os
+ * bairros do IBGE do município.
+ */
+export const NewCampaignDistrictsResponse = z.strictObject({
+  status: z.enum(['pronta', 'sem_cidade']),
+  city: z.string().nullable(),
+  maximum: z.int(),
+  items: z.array(NewCampaignDistrict),
+  pending: z.boolean(),
+  unmatched: z.array(z.string()),
+});
+export type NewCampaignDistrictsResponse = z.infer<typeof NewCampaignDistrictsResponse>;
+
+export const NewCampaignDistrictSearchQuery = z.strictObject({
+  brand_id: z.uuid(),
+  unit_id: z.uuid(),
+  /** O nome (ou o começo dele), sem diferença de acento e de maiúscula; de 2 a 60 letras. */
+  q: z.string().trim().min(2).max(60),
+});
+export type NewCampaignDistrictSearchQuery = z.infer<typeof NewCampaignDistrictSearchQuery>;
+
+/** Os bairros do IBGE do município da loja com o nome procurado, até 10, por nome. */
+export const NewCampaignDistrictSearchResponse = z.strictObject({
+  items: z.array(z.strictObject({ code: z.string(), name: z.string() })),
+});
+export type NewCampaignDistrictSearchResponse = z.infer<typeof NewCampaignDistrictSearchResponse>;

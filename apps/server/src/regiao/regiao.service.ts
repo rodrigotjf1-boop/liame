@@ -32,7 +32,7 @@ import { FlagService } from '../flags/flag.service.js';
 import { VaultService } from '../vault/vault.service.js';
 import { buscarCep, cepNormalizado, type EnderecoDoCep } from './cep.js';
 import { FONTE_CENSO_BAIRRO } from './censo.js';
-import { type Coordenada, nomeComparavel, ProcuraDeCoordenada } from './coordenada.js';
+import { type Coordenada, nomeComparavel, procuraDeCoordenada } from './coordenada.js';
 import { MUNICIPIOS_DO_IPCA, RMS_DO_IPCA } from './ibge.js';
 import { diaNoFuso } from '../results/fora-do-normal.js';
 import { BAIRROS_NA_SECAO, type BairroParaComparar, compararBairros } from './bairros.js';
@@ -111,7 +111,8 @@ function paraEndereco(cep: EnderecoDoCep, rua: string | null, numero: string | n
 @Injectable()
 export class RegiaoService {
   private readonly logger = new Logger('regiao');
-  private readonly procura = new ProcuraDeCoordenada();
+  // A fila do Nominatim dividida com o centro dos bairros da campanha (uma consulta por segundo no processo).
+  private readonly procura = procuraDeCoordenada;
 
   constructor(
     @Inject(APP_CONFIG) private readonly config: AppConfig,
