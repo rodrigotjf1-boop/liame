@@ -474,6 +474,8 @@ describe.skipIf(!hasDb)('a campanha nova na Meta (A4 · X5, parte 1)', () => {
     });
     expect(conjunto!.params.name).toMatch(/ · 2 bairros$/);
     await ownerQuery(`delete from liame.region_district where city_code = $1`, [cidade]);
+    // A loja volta ao município de verdade (ERR-232): o de mentira não fica para a rotina das fontes da região ler.
+    await ownerQuery(`update liame.unit set ibge_city_code = $2 where id = $1`, [e.unitId, '3304557']);
   }, 120_000);
 
   it('as opções da gaveta (parte 2): quem assina, as lojas com o endereço e o cardápio, o teto, o que impede e a campanha de cada peça', async () => {

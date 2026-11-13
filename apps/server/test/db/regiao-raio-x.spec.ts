@@ -1,4 +1,4 @@
-import { randomUUID } from 'node:crypto';
+import { randomInt, randomUUID } from 'node:crypto';
 import { resolve } from 'node:path';
 import { createDatabase, type Database, runMigrations, withContext } from '@liame/database';
 import { sql } from 'drizzle-orm';
@@ -9,6 +9,7 @@ import { ARQUIVO_BASICO, ARQUIVO_RENDA } from '../../src/regiao/censo.js';
 import { ENDERECO_DOS_MUNICIPIOS_DO_IBGE, HOST_DA_RECEITA, PASTA_DO_CNPJ } from '../../src/regiao/cnpj.js';
 import { diasAntes } from '../../src/regiao/demanda.js';
 import { RegiaoService } from '../../src/regiao/regiao.service.js';
+import { diaDaSemana, problemasDaVerba, semanaQueVem } from '../../src/regiao/ritmo-da-semana.js';
 import { diaEmBrasilia, diasDepois } from '../../src/regiao/semana.js';
 import { RegiaoCnpjService } from '../../src/worker/regiao-cnpj.service.js';
 import { RegiaoFontesService } from '../../src/worker/regiao-fontes.service.js';
@@ -461,6 +462,100 @@ describe.skipIf(!hasDb)('Sua região: a rotina das fontes públicas e o retrato 
     const semVendas = { userId, sessionId: 'teste', email: 'teste@liame.dev', name: 'Teste', tenantId, roleKey: 'dono', permissions: new Set(['dossie.ver']), tenantStatus: 'ativa' } as unknown as AuthContext;
     const semPermissao = await naTransacaoDaEmpresa(database, { tenantId, userId }, () => regiao.raioX(semVendas, brandId, tijuca));
     expect(semPermissao).toMatchObject({ store_demand_status: 'sem_permissao', store_demand: null });
+  });
+
+  it('o ritmo da semana em prévia (R7, parte 1): o peso pelos pedidos da loja ou pelo setor, a chuva, as campanhas com verba diária e a que fica fora', async () => {
+    const ritmo = (unidade: string) => api.call('GET', `/v1/region/rhythm?brand_id=${brandId}&unit_id=${unidade}`, { cookie });
+    const semana = semanaQueVem(HOJE);
+    // Sem campanha da Meta: os dias vêm, pelos pedidos da loja (os do teste da demanda), e não há o que mudar.
+    const vazio = await ritmo(tijuca);
+    expect(vazio.status, JSON.stringify(vazio.body)).toBe(200);
+    expect(vazio.body).toMatchObject({ status: 'sem_campanhas', source: 'loja', week: { from: semana.de, to: semana.ate }, campaigns: [], base_micros: 0 });
+    expect(vazio.body.days.map((d: { day: string }) => d.day)).toEqual(semana.dias);
+
+    // A conta de anúncios da Meta: a campanha com verba própria, a campanha sem verba com um conjunto ativo e um pausado,
+    // a campanha pequena (fora), a pausada e a de verba de período (nem aparecem).
+    const meta = randomUUID();
+    const [c1, c2, c3, c4, c5] = [randomUUID(), randomUUID(), randomUUID(), randomUUID(), randomUUID()];
+    await ownerQuery(
+      `insert into liame.connected_account (id, tenant_id, brand_id, provider, external_id, name, currency, timezone) values ($1, $2, $3, 'meta_ads', $4, 'Conta da Mister', 'BRL', 'America/Sao_Paulo')`,
+      [meta, tenantId, brandId, `act_${randomInt(1_000_000, 9_999_999)}`],
+    );
+    await ownerQuery(
+      `insert into liame.campaign (id, tenant_id, connected_account_id, provider, external_id, name, status, daily_budget_micros, lifetime_budget_micros) values
+         ($3, $1, $2, 'meta_ads', 'r7-1', 'Combo sexta', 'ativa', 60000000, null), ($4, $1, $2, 'meta_ads', 'r7-2', 'Delivery noite', 'ativa', null, null),
+         ($5, $1, $2, 'meta_ads', 'r7-3', 'Campanha pequena', 'ativa', 8000000, null), ($6, $1, $2, 'meta_ads', 'r7-4', 'Campanha pausada', 'pausada', 50000000, null),
+         ($7, $1, $2, 'meta_ads', 'r7-5', 'Campanha de período', 'ativa', null, 900000000)`,
+      [tenantId, meta, c1, c2, c3, c4, c5],
+    );
+    await ownerQuery(
+      `insert into liame.ad_group (id, tenant_id, connected_account_id, campaign_id, provider, external_id, name, status, daily_budget_micros) values
+         (gen_random_uuid(), $1, $2, $3, 'meta_ads', 'r7-j1', 'Noite · raio de 3 km', 'ativa', 18000000), (gen_random_uuid(), $1, $2, $3, 'meta_ads', 'r7-j2', 'Noite · quem já pediu', 'pausada', 12000000),
+         (gen_random_uuid(), $1, $2, $4, 'meta_ads', 'r7-j3', 'Período · conjunto', 'ativa', 20000000)`,
+      [tenantId, meta, c2, c5],
+    );
+    try {
+      const r = await ritmo(tijuca);
+      expect(r.status, JSON.stringify(r.body)).toBe(200);
+      expect(r.body).toMatchObject({ status: 'pronto', source: 'loja', base_micros: 78_000_000, base_week_micros: 546_000_000, out: [{ name: 'Campanha pequena', reason: 'verba_pequena' }] });
+      type Campanha = { name: string; level: string; base_micros: number; days_micros: number[]; week_micros: number };
+      const campanhas = r.body.campaigns as Campanha[];
+      expect(campanhas.map((c) => [c.name, c.level, c.base_micros])).toEqual([
+        ['Combo sexta', 'campanha', 60_000_000],
+        ['Delivery noite · Noite · raio de 3 km', 'conjunto', 18_000_000],
+      ]);
+      for (const c of campanhas) {
+        expect(problemasDaVerba(c.base_micros, c.days_micros, null)).toEqual([]);
+        expect(c.week_micros).toBe(c.days_micros.reduce((s, v) => s + v, 0));
+        expect(c.week_micros).toBeLessThanOrEqual(c.base_micros * 7);
+      }
+      type Dia = { day: string; weekday: number; weight: number; total_micros: number; reasons: Array<{ kind: string; share_pct: number | null; text: string | null; min: number | null }> };
+      const dias = r.body.days as Dia[];
+      dias.forEach((d, i) => expect(d.total_micros).toBe(campanhas.reduce((s, c) => s + c.days_micros[i]!, 0)));
+      expect(r.body.week_micros).toBe(dias.reduce((s, d) => s + d.total_micros, 0));
+      expect(r.body.week_micros).toBeLessThanOrEqual(546_000_000);
+      // O dia da semana com mais pedidos (22 dos 23, no teste da demanda) leva o maior peso; cada dia diz a parte dos pedidos.
+      const forte = diaDaSemana(diasAntes(HOJE, 3));
+      const maior = dias.reduce((a, b) => (b.weight > a.weight ? b : a));
+      expect(maior.weekday).toBe(forte);
+      expect(maior.weight).toBeGreaterThan(1);
+      expect(maior.reasons[0]).toMatchObject({ kind: 'pedidos', share_pct: 96 });
+      expect(dias.every((d) => d.reasons[0]!.kind === 'pedidos' && d.reasons.every((x) => ['pedidos', 'chuva', 'data'].includes(x.kind)))).toBe(true);
+      expect(r.body.hours).toMatchObject({ source: 'loja' });
+
+      // Outra loja da marca, num município de mentira (o código começa com 9), sem pedidos: a referência do setor, e a
+      // chuva prevista entra no dia dela.
+      const outra = randomUUID();
+      const cidade = String(randomInt(9_100_000, 9_999_999));
+      await ownerQuery(
+        `insert into liame.unit (id, tenant_id, brand_id, name, address_postal_code, address_district, address_city, address_state, ibge_city_code, location_source, delivery_radius_km)
+         values ($1, $2, $3, 'Loja do Ritmo', '20520054', 'Centro', 'Cidade do Ritmo', 'RJ', $4, 'cep', 3)`,
+        [outra, tenantId, brandId, cidade],
+      );
+      await ownerQuery(
+        `insert into liame.region_weather (geo_code, day, condition, condition_desc, min_c, max_c) values ($1, $2::date, 'pc', 'Pancadas de Chuva', 19, 24), ($1, $3::date, 'ps', 'Predomínio de Sol', 20, 30)`,
+        [cidade, semana.dias[3], semana.dias[4]],
+      );
+      const doSetor = await ritmo(outra);
+      await ownerQuery(`delete from liame.region_weather where geo_code = $1`, [cidade]);
+      expect(doSetor.status, JSON.stringify(doSetor.body)).toBe(200);
+      expect(doSetor.body).toMatchObject({ status: 'pronto', source: 'setor', hours: { source: 'setor' } });
+      const s = doSetor.body.days as Dia[];
+      expect(s.every((d) => d.reasons[0]!.kind === 'setor')).toBe(true);
+      expect(s[3]!.reasons).toContainEqual({ kind: 'chuva', share_pct: null, text: 'Pancadas de Chuva', min: 19, max: 24, eve: null });
+      expect(s[4]!.reasons.some((x) => x.kind === 'chuva')).toBe(false);
+      expect(s[5]!.weight).toBeGreaterThan(s[1]!.weight); // sábado × terça
+
+      // Quem não vê Resultados não recebe o ritmo (ele sai dos pedidos); a loja de outra marca, 404.
+      const regiao = api.app.get(RegiaoService);
+      const semVendas = { userId, sessionId: 'teste', email: 'teste@liame.dev', name: 'Teste', tenantId, roleKey: 'dono', permissions: new Set(['campanhas.ver']), tenantStatus: 'ativa' } as unknown as AuthContext;
+      expect(await naTransacaoDaEmpresa(database, { tenantId, userId }, () => regiao.ritmoDaSemana(semVendas, brandId, tijuca))).toMatchObject({ status: 'sem_permissao', days: [], campaigns: [] });
+      expect((await ritmo(randomUUID())).status).toBe(404);
+      await ownerQuery(`delete from liame.unit where id = $1`, [outra]);
+    } finally {
+      // A conta de anúncios sai (leva as campanhas): os testes seguintes contam com a marca sem a Meta.
+      await ownerQuery(`delete from liame.connected_account where id = $1`, [meta]);
+    }
   });
 
   it('a fonte que falha aparece como "falhou", com a próxima tentativa em 1 hora; o resto vale', async () => {

@@ -497,3 +497,75 @@ export const RegionOverviewResponse = z.strictObject({
   generated_at: z.iso.datetime(),
 });
 export type RegionOverviewResponse = z.infer<typeof RegionOverviewResponse>;
+
+// ---------------------------------------------------------------- o ritmo da semana (R7, parte 1; D-RG-58 a D-RG-60)
+
+export const RegionRhythmQuery = z.strictObject({ brand_id: z.uuid(), unit_id: z.uuid() });
+export type RegionRhythmQuery = z.infer<typeof RegionRhythmQuery>;
+
+/** O porquê do peso de um dia. Os campos que não são do tipo vêm nulos. */
+export const RegionRhythmReason = z.strictObject({
+  /** `pedidos` (a parte dos pedidos da loja neste dia da semana), `setor` (a referência do setor), `chuva` ou `data`. */
+  kind: Slug,
+  /** Em `pedidos`: a parte dos pedidos da semana que cai neste dia (a média de um dia é 14). */
+  share_pct: z.int().nullable(),
+  /** Em `chuva`, a previsão como o CPTEC escreve; em `data`, o nome da data. */
+  text: z.string().nullable(),
+  /** Em `chuva`: a mínima e a máxima previstas. */
+  min: z.int().nullable(),
+  max: z.int().nullable(),
+  /** Em `data`: é a véspera (a data é do dia seguinte). */
+  eve: z.boolean().nullable(),
+});
+export type RegionRhythmReason = z.infer<typeof RegionRhythmReason>;
+
+/**
+ * O ritmo da semana que vem, como o Gestor de tráfego o montaria (R7; a prévia: nada é pedido nem executado). A verba de
+ * cada dia segue os pedidos da loja por dia da semana (ou a referência do setor), a chuva prevista e as datas, com os
+ * limites: cada dia entre 20% abaixo e 20% acima da verba de hoje, até 10% de mudança de um dia para o outro, nenhum dia
+ * acima do teto por campanha, e a semana sem gastar mais do que gastaria sem o ritmo. `status`: `pronto`, `desligado`
+ * (a função da região), `sem_endereco` (a loja fora do mapa), `sem_permissao` (quem pergunta não vê Resultados) ou
+ * `sem_campanhas` (nenhuma campanha ativa da Meta com verba diária própria que caiba nas regras).
+ */
+export const RegionRhythmResponse = z.strictObject({
+  status: Slug,
+  /** A semana que vem, de segunda a domingo; nula fora de `pronto` e `sem_campanhas`. */
+  week: z.strictObject({ from: z.string(), to: z.string() }).nullable(),
+  /** De onde vem o peso: `loja` (os pedidos dela) ou `setor` (a referência, sem pedidos que bastem). */
+  source: Slug.nullable(),
+  days: z.array(
+    z.strictObject({
+      day: z.string(),
+      /** 0 = domingo. */
+      weekday: z.int(),
+      /** A parte da verba de hoje que o dia leva (1 = igual a hoje). */
+      weight: z.number(),
+      /** A verba do dia, somadas as campanhas do ritmo, em micros. */
+      total_micros: z.int(),
+      reasons: z.array(RegionRhythmReason),
+    }),
+  ),
+  /** As campanhas que entram: as ativas da Meta com verba diária própria (na campanha ou no conjunto). */
+  campaigns: z.array(
+    z.strictObject({
+      id: z.uuid(),
+      /** `campanha` ou `conjunto`: onde a verba diária mora. */
+      level: Slug,
+      name: z.string(),
+      base_micros: z.int(),
+      /** A verba de cada dia, na ordem de `days`. */
+      days_micros: z.array(z.int()),
+      week_micros: z.int(),
+    }),
+  ),
+  /** As que ficam fora, com o porquê: `verba_pequena`, `fracao_de_centavo`, `acima_do_teto` ou `fora_dos_limites`. */
+  out: z.array(z.strictObject({ name: z.string(), reason: Slug })),
+  /** A verba de hoje por dia, somadas as campanhas do ritmo; a da semana sem o ritmo (7 dias) e a da semana com ele. */
+  base_micros: z.int(),
+  base_week_micros: z.int(),
+  week_micros: z.int(),
+  /** O horário dos pedidos (o mesmo do plano de mídia, D-RG-29): o bloco e quando os anúncios começam; nulo sem ele. */
+  hours: z.strictObject({ source: Slug, from: z.string(), to: z.string(), ads_from: z.string() }).nullable(),
+  generated_at: z.iso.datetime(),
+});
+export type RegionRhythmResponse = z.infer<typeof RegionRhythmResponse>;

@@ -7,6 +7,8 @@ import {
   ProblemDetails,
   RegionOverviewQuery,
   RegionOverviewResponse,
+  RegionRhythmQuery,
+  RegionRhythmResponse,
   ResourceId,
   SaveStoreLocationRequest,
   SaveStoreLocationResponse,
@@ -71,6 +73,21 @@ export class RegiaoController {
   @ApiNotFoundResponse({ standardSchema: ProblemDetails })
   raioX(@Auth() auth: AuthContext, @Query({ schema: RegionOverviewQuery }) query: RegionOverviewQuery): Promise<RegionOverviewResponse> {
     return this.regiao.raioX(auth, query.brand_id, query.unit_id);
+  }
+
+  @Get('region/rhythm')
+  @Permissao('campanhas.ver')
+  @ApiOperation({
+    summary: 'O ritmo da semana, em prévia',
+    description:
+      'O ritmo da semana que vem (de segunda a domingo), como o Gestor de tráfego o montaria, por regra e sem IA (plano da região, R7; D-RG-58 a D-RG-60). Só leitura: nada é pedido nem executado. O peso de cada dia vem dos pedidos da loja por dia da semana nas 4 semanas de Sua região (sem pedidos que bastem, a referência do setor: mais peso de sexta a domingo), mais um acréscimo pequeno pela chuva prevista e pelas datas (o feriado nacional, a data do varejo e as vésperas delas; o prazo do salário no dia). Os limites: cada dia entre 20% abaixo e 20% acima da verba de hoje, até 10% de mudança de um dia para o outro (a política da Liame), nenhum dia acima do teto por campanha, e a semana sem gastar mais do que gastaria sem o ritmo. Entram as campanhas ativas da Meta com verba diária própria (na campanha, ou no conjunto quando a campanha não tem), em centavos inteiros; a que não cabe nas regras vem em `out`, com o porquê. `status`: `pronto`, `desligado` (a função da região), `sem_endereco` (a loja fora do mapa), `sem_permissao` (quem pergunta não vê Resultados, `vendas.ver`) ou `sem_campanhas`. Marca ou loja de outra empresa, 404.',
+  })
+  @ApiOkResponse({ standardSchema: RegionRhythmResponse })
+  @ApiBadRequestResponse({ standardSchema: ProblemDetails })
+  @ApiForbiddenResponse({ standardSchema: ProblemDetails })
+  @ApiNotFoundResponse({ standardSchema: ProblemDetails })
+  ritmoDaSemana(@Auth() auth: AuthContext, @Query({ schema: RegionRhythmQuery }) query: RegionRhythmQuery): Promise<RegionRhythmResponse> {
+    return this.regiao.ritmoDaSemana(auth, query.brand_id, query.unit_id);
   }
 
   @Post('region/address-lookup')
