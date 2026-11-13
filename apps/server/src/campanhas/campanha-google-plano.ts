@@ -236,6 +236,28 @@ export function rastreioDaPerformanceMax(): string {
 export type OperacaoDoGoogle = Record<string, { create: Record<string, unknown> }>;
 
 /**
+ * Quem vê o anúncio pelo local (D-A5-34): só quem está ou costuma estar no raio (`PRESENCE`). O padrão do Google é
+ * `PRESENCE_OR_INTEREST`, que soma quem só mostrou interesse pelo lugar (pesquisou, visitou, leu sobre ele); para uma loja
+ * que entrega num raio, e para a frase da tela ("quem está num raio de X km em volta da loja"), vale só a presença.
+ * Campo e valores: `campaign.geo_target_type_setting.positive_geo_target_type`, na página oficial de segmentação por local.
+ */
+export const SO_QUEM_ESTA_NO_LOCAL = 'PRESENCE';
+
+/**
+ * A operação de ativar ou pausar a campanha (`campaigns:mutate`). Ativar acerta também o local para "só quem está": a
+ * campanha criada antes da D-A5-34 nasceu com o padrão do Google, e não pode começar a gastar com ele. Pausar muda só a
+ * situação (não pode falhar por outro motivo). Função pura.
+ */
+export function operacaoDeAtivarOuPausar(recurso: string, ativar: boolean): { updateMask: string; update: Record<string, unknown> } {
+  return ativar
+    ? {
+        updateMask: 'status,geo_target_type_setting.positive_geo_target_type',
+        update: { resourceName: recurso, status: 'ENABLED', geoTargetTypeSetting: { positiveGeoTargetType: SO_QUEM_ESTA_NO_LOCAL } },
+      }
+    : { updateMask: 'status', update: { resourceName: recurso, status: 'PAUSED' } };
+}
+
+/**
  * A criação inteira numa requisição só (`googleAds:mutate`; a Performance Max pede o grupo de recursos com todos os
  * recursos dele, e as regras da marca pedem o nome da loja e a logo, na mesma requisição): o orçamento diário só desta
  * campanha; a campanha PAUSADA (Maximizar conversões, regras da marca, a automação desligada, o rastreio, o fim); o raio em volta da
@@ -261,6 +283,7 @@ export function operacoesDaCriacao(e: EstadoDaCampanhaNovaNoGoogle, imagens: Ima
         name: nome,
         advertisingChannelType: 'PERFORMANCE_MAX',
         status: 'PAUSED',
+        geoTargetTypeSetting: { positiveGeoTargetType: SO_QUEM_ESTA_NO_LOCAL },
         campaignBudget: orcamento,
         maximizeConversions: {},
         brandGuidelinesEnabled: true,

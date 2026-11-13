@@ -22,7 +22,8 @@ export const REFRESH_DO_GOOGLE = 'refresh-de-teste-google';
 export const REFRESH_REVOGADO = 'refresh-revogado';
 const FUSO = 'America/Sao_Paulo';
 
-export type CampanhaNoGoogle = { cliente: string; id: string; name: string; status: 'ENABLED' | 'PAUSED' | 'REMOVED'; primaryStatus: string; orcamento: string | null };
+/** `local`: quem vê pelo local (`geoTargetTypeSetting.positiveGeoTargetType`); sem ele, vale o padrão do Google (`PRESENCE_OR_INTEREST`). */
+export type CampanhaNoGoogle = { cliente: string; id: string; name: string; status: 'ENABLED' | 'PAUSED' | 'REMOVED'; primaryStatus: string; orcamento: string | null; local?: string };
 export type OrcamentoNoGoogle = { cliente: string; id: string; amountMicros: number | null; totalAmountMicros: number | null; explicitlyShared: boolean; period: 'DAILY' | 'CUSTOM_PERIOD' };
 export type ChamadaAoGoogle = {
   tipo: 'leitura' | 'validacao' | 'escrita';
@@ -316,7 +317,8 @@ export class GoogleDeMentira {
 
     // A de verdade: tudo ou nada.
     const orcamento = this.novoOrcamento(cliente, { amountMicros: Number(recurso(String(campanha.campaignBudget)).corpo.amountMicros) });
-    const nova = this.novaCampanha(cliente, { name: String(campanha.name), status: 'PAUSED', primaryStatus: 'PAUSED', orcamento: orcamento.id });
+    const local = (campanha.geoTargetTypeSetting as { positiveGeoTargetType?: unknown } | undefined)?.positiveGeoTargetType;
+    const nova = this.novaCampanha(cliente, { name: String(campanha.name), status: 'PAUSED', primaryStatus: 'PAUSED', orcamento: orcamento.id, ...(typeof local === 'string' ? { local } : {}) });
     const g: GrupoNoGoogle = {
       cliente,
       id: numero(),
@@ -413,11 +415,17 @@ export class GoogleDeMentira {
     if (recurso === 'campaigns') {
       const c = this.campanhas.get(nome.match(new RegExp(`^customers/${cliente}/campaigns/(\\d+)$`))?.[1] ?? '');
       if (!c || c.cliente !== cliente) return this.erro(400, 'INVALID_ARGUMENT', 'Request contains an invalid argument.', { codigo: { mutateError: 'RESOURCE_NOT_FOUND' }, texto: 'Resource was not found.' });
-      if (op.updateMask !== 'status' || (op.update.status !== 'ENABLED' && op.update.status !== 'PAUSED')) {
+      // A máscara: só a situação, ou a situação com quem vê pelo local (`geo_target_type_setting.positive_geo_target_type`,
+      // em snake_case; o campo, em camelCase, com `PRESENCE` ou `PRESENCE_OR_INTEREST`), como na página oficial.
+      const comLocal = op.updateMask === 'status,geo_target_type_setting.positive_geo_target_type';
+      const local = (op.update.geoTargetTypeSetting as { positiveGeoTargetType?: unknown } | undefined)?.positiveGeoTargetType;
+      const localVale = comLocal ? local === 'PRESENCE' || local === 'PRESENCE_OR_INTEREST' : op.update.geoTargetTypeSetting === undefined;
+      if ((op.updateMask !== 'status' && !comLocal) || !localVale || (op.update.status !== 'ENABLED' && op.update.status !== 'PAUSED')) {
         return this.erro(400, 'INVALID_ARGUMENT', 'Request contains an invalid argument.', { codigo: { fieldMaskError: 'FIELD_NOT_FOUND' }, texto: 'The field mask contained an invalid field.' });
       }
       if (c.status === 'REMOVED') return this.erro(400, 'INVALID_ARGUMENT', 'Request contains an invalid argument.', { codigo: { campaignError: 'CANNOT_MODIFY_REMOVED_CAMPAIGN' }, texto: 'Cannot modify a removed campaign.' });
       if (chamada.tipo === 'validacao') return { status: 200, corpo: {} };
+      if (comLocal) c.local = local as string;
       c.status = op.update.status;
       c.primaryStatus = c.status === 'PAUSED' ? 'PAUSED' : 'ELIGIBLE';
       return { status: 200, corpo: { results: [{ resourceName: nome }] } };
