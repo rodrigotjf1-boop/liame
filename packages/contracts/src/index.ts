@@ -643,6 +643,8 @@ export {
   SocialComment,
 } from './comentarios.js';
 export {
+  DIRECT_AI_SUGGESTION_NO_AI_REASONS,
+  DIRECT_AI_SUGGESTIONS_MAX,
   DIRECT_ATTENDANCE_HOURS,
   DIRECT_AUTO_REPLY_HOURLY_LIMIT,
   DIRECT_AUTO_REPLY_IN_A_ROW,
@@ -654,6 +656,8 @@ export {
   DIRECT_STATUSES,
   DIRECT_WINDOW_HOURS,
   DirectAccount,
+  DirectAiSuggestionRequest,
+  DirectAiSuggestionResponse,
   DirectAttendanceRequest,
   DirectAttendanceResponse,
   DirectAutoReplyPreviewResponse,
