@@ -79,6 +79,7 @@ Menus em português, como aparecem no painel. Em cada serviço: **Fonte → Gith
 2. **Ambiente**: `DATABASE_URL`, `IMAGENS_BUCKET`, `AWS_REGION`, `AWS_ACCESS_KEY_ID` e `AWS_SECRET_ACCESS_KEY` com os mesmos valores do `liame-worker` (o serviço lê a fila no banco e grava o vídeo no mesmo bucket). **Sem domínio**.
 3. **Avançado → Recursos** (*Resources*): limite de memória `3072` (MB) e limite de CPU `2` (núcleos), as reservas em `0`; **Avançado → Implantar** (*Deploy*): **Réplicas** `1` (D-A6-139). O vídeo pesado não tira CPU dos outros projetos da VPS. Criado pelo dono em 12/11/2026 (no ar às 08:09 UTC).
 4. **Implantar**. O primeiro build demora mais (baixa o navegador do Remotion, ~120 MB). Conferir nos logs `serviço de montagem no ar`. Com a função `video_montado` desligada, a fila fica vazia e o serviço só olha a cada 5 segundos.
+5. **Implantação automática**: ligar no serviço e trocar o endereço do webhook que o EasyPanel cria (o IP cru) pelo do painel, como nos outros (ver "Implantação automática", abaixo). **Sem isso, o merge sobe a API e o web, e o serviço de montagem fica na versão antiga** (ERR-226: em 13/11/2026, o Combo da API chegou ao `liame-render` de 12/11, que só tinha o "Produto em destaque", e o vídeo falhou com `Could not find composition with ID combo`). Ligada pelo dono em 13/11/2026; o webhook trocado no mesmo dia. O serviço não tem domínio: a versão dele não aparece no `/health/ready` da API, e a conferência depois do merge é a entrega do webhook dele (status 200).
 
 ### 3.3 `liame-web`
 
@@ -155,7 +156,8 @@ A chave privada fica só no gerenciador de senhas e no painel. A **pública** n�
 
 - Conferência de ponta a ponta: cadastro com e-mail real (chega pelo SES), segundo fator, conectar a Meta
   com o perfil testador e o Google com a conta de teste, primeira leitura.
-- **Implantação automática (ligada em 29/09/2026 nos três serviços).** O EasyPanel cria os webhooks do GitHub com
+- **Implantação automática (ligada em 29/09/2026 nos três serviços de então, e em 13/11/2026 no `liame-render`;
+  um webhook de deploy por serviço da tabela do §1 — confira a contagem depois de criar um serviço, ERR-226).** O EasyPanel cria os webhooks do GitHub com
   o IP cru da VPS (`http://187.127.55.183:3000/api/deploy/<token>`), que o GitHub não alcança (502). Depois de
   ligar a opção em cada serviço, trocar só o começo do endereço por `https://painel.dmstecnologias.com`, mantendo
   o token, e ligar a verificação de SSL:
