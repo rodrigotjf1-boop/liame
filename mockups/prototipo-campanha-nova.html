@@ -9182,14 +9182,14 @@ function r8HtmlCriativo() {
 }
 
 /* ---------- o teste de região ---------- */
-const R8_REGIAO = { bairro: 'Vila Isabel', dias: 14, de: '13/10', ate: '26/10', pediu: 'segunda, 12/10, 09:40', campanhas: 3, minimo: 15 };
+const R8_REGIAO = { bairro: 'Lapa', dias: 14, de: '13/10', ate: '26/10', pediu: 'segunda, 12/10, 09:40', campanhas: 3, minimo: 15 };
 /* Os pedidos por semana no caixa (os bairros dos pedidos, R3): as 4 semanas de antes e as semanas do teste. */
 const R8_BAIRROS = [
-  { nome: 'Vila Isabel', antes: 31, durante: 22, teste: true },
-  { nome: 'Tijuca', antes: 52, durante: 54 },
-  { nome: 'Maracanã', antes: 27, durante: 28 },
-  { nome: 'Andaraí', antes: 22, durante: 21 },
-  { nome: 'Grajaú', antes: 17, durante: 18 },
+  { nome: 'Lapa', antes: 30, durante: 21, teste: true },
+  { nome: 'Centro', antes: 73, durante: 75 },
+  { nome: 'Glória', antes: 15, durante: 16 },
+  { nome: 'Santa Teresa', antes: 10, durante: 10 },
+  { nome: 'Saúde', antes: 9, durante: 9 },
 ];
 const r8Outros = () => R8_BAIRROS.filter((b) => !b.teste);
 const r8Soma = (lista, campo) => lista.reduce((t, b) => t + b[campo], 0);
@@ -9399,14 +9399,14 @@ if (marcaR8) marcaR8.textContent += ' · R8 (os testes), PROPOSTO em 13/11/2026'
       exige(!$('[data-p8-item="ritmo"]'), 'o ritmo da semana não devia estar na fila');
       if (id === 'r8-regiao-nao-da') { exige(texto('#r8-nao-da').includes('Não dá para testar') && !$('[data-p8-item="regiao"]') && $$('#r8-nao-da-card #r8-bairros tbody tr').length === 5, 'o teste que não pode ser pedido'); return; }
       if (id.startsWith('r8-criativo')) exige(texto('#ap-det-titulo').startsWith('Teste de criativo: Smash em dobro'), 'o título: ' + texto('#ap-det-titulo'));
-      else exige(texto('#ap-det-titulo') === 'Teste de região: Vila Isabel sem anúncio por 14 dias', 'o título: ' + texto('#ap-det-titulo'));
+      else exige(texto('#ap-det-titulo') === 'Teste de região: Lapa sem anúncio por 14 dias', 'o título: ' + texto('#ap-det-titulo'));
       if (id === 'r8-criativo-pedido') exige(!!$('#ap-codigo') && $$('.r8-peca').length === 2 && texto('#aprovacoes').includes('quem decide é o caixa'), 'o pedido do teste de criativo');
       if (id === 'r8-criativo-rodando') exige(texto('#r8-veredito').startsWith('Ainda não dá para dizer') && $$('#r8-tabela tbody tr').length === 5 && !$('#r8-tabela .r8-frente'), 'o teste rodando sem vencedor');
       if (id === 'r8-criativo-vencedor') exige(texto('#r8-veredito').startsWith('O criativo A venceu') && !!$('[data-r8-pausar]') && $$('#r8-tabela th.r8-frente').length === 1 && $$('#r8-tabela td.r8-frente').length === 5, 'o vencedor');
       if (id === 'r8-criativo-empate') exige(texto('#r8-veredito').startsWith('O teste acabou sem vencedor') && !$('[data-r8-pausar]'), 'o teste sem vencedor');
       if (id === 'r8-regiao-pedido') exige(!!$('#ap-codigo') && $$('#r8-bairros tbody tr').length === 5 && texto('#aprovacoes').includes('fica sem anúncio'), 'o pedido do teste de região');
       if (id === 'r8-regiao-rodando') exige(texto('#r8-veredito').startsWith('Ainda medindo') && !!$('[data-r8-encerrar]'), 'o teste de região rodando');
-      if (id === 'r8-regiao-resultado') exige(texto('#r8-veredito').includes('pedidos por semana em Vila Isabel') && $$('#r8-bairros tfoot tr').length === 1 && !!$('.r8-faixa'), 'o resultado do teste de região');
+      if (id === 'r8-regiao-resultado') exige(texto('#r8-veredito').includes('pedidos por semana em Lapa') && $$('#r8-bairros tfoot tr').length === 1 && !!$('.r8-faixa'), 'o resultado do teste de região');
     } };
   }
   window.uiuxCenarios['r8-conta-do-acaso'] = { larguras: [1440], executar: async () => {
