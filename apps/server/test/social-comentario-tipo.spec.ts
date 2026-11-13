@@ -73,7 +73,7 @@ describe('o registro (A6, Z11)', () => {
     expect(texto).toContain('Reclamação vence');
     expect(texto).toContain('Pergunta vence elogio');
     expect(texto).toContain('Na dúvida entre um tipo e "nenhum", escolha "nenhum"');
-    expect(SOCIAL.version).toBe(5);
+    expect(SOCIAL.version).toBe(6);
     expect(SOCIAL.tarefas).toContainEqual({ task: TAREFA_SOCIAL_COMENTARIO_TIPO, prompt: 'social.comentario_tipo' });
     expect(conferirRegistro(registroAtual())).toEqual([]);
   });

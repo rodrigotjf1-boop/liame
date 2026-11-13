@@ -1,0 +1,16 @@
+# Eval da tarefa `social_direct` (A6, Z12, parte 4b; o portão da função; ADR-006 item 8).
+# O promptfoo só percorre os casos e junta o relatório: o prompt, o contexto, a mensagem (a conversa entre as marcas)
+# e o formato da resposta são os do servidor (apoio/provedor.mjs), e quem aprova ou reprova é o avaliador do servidor
+# (apoio/conferir.mjs), com a conferência da produção, mais estrita.
+# Rodar: ver evals/README.md.
+description: 'Liame · social_direct: uma sugestão para a pergunta (só com o que Minha marca diz; "precisa de você" quando não sabe) e os três caminhos para a reclamação numa conversa do Direct ou do Messenger, sem compensação, sem nome e sem número inventado'
+
+prompts:
+  - '{{id}}'
+
+providers:
+  - id: file://../apoio/provedor.mjs
+    config:
+      tarefa: social_direct
+
+tests: file://testes.mjs
