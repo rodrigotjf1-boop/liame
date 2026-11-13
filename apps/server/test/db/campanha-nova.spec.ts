@@ -508,6 +508,17 @@ describe.skipIf(!hasDb)('a campanha nova na Meta (A4 · X5, parte 1)', () => {
     const depois = (await opcoes(e)).body;
     expect(depois.by_piece).toEqual([{ piece_id: e.peca, campaign_id: p.body.id, status: 'pedida', active: false, action_id: p.body.action_id }]);
     expect(depois.campaign_cap_micros).toBe(50_000_000);
+    // O pedido recusado em Aprovações (ERR-230): a peça sai da lista na hora e volta a poder pedir. A situação guardada
+    // segue `pedida` até o pedido seguinte; lida crua, a peça ficava em "Espera a aprovação", sem o botão.
+    const [antes] = await ownerQuery<{ status: string }>(`select status from liame.action_request where id = $1`, [p.body.action_id]);
+    await ownerQuery(`update liame.action_request set status = 'cancelada' where id = $1`, [p.body.action_id]);
+    expect((await ownerQuery<{ status: string }>(`select status from liame.ad_campaign_new where id = $1`, [p.body.id]))[0]!.status).toBe('pedida');
+    expect((await opcoes(e)).body.by_piece).toEqual([]);
+    // O que parou no meio da criação aparece como não criada (dá para pedir de novo, e o motivo fica em Aprovações).
+    await ownerQuery(`update liame.ad_campaign_new set status = 'criando' where id = $1`, [p.body.id]);
+    expect((await opcoes(e)).body.by_piece).toEqual([{ piece_id: e.peca, campaign_id: p.body.id, status: 'nao_criada', active: false, action_id: p.body.action_id }]);
+    await ownerQuery(`update liame.ad_campaign_new set status = 'pedida' where id = $1`, [p.body.id]);
+    await ownerQuery(`update liame.action_request set status = $2 where id = $1`, [p.body.action_id, antes!.status]);
 
     // A função desligada e a Página que saiu: o que impede, com as palavras da recusa do pedido.
     const sem = await cenario('Brasa Opcoes Sem Pagina', { ligada: false });
@@ -732,6 +743,11 @@ describe.skipIf(!hasDb)('a campanha nova na Meta (A4 · X5, parte 1)', () => {
     const opcoes = (await api.call('GET', `/v1/new-campaigns/options?brand_id=${e.brandId}`, { cookie: e.cookie })).body;
     expect(opcoes.by_reels).toEqual([{ instagram_media_id: reels, campaign_id: r.body.id, status: 'pedida', active: false, action_id: r.body.action_id }]);
     expect(opcoes.by_piece).toEqual([]);
+    // O pedido que expirou em Aprovações (ERR-230): o Reels sai da lista na hora, sem esperar o pedido seguinte.
+    const [aberto] = await ownerQuery<{ status: string }>(`select status from liame.action_request where id = $1`, [r.body.action_id]);
+    await ownerQuery(`update liame.action_request set status = 'expirada' where id = $1`, [r.body.action_id]);
+    expect((await api.call('GET', `/v1/new-campaigns/options?brand_id=${e.brandId}`, { cookie: e.cookie })).body.by_reels).toEqual([]);
+    await ownerQuery(`update liame.action_request set status = $2 where id = $1`, [r.body.action_id, aberto!.status]);
 
     // Criar: a pergunta da elegibilidade antes de tudo; o criativo aponta para o post; tudo pausado.
     meta.reels.set(reels, true);

@@ -49,25 +49,37 @@ export function motivoDaFotoPequena(largura: number, altura: number): string | n
 
 export type TextosDaGaveta = { titulos: string[]; longo: string; descricoes: string[] };
 
-/** A primeira frase de um texto (até o ponto, a exclamação ou a interrogação), sem o sinal. */
-function primeiraFrase(t: string): string {
-  const m = /^(.+?)[.!?](\s|$)/.exec(t.trim());
+/** A primeira frase de um texto (até o ponto, a exclamação ou a interrogação), com o sinal dela. */
+function primeiraFraseComSinal(t: string): string {
+  const m = /^(.+?[.!?])(\s|$)/.exec(t.trim());
   return (m ? m[1]! : t).trim();
 }
+
+const igual = (a: string, b: string): boolean => a.toLocaleLowerCase('pt-BR') === b.toLocaleLowerCase('pt-BR');
 
 /**
  * Os textos que a gaveta traz da peça aprovada (D-A5-22), para a pessoa ajustar ou pedir ao Criativo: os títulos (o
  * título da peça, a primeira frase do texto e o convite ao cardápio), o título longo (o título com a primeira frase) e
- * as descrições (o texto da peça e o convite). O que passa do tamanho fica com a contagem em vermelho.
+ * as descrições (o texto da peça e o convite). **Só entra o que cabe no tamanho do Google** (D-A5-33): a peça foi escrita
+ * para a Meta, com 125 caracteres no texto, e a gaveta abria com os campos já em vermelho. O que não cabe dá lugar à
+ * versão mais curta que a própria peça tem (a primeira frase, ou o título); sem nenhuma, o campo vem vazio, para a pessoa
+ * escrever ou pedir ao Criativo. Nada é cortado no meio: o texto conferido pelo Compliance entra inteiro ou não entra.
  */
 export function textosDaPeca(peca: Pick<AdPieceResponse['current'], 'title' | 'body'>): TextosDaGaveta {
+  const L = LIMITES_DO_GOOGLE;
+  const cabe = (t: string, max: number): boolean => t !== '' && tamanho(t) <= max;
   const titulo = peca.title.trim();
-  const frase = primeiraFrase(peca.body);
+  const corpo = peca.body.trim();
+  const fraseComSinal = primeiraFraseComSinal(corpo);
+  const frase = fraseComSinal.replace(/[.!?]$/, '').trim();
   const titulos: string[] = [];
-  for (const t of [titulo, frase, 'Peça pelo cardápio online']) if (t && !titulos.some((x) => x.toLocaleLowerCase('pt-BR') === t.toLocaleLowerCase('pt-BR'))) titulos.push(t);
-  while (titulos.length < LIMITES_DO_GOOGLE.titulos[0]) titulos.push('');
-  const longo = frase && frase.toLocaleLowerCase('pt-BR') !== titulo.toLocaleLowerCase('pt-BR') ? `${titulo}: ${frase}` : titulo;
-  return { titulos, longo, descricoes: [peca.body.trim(), 'Peça pelo cardápio online.'] };
+  for (const t of [titulo, frase, 'Peça pelo cardápio online']) if (cabe(t, L.titulo) && !titulos.some((x) => igual(x, t))) titulos.push(t);
+  while (titulos.length < L.titulos[0]) titulos.push('');
+  const comAFrase = frase && !igual(frase, titulo) ? `${titulo}: ${frase}` : titulo;
+  const longo = [comAFrase, frase, titulo].find((t) => cabe(t, L.tituloLongo)) ?? '';
+  const convite = 'Peça pelo cardápio online.';
+  const descricao = [corpo, fraseComSinal].find((t) => cabe(t, L.descricao) && !igual(t, convite)) ?? '';
+  return { titulos, longo, descricoes: descricao ? [descricao, convite] : [convite, ''] };
 }
 
 export type CampoDoGoogle = 'titulos' | 'longo' | 'descricoes' | 'foto' | 'loja' | 'nome' | 'verba' | 'fim';

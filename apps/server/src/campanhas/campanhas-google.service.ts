@@ -90,7 +90,11 @@ function bloqueioDaConta(contas: Conta[]): AppProblem | null {
 function motivoSemCardapio(destino: Awaited<ReturnType<typeof destinoDoPost>>, unitId: string): string | null {
   if (destino.ok && destino.unitId === unitId) return null;
   if (destino.ok || destino.motivo === 'varias_lojas') return 'O cardápio online ligado à marca é o de outra loja: escolha a loja do cardápio.';
-  if (destino.motivo === 'outra_plataforma') return 'A loja recebe os pedidos online por outra plataforma: no Google, o anúncio leva ao cardápio do Liame.';
+  // Diz o que impede e a saída (13/11/2026): a frase de antes ("no Google, o anúncio leva ao cardápio do Liame") parecia
+  // um aviso, e é uma recusa. O caminho é o do menu: Links e cupons, a linha "Pedidos online" da loja.
+  if (destino.motivo === 'outra_plataforma') {
+    return 'A loja recebe os pedidos online por outra plataforma, e no Google o anúncio só leva ao cardápio do Regem: esta campanha não sai para esta loja. Se ela já vende pelo cardápio do Regem, mude em Links e cupons.';
+  }
   return 'A loja não tem o cardápio online ligado ao Liame: ligue o Regem em Contas conectadas.';
 }
 
@@ -447,12 +451,20 @@ export class CampanhasGoogleService {
     });
 
     const { policies } = await this.policies.load(tx, quem.tenantId, query.brand_id);
+    // A situação que vale, como no `obter`: o pedido que se encerrou em Aprovações sem criar (recusado, expirado ou que
+    // falhou) deixa a campanha cancelada (fora daqui: a peça volta a poder pedir) ou não criada, se já estava sendo
+    // criada. A situação guardada só muda no pedido seguinte; lida crua, a peça ficava em "Espera a aprovação" depois da
+    // recusa, sem o botão de pedir de novo (ERR-230).
     const by_piece = (
       await tx.execute<{ piece_id: string; campaign_id: string; status: GoogleCampaignResponse['status']; active: boolean; action_id: string | null }>(sql`
-        select distinct on (piece_id) piece_id, id as campaign_id, status, active, action_id
-          from liame.google_campaign_new
-         where tenant_id = ${quem.tenantId} and brand_id = ${query.brand_id} and status <> 'cancelada'
-         order by piece_id, created_at desc, id desc`)
+        select distinct on (c.piece_id) c.piece_id, c.id as campaign_id,
+               case when c.status = 'criando' and coalesce(r.status in ${ENCERRADOS}, false) then 'nao_criada' else c.status end as status,
+               c.active, c.action_id
+          from liame.google_campaign_new c
+          left join liame.action_request r on r.id = c.action_id and r.tenant_id = c.tenant_id
+         where c.tenant_id = ${quem.tenantId} and c.brand_id = ${query.brand_id} and c.status <> 'cancelada'
+           and not (c.status = 'pedida' and coalesce(r.status in ${ENCERRADOS}, false))
+         order by c.piece_id, c.created_at desc, c.id desc`)
     ).rows;
 
     return {

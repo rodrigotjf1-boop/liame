@@ -60,14 +60,35 @@ describe('campanha nova no Google: a gaveta', () => {
     expect(motivoDaFotoPequena(520, 520)).toBe('A foto é pequena para o recorte deitado: o Google pede pelo menos 600 × 314, e o maior recorte desta foto dá 520 × 272. Use outra foto.');
   });
 
-  it('os textos que a gaveta traz da peça: o título, a primeira frase e o convite; o longo e as descrições', () => {
-    expect(textosDaPeca({ title: 'Sexta é dia de combo', body: 'Smash, batata e refri por R$ 34,90. Peça pelo cardápio online.' })).toEqual({
-      titulos: ['Sexta é dia de combo', 'Smash, batata e refri por R$ 34,90', 'Peça pelo cardápio online'],
-      longo: 'Sexta é dia de combo: Smash, batata e refri por R$ 34,90',
-      descricoes: ['Smash, batata e refri por R$ 34,90. Peça pelo cardápio online.', 'Peça pelo cardápio online.'],
+  it('os textos que a gaveta traz da peça: o título, a primeira frase e o convite; o longo e as descrições; só o que cabe no Google (D-A5-33)', () => {
+    expect(textosDaPeca({ title: 'Sexta é dia de combo', body: 'Smash e batata por R$ 34,90. Peça pelo cardápio online.' })).toEqual({
+      titulos: ['Sexta é dia de combo', 'Smash e batata por R$ 34,90', 'Peça pelo cardápio online'],
+      longo: 'Sexta é dia de combo: Smash e batata por R$ 34,90',
+      descricoes: ['Smash e batata por R$ 34,90. Peça pelo cardápio online.', 'Peça pelo cardápio online.'],
     });
     // Sem frase diferente do título, o campo que falta vem vazio (a pessoa escreve ou pede ao Criativo).
-    expect(textosDaPeca({ title: 'Peça pelo cardápio online', body: 'Peça pelo cardápio online.' }).titulos).toEqual(['Peça pelo cardápio online', '', '']);
+    expect(textosDaPeca({ title: 'Peça pelo cardápio online', body: 'Peça pelo cardápio online.' })).toEqual({
+      titulos: ['Peça pelo cardápio online', '', ''],
+      longo: 'Peça pelo cardápio online',
+      descricoes: ['Peça pelo cardápio online.', ''],
+    });
+    // A peça do piloto em 13/11/2026, escrita para a Meta (o texto com 110 caracteres): a gaveta abria com três campos em
+    // vermelho (70 de 30, 92 de 90 e 110 de 90). O que não cabe dá lugar à frase ou ao título; nada é cortado no meio.
+    const piloto = textosDaPeca({
+      title: 'Combo Família Mister',
+      body: 'Reúna a família em volta da mesa com o Combo Família do Mister Burgers. Peça pelo cardápio online e aproveite.',
+    });
+    expect(piloto).toEqual({
+      titulos: ['Combo Família Mister', 'Peça pelo cardápio online', ''],
+      longo: 'Reúna a família em volta da mesa com o Combo Família do Mister Burgers',
+      descricoes: ['Reúna a família em volta da mesa com o Combo Família do Mister Burgers.', 'Peça pelo cardápio online.'],
+    });
+    // Nada do que a gaveta traz passa do tamanho: o que sobra para a pessoa é só o campo vazio.
+    expect(motivoDosTextos(piloto)).toEqual({ campo: 'titulos', motivo: 'Há título vazio: escreva ou tire.' });
+    // A frase com exclamação fica com o sinal dela na descrição; o texto sem versão que caiba deixa o campo vazio.
+    expect(textosDaPeca({ title: 'Combo', body: `Hoje tem combo! ${'Muito texto depois. '.repeat(6)}` }).descricoes).toEqual(['Hoje tem combo!', 'Peça pelo cardápio online.']);
+    const semFrase = textosDaPeca({ title: 'x'.repeat(31), body: 'y'.repeat(95) });
+    expect(semFrase).toEqual({ titulos: ['Peça pelo cardápio online', '', ''], longo: 'x'.repeat(31), descricoes: ['Peça pelo cardápio online.', ''] });
   });
 
   it('os textos: as quantidades, os tamanhos, os vazios e os repetidos, no campo de cada um, com as palavras do servidor', () => {

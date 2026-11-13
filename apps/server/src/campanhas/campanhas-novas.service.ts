@@ -488,19 +488,27 @@ export class CampanhasNovasService {
 
     const { policies, timezone } = await this.policies.load(tx, quem.tenantId, query.brand_id);
     type Ultima = { campaign_id: string; status: NewCampaignResponse['status']; active: boolean; action_id: string | null };
+    // A situação que vale, como no `obter`: o pedido que se encerrou em Aprovações sem criar (recusado, expirado ou que
+    // falhou) deixa a campanha cancelada (fora daqui: a peça ou o Reels volta a poder pedir) ou não criada, se já tinha
+    // começado na Meta. A situação guardada só muda no pedido seguinte; lida crua, a peça ficava em "Espera a aprovação"
+    // depois da recusa, sem o botão de pedir de novo (ERR-230).
+    const situacaoQueVale = sql`case when c.status = 'criando' and coalesce(r.status in ${ENCERRADOS}, false) then 'nao_criada' else c.status end`;
+    const semAsCanceladas = sql`c.status <> 'cancelada' and not (c.status = 'pedida' and coalesce(r.status in ${ENCERRADOS}, false))`;
     const by_piece = (
       await tx.execute<Ultima & { piece_id: string }>(sql`
-        select distinct on (piece_id) piece_id, id as campaign_id, status, active, action_id
-          from liame.ad_campaign_new
-         where tenant_id = ${quem.tenantId} and brand_id = ${query.brand_id} and status <> 'cancelada' and piece_id is not null
-         order by piece_id, created_at desc, id desc`)
+        select distinct on (c.piece_id) c.piece_id, c.id as campaign_id, ${situacaoQueVale} as status, c.active, c.action_id
+          from liame.ad_campaign_new c
+          left join liame.action_request r on r.id = c.action_id and r.tenant_id = c.tenant_id
+         where c.tenant_id = ${quem.tenantId} and c.brand_id = ${query.brand_id} and ${semAsCanceladas} and c.piece_id is not null
+         order by c.piece_id, c.created_at desc, c.id desc`)
     ).rows;
     const by_reels = (
       await tx.execute<Ultima & { instagram_media_id: string }>(sql`
-        select distinct on (instagram_media_id) instagram_media_id, id as campaign_id, status, active, action_id
-          from liame.ad_campaign_new
-         where tenant_id = ${quem.tenantId} and brand_id = ${query.brand_id} and status <> 'cancelada' and instagram_media_id is not null
-         order by instagram_media_id, created_at desc, id desc`)
+        select distinct on (c.instagram_media_id) c.instagram_media_id, c.id as campaign_id, ${situacaoQueVale} as status, c.active, c.action_id
+          from liame.ad_campaign_new c
+          left join liame.action_request r on r.id = c.action_id and r.tenant_id = c.tenant_id
+         where c.tenant_id = ${quem.tenantId} and c.brand_id = ${query.brand_id} and ${semAsCanceladas} and c.instagram_media_id is not null
+         order by c.instagram_media_id, c.created_at desc, c.id desc`)
     ).rows;
 
     return {

@@ -192,6 +192,14 @@ describe.skipIf(!hasDb)('a campanha nova no Google: o pedido e a criação (A5 �
     expect(r.body.units).toEqual([{ id: e.unitId, name: 'Loja Centro', address: 'Rua da Assembleia, 10, Centro', has_address: true, delivery_radius_km: null, menu_available: true, menu_block: null }]);
     const p = await pedir(e);
     expect((await opcoes(e)).body.by_piece).toEqual([{ piece_id: e.peca, campaign_id: p.body.id, status: 'pedida', active: false, action_id: p.body.action_id }]);
+    // O pedido recusado em Aprovações (ERR-230): a peça sai da lista na hora e volta a poder pedir. A situação guardada
+    // segue `pedida` até o pedido seguinte; lida crua, a peça ficava em "Espera a aprovação", sem o botão.
+    await ownerQuery(`update liame.action_request set status = 'cancelada' where id = $1`, [p.body.action_id]);
+    expect((await ownerQuery<{ status: string }>(`select status from liame.google_campaign_new where id = $1`, [p.body.id]))[0]!.status).toBe('pedida');
+    expect((await opcoes(e)).body.by_piece).toEqual([]);
+    // O que parou no meio da criação aparece como não criada (dá para pedir de novo, e o motivo fica em Aprovações).
+    await ownerQuery(`update liame.google_campaign_new set status = 'criando' where id = $1`, [p.body.id]);
+    expect((await opcoes(e)).body.by_piece).toEqual([{ piece_id: e.peca, campaign_id: p.body.id, status: 'nao_criada', active: false, action_id: p.body.action_id }]);
 
     // Desligada, sem a conta e sem a logo: o que impede, na ordem e com as palavras da recusa do pedido.
     const sem = await cenario('Brasa Google Sem Nada', { ligada: false });
