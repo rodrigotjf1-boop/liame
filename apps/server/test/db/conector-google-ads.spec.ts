@@ -83,6 +83,20 @@ describe.skipIf(!hasDb)('conector do Google Ads (leitura, v25)', () => {
         ],
       };
     }
+    if (/^SELECT segments\.date, segments\.geo_target_most_specific_location, .* FROM user_location_view WHERE/.test(query) && desde) {
+      // O local mais específico: o bairro quando o Google tem o lugar (aqui, um id de bairro), senão a cidade.
+      return {
+        status: 200,
+        corpo: [
+          {
+            results: [
+              { segments: { date: desde, geoTargetMostSpecificLocation: 'geoTargetConstants/9100001' }, metrics: { impressions: '250', clicks: '7', costMicros: '3000000', conversions: 1 } },
+              { segments: { date: desde, geoTargetMostSpecificLocation: 'geoTargetConstants/1001773' }, metrics: { impressions: '150', clicks: '3', costMicros: '2000000' } },
+            ],
+          },
+        ],
+      };
+    }
     if (/FROM user_location_view WHERE/.test(query) && desde) {
       return {
         status: 200,
@@ -144,13 +158,22 @@ describe.skipIf(!hasDb)('conector do Google Ads (leitura, v25)', () => {
     ]);
     const cidades = await conector().lerCidades(conta(), { inicio: '2026-10-01', fim: '2026-10-10' });
     expect(cidades).toEqual([{ dia: '2026-10-01', lugar: '1001773', impressoes: 400, cliques: 10, gasto: '5', conversoes: '1.5' }]);
+    // A medição dos bairros: o local mais específico, na mesma vista, com o campo próprio.
+    const locais = await conector().lerLocais(conta(), { inicio: '2026-10-01', fim: '2026-10-10' });
+    expect(locais).toEqual([
+      { dia: '2026-10-01', lugar: '9100001', impressoes: 250, cliques: 7, gasto: '3', conversoes: '1' },
+      { dia: '2026-10-01', lugar: '1001773', impressoes: 150, cliques: 3, gasto: '2', conversoes: '0' },
+    ]);
     // O id fora do formato não entra na consulta; os repetidos vão uma vez.
     const lugares = await conector().lerLugares(conta(), ['1001773', 'geoTargetConstants/1001773', "1' OR 1=1"]);
     expect(lugares).toEqual([{ id: '1001773', nome: 'Rio de Janeiro', nomeCompleto: 'Rio de Janeiro,State of Rio de Janeiro,Brazil', tipo: 'City', pais: 'BR' }]);
     const consultas = pedidos.slice(antes).map((p) => p.query ?? '');
-    expect(consultas).toHaveLength(3);
+    expect(consultas).toHaveLength(4);
     expect(consultas[0]).toBe("SELECT segments.date, segments.hour, metrics.impressions, metrics.clicks, metrics.cost_micros, metrics.conversions FROM customer WHERE segments.date BETWEEN '2026-10-01' AND '2026-10-10'");
-    expect(consultas[1]).toContain('FROM user_location_view WHERE');
+    expect(consultas[1]).toContain('SELECT segments.date, segments.geo_target_city, ');
+    expect(consultas[2]).toBe(
+      "SELECT segments.date, segments.geo_target_most_specific_location, metrics.impressions, metrics.clicks, metrics.cost_micros, metrics.conversions FROM user_location_view WHERE segments.date BETWEEN '2026-10-01' AND '2026-10-10'",
+    );
     expect(pedidos.slice(antes).every((p) => p.cabecalhos['login-customer-id'] === GERENTE)).toBe(true);
   });
 

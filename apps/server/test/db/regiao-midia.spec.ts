@@ -29,6 +29,8 @@ describe.skipIf(!hasDb)('a mídia por região e por hora, pela rotina do worker 
   let rotina: RegiaoMidiaLoop;
   let e: EmpresaComGoogle;
   const LUGAR = String(randomInt(900_000_000, 999_999_999));
+  /** O bairro do local mais específico (a medição dos bairros), novo a cada rodada. */
+  const LOCAL = String(randomInt(800_000_000, 899_999_999));
   let cidadesFalham = false;
   let semPermissao = false;
 
@@ -53,12 +55,36 @@ describe.skipIf(!hasDb)('a mídia por região e por hora, pela rotina do worker 
         ],
       };
     }
+    if (q.includes('segments.geo_target_most_specific_location') && q.includes('FROM user_location_view')) {
+      if (cidadesFalham) return { status: 400, corpo: { error: { code: 400, status: 'INVALID_ARGUMENT', message: 'Request contains an invalid argument.' } } };
+      return {
+        status: 200,
+        corpo: [
+          {
+            results: [
+              { segments: { date: '2026-11-10', geoTargetMostSpecificLocation: `geoTargetConstants/${LOCAL}` }, metrics: { impressions: '500', clicks: '20', costMicros: '9000000', conversions: 2 } },
+              { segments: { date: '2026-11-10', geoTargetMostSpecificLocation: `geoTargetConstants/${LUGAR}` }, metrics: { impressions: '200', clicks: '5', costMicros: '3000000' } },
+            ],
+          },
+        ],
+      };
+    }
     if (q.includes('FROM user_location_view')) {
       if (cidadesFalham) return { status: 400, corpo: { error: { code: 400, status: 'INVALID_ARGUMENT', message: 'Request contains an invalid argument.' } } };
       return { status: 200, corpo: [{ results: [{ segments: { date: '2026-11-10', geoTargetCity: `geoTargetConstants/${LUGAR}` }, metrics: { impressions: '700', clicks: '25', costMicros: '12000000', conversions: 2 } }] }] };
     }
     if (q.includes('FROM geo_target_constant')) {
-      return { status: 200, corpo: [{ results: [{ geoTargetConstant: { id: LUGAR, name: 'Rio de Janeiro', canonicalName: 'Rio de Janeiro,State of Rio de Janeiro,Brazil', targetType: 'City', countryCode: 'BR' } }] }] };
+      return {
+        status: 200,
+        corpo: [
+          {
+            results: [
+              { geoTargetConstant: { id: LUGAR, name: 'Rio de Janeiro', canonicalName: 'Rio de Janeiro,State of Rio de Janeiro,Brazil', targetType: 'City', countryCode: 'BR' } },
+              { geoTargetConstant: { id: LOCAL, name: 'Tijuca', canonicalName: 'Tijuca,Rio de Janeiro,State of Rio de Janeiro,Brazil', targetType: 'Neighborhood', countryCode: 'BR' } },
+            ],
+          },
+        ],
+      };
     }
     return null;
   };
@@ -72,6 +98,11 @@ describe.skipIf(!hasDb)('a mídia por região e por hora, pela rotina do worker 
   const cidades = () =>
     ownerQuery<{ day: string; geo_target_id: string; clicks: string; spend: string }>(
       `select day::text as day, geo_target_id::text, clicks::text, spend::text from liame.ad_city_daily where connected_account_id = $1 order by day`,
+      [e.conta],
+    );
+  const locais = () =>
+    ownerQuery<{ day: string; geo_target_id: string; clicks: string }>(
+      `select day::text as day, geo_target_id::text, clicks::text from liame.ad_local_daily where connected_account_id = $1 order by day, geo_target_id`,
       [e.conta],
     );
   const cursor = async () =>
@@ -109,7 +140,7 @@ describe.skipIf(!hasDb)('a mídia por região e por hora, pela rotina do worker 
   it('com a função ligada: a hora e a cidade das 4 semanas até ontem, e o nome do lugar novo; o que veio fora da janela fica de fora', async () => {
     await ligarFlagDaEmpresa(api, 'regiao', e.tenantId, true);
     await ownerQuery(`update liame.sync_state set cursor = '{}'::jsonb where connected_account_id = $1 and dataset = 'regiao_midia'`, [e.conta]);
-    expect(await rodar()).toEqual([{ conta: e.conta, status: 'ok', horas: 3, cidades: 1 }]);
+    expect(await rodar()).toEqual([{ conta: e.conta, status: 'ok', horas: 3, cidades: 1, locais: 2 }]);
     const feitas = consultasFeitas();
     expect(feitas[0]).toContain("BETWEEN '2026-10-15' AND '2026-11-11'");
     expect(feitas.some((q) => q.includes(`'geoTargetConstants/${LUGAR}'`))).toBe(true);
@@ -119,6 +150,13 @@ describe.skipIf(!hasDb)('a mídia por região e por hora, pela rotina do worker 
     ]);
     expect(await cidades()).toEqual([{ day: '2026-11-10', geo_target_id: LUGAR, clicks: '25', spend: '12.000000' }]);
     expect(await ownerQuery(`select name, target_type, country_code from liame.region_geo_target where id = $1`, [LUGAR])).toEqual([{ name: 'Rio de Janeiro', target_type: 'City', country_code: 'BR' }]);
+    // A medição dos bairros: o local mais específico, com o tipo do lugar (o bairro como Neighborhood).
+    expect(await locais()).toEqual([
+      { day: '2026-11-10', geo_target_id: LUGAR, clicks: '5' },
+      { day: '2026-11-10', geo_target_id: LOCAL, clicks: '20' },
+    ].sort((a, b) => Number(a.geo_target_id) - Number(b.geo_target_id)));
+    expect(await ownerQuery(`select name, target_type from liame.region_geo_target where id = $1`, [LOCAL])).toEqual([{ name: 'Tijuca', target_type: 'Neighborhood' }]);
+    expect((await cursor())!.cursor).toMatchObject({ versao: 2 });
     expect(await cursor()).toMatchObject({ last_error: null, cursor: { proxima: new Date(AGORA.getTime() + 24 * 3_600_000).toISOString(), falhas_seguidas: 0 } });
   });
 
@@ -178,6 +216,14 @@ describe.skipIf(!hasDb)('a mídia por região e por hora, pela rotina do worker 
     expect(dela).toEqual([{ id: [antigo, novo].sort((a, b) => Number(a) - Number(b))[0], name: nome, full_name: `${nome},State of Rio de Janeiro,Brazil`, clicks: 6, impressions: 50, clicks_pct: expect.any(Number) }]);
   });
 
+  it('a conta lida pela versão anterior da leitura fica devida já, sem esperar o dia; lida de novo, não', async () => {
+    const daqui = new Date(AGORA.getTime() + 24 * 3_600_000).toISOString();
+    await ownerQuery(`update liame.sync_state set cursor = jsonb_build_object('proxima', $2::text, 'versao', 1) where connected_account_id = $1 and dataset = 'regiao_midia'`, [e.conta, daqui]);
+    expect(await rodar()).toEqual([{ conta: e.conta, status: 'ok', horas: 3, cidades: 1, locais: 2 }]);
+    expect((await cursor())!.cursor).toMatchObject({ versao: 2, proxima: daqui });
+    expect(await rodar()).toEqual([]);
+  });
+
   it('no dia seguinte: o lugar já conhecido não é traduzido de novo; a cidade que falha não derruba a hora e deixa a de antes', async () => {
     google.chamadas.length = 0;
     cidadesFalham = true;
@@ -194,7 +240,9 @@ describe.skipIf(!hasDb)('a mídia por região e por hora, pela rotina do worker 
       ['2026-11-11', 12],
     ]);
     expect(await cidades()).toHaveLength(1);
-    expect((await cursor())!.cursor).toMatchObject({ cidades: 'falhou', falhas_seguidas: 0 });
+    expect((await cursor())!.cursor).toMatchObject({ cidades: 'falhou', locais: 'falhou', falhas_seguidas: 0 });
+    // O local que falha também deixa o de antes.
+    expect(await locais()).toHaveLength(2);
   });
 
   it('sem permissão, a conta espera um dia e o que já foi lido fica; a conta desligada leva junto o que foi lido dela', async () => {
@@ -214,5 +262,6 @@ describe.skipIf(!hasDb)('a mídia por região e por hora, pela rotina do worker 
     expect(await rodar(depois)).toEqual([]);
     expect(await horas()).toEqual([]);
     expect(await cidades()).toEqual([]);
+    expect(await locais()).toEqual([]);
   });
 });

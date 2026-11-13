@@ -26,6 +26,12 @@ import { type JobScope, tenantFilter } from './outbox-publisher.js';
 /** Reserva da leitura: se o worker cair no meio, ela volta para a fila depois disto. */
 const RESERVA_MIN = 30;
 const PROVEDORES = ['meta_ads', 'google_ads'] as const;
+/**
+ * A versão da leitura, no cursor: 1 = a hora e a cidade (R4, parte 1); 2 = mais o local mais específico do Google (a
+ * medição dos bairros). A conta lida por uma versão anterior fica devida já, sem esperar o dia: a leitura nova sai logo
+ * depois do deploy (a migration entra antes do merge e não pode antecipá-la).
+ */
+const VERSAO_DA_LEITURA = 2;
 type Provedor = (typeof PROVEDORES)[number];
 
 /** Como terminou a vez de uma conta. */
@@ -34,10 +40,11 @@ export type ResultadoDaMidia = {
   status: 'ok' | 'desligada' | 'ignorada' | 'sem_permissao' | 'falhou';
   horas?: number;
   cidades?: number;
+  locais?: number;
   erro?: string;
 };
 
-type CursorDaMidia = { proxima?: string; falha?: string; falhas_seguidas?: number; cidades?: 'falhou' };
+type CursorDaMidia = { proxima?: string; falha?: string; falhas_seguidas?: number; cidades?: 'falhou'; locais?: 'falhou'; versao?: number };
 
 type LinhaDaConta = {
   id: string;
@@ -73,7 +80,7 @@ export class RegiaoMidiaLoop {
     const reservadas = await withSystem(db, async (tx) => {
       // A conta desligada leva junto o que foi lido dela (`data-classes.ts`: "com a conta conectada"); os pedidos por
       // bairro da loja do Regem (R3, parte 2) também saem aqui, na mesma limpeza da região.
-      for (const tabela of [sql`liame.ad_hour_daily`, sql`liame.ad_city_daily`, sql`liame.region_order_district`]) {
+      for (const tabela of [sql`liame.ad_hour_daily`, sql`liame.ad_city_daily`, sql`liame.ad_local_daily`, sql`liame.region_order_district`]) {
         await tx.execute(sql`
           delete from ${tabela} m
            using liame.connected_account a
@@ -92,14 +99,16 @@ export class RegiaoMidiaLoop {
             from liame.sync_state s
             join liame.connected_account a on a.id = s.connected_account_id
            where s.dataset = ${DATASET_DA_MIDIA} and ${elegivel}
-             and coalesce((s.cursor->>'proxima')::timestamptz, '-infinity'::timestamptz) <= ${referencia}
+             and (coalesce((s.cursor->>'proxima')::timestamptz, '-infinity'::timestamptz) <= ${referencia}
+                  or coalesce((s.cursor->>'versao')::integer, 1) < ${VERSAO_DA_LEITURA}::integer)
              ${tenantFilter(scope, sql`a.tenant_id`)}
            order by coalesce((s.cursor->>'proxima')::timestamptz, '-infinity'::timestamptz), s.connected_account_id
            limit ${limite}
            for update of s skip locked
         )
         update liame.sync_state s
-           set cursor = s.cursor || jsonb_build_object('proxima', ${referencia} + make_interval(mins => ${RESERVA_MIN})), updated_at = ${referencia}
+           set cursor = s.cursor || jsonb_build_object('proxima', ${referencia} + make_interval(mins => ${RESERVA_MIN}), 'versao', ${VERSAO_DA_LEITURA}::integer),
+               updated_at = ${referencia}
           from devidas d
          where s.connected_account_id = d.connected_account_id and s.dataset = ${DATASET_DA_MIDIA}
         returning s.connected_account_id as id, s.tenant_id`);
@@ -155,6 +164,8 @@ export class RegiaoMidiaLoop {
     let cidades: CidadeLida[] | null = null;
     let lugares: LugarLido[] = [];
     let cidadesFalharam = false;
+    let locais: CidadeLida[] | null = null;
+    let locaisFalharam = false;
     try {
       if (!inicio.segredo) throw new ErroConector('autenticacao', conta.provider, 'autorização revogada ou ausente');
       const credencial = JSON.parse(inicio.segredo) as CredencialGuardada;
@@ -174,18 +185,26 @@ export class RegiaoMidiaLoop {
       } else {
         const google = await criarConectorGoogleAds(db, cliente, this.config.plataformas);
         horas = await google.lerHoras(ctx, janela);
-        // A cidade é um extra da hora: se falhar sem ser a autorização, a hora vale e a cidade fica a de antes.
-        try {
-          cidades = await google.lerCidades(ctx, janela);
-          const conhecidos = await this.lugaresConhecidos(db, [...new Set(cidades.map((c) => c.lugar))]);
-          const novos = [...new Set(cidades.map((c) => c.lugar))].filter((id) => !conhecidos.has(id));
-          if (novos.length) lugares = await google.lerLugares(ctx, novos);
-        } catch (err) {
-          if (!(err instanceof ErroConector) || err.tipo === 'autenticacao') throw err;
-          this.logger.warn(`conta ${contaId}: a cidade dos anúncios do Google não veio (${err.tipo}): ${err.message}`);
-          cidades = null;
-          cidadesFalharam = true;
-        }
+        // A cidade e o local mais específico (a medição dos bairros) são extras da hora: o que falhar sem ser a
+        // autorização fica o de antes, e a hora vale.
+        const extra = async <T,>(nome: string, leitura: () => Promise<T>): Promise<T | null> => {
+          try {
+            return await leitura();
+          } catch (err) {
+            if (!(err instanceof ErroConector) || err.tipo === 'autenticacao') throw err;
+            this.logger.warn(`conta ${contaId}: ${nome} dos anúncios do Google não veio (${err.tipo}): ${err.message}`);
+            return null;
+          }
+        };
+        cidades = await extra('a cidade', () => google.lerCidades(ctx, janela));
+        cidadesFalharam = cidades === null;
+        locais = await extra('o local mais específico', () => google.lerLocais(ctx, janela));
+        locaisFalharam = locais === null;
+        // O nome e o tipo dos lugares novos das duas leituras; sem eles, o lugar aparece pelo id até a leitura seguinte.
+        const ids = [...new Set([...(cidades ?? []), ...(locais ?? [])].map((c) => c.lugar))];
+        const conhecidos = await this.lugaresConhecidos(db, ids);
+        const novos = ids.filter((id) => !conhecidos.has(id));
+        if (novos.length) lugares = (await extra('o nome dos lugares', () => google.lerLugares(ctx, novos))) ?? [];
       }
     } catch (err) {
       if (!(err instanceof ErroConector)) throw err;
@@ -217,7 +236,22 @@ export class RegiaoMidiaLoop {
              where x.dia between ${janela.inicio}::date and ${janela.fim}::date`);
         }
       }
-      const proximo: CursorDaMidia = { proxima: depois(INTERVALO_DA_MIDIA_MIN * 60_000), falhas_seguidas: 0, ...(cidadesFalharam ? { cidades: 'falhou' } : {}) };
+      if (locais) {
+        await tx.execute(sql`delete from liame.ad_local_daily where connected_account_id = ${contaId}`);
+        if (locais.length) {
+          await tx.execute(sql`
+            insert into liame.ad_local_daily (connected_account_id, tenant_id, brand_id, provider, day, geo_target_id, impressions, clicks, spend, conversions, read_at)
+            select ${contaId}, ${tenantId}, ${conta.brand_id}, 'google_ads', x.dia, x.lugar, x.impressoes, x.cliques, x.gasto, x.conversoes, ${agora.toISOString()}::timestamptz
+              from jsonb_to_recordset(${JSON.stringify(locais)}::jsonb) as x (dia date, lugar bigint, impressoes bigint, cliques bigint, gasto numeric, conversoes numeric)
+             where x.dia between ${janela.inicio}::date and ${janela.fim}::date`);
+        }
+      }
+      const proximo: CursorDaMidia = {
+        proxima: depois(INTERVALO_DA_MIDIA_MIN * 60_000),
+        falhas_seguidas: 0,
+        ...(cidadesFalharam ? { cidades: 'falhou' } : {}),
+        ...(locaisFalharam ? { locais: 'falhou' } : {}),
+      };
       await this.marcar(tx, contaId, tenantId, { sucesso: true, erro: null, cursor: proximo }, agora);
     });
     // O nome dos lugares novos: tabela do sistema, gravada em escopo de sistema.
@@ -231,7 +265,7 @@ export class RegiaoMidiaLoop {
                                          country_code = excluded.country_code, fetched_at = excluded.fetched_at`),
       );
     }
-    return { conta: contaId, status: 'ok', horas: horas.length, ...(cidades ? { cidades: cidades.length } : {}) };
+    return { conta: contaId, status: 'ok', horas: horas.length, ...(cidades ? { cidades: cidades.length } : {}), ...(locais ? { locais: locais.length } : {}) };
   }
 
   /** Os lugares que o Liame já sabe o nome (a tabela do sistema, que todos leem). */
@@ -249,7 +283,7 @@ export class RegiaoMidiaLoop {
     await tx.execute(sql`
       insert into liame.sync_state (connected_account_id, dataset, tenant_id, expected_every_minutes, last_success_at, last_attempt_at, last_error, cursor, updated_at)
       values (${contaId}, ${DATASET_DA_MIDIA}, ${tenantId}, ${INTERVALO_DA_MIDIA_MIN}, ${o.sucesso ? quando : null}::timestamptz, ${quando}::timestamptz,
-              ${o.erro}, ${JSON.stringify(o.cursor)}::jsonb, ${quando}::timestamptz)
+              ${o.erro}, ${JSON.stringify({ ...o.cursor, versao: VERSAO_DA_LEITURA })}::jsonb, ${quando}::timestamptz)
       on conflict (connected_account_id, dataset) do update set
         last_success_at = coalesce(excluded.last_success_at, liame.sync_state.last_success_at),
         last_attempt_at = excluded.last_attempt_at,
@@ -270,7 +304,7 @@ export class RegiaoMidiaLoop {
   private async adiar(tx: Tx, contaId: string, tenantId: string, cursor: CursorDaMidia, agora: Date): Promise<void> {
     await tx.execute(sql`
       insert into liame.sync_state (connected_account_id, dataset, tenant_id, expected_every_minutes, cursor, updated_at)
-      values (${contaId}, ${DATASET_DA_MIDIA}, ${tenantId}, ${INTERVALO_DA_MIDIA_MIN}, ${JSON.stringify(cursor)}::jsonb, ${agora.toISOString()}::timestamptz)
+      values (${contaId}, ${DATASET_DA_MIDIA}, ${tenantId}, ${INTERVALO_DA_MIDIA_MIN}, ${JSON.stringify({ ...cursor, versao: VERSAO_DA_LEITURA })}::jsonb, ${agora.toISOString()}::timestamptz)
       on conflict (connected_account_id, dataset) do update set cursor = excluded.cursor, updated_at = excluded.updated_at`);
   }
 }
