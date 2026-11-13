@@ -5,8 +5,13 @@ import { z } from 'zod';
 // campanha, o conjunto e o anúncio na Meta, tudo pausado. O pedido espera a aprovação com o código do app em Aprovações;
 // ativar é outro pedido (a parte 3).
 
-export const NEW_CAMPAIGN_OBJECTIVES = ['cardapio', 'whatsapp'] as const;
-/** O que a pessoa quer do anúncio: pedidos pelo cardápio da loja ou conversas no WhatsApp da Página. */
+export const NEW_CAMPAIGN_OBJECTIVES = ['cardapio', 'whatsapp', 'alcance', 'seguidores'] as const;
+/**
+ * O que a pessoa quer do anúncio: pedidos pelo cardápio da loja, conversas no WhatsApp da Página e, da R6 do plano da
+ * região (D-RG-48), ser conhecido no raio (`alcance`: o botão leva ao cardápio, no máximo 2 vezes por pessoa a cada 7
+ * dias) e seguidores no Instagram (`seguidores`: o destino é o perfil do Instagram ligado à Página). Alcance e
+ * seguidores dividem até 25% do teto do mês (D-RG-49).
+ */
 export const NewCampaignObjective = z.enum(NEW_CAMPAIGN_OBJECTIVES);
 export type NewCampaignObjective = z.infer<typeof NewCampaignObjective>;
 
@@ -82,7 +87,7 @@ export const NewCampaignResponse = z.strictObject({
   radius_km: z.number(),
   daily_budget_micros: z.int(),
   end_date: z.iso.date().nullable(),
-  /** O cardápio da loja (o destino de "pedidos pelo cardápio"); nulo no WhatsApp. */
+  /** O cardápio da loja (o destino de "pedidos pelo cardápio" e de "ser conhecido no raio"); nulo no WhatsApp e em seguidores. */
   link: z.string().nullable(),
   status: NewCampaignStatus,
   /** O pedido em Aprovações. */
@@ -143,6 +148,12 @@ export const NewCampaignOptionsResponse = z.strictObject({
   units: z.array(NewCampaignUnitOption),
   /** O teto por campanha da Meta (a verba diária), quando a empresa definiu; a verba acima dele é recusada. */
   campaign_cap_micros: z.int().nullable(),
+  /**
+   * O teto de alcance e seguidores no mês (R6, D-RG-49): 25% do teto do mês da empresa (`cap_micros`), o que já está
+   * reservado para campanhas assim, pedidas ou ativas, até o fim do mês (`used_micros`) e os dias que faltam, contando
+   * hoje (`days_left`). Nulo quando a empresa ainda não definiu o teto do mês.
+   */
+  top_of_funnel: z.strictObject({ cap_micros: z.int(), used_micros: z.int(), days_left: z.int() }).nullable(),
   /** A campanha nova mais recente de cada peça da marca (a cancelada fica fora): a tela mostra em que pé ela está. */
   by_piece: z.array(
     z.strictObject({ piece_id: z.uuid(), campaign_id: z.uuid(), status: NewCampaignStatus, active: z.boolean(), action_id: z.uuid().nullable() }),

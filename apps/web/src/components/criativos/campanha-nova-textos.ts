@@ -7,10 +7,31 @@ import { microsDeReais } from '@/components/links/cupons-textos';
 // D-A4-46): a gaveta em Criativos, a situação na peça e o pedido em Aprovações. As recusas são as do servidor
 // (`campanhas-novas.service.ts`): a tela confere o mesmo antes de mandar, e o servidor confere de novo.
 
-export const OBJETIVOS: Record<NewCampaignObjective, { rotulo: string; icone: 'external' | 'message'; botao: string; rastreio: string }> = {
+export const OBJETIVOS: Record<NewCampaignObjective, { rotulo: string; icone: 'external' | 'message' | 'megaphone' | 'user-plus'; botao: string; rastreio: string }> = {
   cardapio: { rotulo: 'Pedidos pelo cardápio', icone: 'external', botao: 'Pedir agora', rastreio: 'Vai junto, nos parâmetros de URL do anúncio' },
   whatsapp: { rotulo: 'Conversas no WhatsApp', icone: 'message', botao: 'Enviar mensagem', rastreio: 'Pela conversa que o anúncio abre' },
+  // R6 do plano da região (D-RG-48): os objetivos do topo do funil.
+  alcance: { rotulo: 'Ser conhecido no raio', icone: 'megaphone', botao: 'Pedir agora', rastreio: 'Pelo alcance e pela frequência, em Resultados' },
+  seguidores: { rotulo: 'Seguidores no Instagram', icone: 'user-plus', botao: 'Ver perfil', rastreio: 'Pelos seguidores, em Minha marca › Região' },
 };
+
+/** Os objetivos do topo do funil, que dividem até 25% do teto do mês (D-RG-49). */
+export const DO_TOPO: readonly NewCampaignObjective[] = ['alcance', 'seguidores'];
+/** A frequência do alcance (D-RG-51), como o servidor manda à Meta. */
+export const FREQUENCIA_DO_ALCANCE = 'No máximo 2 vezes por pessoa a cada 7 dias';
+
+/**
+ * A linha do teto de alcance e seguidores (R6, D-RG-49) com a verba diária da gaveta: quanto cabe no mês e quanto esta
+ * usaria até o fim dele. `passa` quando a soma passa do teto (o servidor recusa com as mesmas contas).
+ */
+export function linhaDoTopo(t: NonNullable<NewCampaignOptionsResponse['top_of_funnel']>, verbaDiariaMicros: number | string | null): { texto: string; passa: boolean } {
+  const esta = (verbaDiariaMicros === null ? 0 : Number(verbaDiariaMicros)) * t.days_left;
+  const passa = t.used_micros + esta > t.cap_micros;
+  const base = `Alcance e seguidores: até 25% do teto do mês (${reaisDeMicros(String(t.cap_micros))}). Já há ${reaisDeMicros(String(t.used_micros))} reservados em campanhas assim`;
+  if (!passa) return { texto: `${base}; esta usa até ${reaisDeMicros(String(esta))} até o fim do mês.`, passa };
+  const maximo = t.days_left > 0 ? Math.max(0, Math.floor((t.cap_micros - t.used_micros) / t.days_left / 10_000) * 10_000) : 0;
+  return { texto: `${base}. Esta passa do teto: ${maximo > 0 ? `diminua a verba diária para até ${reaisDeMicros(String(maximo))}` : 'deixe para o mês que vem'}.`, passa };
+}
 
 /** Os raios da gaveta: 3, 5 e 8 km, e o raio de entrega da loja quando ela informou (D-A4-43). */
 export function raiosDaLoja(loja: NewCampaignUnitOption | null): { km: number; rotulo: string; entrega: boolean }[] {
@@ -31,11 +52,14 @@ export function dicaDoRaio(km: number, loja: NewCampaignUnitOption): string {
 /** Para onde o anúncio leva, com as palavras do P42. */
 export function destinoDoObjetivo(objetivo: NewCampaignObjective, loja: NewCampaignUnitOption | null, pagina: string | null): { leva: string; onde: string } {
   if (objetivo === 'whatsapp') return { leva: `A conversa no WhatsApp da Página ${pagina ?? ''}`.trim(), onde: 'o número do WhatsApp ligado à Página' };
+  if (objetivo === 'seguidores') return { leva: 'O perfil da marca no Instagram', onde: 'o perfil ligado à Página, para a pessoa seguir' };
   return { leva: `O cardápio online da ${loja?.name ?? 'loja'}`, onde: 'onde a pessoa faz o pedido' };
 }
 
 export function dicaDoObjetivo(objetivo: NewCampaignObjective, loja: NewCampaignUnitOption | null, pagina: string | null): string {
   if (objetivo === 'whatsapp') return `Abre uma conversa no WhatsApp da Página ${pagina ?? ''}. A Página precisa ter o número do WhatsApp ligado, e a Meta confere ao criar.`.replace('  ', ' ');
+  if (objetivo === 'alcance') return `Mostra o anúncio para o máximo de pessoas do raio, no máximo 2 vezes por pessoa a cada 7 dias; o botão leva ao cardápio online da ${loja?.name ?? 'loja'}. Conta no teto de 25% da verba do mês para alcance e seguidores.`;
+  if (objetivo === 'seguidores') return 'Leva ao perfil da marca no Instagram, para a pessoa seguir; a Meta mostra para quem costuma visitar perfis. Conta no teto de 25% da verba do mês. O Liame confere com a Meta antes de criar.';
   return `Leva ao cardápio online da ${loja?.name ?? 'loja'}, onde a pessoa faz o pedido.`;
 }
 
@@ -74,13 +98,19 @@ export function conferirCampanha(c: CamposDaCampanha, opcoes: NewCampaignOptions
   const loja = opcoes.units.find((u) => u.id === c.loja);
   if (!loja) e.loja = 'Escolha a loja.';
   else if (!loja.has_address) e.loja = 'A campanha mostra o anúncio em volta da loja, e o ponto dela ainda não está no endereço. Ajuste o endereço da loja em Minha marca antes.';
-  else if (c.objetivo === 'cardapio' && !loja.menu_available) e.objetivo = loja.menu_block ?? 'A loja não tem o cardápio online ligado ao Liame.';
+  else if ((c.objetivo === 'cardapio' || c.objetivo === 'alcance') && !loja.menu_available) e.objetivo = loja.menu_block ?? 'A loja não tem o cardápio online ligado ao Liame.';
+  if (c.objetivo === 'seguidores' && !opcoes.instagram) {
+    e.objetivo = 'Seguidores no Instagram leva ao perfil do Instagram ligado à Página da marca. Ligue o Instagram à Página na Meta e conecte de novo em Contas conectadas.';
+  }
   if (!c.nome.trim()) e.nome = 'Dê um nome à campanha.';
   else if ([...c.nome.trim()].length > 80) e.nome = 'O nome vai até 80 caracteres.';
   const micros = microsDeReais(c.verba);
   if (micros === null || BigInt(micros) < 10_000n) e.verba = 'Digite a verba diária em reais, como 30,00.';
   else if (opcoes.campaign_cap_micros !== null && BigInt(micros) > BigInt(opcoes.campaign_cap_micros)) {
     e.verba = `A verba diária passa do teto por campanha, que é de ${reaisDeMicros(BigInt(opcoes.campaign_cap_micros))} por dia. Quem muda o teto é o Dono ou o Administrador, em Verba do mês.`;
+  } else if (DO_TOPO.includes(c.objetivo) && opcoes.top_of_funnel) {
+    const topo = linhaDoTopo(opcoes.top_of_funnel, micros);
+    if (topo.passa) e.verba = topo.texto;
   }
   if (c.fim && c.fim <= hoje) e.fim = 'A data de fim precisa ser depois de hoje.';
   return e;
@@ -91,6 +121,8 @@ export function erroDoPedido(p: Problema): { campo: CampoComErro | null; texto: 
   const texto = p.detail ?? p.title ?? 'Não foi possível pedir a campanha agora.';
   const porCodigo: Record<string, CampoComErro> = {
     'midia-fora-das-fotos': 'midia',
+    'acima-do-teto-do-topo': 'verba',
+    'sem-instagram-na-pagina': 'objetivo',
     'video-sem-capa': 'midia',
     'loja-nao-encontrada': 'loja',
     'loja-sem-endereco': 'loja',

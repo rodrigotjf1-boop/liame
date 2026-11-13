@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Campanha nova · Liame</title>
 <!--
-@prototipo Liame · A4 · P42 · Campanha nova com a foto ou o vídeo da loja (APROVADO PELO DONO EM 11/11/2026, com as recomendações D-A4-42 a D-A4-46) · REVISÃO R6 de 13/11/2026 (plano da região: a campanha com raio, os objetivos de alcance e de seguidores, a estimativa de público no raio, o teto de 25% e a frequência; D-RG-48 a D-RG-52 como recomendadas), PARA O DONO APROVAR
+@prototipo Liame · A4 · P42 · Campanha nova com a foto ou o vídeo da loja (APROVADO PELO DONO EM 11/11/2026, com as recomendações D-A4-42 a D-A4-46) · REVISÃO R6 de 13/11/2026 (plano da região: a campanha com raio, os objetivos de alcance e de seguidores, a estimativa de público no raio, o teto de 25% e a frequência; D-RG-48 a D-RG-52 como recomendadas), APROVADA PELO DONO em 13/11/2026
 base: o P10 (prototipo-criativos.html, aprovado em 05/10/2026): Criativos, a peça aprovada, a gaveta "Campanha nova,
       pausada" e os pedidos em Aprovações ficam como estão lá, no seletor "Criativos"; o P42 entra por cima, no
       seletor "Campanha nova".
@@ -7711,7 +7711,7 @@ const P42_DECISOES = [
     rec: 'assim, como a parte 6 da X5, depois das telas.' },
 ];
 const P42_PERGUNTA = { txt: 'O Gestor de tráfego propõe campanhas novas sozinho?', rec: 'fica para depois, como no P10.' };
-/* A revisão R6 (plano da região, a campanha com raio), para o dono aprovar. */
+/* A revisão R6 (plano da região, a campanha com raio), aprovada pelo dono em 13/11/2026. */
 const P42_DECISOES_R6 = [
   { id: 'D-RG-48', titulo: 'Os objetivos novos: alcance e seguidores', oque: 'Além de pedidos pelo cardápio e conversas no WhatsApp: "Ser conhecido no raio" (OUTCOME_AWARENESS, otimizado para alcance, REACH, com o botão que leva ao cardápio) e "Seguidores no Instagram" (OUTCOME_TRAFFIC com o destino no perfil do Instagram, VISIT_INSTAGRAM_PROFILE; a combinação conferida com a Meta antes de criar, pelo validate_only). Os dois nascem pausados e com aprovação, como as outras.', porque: 'D-RG-3: a loja de bairro precisa ser conhecida no raio antes de vender; o funil local começa no reconhecimento e nos seguidores.', rec: 'Assim. O de seguidores só aparece com o Instagram ligado à Página.' },
   { id: 'D-RG-49', titulo: 'O teto de 25% para alcance e seguidores', oque: 'As campanhas de alcance e de seguidores usam, somadas, até 25% do teto do mês da empresa (a verba diária vezes os dias que faltam no mês, mais as que já estão ativas). Passou, o pedido não é criado, e a gaveta diz quanto cabe.', porque: 'D-RG-3: o grosso da verba fica com pedidos e conversas, que pagam a conta.', rec: 'Assim, conferido no servidor ao pedir e ao ativar.' },
@@ -7721,8 +7721,8 @@ const P42_DECISOES_R6 = [
 ];
 function p42DecisoesHtml() {
   const lista = P42_DECISOES.map((d) => `<li><div><b>${d.id} · ${esc(d.titulo)}</b><span><b>O que é:</b> ${esc(d.oque)}</span><span><b>Por quê:</b> ${esc(d.porque)}</span><span><b>Recomendação:</b> ${esc(d.rec)}</span></div><span class="st st--concluido">Aprovada</span></li>`).join('');
-  const r6 = P42_DECISOES_R6.map((d) => `<li><div><b>${d.id} · ${esc(d.titulo)}</b><span><b>O que é:</b> ${esc(d.oque)}</span><span><b>Por quê:</b> ${esc(d.porque)}</span><span><b>Recomendação:</b> ${esc(d.rec)}</span></div><span class="st st--espera">Para aprovar</span></li>`).join('');
-  return `<section class="card p42-decisoes" id="p42-decisoes-r6" aria-labelledby="p42-dec-r6-t"><div class="card-cab"><div><h2 id="p42-dec-r6-t">Revisão R6: a campanha com raio (D-RG-48 a D-RG-52)</h2><p class="card-sub">Do plano da região, para o dono aprovar. Estados do grupo "R6" no seletor.</p></div></div><ul class="rev-decisoes">${r6}</ul></section>` + `<section class="card p42-decisoes" id="p42-decisoes" aria-labelledby="p42-dec-t"><div class="card-cab"><div><h2 id="p42-dec-t" tabindex="-1">Decisões</h2><p class="card-sub">Pelo servidor da X5 (parte 1, pronta em 11/11/2026, com a função desligada) e pela documentação da Meta reconferida em 11/11/2026. Aprovadas por você em 11/11/2026, com as recomendações.</p></div></div><ul class="rev-decisoes">${lista}</ul><p class="lite-frase"><b>A pergunta aberta:</b> ${esc(P42_PERGUNTA.txt)} <b>Recomendação:</b> ${esc(P42_PERGUNTA.rec)}</p></section>`;
+  const r6 = P42_DECISOES_R6.map((d) => `<li><div><b>${d.id} · ${esc(d.titulo)}</b><span><b>O que é:</b> ${esc(d.oque)}</span><span><b>Por quê:</b> ${esc(d.porque)}</span><span><b>Recomendação:</b> ${esc(d.rec)}</span></div><span class="st st--concluido">Aprovada</span></li>`).join('');
+  return `<section class="card p42-decisoes" id="p42-decisoes-r6" aria-labelledby="p42-dec-r6-t"><div class="card-cab"><div><h2 id="p42-dec-r6-t">Revisão R6: a campanha com raio (D-RG-48 a D-RG-52)</h2><p class="card-sub">Do plano da região, aprovada pelo dono em 13/11/2026. Estados do grupo "R6" no seletor.</p></div></div><ul class="rev-decisoes">${r6}</ul></section>` + `<section class="card p42-decisoes" id="p42-decisoes" aria-labelledby="p42-dec-t"><div class="card-cab"><div><h2 id="p42-dec-t" tabindex="-1">Decisões</h2><p class="card-sub">Pelo servidor da X5 (parte 1, pronta em 11/11/2026, com a função desligada) e pela documentação da Meta reconferida em 11/11/2026. Aprovadas por você em 11/11/2026, com as recomendações.</p></div></div><ul class="rev-decisoes">${lista}</ul><p class="lite-frase"><b>A pergunta aberta:</b> ${esc(P42_PERGUNTA.txt)} <b>Recomendação:</b> ${esc(P42_PERGUNTA.rec)}</p></section>`;
 }
 /* ---------- o seletor "Campanha nova" (faixa do protótipo) ---------- */
 const selP42 = $('#rev-p42');
