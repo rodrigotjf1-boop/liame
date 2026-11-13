@@ -9496,18 +9496,39 @@ const R9_ESTADOS = {
   },
 };
 const R9_TODOS = Object.assign({}, ...Object.values(R9_ESTADOS));
-/* O que a loja vende, de Minha marca; os bairros que o Google tem como lugar; os concorrentes de Minha marca. */
-const R9_TIPO = 'hamburgueria';
+/* O que a loja vende, sem IA: a categoria principal do Perfil da Empresa no Google (quando o perfil está ligado) e os
+   "termos de busca da loja", um campo curto e novo de Minha marca (até 3, escritos por uma pessoa). Depois, os bairros
+   que o Google tem como lugar e os concorrentes de Minha marca. */
+const R9_BASES = [
+  { termo: 'hamburgueria', fonte: 'a categoria do Perfil da Empresa no Google' },
+  { termo: 'hambúrguer', fonte: 'os termos de busca de Minha marca' },
+  { termo: 'smash burger', fonte: 'os termos de busca de Minha marca' },
+];
 const R9_NO_GOOGLE = new Set(['centro', 'lapa', 'gloria', 'saude']);
 const R9_CONCORRENTES = ['burger king', 'mcdonald', 'bob’s', "bob's"];
 /* Os limites dos temas ficam "a conferir": a página da versão da API em uso e um teste na conta real (D-RG-89). */
 const R9_LIM = { temas: 25, tema: 80 };
 const r9Area = () => R6B_SUGERIDOS.filter((b) => b.area).map((b) => b.id);
 const r9Circulo = (b) => `um círculo de ${numero(b.r, b.r % 1 ? 1 : 0)} km no centro`;
-/* Os temas, por regra: o que a loja vende com "perto de mim" e "delivery", e depois com cada bairro de quem vê. */
-function r9TemasDe(ids) {
+/* Os temas, por regra: cada termo com "perto de mim", o segundo com "delivery", e depois os bairros de quem vê. Um tema
+   por bairro primeiro; o segundo tema de cada bairro só enquanto couber no limite. `corte`: os bairros que ficaram com um
+   tema só e os que ficaram sem nenhum, para a tela dizer (a lista nunca corta em silêncio). */
+function r9Montar(ids) {
+  const [a, b] = [R9_BASES[0].termo, (R9_BASES[1] ?? R9_BASES[0]).termo];
   const nomes = ids.map((id) => r6bLugar(id)?.nome).filter(Boolean);
-  return [`${R9_TIPO} perto de mim`, 'hambúrguer delivery', 'smash burger perto de mim', ...nomes.flatMap((n) => [`${R9_TIPO} ${n}`, `delivery de hambúrguer ${n}`])].slice(0, R9_LIM.temas);
+  const temas = [...R9_BASES.map((x) => `${x.termo} perto de mim`), `${b} delivery`];
+  const semNenhum = [], comUmSo = [];
+  for (const n of nomes) { if (temas.length < R9_LIM.temas) temas.push(`${a} ${n}`); else semNenhum.push(n); }
+  for (const n of nomes) { if (semNenhum.includes(n)) continue; if (temas.length < R9_LIM.temas) temas.push(`delivery de ${b} ${n}`); else comUmSo.push(n); }
+  return { temas, corte: { comUmSo, semNenhum } };
+}
+const r9TemasDe = (ids) => r9Montar(ids).temas;
+const r9Lista = (n) => (n.length < 2 ? n.join('') : `${n.slice(0, -1).join(', ')} e ${n.at(-1)}`);
+function r9CorteTxt(ids) {
+  const { comUmSo, semNenhum } = r9Montar(ids).corte;
+  if (!comUmSo.length && !semNenhum.length) return '';
+  const partes = [semNenhum.length ? `${r9Lista(semNenhum)} ${semNenhum.length === 1 ? 'ficou' : 'ficaram'} sem tema` : '', comUmSo.length ? `${r9Lista(comUmSo)} ${comUmSo.length === 1 ? 'ficou' : 'ficaram'} com um tema só` : ''].filter(Boolean);
+  return `A lista parou em ${R9_LIM.temas} temas: ${partes.join('; ')}. Tire um tema para pôr outro.`;
 }
 function r9TemaRuim(t) {
   const x = t.toLocaleLowerCase('pt-BR');
@@ -9528,15 +9549,17 @@ function r9QuemVe(m) {
   }
   const itens = R6B_SUGERIDOS.map((b) => `<li><label class="r9-bairro"><input type="checkbox" name="r9-bairro" value="${b.id}"${m.bairros.includes(b.id) ? ' checked' : ''}><span><b>${esc(b.nome)}</b><small>${r6bOrigem(b)}</small><small>no Google: ${R9_NO_GOOGLE.has(b.id) ? 'o bairro dele' : r9Circulo(b)}</small></span></label></li>`).join('');
   return `<fieldset class="campo r9-quem" id="r9-quem" tabindex="-1"><legend>Quem vê</legend>${seg}<ul class="r9-bairros">${itens}</ul>
-    <p class="campo-dica">Quem está ou costuma estar nos bairros marcados. No Google, raio e bairros juntos somariam as duas áreas: por isso é um ou outro. O bairro que o Google não tem entra como um círculo no centro dele.</p></fieldset>`;
+    <p class="campo-dica">Quem está ou costuma estar nos bairros marcados (a campanha vai por presença, e não por interesse no lugar). No Google, raio e bairros juntos somariam as duas áreas: por isso é um ou outro. O bairro que o Google não tem entra como um círculo no centro dele.</p></fieldset>`;
 }
 function r9Buscas(m) {
   const comErro = m.erro && m.campo === 'r9-buscas';
+  const corte = m.temasMexidos ? '' : r9CorteTxt(m.quemVe === 'bairros' && m.bairros.length ? m.bairros : r9Area());
   const lis = m.temas.map((t, i) => `<li><label class="sr-only" for="r9-tema-${i}">Tema ${i + 1}</label><input class="input" id="r9-tema-${i}" autocomplete="off" maxlength="${R9_LIM.tema * 2}" value="${esc(t)}" aria-describedby="r9-tema-${i}-n"${comErro && (r9TemaRuim(t) || [...t].length > R9_LIM.tema) ? ' aria-invalid="true"' : ''}>${p45Conta(t, R9_LIM.tema, `r9-tema-${i}-n`)}<button class="btn btn--icon btn--ghost btn--sm" type="button" data-r9-tirar="${i}" aria-label="Tirar o tema ${i + 1}">${ic('i-x')}</button></li>`).join('');
   const mais = m.temas.length < R9_LIM.temas ? `<button class="btn btn--sm p45-mais" type="button" data-r9-mais>${ic('i-plus', 'ic ic-sm')}Mais um tema</button>` : '';
   return `<fieldset class="campo" id="r9-buscas" tabindex="-1"><legend>As buscas <span class="campo-dica">temas de busca: até ${R9_LIM.temas}, até ${R9_LIM.tema} caracteres cada</span></legend>
-    <p class="campo-dica">O que as pessoas digitam quando procuram uma loja como a sua. O Liame montou a lista com o que a loja vende (de Minha marca), “perto de mim” e os bairros de quem vê. É uma pista para o Google, não uma garantia: ele decide em que buscas mostra o anúncio.</p>
-    <ol class="r9-temas">${lis}</ol>${mais}
+    <p class="campo-dica">O que as pessoas digitam quando procuram uma loja como a sua. É uma pista para o Google, não uma garantia: ele decide em que buscas mostra o anúncio.</p>
+    <p class="campo-dica" id="r9-fonte">O Liame montou a lista, sem IA, com ${R9_BASES.map((x) => `“${x.termo}” (${x.fonte})`).join(', ')}, mais “perto de mim”, “delivery” e os bairros de quem vê.</p>
+    <ol class="r9-temas">${lis}</ol>${mais}${corte ? `<p class="campo-dica" id="r9-corte" role="status">${corte}</p>` : ''}
     <p class="campo-dica">${p42Conferir('Quantos temas o Google aceita por grupo de recursos e o tamanho de cada um, na versão da API em uso')}.</p></fieldset>`;
 }
 const p45HtmlR9 = p45Html;
@@ -9640,17 +9663,18 @@ function r9RitmoHtml() {
       ${linha('i-shield', '<b>Fica fora</b> a campanha do Google que divide o orçamento com outras (o Liame nunca muda orçamento dividido) e a que foi criada fora do Liame.')}
       ${linha('i-sliders', 'Os pesos de cada dia são os mesmos das campanhas da Meta. As regras são as do Google: até 10% por mudança e no máximo 3 mudanças por hora na conta.')}
       ${linha('i-clock', 'O horário (ligar e pausar ao longo do dia) não vale para o Google nesta entrega.')}
-      ${linha('i-info', `${p42Conferir('Como o Google gasta depois de uma mudança diária de verba: ele pode passar da verba num dia e compensar em outros')}: a conferência do gasto do ritmo mede os 7 dias e avisa na Atenção.`)}
+      ${linha('i-info', `${p42Conferir('Como o Google gasta depois de uma mudança diária de verba: ele aceita passar da verba num dia e cobra pela média do mês, então a distância entre o gasto e a soma das verbas tende a ser maior que na Meta')}. A conferência do gasto do ritmo mede os 7 dias e avisa na Atenção.`)}
+      ${linha('i-alert-circle', `${p42Conferir('Se mudar a verba todo dia atrapalha o aprendizado da Performance Max com “Maximizar conversões”')}. Por isso entra só depois da primeira semana do ritmo na Meta, e é medido no piloto antes de qualquer promessa de resultado.`)}
     </div></section>`;
 }
 
 /* ---------- as decisões propostas ---------- */
 const R9_DECISOES = [
-  { id: 'D-RG-85', titulo: 'As buscas: os temas de busca da campanha do Google', oque: 'A campanha do Google (Performance Max) passa a levar temas de busca. O Liame monta a lista por regra, sem IA: o que a loja vende (de Minha marca) com “perto de mim” e “delivery”, e depois com cada bairro de quem vê. A lista aparece na gaveta, pode ser mexida, e vai para Aprovações inteira: o que vai ao Google é o que você aprovar.', porque: 'É o item do plano (R9): as buscas “perto de mim” e por bairro. O tema é pista para o Google, não garantia, e a tela diz isso.', rec: 'Assim.' },
+  { id: 'D-RG-85', titulo: 'As buscas: os temas de busca da campanha do Google', oque: 'A campanha do Google (Performance Max) passa a levar temas de busca. O Liame monta a lista por regra, sem IA. O que a loja vende sai da categoria principal do Perfil da Empresa no Google (com o perfil ligado) e dos “termos de busca da loja”, um campo novo e curto em Minha marca (até 3 termos, escritos por uma pessoa); sem nenhum dos dois, a lista começa vazia e a gaveta pede os termos. Cada termo entra com “perto de mim”, e depois com os bairros de quem vê: um tema por bairro primeiro, o segundo enquanto couber no limite, e a tela diz onde a lista parou. A lista pode ser mexida e vai para Aprovações inteira: o que vai ao Google é o que você aprovar.', porque: 'É o item do plano (R9): as buscas “perto de mim” e por bairro. O tema é pista para o Google, não garantia, e a tela diz isso.', rec: 'Assim.' },
   { id: 'D-RG-86', titulo: 'Os temas passam pela conferência dos textos', oque: 'Cada tema passa pela mesma conferência dos títulos e das descrições do Google: sem nome de concorrente, sem dado pessoal e sem promessa que a loja não prova. O tema que não passa não deixa pedir, e a tela diz qual é e por quê.', porque: 'É texto que sai em nome da loja. Tema com a marca de outro é disputa de marca, que você ainda não decidiu fazer.', rec: 'Assim. Anunciar na busca pela marca do concorrente fica fora até decisão própria.' },
-  { id: 'D-RG-87', titulo: 'Quem vê no Google: o raio ou os bairros', oque: 'A gaveta do Google ganha a mesma escolha da Meta (R6-3): o raio em volta da loja, ou os bairros. Um ou outro: no Google, os dois juntos somariam as áreas. O bairro que o Google tem como lugar vai pelo lugar dele; o que ele não tem, por um círculo no centro do bairro.', porque: 'É a D-RG-57, que você aprovou: a escolha por bairros entra na campanha do Google na R9. O Google tem bairros do Brasil (o Liame já lê cliques por bairro dele).', rec: 'Assim.' },
-  { id: 'D-RG-88', titulo: 'O ritmo da semana com a campanha do Google', oque: 'O ritmo da semana (R7) passa a incluir a Performance Max criada pelo Liame, ativa e com o orçamento só dela, com os mesmos pesos de cada dia e as regras do Google (até 10% por mudança, 3 mudanças por hora). Fica fora a campanha com orçamento dividido e a criada fora do Liame. O horário não vale para o Google nesta entrega.', porque: 'É a D-RG-64 (“o Google entra na R9”) com a regra que já vale: o Liame nunca muda orçamento dividido (D-A5-4).', rec: 'Assim, depois da primeira semana do ritmo na Meta.' },
-  { id: 'D-RG-89', titulo: 'O que se confere antes do código, e o que espera você', oque: 'Antes de escrever o código: quantos temas o Google aceita por grupo e o tamanho de cada um, na página oficial da versão da API em uso, com um teste que só valida na conta real. Esperam você: pedir o nível Básico do Google (sem ele, o volume de busca por cidade fica em “Ainda não”) e ativar a primeira campanha do Google, que está criada e pausada (sem campanha ativa, o ritmo não tem o que mexer nem há cliques para ler por bairro).', porque: 'O número certo sai da documentação e da conta, não de memória; e o que depende de pedido ao Google leva tempo de análise.', rec: 'Assim.' },
+  { id: 'D-RG-87', titulo: 'Quem vê no Google: o raio ou os bairros', oque: 'A gaveta do Google ganha a mesma escolha da Meta (R6-3): o raio em volta da loja, ou os bairros. Um ou outro: no Google, os dois juntos somariam as áreas. O bairro que o Google tem como lugar vai pelo lugar dele; o que ele não tem, por um círculo no centro do bairro. Nos dois casos a campanha vale para quem está ou costuma estar no lugar (presença), e não para quem só mostrou interesse por ele.', porque: 'É a D-RG-57, que você aprovou: a escolha por bairros entra na campanha do Google na R9. O Google tem bairros do Brasil (o Liame já lê cliques por bairro dele).', rec: 'Assim.' },
+  { id: 'D-RG-88', titulo: 'O ritmo da semana com a campanha do Google', oque: 'O ritmo da semana (R7) passa a incluir a Performance Max criada pelo Liame, ativa e com o orçamento só dela, com os mesmos pesos de cada dia e as regras do Google (até 10% por mudança, 3 mudanças por hora). Fica fora a campanha com orçamento dividido e a criada fora do Liame. O horário não vale para o Google nesta entrega.', porque: 'É a D-RG-64 (“o Google entra na R9”) com a regra que já vale: o Liame nunca muda orçamento dividido (D-A5-4).', rec: 'Assim, depois da primeira semana do ritmo na Meta, e a medir no piloto com a conferência do gasto do ritmo ligada: no Google, o gasto do dia pode ficar mais longe da verba do que na Meta, e mudar a verba todo dia pode atrapalhar o aprendizado da campanha (os dois a conferir na página oficial antes do código).' },
+  { id: 'D-RG-89', titulo: 'O que se confere antes do código, e o que espera você', oque: 'Antes de escrever o código: quantos temas o Google aceita por grupo e o tamanho de cada um, na página oficial da versão da API em uso, com um teste que só valida na conta real; e se a categoria do perfil vem pela API do Perfil da Empresa. Esperam você: pedir o nível Básico do Google (sem ele, o volume de busca por cidade fica em “Ainda não”) e ativar a primeira campanha do Google, que está criada e pausada (sem campanha ativa, o ritmo não tem o que mexer nem há cliques para ler por bairro).', porque: 'O número certo sai da documentação e da conta, não de memória; e o que depende de pedido ao Google leva tempo de análise.', rec: 'Assim.' },
 ];
 function r9DecisoesHtml() {
   const lista = R9_DECISOES.map((d) => `<li><div><b>${d.id} · ${esc(d.titulo)}</b><span><b>O que é:</b> ${esc(d.oque)}</span><span><b>Por quê:</b> ${esc(d.porque)}</span><span><b>Recomendação:</b> ${esc(d.rec)}</span></div><span class="st st--espera">Proposta</span></li>`).join('');
@@ -9732,29 +9756,38 @@ if (marcaR9) marcaR9.textContent += ' · R9 (o Google pela região), PROPOSTO em
     window.uiuxCenarios['r9-' + id.slice(3)] = { larguras: [1440, 375], executar: async () => {
       definirModo('lite', { silencioso: true }); r9Estado(id); await esperar(300);
       exige(selR9.value === id && selP45.selectedIndex === -1 && selR7.selectedIndex === -1, 'os seletores: ' + selR9.value);
-      if (id === 'r9-gaveta') exige(dlgP45.open && $$('#r9-buscas .r9-temas li').length === 11 && $$('[data-r9-quem]').length === 2 && !!$('input[name="p45-raio"]:checked') && !$('input[name="r9-bairro"]'), 'a gaveta com o raio e os 11 temas');
+      if (id === 'r9-gaveta') exige(dlgP45.open && $$('#r9-buscas .r9-temas li').length === 12 && $$('[data-r9-quem]').length === 2 && !!$('input[name="p45-raio"]:checked') && !$('input[name="r9-bairro"]') && texto('#r9-fonte').includes('a categoria do Perfil da Empresa no Google') && !$('#r9-corte'), 'a gaveta com o raio, a fonte e os 12 temas');
       if (id === 'r9-gaveta-bairros') exige(dlgP45.open && $$('input[name="r9-bairro"]').length === 6 && $$('input[name="r9-bairro"]:checked').length === 4 && !$('input[name="p45-raio"]') && texto('#r9-quem').includes('um círculo de'), 'a gaveta por bairros');
       if (id === 'r9-tema-recusado') exige(texto('#p45-erro').includes('não passa na conferência dos textos: cita um concorrente') && $$('#r9-buscas input[aria-invalid="true"]').length === 1 && p45.m.fase === 'form', 'o tema recusado: ' + texto('#p45-erro'));
-      if (id === 'r9-aprovacoes') exige(!$('#tela-aprovacoes').hidden && texto('.det-cab').includes('Rodrigo pediu') && $$('#r9-ap-temas li').length === 11 && $$('#r9-ap-bairros li').length === 4 && texto('#aprovacoes').includes('As buscas') && texto('#r9-ap-bairros').includes('o Google não tem este bairro'), 'o pedido com os bairros e os temas');
+      if (id === 'r9-aprovacoes') exige(!$('#tela-aprovacoes').hidden && texto('.det-cab').includes('Rodrigo pediu') && $$('#r9-ap-temas li').length === 12 && $$('#r9-ap-bairros li').length === 4 && texto('#aprovacoes').includes('As buscas') && texto('#r9-ap-bairros').includes('o Google não tem este bairro'), 'o pedido com os bairros e os temas');
       if (id === 'r9-ritmo') exige(!!$('#r9-ritmo') && $$('#r9-ritmo-tabela tbody tr').length === 7 && texto('#ap-det-titulo').startsWith('Ritmo da semana') && texto('#r9-ritmo-tabela tfoot').includes('R$ 210,00'), 'o ritmo com o Google');
       if (id === 'r9-decisoes') exige($$('#r9-decisoes .rev-decisoes > li').length === 5 && !$('#p45-decisoes'), 'as 5 decisões');
     } };
   }
+  window.uiuxCenarios['r9-temas-no-limite'] = { larguras: [1440], executar: async () => {
+    // Com 13 bairros: 4 gerais + 13 (um por bairro) = 17; o segundo tema cabe para 8 bairros (25); os outros 5 ficam com um só.
+    const treze = [...R6B_SUGERIDOS, ...R6B_CIDADE].map((b) => b.id);
+    const m = r9Montar(treze);
+    exige(m.temas.length === 25 && m.corte.semNenhum.length === 0 && m.corte.comUmSo.length === 5, 'o corte: ' + JSON.stringify(m.corte));
+    exige(treze.every((id) => m.temas.some((t) => t.endsWith(r6bLugar(id).nome))), 'todo bairro tem pelo menos um tema');
+    exige(r9CorteTxt(treze).startsWith('A lista parou em 25 temas: ') && r9CorteTxt(treze).includes('ficaram com um tema só'), 'a frase do corte: ' + r9CorteTxt(treze));
+    exige(r9CorteTxt(r9Area()) === '', 'sem corte, sem frase');
+  } };
   window.uiuxCenarios['r9-fluxo-bairros-e-temas'] = { larguras: [1440, 375], executar: async () => {
     definirModo('lite', { silencioso: true }); r9Estado('r9-gaveta'); await esperar(200);
     $('[data-r9-quem="bairros"]').click(); await esperar(120);
-    exige($$('input[name="r9-bairro"]:checked').length === 4 && $$('#r9-buscas .r9-temas li').length === 11, 'os bairros da área de entrega marcados');
+    exige($$('input[name="r9-bairro"]:checked').length === 4 && $$('#r9-buscas .r9-temas li').length === 12, 'os bairros da área de entrega marcados');
     // Desmarcar um bairro tira os dois temas dele; tirar um tema à mão trava a lista (ela não se refaz sozinha).
     const gloria = $('input[name="r9-bairro"][value="gloria"]'); gloria.checked = false; gloria.dispatchEvent(new Event('change', { bubbles: true })); await esperar(120);
-    exige($$('#r9-buscas .r9-temas li').length === 9 && !texto('#r9-buscas').includes('Glória') && ![...$$('#r9-buscas input')].some((i) => i.value.includes('Glória')), 'os temas seguem os bairros');
+    exige($$('#r9-buscas .r9-temas li').length === 10 && !texto('#r9-buscas').includes('Glória') && ![...$$('#r9-buscas input')].some((i) => i.value.includes('Glória')), 'os temas seguem os bairros');
     $('[data-r9-tirar="0"]').click(); await esperar(120);
-    exige($$('#r9-buscas .r9-temas li').length === 8 && p45.m.temasMexidos, 'o tema tirado à mão');
+    exige($$('#r9-buscas .r9-temas li').length === 9 && p45.m.temasMexidos, 'o tema tirado à mão');
     $('#p45-form').requestSubmit(); await esperar(200);
     exige(p45.m.fase === 'criado', 'o pedido não foi criado: ' + (p45.m.erro ?? ''));
     const q = p10.pedidos[p45.m.criado];
-    exige(q.quemVe === 'bairros' && q.quem === 'Rodrigo' && q.bairros.length === 3 && q.temas.length === 8, 'o pedido com os bairros e os temas');
+    exige(q.quemVe === 'bairros' && q.quem === 'Rodrigo' && q.bairros.length === 3 && q.temas.length === 9, 'o pedido com os bairros e os temas');
     $('[data-p45-ver]').click(); await esperar(300);
-    exige(!$('#tela-aprovacoes').hidden && $$('#r9-ap-temas li').length === 8 && $$('#r9-ap-bairros li').length === 3, 'o pedido em Aprovações');
+    exige(!$('#tela-aprovacoes').hidden && $$('#r9-ap-temas li').length === 9 && $$('#r9-ap-bairros li').length === 3, 'o pedido em Aprovações');
     // A gaveta do Google sem a R9 continua como era.
     p45Estado('google-gaveta'); await esperar(200);
     exige(dlgP45.open && !$('#r9-buscas') && !$('[data-r9-quem]') && selR9.selectedIndex === -1, 'a gaveta do P45 sem a R9');
