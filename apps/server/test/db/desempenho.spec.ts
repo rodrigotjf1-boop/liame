@@ -5,6 +5,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { hojeNoFuso } from '../../src/media/sincronizador.js';
 import { enableMfa, ownerQuery, resetIpRateLimits, signupAndLogin, startApi, type TestApi } from '../helpers/api.js';
 import { ligarFlagDaEmpresa } from '../helpers/meta-de-mentira.js';
+import { longeDoFimDaJanela } from '../helpers/virada.js';
 import { hasDb, OWNER_URL } from './env.js';
 
 // Como os anúncios rodaram (P23): o que a Meta e o Google informam por campanha e o "Ler agora". O alcance do período
@@ -183,6 +184,9 @@ describe.skipIf(!hasDb)('como os anúncios rodaram (P23)', () => {
       tenantId,
       ids.google,
     ]);
+    // Perto do fim da janela de 15 minutos, espera a seguinte: o pedido e a leitura da tela, mais abaixo, precisam cair
+    // na mesma janela (a mesma virada reprovou o teste dos comentários no CI: ERR-235).
+    await longeDoFimDaJanela(15 * 60_000);
     // Janela fixa: a vez pode cair na janela seguinte; tenta até ver o bloqueio (V70).
     let primeira: Awaited<ReturnType<typeof lerAgora>> | null = null;
     let bloqueio: Awaited<ReturnType<typeof lerAgora>> | null = null;

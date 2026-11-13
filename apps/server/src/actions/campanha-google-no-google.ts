@@ -8,6 +8,7 @@ import {
   type IdsNoGoogle,
   idsDaCriacao,
   idsDaProcura,
+  operacaoDeAtivarOuPausar,
   operacoesDaCriacao,
 } from '../campanhas/campanha-google-plano.js';
 import { FotoNaoServe, imagensDoGoogle } from '../campanhas/imagens-do-google.js';
@@ -274,7 +275,8 @@ export class CampanhaGoogleConnector implements Connector {
           conta: g.chave,
           url: `${deps.googleAdsUrl}/${versao}/${cliente}/campaigns:mutate`,
           metodo: 'POST',
-          corpo: { operations: [{ updateMask: 'status', update: { resourceName: recurso, status: ativar ? 'ENABLED' : 'PAUSED' } }], validateOnly: validar },
+          // Ativar acerta também o local para "só quem está no raio" (D-A5-34); pausar muda só a situação.
+          corpo: { operations: [operacaoDeAtivarOuPausar(recurso, ativar)], validateOnly: validar },
           endpoint: validar ? 'entity_update (validação)' : 'entity_update',
           apiVersion: versao,
           cabecalhos: g.cabecalhos,

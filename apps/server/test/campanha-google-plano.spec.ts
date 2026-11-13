@@ -14,6 +14,7 @@ import {
   motivoDosTextos,
   nomeNoGoogle,
   type OperacaoDoGoogle,
+  operacaoDeAtivarOuPausar,
   operacoesDaCriacao,
   planoDaCampanhaGoogle,
   planoDeAtivarNoGoogle,
@@ -182,6 +183,8 @@ describe('a criação no Google, sem rede (A5 · Y9, parte 3; D-A5-27, D-A5-28)'
       name: 'Combo sexta · Google · novembro (Liame 000000000001)',
       advertisingChannelType: 'PERFORMANCE_MAX',
       status: 'PAUSED',
+      // Só quem está ou costuma estar no raio (D-A5-34): o padrão do Google soma quem só mostrou interesse pelo lugar.
+      geoTargetTypeSetting: { positiveGeoTargetType: 'PRESENCE' },
       campaignBudget: `${cliente}/campaignBudgets/-1`,
       maximizeConversions: {},
       brandGuidelinesEnabled: true,
@@ -252,6 +255,16 @@ describe('a criação no Google, sem rede (A5 · Y9, parte 3; D-A5-27, D-A5-28)'
     expect(idsDaProcura([{ results: [{ campaign: { id: '222', campaignBudget: `${c}/campaignBudgets/111` }, assetGroup: { id: '333' } }] }])).toEqual({ orcamento: '111', campanha: '222', grupo: '333' });
     expect(idsDaProcura([])).toBeNull();
     expect(idsDaProcura([{ results: [{ campaign: { id: '222' }, assetGroup: { id: '333' } }] }])).toBeNull();
+  });
+
+  it('ativar acerta o local para "só quem está" (a campanha criada antes nasceu com o padrão do Google); pausar muda só a situação', () => {
+    const recurso = 'customers/1234567890/campaigns/777';
+    // A máscara vai em snake_case e o campo em camelCase, como na página oficial de segmentação por local.
+    expect(operacaoDeAtivarOuPausar(recurso, true)).toEqual({
+      updateMask: 'status,geo_target_type_setting.positive_geo_target_type',
+      update: { resourceName: recurso, status: 'ENABLED', geoTargetTypeSetting: { positiveGeoTargetType: 'PRESENCE' } },
+    });
+    expect(operacaoDeAtivarOuPausar(recurso, false)).toEqual({ updateMask: 'status', update: { resourceName: recurso, status: 'PAUSED' } });
   });
 
   it('as imagens de verdade: os recortes nas medidas do Google e a logo deitada inteira num quadrado; a foto pequena recusada', async () => {

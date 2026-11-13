@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { esperaDaVirada, faltaParaAMeiaNoite, FUSOS_DA_VIRADA, MARGEM_DA_VIRADA_MS } from './helpers/virada.js';
+import { esperaDaVirada, faltaParaAMeiaNoite, faltaParaOFimDaJanela, FUSOS_DA_VIRADA, MARGEM_DA_VIRADA_MS } from './helpers/virada.js';
 
 // A proteção dos testes contra a virada do dia (V89, ERR-092): o arquivo carregado logo antes da meia-noite espera ela
 // passar. Aqui só a conta, com relógio fixo: o `setup.ts` é quem espera.
@@ -28,5 +28,16 @@ describe('a virada do dia nos testes (V89)', () => {
     // A margem: a 120 segundos espera; a 121, não.
     expect(esperaDaVirada(new Date('2026-10-04T02:58:00.000Z'))).toBe(122_000);
     expect(esperaDaVirada(new Date('2026-10-04T02:57:59.000Z'))).toBe(0);
+  });
+
+  it('a janela fixa do "Ler agora" (V70; ERR-235): quanto falta para o fim da janela alinhada ao relógio', () => {
+    const CINCO_MIN = 300_000;
+    // O caso do CI: o pedido às 14:59:59,950 caía na janela que acabava 50 ms depois.
+    expect(faltaParaOFimDaJanela(new Date('2026-11-13T14:59:59.950Z'), CINCO_MIN)).toBe(50);
+    // No começo exato da janela falta ela inteira; no meio, o resto.
+    expect(faltaParaOFimDaJanela(new Date('2026-11-13T15:00:00.000Z'), CINCO_MIN)).toBe(CINCO_MIN);
+    expect(faltaParaOFimDaJanela(new Date('2026-11-13T15:02:30.000Z'), CINCO_MIN)).toBe(150_000);
+    // A de 15 minutos dos resultados.
+    expect(faltaParaOFimDaJanela(new Date('2026-11-13T15:14:58.000Z'), 900_000)).toBe(2_000);
   });
 });

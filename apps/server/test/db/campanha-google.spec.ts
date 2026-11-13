@@ -241,7 +241,8 @@ describe.skipIf(!hasDb)('a campanha nova no Google: o pedido e a criação (A5 �
     expect(validacao!.corpo.mutateOperations).toEqual(escrita!.corpo.mutateOperations);
 
     const c = [...google.campanhas.values()].find((x) => x.cliente === e.cliente)!;
-    expect(c).toMatchObject({ name: `Combo sexta · Google · novembro (Liame ${id.replace(/-/g, '').slice(-12)})`, status: 'PAUSED' });
+    // Nasce valendo só para quem está no raio (D-A5-34), e não com o padrão do Google (presença ou interesse).
+    expect(c).toMatchObject({ name: `Combo sexta · Google · novembro (Liame ${id.replace(/-/g, '').slice(-12)})`, status: 'PAUSED', local: 'PRESENCE' });
     expect(google.orcamentos.get(c.orcamento!)).toMatchObject({ amountMicros: 30_000_000, explicitlyShared: false, period: 'DAILY' });
     const criacao = google.criacoes.get(c.id)!;
     expect(criacao.corpoDaCampanha).toMatchObject({
@@ -354,11 +355,14 @@ describe.skipIf(!hasDb)('a campanha nova no Google: o pedido e a criação (A5 �
     expect(await pedidoDe(ativacao)).toMatchObject({ status: 'aguardando_aprovacao', tool: 'campanha_google_ativar', provider: 'google_ads' });
     expect((await ativar(id)).body.code).toBe('pedido-em-aberto');
     google.chamadas.length = 0;
+    // A campanha criada antes da D-A5-34 nasceu com o padrão do Google (presença ou interesse): ativar acerta isso.
+    campanha.local = 'PRESENCE_OR_INTEREST';
     await aprovarEExecutar(e, ativacao);
     expect((await pedidoDe(ativacao)).status).toBe('executada');
-    // Lê a campanha no Google, confere a mudança e muda: a campanha passa a rodar.
+    // Lê a campanha no Google, confere a mudança e muda: a campanha passa a rodar, só para quem está no raio.
     expect(google.resumo(e.cliente)).toEqual(['leitura', 'validacao:campaigns', 'escrita:campaigns']);
     expect(campanha.status).toBe('ENABLED');
+    expect(campanha.local).toBe('PRESENCE');
     expect(await lida(e, id)).toMatchObject({ active: true, activated_at: expect.any(String), pending_action_id: null });
     expect((await ativar(id)).body.code).toBe('ja-ativa');
 
