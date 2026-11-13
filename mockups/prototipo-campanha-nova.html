@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Campanha nova · Liame</title>
 <!--
-@prototipo Liame · A4 · P42 · Campanha nova com a foto ou o vídeo da loja (APROVADO PELO DONO EM 11/11/2026, com as recomendações D-A4-42 a D-A4-46) · REVISÃO R6 de 13/11/2026 (plano da região: a campanha com raio, os objetivos de alcance e de seguidores, a estimativa de público no raio, o teto de 25% e a frequência; D-RG-48 a D-RG-52 como recomendadas), APROVADA PELO DONO em 13/11/2026 · REVISÃO R6-3 de 13/11/2026 (quem vê por bairros, além do raio: pedido do dono em 13/11/2026; D-RG-53 a D-RG-57 como recomendadas), APROVADA PELO DONO em 13/11/2026 · REVISÃO R7 de 13/11/2026 (plano da região: o ritmo da semana, do Gestor de tráfego, em Aprovações; seletor "Ritmo"; D-RG-58 a D-RG-65 como recomendadas), APROVADA PELO DONO em 13/11/2026 · REVISÃO R8 de 13/11/2026 (plano da região: os testes de criativo e de região, em Aprovações; seletor "Testes"; D-RG-76 a D-RG-84 como recomendadas), PROPOSTA: ESPERA A APROVAÇÃO DO DONO
+@prototipo Liame · A4 · P42 · Campanha nova com a foto ou o vídeo da loja (APROVADO PELO DONO EM 11/11/2026, com as recomendações D-A4-42 a D-A4-46) · REVISÃO R6 de 13/11/2026 (plano da região: a campanha com raio, os objetivos de alcance e de seguidores, a estimativa de público no raio, o teto de 25% e a frequência; D-RG-48 a D-RG-52 como recomendadas), APROVADA PELO DONO em 13/11/2026 · REVISÃO R6-3 de 13/11/2026 (quem vê por bairros, além do raio: pedido do dono em 13/11/2026; D-RG-53 a D-RG-57 como recomendadas), APROVADA PELO DONO em 13/11/2026 · REVISÃO R7 de 13/11/2026 (plano da região: o ritmo da semana, do Gestor de tráfego, em Aprovações; seletor "Ritmo"; D-RG-58 a D-RG-65 como recomendadas), APROVADA PELO DONO em 13/11/2026 · REVISÃO R8 de 13/11/2026 (plano da região: os testes de criativo e de região, em Aprovações; seletor "Testes"; D-RG-76 a D-RG-84 como recomendadas), PROPOSTA: ESPERA A APROVAÇÃO DO DONO · REVISÃO R9 de 13/11/2026 (plano da região: o Google pela região, revisão do P45: os bairros e os temas de busca na campanha do Google e o ritmo da semana com ela; seletor "Google local"; D-RG-85 a D-RG-89 como recomendadas), PROPOSTA: ESPERA A APROVAÇÃO DO DONO
 base: o P10 (prototipo-criativos.html, aprovado em 05/10/2026): Criativos, a peça aprovada, a gaveta "Campanha nova,
       pausada" e os pedidos em Aprovações ficam como estão lá, no seletor "Criativos"; o P42 entra por cima, no
       seletor "Campanha nova".
@@ -7319,17 +7319,17 @@ function r6bQuemVe(m, semEndereco) {
 }
 /* Quem vê, no pedido em Aprovações (a tabela e o resumo). */
 function r6bQuemVeTxt(c) {
-  if (c.quem !== 'bairros') return `${p42KmTxt(c.raio)} em volta da ${P42_LOJA.nome} (${P42_LOJA.endereco}) · 18 anos ou mais · sem o público ampliado da Meta`;
+  if (c.quemVe !== 'bairros') return `${p42KmTxt(c.raio)} em volta da ${P42_LOJA.nome} (${P42_LOJA.endereco}) · 18 anos ou mais · sem o público ampliado da Meta`;
   const bs = (c.bairros ?? []).map(r6bLugar).filter(Boolean);
   return `${bs.length} bairros: ${bs.map((b) => `${b.nome} (${b.meta ? 'o bairro da Meta' : `círculo de ${numero(b.r, b.r % 1 ? 1 : 0)} km`})`).join(', ')} · 18 anos ou mais · sem o público ampliado da Meta`;
 }
 function r6bResumo(c) {
-  if (c.quem !== 'bairros') return `<dt>Quem vê</dt><dd>${p42KmTxt(c.raio)} em volta da ${P42_LOJA.nome}<small>${P42_LOJA.endereco} · 18 anos ou mais</small></dd>`;
+  if (c.quemVe !== 'bairros') return `<dt>Quem vê</dt><dd>${p42KmTxt(c.raio)} em volta da ${P42_LOJA.nome}<small>${P42_LOJA.endereco} · 18 anos ou mais</small></dd>`;
   const bs = (c.bairros ?? []).map(r6bLugar).filter(Boolean);
   return `<dt>Quem vê</dt><dd>${bs.length} bairros<small>${esc(bs.map((b) => b.nome).join(', '))} · 18 anos ou mais</small></dd>`;
 }
 const r6bPessoas = (c) => {
-  if (c.quem !== 'bairros') return ['Pessoas no raio', 'de 182 mil a 214 mil, pela estimativa da Meta ao pedir'];
+  if (c.quemVe !== 'bairros') return ['Pessoas no raio', 'de 182 mil a 214 mil, pela estimativa da Meta ao pedir'];
   const [de, ate] = r6bFaixa(c.bairros ?? []);
   return ['Pessoas nos bairros', `de ${numero(de)} mil a ${numero(ate)} mil, pela estimativa da Meta ao pedir`];
 };
@@ -7528,7 +7528,7 @@ function p42ConferirPedido(m) {
   const igual = Object.values(p10.pedidos).find((q) => q.tipo === 'criar' && q.estado === 'pendente' && (m.peca ? q.peca === m.peca : q.origem === 'reels'));
   if (igual) return { erro: 'Já existe um pedido de campanha com esta peça esperando aprovação. Decida esse antes de pedir outro.', ver: igual.id };
   const versao = m.peca ? versaoDe(p10.pecas[m.peca]).n : null;
-  return { pedido: { tipo: 'criar', p42: true, origem: m.origem, peca: m.peca, versao, foto: m.origem === 'reels' ? null : m.foto, nome, objetivo: m.objetivo, raio: m.raio, quem: m.quem ?? 'raio', bairros: m.quem === 'bairros' ? [...(m.bairros ?? [])] : null, verba, fim: m.fim || null } };
+  return { pedido: { tipo: 'criar', p42: true, origem: m.origem, peca: m.peca, versao, foto: m.origem === 'reels' ? null : m.foto, nome, objetivo: m.objetivo, raio: m.raio, quemVe: m.quem ?? 'raio', bairros: m.quem === 'bairros' ? [...(m.bairros ?? [])] : null, verba, fim: m.fim || null } };
 }
 const enviarCampanhaP42 = enviarCampanha;
 enviarCampanha = function () {
@@ -7787,7 +7787,7 @@ function p42HtmlPedido(id) {
   }
   const km = p42KmTxt(c.raio), ate = moeda(d2(c.verba * MES.faltam));
   const FRASE = {
-    criar: `Uma campanha nova na Meta, com ${reels ? `o Reels de ${P42_REELS.dia}, como está no post` : `a peça <b>“${esc(v.titulo)}”</b> e ${video ? 'um vídeo' : 'uma foto'} da loja`}, ${c.quem === 'bairros' ? `para quem está nos ${(c.bairros ?? []).length} bairros escolhidos, em volta da ${P42_LOJA.nome}` : `para quem está a até ${km} da ${P42_LOJA.nome}`}. <b>Ela nasce pausada:</b> não aparece para ninguém e não gasta. Ativar é outro pedido, com outra aprovação. Se você aprovar, o Liame confere com a Meta e cria, passo a passo.`,
+    criar: `Uma campanha nova na Meta, com ${reels ? `o Reels de ${P42_REELS.dia}, como está no post` : `a peça <b>“${esc(v.titulo)}”</b> e ${video ? 'um vídeo' : 'uma foto'} da loja`}, ${c.quemVe === 'bairros' ? `para quem está nos ${(c.bairros ?? []).length} bairros escolhidos, em volta da ${P42_LOJA.nome}` : `para quem está a até ${km} da ${P42_LOJA.nome}`}. <b>Ela nasce pausada:</b> não aparece para ninguém e não gasta. Ativar é outro pedido, com outra aprovação. Se você aprovar, o Liame confere com a Meta e cria, passo a passo.`,
     ativar: `A campanha <b>“${esc(c.nome)}”</b> começa a aparecer e a gastar <b>até ${moeda(c.verba)} por dia</b>. Até o fim de ${MES.nome} são até ${ate}, dentro da verba do mês. Se você aprovar, o Liame confere com a Meta e ativa.`,
     pausar: `A campanha <b>“${esc(c.nome)}”</b> volta a ficar <b>pausada</b>, como estava antes da ativação que você está desfazendo. Se você aprovar, o Liame confere com a Meta e pausa.`,
   }[q.tipo];
@@ -7955,7 +7955,7 @@ function p42Estado(v, { focar = false } = {}) {
   }
   if (P42_APROV.includes(v) || v === 'r6-aprovacoes' || v === 'r6-bairros-aprovacoes') {
     const c = p10.pedidos['cn-criar-1'];
-    Object.assign(c, { p42: true, origem: 'peca', foto: v === 'aprovacoes-criando' ? 'v2' : 'f2', raio: '5', ...(v === 'r6-aprovacoes' ? { objetivo: 'alcance' } : {}), ...(v === 'r6-bairros-aprovacoes' ? { objetivo: 'alcance', quem: 'bairros', bairros: ['centro', 'lapa', 'gloria', 'santa-teresa'] } : { quem: 'raio', bairros: null }) });
+    Object.assign(c, { p42: true, origem: 'peca', foto: v === 'aprovacoes-criando' ? 'v2' : 'f2', raio: '5', ...(v === 'r6-aprovacoes' ? { objetivo: 'alcance' } : {}), ...(v === 'r6-bairros-aprovacoes' ? { objetivo: 'alcance', quemVe: 'bairros', bairros: ['centro', 'lapa', 'gloria', 'santa-teresa'] } : { quemVe: 'raio', bairros: null }), quem: 'Rodrigo' });
     if (v === 'aprovacoes-criando') c.passo = p42Partes(c).findIndex((x) => x.video);
     if (v === 'aprovacoes-nao-criada') {
       Object.assign(c, { estado: 'nao_criada', sit: 'pausada', falhou: 1, motivoMeta: 'O público deste conjunto é pequeno demais.' });
@@ -9435,5 +9435,333 @@ if (marcaR8) marcaR8.textContent += ' · R8 (os testes), PROPOSTO em 13/11/2026'
 if (params.get('r8')) r8Estado(params.get('r8'));
 </script>
 <!-- R8:camada:fim -->
+<!-- R9:camada:inicio -->
+<style>
+/* ===================== Região · R9 · O Google pela região (PROPOSTO em 13/11/2026, espera a aprovação do dono) ===================== */
+.r9-quem { display: grid; gap: var(--sp-3); }
+.r9-bairros { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: var(--sp-2); margin: 0; padding: 0; list-style: none; }
+.r9-bairro { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: var(--sp-2); align-items: start; padding: var(--sp-2) var(--sp-3); border: 1px solid var(--border); border-radius: var(--radius); cursor: pointer; }
+.r9-bairro:has(input:checked) { border-color: var(--text); }
+.r9-bairro input { margin-top: 3px; }
+.r9-bairro b { overflow-wrap: anywhere; }
+.r9-bairro small { display: block; color: var(--text-muted); font-size: var(--text-xs); }
+.r9-temas { display: grid; gap: var(--sp-2); margin: 0; padding: 0; list-style: none; }
+.r9-temas li { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: var(--sp-2); align-items: center; }
+.r9-temas .input { min-width: 0; width: 100%; }
+.r9-lista { display: grid; gap: 2px; margin: 0; padding-left: var(--sp-5); font-size: var(--text-sm); }
+.r9-lista li { overflow-wrap: anywhere; }
+.r9-card { margin-bottom: var(--sp-5); }
+.r9-card-corpo { display: grid; gap: var(--sp-3); }
+.r9-card .nota { display: flex; gap: var(--sp-3); margin: 0; font-size: var(--text-sm); color: var(--text-muted); }
+.r9-card .nota .ic { flex: none; margin-top: 2px; }
+.r9-envolve { container: r9 / inline-size; }
+.r9-tabela td.n, .r9-tabela th.n { text-align: right; font-family: var(--font-mono); white-space: nowrap; }
+.r9-tabela tfoot th, .r9-tabela tfoot td { font-weight: 600; border-top: 2px solid var(--border-strong); }
+@container r9 (max-width: 520px) {
+  .r9-tabela thead { display: none; }
+  .r9-tabela, .r9-tabela tbody, .r9-tabela tfoot, .r9-tabela tr, .r9-tabela th, .r9-tabela td { display: block; }
+  .r9-tabela tr { padding: var(--sp-3) var(--sp-4); border-bottom: 1px solid var(--border); }
+  .r9-tabela th, .r9-tabela td, .r9-tabela td.n { padding: 0; border: 0; white-space: normal; text-align: left; }
+  .r9-tabela td { margin-top: var(--sp-2); }
+  .r9-tabela td[data-col]::before { content: attr(data-col) ": "; color: var(--text-muted); font-size: var(--text-xs); font-family: var(--font-sans); font-weight: 400; }
+}
+</style>
+<script>
+/* =====================================================================================================================
+   Região · R9 · O Google pela região (plano da região, R9; D-RG-85 a D-RG-89, PROPOSTAS em 13/11/2026: esperam a
+   aprovação do dono). Revisão da campanha nova no Google (P45), por cima da gaveta e do pedido em Aprovações que já
+   existem. O raio da loja já está na campanha (Y9). Entram:
+     - quem vê por bairros, além do raio: um ou outro, porque no Google os dois juntos somariam as áreas. O bairro que o
+       Google tem como lugar vai pelo lugar dele; o que ele não tem, por um círculo no centro (como na Meta, D-RG-54);
+     - as buscas: os temas de busca da Performance Max, montados por regra com o que a loja vende (de Minha marca),
+       "perto de mim" e os bairros de quem vê. A lista aparece na gaveta, pode ser mexida, passa pela conferência dos
+       textos e vai para Aprovações como está: o que vai ao Google é o que a pessoa aprovou. É pista, não garantia;
+     - o ritmo da semana (R7) com a campanha do Google criada pelo Liame, que tem o orçamento só dela.
+   O volume de busca por cidade continua em "Ainda não": depende do nível Básico do Google, que é pedido do dono.
+   Dados de exemplo: Mister Burgers · Loja Centro, os bairros da campanha por bairros (R6-3).
+   ===================================================================================================================== */
+var r9 = null;
+const R9_ESTADOS = {
+  'R9 · A campanha do Google pela região': {
+    'r9-gaveta': 'A gaveta: quem vê (o raio) e as buscas (os temas)',
+    'r9-gaveta-bairros': 'Quem vê: bairros, os que o Google tem e os outros',
+    'r9-tema-recusado': 'Um tema de busca não passa na conferência',
+    'r9-aprovacoes': 'Em Aprovações: a campanha com os bairros e os temas',
+  },
+  'R9 · O ritmo da semana com o Google': {
+    'r9-ritmo': 'O ritmo da semana com a campanha do Google junto',
+  },
+  'Decisões': {
+    'r9-decisoes': 'As decisões propostas (D-RG-85 a D-RG-89)',
+  },
+};
+const R9_TODOS = Object.assign({}, ...Object.values(R9_ESTADOS));
+/* O que a loja vende, de Minha marca; os bairros que o Google tem como lugar; os concorrentes de Minha marca. */
+const R9_TIPO = 'hamburgueria';
+const R9_NO_GOOGLE = new Set(['centro', 'lapa', 'gloria', 'saude']);
+const R9_CONCORRENTES = ['burger king', 'mcdonald', 'bob’s', "bob's"];
+/* Os limites dos temas ficam "a conferir": a página da versão da API em uso e um teste na conta real (D-RG-89). */
+const R9_LIM = { temas: 25, tema: 80 };
+const r9Area = () => R6B_SUGERIDOS.filter((b) => b.area).map((b) => b.id);
+const r9Circulo = (b) => `um círculo de ${numero(b.r, b.r % 1 ? 1 : 0)} km no centro`;
+/* Os temas, por regra: o que a loja vende com "perto de mim" e "delivery", e depois com cada bairro de quem vê. */
+function r9TemasDe(ids) {
+  const nomes = ids.map((id) => r6bLugar(id)?.nome).filter(Boolean);
+  return [`${R9_TIPO} perto de mim`, 'hambúrguer delivery', 'smash burger perto de mim', ...nomes.flatMap((n) => [`${R9_TIPO} ${n}`, `delivery de hambúrguer ${n}`])].slice(0, R9_LIM.temas);
+}
+function r9TemaRuim(t) {
+  const x = t.toLocaleLowerCase('pt-BR');
+  if (R9_CONCORRENTES.some((c) => x.includes(c))) return 'cita um concorrente';
+  if (/(^|\s)(melhor|mais barato|número 1|nº 1)(\s|$)/.test(x)) return 'faz uma promessa que a loja não prova';
+  return null;
+}
+function r9Preparar(m) {
+  const area = r9Area();
+  Object.assign(m, { quemVe: r9.quem ?? 'raio', bairros: r9.quem === 'bairros' ? area : [], temas: r9TemasDe(area), temasMexidos: false });
+}
+
+/* ---------- a gaveta: "Quem vê" com raio ou bairros, e "As buscas" ---------- */
+function r9QuemVe(m) {
+  const seg = `<div class="seg" role="group" aria-label="Quem vê por">${[['raio', 'Raio'], ['bairros', 'Bairros']].map(([id, rot]) => `<button type="button" data-r9-quem="${id}" aria-pressed="${m.quemVe === id}">${rot}</button>`).join('')}</div>`;
+  if (m.quemVe !== 'bairros') {
+    return `<fieldset class="campo r9-quem" id="r9-quem" tabindex="-1"><legend>Quem vê</legend>${seg}<div class="pd-escolha">${P42_RAIOS.map(([id, rot]) => `<label class="pd-opcao"><input type="radio" name="p45-raio" value="${id}"${m.raio === id ? ' checked' : ''} aria-describedby="p45-raio-dica">${rot}</label>`).join('')}</div><p class="campo-dica" id="p45-raio-dica">Quem está num raio de ${p42KmTxt(m.raio)} em volta da ${P42_LOJA.nome} (${P42_LOJA.endereco}). No Google, o raio vale para quem está ou costuma estar ali.</p></fieldset>`;
+  }
+  const itens = R6B_SUGERIDOS.map((b) => `<li><label class="r9-bairro"><input type="checkbox" name="r9-bairro" value="${b.id}"${m.bairros.includes(b.id) ? ' checked' : ''}><span><b>${esc(b.nome)}</b><small>${r6bOrigem(b)}</small><small>no Google: ${R9_NO_GOOGLE.has(b.id) ? 'o bairro dele' : r9Circulo(b)}</small></span></label></li>`).join('');
+  return `<fieldset class="campo r9-quem" id="r9-quem" tabindex="-1"><legend>Quem vê</legend>${seg}<ul class="r9-bairros">${itens}</ul>
+    <p class="campo-dica">Quem está ou costuma estar nos bairros marcados. No Google, raio e bairros juntos somariam as duas áreas: por isso é um ou outro. O bairro que o Google não tem entra como um círculo no centro dele.</p></fieldset>`;
+}
+function r9Buscas(m) {
+  const comErro = m.erro && m.campo === 'r9-buscas';
+  const lis = m.temas.map((t, i) => `<li><label class="sr-only" for="r9-tema-${i}">Tema ${i + 1}</label><input class="input" id="r9-tema-${i}" autocomplete="off" maxlength="${R9_LIM.tema * 2}" value="${esc(t)}" aria-describedby="r9-tema-${i}-n"${comErro && (r9TemaRuim(t) || [...t].length > R9_LIM.tema) ? ' aria-invalid="true"' : ''}>${p45Conta(t, R9_LIM.tema, `r9-tema-${i}-n`)}<button class="btn btn--icon btn--ghost btn--sm" type="button" data-r9-tirar="${i}" aria-label="Tirar o tema ${i + 1}">${ic('i-x')}</button></li>`).join('');
+  const mais = m.temas.length < R9_LIM.temas ? `<button class="btn btn--sm p45-mais" type="button" data-r9-mais>${ic('i-plus', 'ic ic-sm')}Mais um tema</button>` : '';
+  return `<fieldset class="campo" id="r9-buscas" tabindex="-1"><legend>As buscas <span class="campo-dica">temas de busca: até ${R9_LIM.temas}, até ${R9_LIM.tema} caracteres cada</span></legend>
+    <p class="campo-dica">O que as pessoas digitam quando procuram uma loja como a sua. O Liame montou a lista com o que a loja vende (de Minha marca), “perto de mim” e os bairros de quem vê. É uma pista para o Google, não uma garantia: ele decide em que buscas mostra o anúncio.</p>
+    <ol class="r9-temas">${lis}</ol>${mais}
+    <p class="campo-dica">${p42Conferir('Quantos temas o Google aceita por grupo de recursos e o tamanho de cada um, na versão da API em uso')}.</p></fieldset>`;
+}
+const p45HtmlR9 = p45Html;
+p45Html = function () {
+  const h = p45HtmlR9(), m = p45?.m;
+  if (!r9?.ativo || !m || m.fase !== 'form' || !m.temas) return h;
+  const a = h.indexOf('<fieldset class="campo"><legend>Quem vê</legend>'), b = a < 0 ? -1 : h.indexOf('</fieldset>', a);
+  if (b < 0) return h;
+  return h.slice(0, a) + r9QuemVe(m) + r9Buscas(m) + h.slice(b + '</fieldset>'.length);
+};
+const p45AbrirGavetaR9 = p45AbrirGaveta;
+p45AbrirGaveta = function (o) { p45AbrirGavetaR9(o); if (r9?.ativo && p45?.m) { r9Preparar(p45.m); p45Desenhar(); } };
+const p45LerR9 = p45Ler;
+p45Ler = function () {
+  p45LerR9();
+  const m = p45?.m;
+  if (!r9?.ativo || !m || m.fase !== 'form' || !m.temas) return;
+  m.temas = m.temas.map((t, i) => $(`#r9-tema-${i}`)?.value ?? t);
+  if (m.quemVe === 'bairros' && $('input[name="r9-bairro"]')) m.bairros = $$('input[name="r9-bairro"]:checked').map((x) => x.value);
+};
+const p45ConferirR9 = p45Conferir;
+p45Conferir = function (m) {
+  const r = p45ConferirR9(m);
+  if (!r9?.ativo || !m.temas || r.erro) return r;
+  const temas = m.temas.map((t) => t.trim()).filter(Boolean), tam = (t) => [...t].length;
+  if (m.quemVe === 'bairros' && !m.bairros.length) return { erro: 'Marque pelo menos um bairro, ou volte para o raio.', campo: 'r9-quem' };
+  const longo = temas.find((t) => tam(t) > R9_LIM.tema);
+  if (longo) return { erro: `O tema “${longo}” tem ${tam(longo)} caracteres: vai até ${R9_LIM.tema}.`, campo: 'r9-buscas' };
+  const ruim = temas.find((t) => r9TemaRuim(t));
+  if (ruim) return { erro: `O tema “${ruim}” não passa na conferência dos textos: ${r9TemaRuim(ruim)}. Tire ou troque o tema.`, campo: 'r9-buscas' };
+  if (new Set(temas.map((t) => t.toLocaleLowerCase('pt-BR'))).size < temas.length) return { erro: 'Há temas repetidos na lista das buscas.', campo: 'r9-buscas' };
+  return { pedido: { ...r.pedido, quemVe: m.quemVe, bairros: m.quemVe === 'bairros' ? [...m.bairros] : null, temas } };
+};
+formP45.addEventListener('click', (e) => {
+  const alvo = e.target instanceof Element ? e.target : null, m = p45?.m;
+  if (!alvo || !m || !r9?.ativo || m.fase !== 'form' || !m.temas) return;
+  const quem = alvo.closest('[data-r9-quem]');
+  if (quem) {
+    p45Ler();
+    m.quemVe = quem.dataset.r9Quem;
+    if (m.quemVe === 'bairros' && !m.bairros.length) m.bairros = r9Area();
+    if (!m.temasMexidos) m.temas = r9TemasDe(m.quemVe === 'bairros' ? m.bairros : r9Area());
+    if (m.campo === 'r9-quem') Object.assign(m, { erro: null, campo: null });
+    p45Desenhar();
+    $(`[data-r9-quem="${m.quemVe}"]`)?.focus();
+    anunciar(m.quemVe === 'bairros' ? 'Quem vê: por bairros.' : 'Quem vê: pelo raio em volta da loja.');
+    return;
+  }
+  const tirar = alvo.closest('[data-r9-tirar]');
+  if (tirar) { p45Ler(); m.temas.splice(Number(tirar.dataset.r9Tirar), 1); m.temasMexidos = true; if (m.campo === 'r9-buscas') Object.assign(m, { erro: null, campo: null }); p45Desenhar(); ($('[data-r9-mais]') ?? $('#r9-buscas'))?.focus(); anunciar('Tema tirado.'); return; }
+  if (alvo.closest('[data-r9-mais]')) { p45Ler(); m.temas.push(''); m.temasMexidos = true; p45Desenhar(); $(`#r9-tema-${m.temas.length - 1}`)?.focus(); }
+});
+formP45.addEventListener('change', (e) => {
+  const t = e.target, m = p45?.m;
+  if (!(t instanceof HTMLInputElement) || t.name !== 'r9-bairro' || !m || !r9?.ativo) return;
+  p45Ler();
+  if (m.temasMexidos) return;
+  // Os temas seguem os bairros marcados, enquanto ninguém mexeu na lista à mão.
+  m.temas = r9TemasDe(m.bairros.length ? m.bairros : r9Area());
+  p45Desenhar();
+  $(`input[name="r9-bairro"][value="${t.value}"]`)?.focus();
+});
+
+/* ---------- Aprovações: o pedido com os bairros e os temas ---------- */
+const r9Nomes = (ids) => { const n = ids.map((id) => r6bLugar(id)?.nome ?? id); return n.length < 2 ? n.join('') : `${n.slice(0, -1).join(', ')} e ${n.at(-1)}`; };
+const p45TabelaR9 = p45Tabela;
+p45Tabela = function (c) {
+  const linhas = p45TabelaR9(c);
+  if (!c.temas) return linhas;
+  const i = linhas.findIndex((l) => l[0] === 'Quem vê');
+  if (c.quemVe === 'bairros' && i >= 0) linhas[i] = ['Quem vê', '—', `${c.bairros.length} bairros: ${esc(r9Nomes(c.bairros))}`];
+  linhas.splice(i + 1, 0, ['As buscas', '—', `${c.temas.length} temas de busca: ${c.temas.slice(0, 2).map((t) => `“${esc(t)}”`).join(', ')}${c.temas.length > 2 ? ` e mais ${c.temas.length - 2}` : ''}`]);
+  return linhas;
+};
+const p45SecaoAnuncioR9 = p45SecaoAnuncio;
+p45SecaoAnuncio = function (c) {
+  let h = p45SecaoAnuncioR9(c);
+  if (!c.temas) return h;
+  if (c.quemVe === 'bairros') h = h.replace(/<dt>Quem vê<\/dt><dd>[\s\S]*?<\/dd>/, () => `<dt>Quem vê</dt><dd>${c.bairros.length} bairros<small>${esc(r9Nomes(c.bairros))}</small></dd>`);
+  const bairros = c.quemVe === 'bairros'
+    ? `<div class="secao" id="r9-ap-bairros"><p class="rotulo-marca">Quem vê: os bairros</p><ul class="r9-lista">${c.bairros.map((id) => { const b = r6bLugar(id); return `<li><b>${esc(b.nome)}</b>: ${R9_NO_GOOGLE.has(id) ? 'o bairro do Google' : `${r9Circulo(b)} (o Google não tem este bairro)`}</li>`; }).join('')}</ul>
+      ${linha('i-info', 'No Google, vale quem está ou costuma estar nesses lugares. A campanha não leva o raio junto: os dois somariam as áreas.')}</div>`
+    : '';
+  const temas = `<div class="secao" id="r9-ap-temas"><p class="rotulo-marca">As buscas: ${c.temas.length} temas</p><ol class="r9-lista">${c.temas.map((t) => `<li>${esc(t)}</li>`).join('')}</ol>
+    ${linha('i-info', 'São pista para o Google, não garantia: ele decide em que buscas mostra o anúncio. O que vai ao Google é esta lista, como você aprovar.')}
+    ${linha('i-shield', 'Cada tema passou pela conferência dos textos: sem concorrente, sem dado pessoal e sem promessa.')}</div>`;
+  return h + bairros + temas;
+};
+
+/* ---------- o ritmo da semana (R7) com a campanha do Google ---------- */
+const R9_CAMPANHA = { nome: 'Combo sexta · Google · outubro', base: 30 };
+function r9RitmoHtml() {
+  const linhas = R7_DIAS.map((d) => `<tr><th scope="row">${d.dia}</th><td class="n" data-col="Verba do dia">${moeda(r7Verba(R9_CAMPANHA, d))}</td><td data-col="Sobre a de hoje">${r7Variacao(d.f)}</td></tr>`).join('');
+  const semana = d2(R7_DIAS.reduce((t, d) => t + r7Verba(R9_CAMPANHA, d), 0));
+  return `<section class="card r9-card" id="r9-ritmo" aria-labelledby="r9-ritmo-t"><div class="card-cab"><div><h2 id="r9-ritmo-t" tabindex="-1">O ritmo da semana, com a campanha do Google</h2><p class="card-sub">O pedido de domingo do Gestor de tráfego (abaixo) passa a trazer também a campanha do Google criada pelo Liame. A aprovação continua uma só, com o código do app.</p></div></div>
+    <div class="r9-card-corpo">
+      <div class="r9-envolve"><table class="tabela r9-tabela" id="r9-ritmo-tabela"><caption class="sr-only">A verba de cada dia da campanha do Google no ritmo da semana</caption>
+        <thead><tr><th scope="col">${esc(R9_CAMPANHA.nome)}</th><th scope="col" class="n">Verba do dia</th><th scope="col">Sobre a de hoje</th></tr></thead><tbody>${linhas}</tbody>
+        <tfoot><tr><th scope="row">A semana</th><td class="n" data-col="Soma das verbas">${moeda(semana)}</td><td data-col="">sem o ritmo: ${moeda(R9_CAMPANHA.base * 7)}</td></tr></tfoot></table></div>
+      ${linha('i-megaphone', `<b>Entra</b> a Performance Max “${esc(R9_CAMPANHA.nome)}”, de ${moeda(R9_CAMPANHA.base)} por dia: foi criada pelo Liame, está ativa e tem o orçamento só dela.`)}
+      ${linha('i-shield', '<b>Fica fora</b> a campanha do Google que divide o orçamento com outras (o Liame nunca muda orçamento dividido) e a que foi criada fora do Liame.')}
+      ${linha('i-sliders', 'Os pesos de cada dia são os mesmos das campanhas da Meta. As regras são as do Google: até 10% por mudança e no máximo 3 mudanças por hora na conta.')}
+      ${linha('i-clock', 'O horário (ligar e pausar ao longo do dia) não vale para o Google nesta entrega.')}
+      ${linha('i-info', `${p42Conferir('Como o Google gasta depois de uma mudança diária de verba: ele pode passar da verba num dia e compensar em outros')}: a conferência do gasto do ritmo mede os 7 dias e avisa na Atenção.`)}
+    </div></section>`;
+}
+
+/* ---------- as decisões propostas ---------- */
+const R9_DECISOES = [
+  { id: 'D-RG-85', titulo: 'As buscas: os temas de busca da campanha do Google', oque: 'A campanha do Google (Performance Max) passa a levar temas de busca. O Liame monta a lista por regra, sem IA: o que a loja vende (de Minha marca) com “perto de mim” e “delivery”, e depois com cada bairro de quem vê. A lista aparece na gaveta, pode ser mexida, e vai para Aprovações inteira: o que vai ao Google é o que você aprovar.', porque: 'É o item do plano (R9): as buscas “perto de mim” e por bairro. O tema é pista para o Google, não garantia, e a tela diz isso.', rec: 'Assim.' },
+  { id: 'D-RG-86', titulo: 'Os temas passam pela conferência dos textos', oque: 'Cada tema passa pela mesma conferência dos títulos e das descrições do Google: sem nome de concorrente, sem dado pessoal e sem promessa que a loja não prova. O tema que não passa não deixa pedir, e a tela diz qual é e por quê.', porque: 'É texto que sai em nome da loja. Tema com a marca de outro é disputa de marca, que você ainda não decidiu fazer.', rec: 'Assim. Anunciar na busca pela marca do concorrente fica fora até decisão própria.' },
+  { id: 'D-RG-87', titulo: 'Quem vê no Google: o raio ou os bairros', oque: 'A gaveta do Google ganha a mesma escolha da Meta (R6-3): o raio em volta da loja, ou os bairros. Um ou outro: no Google, os dois juntos somariam as áreas. O bairro que o Google tem como lugar vai pelo lugar dele; o que ele não tem, por um círculo no centro do bairro.', porque: 'É a D-RG-57, que você aprovou: a escolha por bairros entra na campanha do Google na R9. O Google tem bairros do Brasil (o Liame já lê cliques por bairro dele).', rec: 'Assim.' },
+  { id: 'D-RG-88', titulo: 'O ritmo da semana com a campanha do Google', oque: 'O ritmo da semana (R7) passa a incluir a Performance Max criada pelo Liame, ativa e com o orçamento só dela, com os mesmos pesos de cada dia e as regras do Google (até 10% por mudança, 3 mudanças por hora). Fica fora a campanha com orçamento dividido e a criada fora do Liame. O horário não vale para o Google nesta entrega.', porque: 'É a D-RG-64 (“o Google entra na R9”) com a regra que já vale: o Liame nunca muda orçamento dividido (D-A5-4).', rec: 'Assim, depois da primeira semana do ritmo na Meta.' },
+  { id: 'D-RG-89', titulo: 'O que se confere antes do código, e o que espera você', oque: 'Antes de escrever o código: quantos temas o Google aceita por grupo e o tamanho de cada um, na página oficial da versão da API em uso, com um teste que só valida na conta real. Esperam você: pedir o nível Básico do Google (sem ele, o volume de busca por cidade fica em “Ainda não”) e ativar a primeira campanha do Google, que está criada e pausada (sem campanha ativa, o ritmo não tem o que mexer nem há cliques para ler por bairro).', porque: 'O número certo sai da documentação e da conta, não de memória; e o que depende de pedido ao Google leva tempo de análise.', rec: 'Assim.' },
+];
+function r9DecisoesHtml() {
+  const lista = R9_DECISOES.map((d) => `<li><div><b>${d.id} · ${esc(d.titulo)}</b><span><b>O que é:</b> ${esc(d.oque)}</span><span><b>Por quê:</b> ${esc(d.porque)}</span><span><b>Recomendação:</b> ${esc(d.rec)}</span></div><span class="st st--espera">Proposta</span></li>`).join('');
+  return `<section class="card p42-decisoes r9-card" id="r9-decisoes" aria-labelledby="r9-dec-t"><div class="card-cab"><div><h2 id="r9-dec-t" tabindex="-1">R9 · O Google pela região (D-RG-85 a D-RG-89)</h2><p class="card-sub">Do plano da região (R9: a campanha do Google com raio, as buscas “perto de mim” e por bairro; o volume de busca depois do nível Básico). Propostas em 13/11/2026: esperam a sua aprovação. Estados do seletor “Google local”.</p></div></div><ul class="rev-decisoes">${lista}</ul></section>`;
+}
+
+/* ---------- o seletor "Google local" (faixa do protótipo) ---------- */
+($('#rev-r8') ?? $('#rev-r7'))?.closest('label')?.insertAdjacentHTML('afterend', '<label>Google local <select id="rev-r9"></select></label>');
+const selR9 = $('#rev-r9');
+selR9.replaceChildren(...Object.entries(R9_ESTADOS).map(([grupo, itens]) => {
+  const g = document.createElement('optgroup'); g.label = grupo;
+  g.append(...Object.entries(itens).map(([id, rot]) => new Option(rot, id)));
+  return g;
+}));
+selR9.selectedIndex = -1;
+function r9Desligar() {
+  if (r9) r9.ativo = false;
+  $('#r9-decisoes')?.remove();
+  $('#r9-ritmo')?.remove();
+  const c = p10?.pedidos?.['cn-criar-1'];
+  if (c) { delete c.temas; delete c.quemVe; delete c.bairros; }
+  selR9.selectedIndex = -1;
+}
+const p42EstadoR9 = p42Estado;
+p42Estado = function (v, opts) { r9Desligar(); p42EstadoR9(v, opts); };
+const p45EstadoR9 = p45Estado;
+p45Estado = function (v, opts) { r9Desligar(); p45EstadoR9(v, opts); };
+const definirP10R9 = definirP10;
+definirP10 = function (v, opts) { r9Desligar(); definirP10R9(v, opts); };
+const r7EstadoR9 = r7Estado;
+r7Estado = function (v, opts) { r9Desligar(); r7EstadoR9(v, opts); };
+if (typeof r8Estado === 'function') { const r8EstadoR9 = r8Estado; r8Estado = function (v, opts) { r9Desligar(); r8EstadoR9(v, opts); }; }
+function r9Estado(v, { focar = false } = {}) {
+  if (!R9_TODOS[v]) v = 'r9-gaveta';
+  r9Desligar();
+  r9 = { ativo: true, estado: v, quem: v === 'r9-gaveta-bairros' ? 'bairros' : 'raio' };
+  if (v === 'r9-ritmo') {
+    // A base é o pedido do ritmo da semana em Aprovações; o cartão de cima diz o que muda com o Google.
+    r7EstadoR9('r7-pedido');
+    selR7.selectedIndex = -1;
+    selR9.value = v;
+    $('#aprovacoes')?.insertAdjacentHTML('afterbegin', r9RitmoHtml());
+    if (focar) $('#r9-ritmo-t')?.focus({ preventScroll: true });
+    return;
+  }
+  // A base é a do Google (P45): a gaveta abre já com os campos da R9; em Aprovações, o pedido ganha os bairros e os temas.
+  p45EstadoR9(v === 'r9-aprovacoes' ? 'google-aprovar' : v === 'r9-decisoes' ? 'google-decisoes' : 'google-gaveta');
+  selP45.selectedIndex = -1;
+  selR9.value = v;
+  if (v === 'r9-aprovacoes') {
+    const ids = ['centro', 'lapa', 'gloria', 'santa-teresa'];
+    Object.assign(p10.pedidos['cn-criar-1'], { quemVe: 'bairros', bairros: ids, temas: r9TemasDe(ids) });
+    desenharP8();
+    if (focar) $('#ap-det-titulo')?.focus({ preventScroll: true });
+    return;
+  }
+  if (v === 'r9-decisoes') {
+    $('#p45-decisoes')?.remove();
+    $('#criativos .view-cab')?.insertAdjacentHTML('afterend', r9DecisoesHtml());
+    if (focar) $('#r9-dec-t')?.focus({ preventScroll: true });
+    return;
+  }
+  if (v === 'r9-tema-recusado' && p45?.m) {
+    p45.m.temas.push('melhor que o Burger King');
+    p45.m.temasMexidos = true;
+    p45Desenhar();
+    p45Enviar();
+  }
+}
+selR9.addEventListener('change', () => r9Estado(selR9.value, { focar: true }));
+const marcaR9 = $('.revisao-marca b');
+if (marcaR9) marcaR9.textContent += ' · R9 (o Google pela região), PROPOSTO em 13/11/2026';
+
+/* ---------- cenários da R9 para a conferência no navegador sem janela ---------- */
+(() => {
+  const exige = (cond, msg) => { if (!cond) throw new Error(msg); };
+  const texto = (sel) => ($(sel)?.textContent ?? '').replace(/\s+/g, ' ');
+  for (const id of Object.keys(R9_TODOS)) {
+    window.uiuxCenarios['r9-' + id.slice(3)] = { larguras: [1440, 375], executar: async () => {
+      definirModo('lite', { silencioso: true }); r9Estado(id); await esperar(300);
+      exige(selR9.value === id && selP45.selectedIndex === -1 && selR7.selectedIndex === -1, 'os seletores: ' + selR9.value);
+      if (id === 'r9-gaveta') exige(dlgP45.open && $$('#r9-buscas .r9-temas li').length === 11 && $$('[data-r9-quem]').length === 2 && !!$('input[name="p45-raio"]:checked') && !$('input[name="r9-bairro"]'), 'a gaveta com o raio e os 11 temas');
+      if (id === 'r9-gaveta-bairros') exige(dlgP45.open && $$('input[name="r9-bairro"]').length === 6 && $$('input[name="r9-bairro"]:checked').length === 4 && !$('input[name="p45-raio"]') && texto('#r9-quem').includes('um círculo de'), 'a gaveta por bairros');
+      if (id === 'r9-tema-recusado') exige(texto('#p45-erro').includes('não passa na conferência dos textos: cita um concorrente') && $$('#r9-buscas input[aria-invalid="true"]').length === 1 && p45.m.fase === 'form', 'o tema recusado: ' + texto('#p45-erro'));
+      if (id === 'r9-aprovacoes') exige(!$('#tela-aprovacoes').hidden && texto('.det-cab').includes('Rodrigo pediu') && $$('#r9-ap-temas li').length === 11 && $$('#r9-ap-bairros li').length === 4 && texto('#aprovacoes').includes('As buscas') && texto('#r9-ap-bairros').includes('o Google não tem este bairro'), 'o pedido com os bairros e os temas');
+      if (id === 'r9-ritmo') exige(!!$('#r9-ritmo') && $$('#r9-ritmo-tabela tbody tr').length === 7 && texto('#ap-det-titulo').startsWith('Ritmo da semana') && texto('#r9-ritmo-tabela tfoot').includes('R$ 210,00'), 'o ritmo com o Google');
+      if (id === 'r9-decisoes') exige($$('#r9-decisoes .rev-decisoes > li').length === 5 && !$('#p45-decisoes'), 'as 5 decisões');
+    } };
+  }
+  window.uiuxCenarios['r9-fluxo-bairros-e-temas'] = { larguras: [1440, 375], executar: async () => {
+    definirModo('lite', { silencioso: true }); r9Estado('r9-gaveta'); await esperar(200);
+    $('[data-r9-quem="bairros"]').click(); await esperar(120);
+    exige($$('input[name="r9-bairro"]:checked').length === 4 && $$('#r9-buscas .r9-temas li').length === 11, 'os bairros da área de entrega marcados');
+    // Desmarcar um bairro tira os dois temas dele; tirar um tema à mão trava a lista (ela não se refaz sozinha).
+    const gloria = $('input[name="r9-bairro"][value="gloria"]'); gloria.checked = false; gloria.dispatchEvent(new Event('change', { bubbles: true })); await esperar(120);
+    exige($$('#r9-buscas .r9-temas li').length === 9 && !texto('#r9-buscas').includes('Glória') && ![...$$('#r9-buscas input')].some((i) => i.value.includes('Glória')), 'os temas seguem os bairros');
+    $('[data-r9-tirar="0"]').click(); await esperar(120);
+    exige($$('#r9-buscas .r9-temas li').length === 8 && p45.m.temasMexidos, 'o tema tirado à mão');
+    $('#p45-form').requestSubmit(); await esperar(200);
+    exige(p45.m.fase === 'criado', 'o pedido não foi criado: ' + (p45.m.erro ?? ''));
+    const q = p10.pedidos[p45.m.criado];
+    exige(q.quemVe === 'bairros' && q.quem === 'Rodrigo' && q.bairros.length === 3 && q.temas.length === 8, 'o pedido com os bairros e os temas');
+    $('[data-p45-ver]').click(); await esperar(300);
+    exige(!$('#tela-aprovacoes').hidden && $$('#r9-ap-temas li').length === 8 && $$('#r9-ap-bairros li').length === 3, 'o pedido em Aprovações');
+    // A gaveta do Google sem a R9 continua como era.
+    p45Estado('google-gaveta'); await esperar(200);
+    exige(dlgP45.open && !$('#r9-buscas') && !$('[data-r9-quem]') && selR9.selectedIndex === -1, 'a gaveta do P45 sem a R9');
+  } };
+})();
+if (params.get('r9')) r9Estado(params.get('r9'));
+</script>
+<!-- R9:camada:fim -->
 </body>
 </html>
