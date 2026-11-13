@@ -10,6 +10,7 @@ import { quandoComHora } from '@/lib/formato';
 import {
   type AcaoDeAnuncio,
   alvoNaFrase,
+  avisoDoDesfazerNoRitmo,
   caminhoDoAnuncio,
   colunasDoAnuncio,
   type MesDoPedido,
@@ -69,6 +70,7 @@ export function DetalheAnuncio({ acao, grupo, agora, pro, podeDecidir, podeOpera
   const t = textosDoAnuncio(acao, mes);
   const quem = quemPediu(acao);
   const origem = origemDoAnuncio(acao);
+  const desfazerNoRitmo = avisoDoDesfazerNoRitmo(acao);
   const plano = identidadeDoPlano(acao);
   const prazo = prazoDe(acao, agora);
   const porque = porqueDoAnuncio(acao);
@@ -230,6 +232,7 @@ export function DetalheAnuncio({ acao, grupo, agora, pro, podeDecidir, podeOpera
                 </b>{' '}
                 para {t.volta}. Ele também espera a aprovação com o código do app e só é executado se ninguém mexer {alvoNaFrase(acao).no} até lá.
               </p>
+              {desfazerNoRitmo && <p>{desfazerNoRitmo}</p>}
               <div className="desfazer-acoes">
                 <button className="btn btn--primary btn--sm" type="button" disabled={volta.enviando} aria-busy={volta.enviando || undefined} onClick={() => disparar(desfazer())}>
                   Pedir para desfazer

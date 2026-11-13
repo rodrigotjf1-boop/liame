@@ -1,6 +1,6 @@
 import type { ActionResponse, BudgetMonthChange, BudgetMonthResponse, RegionRhythmDetailResponse } from '@liame/contracts';
 import { describe, expect, it } from 'vitest';
-import { origemDoAnuncio } from '@/components/aprovacoes/anuncio-textos';
+import { type AcaoDeAnuncio, avisoDoDesfazerNoRitmo, origemDoAnuncio } from '@/components/aprovacoes/anuncio-textos';
 import {
   campanhaNoRitmo,
   diaEscrito,
@@ -297,5 +297,20 @@ describe('o ritmo da semana em Sua região (R7, parte 1b-3b; D-RG-65)', () => {
     expect(linhasDoRitmoNaRegiao({ running: null, proposed: ref('cancelado', '2026-11-23', '2026-11-29') })[0]!.texto).toBe('De 23/11 a 29/11: a verba de cada campanha fica como está.');
     // A situação que a tela não conhece não vira frase inventada.
     expect(linhasDoRitmoNaRegiao({ running: null, proposed: ref('encerrado', '2026-11-23', '2026-11-29') })).toEqual([]);
+  });
+});
+
+describe('desfazer um passo do ritmo (R7, parte 1b-3b)', () => {
+  const pedido = (tool: string, kind: 'campanha' | 'conjunto') => ({ tool, target: { kind, name: kind === 'campanha' ? 'Smash em dobro' : 'Raio de 3 km' } }) as unknown as AcaoDeAnuncio;
+
+  it('a confirmação diz que a campanha (ou o conjunto) sai do ritmo; nos outros pedidos, nada', () => {
+    expect(avisoDoDesfazerNoRitmo(pedido('orcamento_do_ritmo', 'campanha'))).toBe(
+      'Este é um passo do ritmo da semana: desfazer devolve a verba de antes deste dia, e a campanha “Smash em dobro” sai do ritmo. O Liame não muda mais a verba dela nesta semana.',
+    );
+    expect(avisoDoDesfazerNoRitmo(pedido('orcamento_do_ritmo', 'conjunto'))).toBe(
+      'Este é um passo do ritmo da semana: desfazer devolve a verba de antes deste dia, e o conjunto “Raio de 3 km” sai do ritmo. O Liame não muda mais a verba dele nesta semana.',
+    );
+    expect(avisoDoDesfazerNoRitmo(pedido('orcamento_ajustar', 'campanha'))).toBeNull();
+    expect(avisoDoDesfazerNoRitmo(pedido('orcamento_aumentar', 'campanha'))).toBeNull();
   });
 });
