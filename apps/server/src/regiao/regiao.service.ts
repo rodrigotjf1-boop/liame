@@ -5,6 +5,8 @@ import {
   type GoogleProfileAddressRequest,
   type GoogleProfileAddressResponse,
   type RegionOverviewResponse,
+  type RegionRhythmDetailResponse,
+  type RegionRhythmRef,
   type RegionRhythmResponse,
   type RegionRhythmStopResponse,
   type SaveStoreLocationRequest,
@@ -15,7 +17,7 @@ import {
   type StoreLocationsResponse,
   STORES_PER_BRAND_MAX,
 } from '@liame/contracts';
-import { type Database, uuidv7 } from '@liame/database';
+import { type Database, type Tx, uuidv7 } from '@liame/database';
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import { sql } from 'drizzle-orm';
 import { type BlocoDosAnuncios, horariosDaLoja, LOJAS_NO_PLANO, type LojaDaMidia, RAIO_PADRAO_KM } from '../ai/estrategista/midia.js';
@@ -37,6 +39,7 @@ import { FONTE_CENSO_BAIRRO } from './censo.js';
 import { bairroDaArea, type Coordenada, nomeComparavel, procuraDeCoordenada } from './coordenada.js';
 import { MUNICIPIOS_DO_IPCA, RMS_DO_IPCA } from './ibge.js';
 import { controleDoRitmo } from '../campanhas/ritmo-passos.js';
+import { EstadoDoRitmo } from '../campanhas/ritmo-plano.js';
 import { carregarPoliticas } from '../policy/policy.service.js';
 import { tetoDaVerba } from '../policy/teto-da-verba.js';
 import { diaNoFuso } from '../results/fora-do-normal.js';
@@ -128,7 +131,20 @@ export interface RitmoMontado {
 }
 
 /** A prévia do ritmo sem semana (a função desligada, a loja fora do mapa, sem permissão). */
-const ritmoVazio = (agora: Date) => ({ week: null, source: null, days: [], campaigns: [], out: [], base_micros: 0, base_week_micros: 0, week_micros: 0, hours: null, generated_at: agora.toISOString() });
+const ritmoVazio = (agora: Date) => ({
+  week: null,
+  source: null,
+  days: [],
+  campaigns: [],
+  out: [],
+  base_micros: 0,
+  base_week_micros: 0,
+  week_micros: 0,
+  hours: null,
+  running: null,
+  proposed: null,
+  generated_at: agora.toISOString(),
+});
 
 @Injectable()
 export class RegiaoService {
@@ -644,6 +660,146 @@ export class RegiaoService {
   }
 
   /**
+   * Os ritmos guardados da marca que a prévia cita: o que está rodando nesta semana (aprovado, ou parado e devolvendo a
+   * verba) e o que foi pedido para a semana da prévia, em qualquer situação (o mais novo, se houve mais de um).
+   */
+  private async ritmosGuardados(tx: Tx, tenantId: string, brandId: string, hoje: string, semanaDe: string): Promise<{ running: RegionRhythmRef | null; proposed: RegionRhythmRef | null }> {
+    const r = await tx.execute<{ id: string; status: string; week_start: string; week_end: string; action_id: string | null }>(sql`
+      select id, status, week_start::text as week_start, week_end::text as week_end, action_id
+        from liame.budget_rhythm
+       where tenant_id = ${tenantId} and brand_id = ${brandId}
+         and (week_start = ${semanaDe}::date or (week_start <= ${hoje}::date and week_end >= ${hoje}::date and status in ('aprovado', 'parado')))
+       order by created_at desc, id desc`);
+    const ref = (l: (typeof r.rows)[number] | undefined): RegionRhythmRef | null => (l ? { id: l.id, status: l.status, week: { from: l.week_start, to: l.week_end }, action_id: l.action_id } : null);
+    return {
+      running: ref(r.rows.find((l) => l.week_start <= hoje && l.week_end >= hoje && (l.status === 'aprovado' || l.status === 'parado'))),
+      proposed: ref(r.rows.find((l) => l.week_start === semanaDe)),
+    };
+  }
+
+  /**
+   * Um ritmo guardado, com o que aconteceu em cada campanha (R7, parte 1b-3): o que a pessoa aprova (os 7 dias com o
+   * porquê e a verba de cada campanha em cada dia) e os passos que o Liame deu, do mais antigo ao mais novo. É a leitura
+   * da tela do pedido em Aprovações. Vale também com a função desligada: é como a pessoa vê em que verba cada campanha
+   * ficou.
+   */
+  async ritmoGuardado(auth: AuthContext, id: string, agora = new Date()): Promise<RegionRhythmDetailResponse> {
+    const { tenantId } = this.quem(auth);
+    const tx = currentTx();
+    const naoEncontrado = () => new AppProblem(404, 'nao-encontrado', 'Não encontramos', 'Ritmo da semana não encontrado nesta empresa.');
+    const r = (
+      await tx.execute<{
+        brand_id: string;
+        unit_id: string;
+        loja: string;
+        status: string;
+        source: string;
+        week_start: string;
+        week_end: string;
+        plan: unknown;
+        action_id: string | null;
+        criado_em: string;
+        aprovado_em: string | null;
+        parado_em: string | null;
+        parou_id: string | null;
+        parou: string | null;
+        aprovou_id: string | null;
+        aprovou: string | null;
+        hoje: string;
+      }>(sql`
+        select b.brand_id, b.unit_id, u.name as loja, b.status, b.source, b.week_start::text as week_start, b.week_end::text as week_end, b.plan, b.action_id,
+               to_char(b.created_at at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') as criado_em,
+               to_char(b.approved_at at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') as aprovado_em,
+               to_char(b.stopped_at at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') as parado_em,
+               b.stopped_by as parou_id, sp.name as parou, ap.approved_by as aprovou_id, au.name as aprovou,
+               (${agora.toISOString()}::timestamptz at time zone coalesce(u.timezone, 'America/Sao_Paulo'))::date::text as hoje
+          from liame.budget_rhythm b
+          join liame.unit u on u.id = b.unit_id and u.tenant_id = b.tenant_id
+          left join liame.app_user sp on sp.id = b.stopped_by
+          left join lateral (select a.approved_by from liame.approval a
+                              where a.tenant_id = b.tenant_id and a.action_request_id = b.action_id and a.sufficient order by a.created_at desc limit 1) ap on true
+          left join liame.app_user au on au.id = ap.approved_by
+         where b.id = ${id} and b.tenant_id = ${tenantId}`)
+    ).rows[0];
+    const plano = r ? EstadoDoRitmo.omit({ situacao: true }).safeParse(r.plan) : null;
+    if (!r || !plano?.success) throw naoEncontrado();
+    const passos = (
+      await tx.execute<{ resource_id: string; dia: string; kind: string; status: string; target_micros: string; expected_micros: string; reason: string | null; action_id: string | null; em: string }>(sql`
+        select resource_id, day::text as dia, kind, status, target_micros::text as target_micros, expected_micros::text as expected_micros, reason, action_id,
+               to_char(updated_at at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') as em
+          from liame.budget_rhythm_step where tenant_id = ${tenantId} and rhythm_id = ${id}
+         order by day, created_at, id`)
+    ).rows;
+    const p = plano.data;
+    const campaigns = p.campanhas.map((c) => {
+      const meus = passos.filter((x) => x.resource_id === c.recurso);
+      const feito = meus.filter((x) => x.status === 'feito').at(-1);
+      // A verba em que a campanha está pelo Liame: a do último passo feito; sem passo, a da véspera da semana.
+      const deixada = feito ? Number(feito.target_micros) : (c.partida_micros ?? c.base_micros);
+      const voltando = meus.some((x) => x.kind === 'volta') || r.status === 'parado' || r.status === 'encerrado' || r.hoje > r.week_end;
+      const state = meus.some((x) => x.status === 'fora')
+        ? 'fora'
+        : r.status === 'pedido' || r.status === 'cancelado'
+          ? 'proposta'
+          : !voltando
+            ? 'no_ritmo'
+            : deixada === c.base_micros
+              ? 'voltou'
+              : 'voltando';
+      return {
+        resource: c.recurso,
+        name: c.nome,
+        base_micros: c.base_micros,
+        days_micros: c.dias_micros,
+        week_micros: c.dias_micros.reduce((s, v) => s + v, 0),
+        state,
+        left_micros: deixada,
+        steps: meus.map((x) => ({
+          day: x.dia,
+          kind: x.kind,
+          status: x.status,
+          target_micros: Number(x.target_micros),
+          expected_micros: Number(x.expected_micros),
+          reason: x.reason,
+          action_id: x.action_id,
+          at: x.em,
+        })),
+      };
+    });
+    const base = campaigns.reduce((s, c) => s + c.base_micros, 0);
+    const pessoa = (pid: string | null, nome: string | null) => (pid ? { id: pid, name: nome ?? 'Pessoa removida' } : null);
+    return {
+      id,
+      brand_id: r.brand_id,
+      unit: { id: r.unit_id, name: r.loja },
+      status: r.status,
+      week: { from: r.week_start, to: r.week_end },
+      source: r.source,
+      today: r.hoje,
+      action_id: r.action_id,
+      requested_at: r.criado_em,
+      approved_at: r.aprovado_em,
+      approved_by: r.aprovado_em ? pessoa(r.aprovou_id, r.aprovou) : null,
+      stopped_at: r.parado_em,
+      stopped_by: pessoa(r.parou_id, r.parou),
+      days: p.dias.map((d, i) => ({
+        day: d.dia,
+        weekday: d.dia_da_semana,
+        weight: d.peso,
+        total_micros: campaigns.reduce((s, c) => s + c.days_micros[i]!, 0),
+        reasons: d.porques.map((q) => ({ kind: q.kind, share_pct: q.share_pct, text: q.text, min: q.min, max: q.max, eve: q.eve })),
+      })),
+      campaigns,
+      out: p.fora.map((o) => ({ name: o.nome, reason: o.motivo })),
+      base_micros: base,
+      base_week_micros: base * 7,
+      week_micros: campaigns.reduce((s, c) => s + c.week_micros, 0),
+      ceiling_micros: p.teto_micros,
+      generated_at: agora.toISOString(),
+    };
+  }
+
+  /**
    * Parar o ritmo da semana (R7, parte 1b-2; D-RG-63): não pede o código do app. O ritmo aprovado passa a parado: o passo
    * que estiver na fila não sai (o executor confere o portão do ritmo de novo), e a rotina dos passos devolve a verba de
    * cada campanha à de antes, em até 10% por dia. O ritmo ainda pedido se recusa em Aprovações; o que já acabou, o
@@ -774,6 +930,7 @@ export class RegiaoService {
     }
     const base = campaigns.reduce((s, c) => s + c.base_micros, 0);
     const horarios = horariosDaLoja(demanda);
+    const guardados = await this.ritmosGuardados(tx, tenantId, brandId, hoje, semana.de);
     const resposta: RegionRhythmResponse = {
       status: campaigns.length ? 'pronto' : 'sem_campanhas',
       week: { from: semana.de, to: semana.ate },
@@ -798,6 +955,7 @@ export class RegiaoService {
       base_week_micros: base * 7,
       week_micros: campaigns.reduce((s, c) => s + c.week_micros, 0),
       hours: { source: horarios.source, from: horarios.from, to: horarios.to, ads_from: horarios.ads_from },
+      ...guardados,
       generated_at: agora.toISOString(),
     };
     return { resposta, recursos, loja: { nome: loja.name }, teto };

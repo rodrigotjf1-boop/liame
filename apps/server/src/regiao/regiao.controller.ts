@@ -8,6 +8,7 @@ import {
   RegionOverviewQuery,
   RegionOverviewResponse,
   RegionRhythmQuery,
+  RegionRhythmDetailResponse,
   RegionRhythmResponse,
   RegionRhythmStopResponse,
   ResourceId,
@@ -89,6 +90,21 @@ export class RegiaoController {
   @ApiNotFoundResponse({ standardSchema: ProblemDetails })
   ritmoDaSemana(@Auth() auth: AuthContext, @Query({ schema: RegionRhythmQuery }) query: RegionRhythmQuery): Promise<RegionRhythmResponse> {
     return this.regiao.ritmoDaSemana(auth, query.brand_id, query.unit_id);
+  }
+
+  @Get('region/rhythms/:id')
+  @Permissao('campanhas.ver')
+  @ApiOperation({
+    summary: 'Um ritmo da semana, com os passos',
+    description:
+      'O ritmo guardado de uma semana (plano da região, R7): o que a pessoa aprova (os 7 dias com o porquê e a verba de cada campanha em cada dia), a situação dele e os passos que o Liame deu em cada campanha (a verba do dia, a volta à de antes, o que ficou bloqueado e a campanha que saiu do ritmo). Só leitura.',
+  })
+  @ApiOkResponse({ standardSchema: RegionRhythmDetailResponse })
+  @ApiBadRequestResponse({ standardSchema: ProblemDetails })
+  @ApiForbiddenResponse({ standardSchema: ProblemDetails })
+  @ApiNotFoundResponse({ standardSchema: ProblemDetails })
+  ritmoGuardado(@Auth() auth: AuthContext, @Param('id', { schema: ResourceId }) id: string): Promise<RegionRhythmDetailResponse> {
+    return this.regiao.ritmoGuardado(auth, id);
   }
 
   @Post('region/rhythm/:id/stop')

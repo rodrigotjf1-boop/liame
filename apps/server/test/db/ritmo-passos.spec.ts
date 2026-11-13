@@ -1,5 +1,5 @@
 import { randomInt, randomUUID } from 'node:crypto';
-import { RegionRhythmResponse, RegionRhythmStopResponse } from '@liame/contracts';
+import { BudgetMonthResponse, RegionRhythmDetailResponse, RegionRhythmResponse, RegionRhythmStopResponse } from '@liame/contracts';
 import type { Database } from '@liame/database';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { ActionService } from '../../src/actions/action.service.js';
@@ -33,7 +33,8 @@ import { hasDb } from './env.js';
 //   - o que o ritmo NÃO liga: o pedido de verba comum de um funcionário de IA segue como sempre;
 //   - o limite da empresa que não deixa a verba SUBIR tira a campanha do ritmo, e a volta é tentada todo dia até sair;
 //   - o pedido de ontem que ficou na fila não gasta a tentativa de hoje;
-//   - a conferência do gasto não trata o passo do ritmo como uma mudança só.
+//   - a conferência do gasto não trata o passo do ritmo como uma mudança só;
+//   - o ritmo guardado, como a tela o lê (parte 1b-3): a situação, cada campanha com a verba em que ficou e os passos.
 
 const REAL = 1_000_000;
 const HOJE = diaNoFuso(new Date(), 'America/Sao_Paulo');
@@ -164,6 +165,14 @@ describe.skipIf(!hasDb)('o ritmo da semana: os passos do dia (R7, parte 1b-2)', 
       .map((c) => c.params.daily_budget);
   const executar = (e: Empresa) => executor.runCycle(20, { tenantIds: [e.tenantId] });
   const resumo = (r: Array<{ recurso: string | null; situacao: string }>) => r.map((x) => [x.recurso, x.situacao]);
+  /** O ritmo guardado, como a tela o lê (o contrato inteiro, com objetos estritos). */
+  async function guardado(e: Empresa, ritmoId: string) {
+    const r = await api.call('GET', `/v1/region/rhythms/${ritmoId}`, { cookie: e.cookie });
+    expect(r.status, JSON.stringify(r.body)).toBe(200);
+    return RegionRhythmDetailResponse.parse(r.body);
+  }
+  /** Cada campanha do ritmo guardado: o nome, a situação, a verba em que ficou e os passos (o dia, o tipo, a situação e a verba). */
+  const campanhasDo = (d: RegionRhythmDetailResponse) => d.campaigns.map((c) => [c.name, c.state, c.left_micros, c.steps.map((x) => [x.day, x.kind, x.status, x.target_micros])]);
 
   it('o passo de hoje: o pedido nasce aprovado pelo ritmo, com a ação própria e a reserva de quem aumenta; a verba muda na Meta; uma tentativa por dia', async () => {
     const e = await cenario('Brasa Passo De Hoje');
@@ -197,6 +206,28 @@ describe.skipIf(!hasDb)('o ritmo da semana: os passos do dia (R7, parte 1b-2)', 
       { resource_id: b.recurso, dia: HOJE, kind: 'ritmo', status: 'feito', target: String(36 * REAL), expected: String(40 * REAL), reason: null },
     ]);
     expect(await pedidosDe(e)).toHaveLength(2);
+
+    // O ritmo guardado, como a tela o lê: a situação, os 7 dias e cada campanha com a verba em que ficou e os passos.
+    const detalhe = await guardado(e, id);
+    expect(detalhe).toMatchObject({ id, brand_id: e.brandId, status: 'aprovado', source: 'loja', today: HOJE, week: { from: segundaDe(HOJE), to: diasDepois(segundaDe(HOJE), 6) }, unit: { id: e.loja, name: 'Loja do Ritmo' } });
+    expect(detalhe).toMatchObject({ base_micros: 100 * REAL, base_week_micros: 700 * REAL, week_micros: 7 * 102 * REAL, ceiling_micros: null, stopped_at: null, stopped_by: null, out: [] });
+    expect(detalhe.days.map((d) => [d.day, d.total_micros])).toEqual(Array.from({ length: 7 }, (_, i) => [diasDepois(segundaDe(HOJE), i), 102 * REAL]));
+    expect(campanhasDo(detalhe)).toEqual([
+      ['Combo sexta', 'no_ritmo', 66 * REAL, [[HOJE, 'ritmo', 'feito', 66 * REAL]]],
+      ['Smash em dobro', 'no_ritmo', 36 * REAL, [[HOJE, 'ritmo', 'feito', 36 * REAL]]],
+    ]);
+    expect(detalhe.campaigns[0]!.steps[0]).toMatchObject({ expected_micros: 60 * REAL, reason: null, action_id: pedidos.find((p) => p.resource_id === a.recurso)!.id });
+    // A prévia da semana que vem cita o ritmo que está rodando nesta.
+    const previa = RegionRhythmResponse.parse((await api.call('GET', `/v1/region/rhythm?brand_id=${e.brandId}&unit_id=${e.loja}`, { cookie: e.cookie })).body);
+    expect([previa.running, previa.proposed]).toEqual([{ id, status: 'aprovado', week: { from: segundaDe(HOJE), to: diasDepois(segundaDe(HOJE), 6) }, action_id: null }, null]);
+
+    // A Verba do mês: os passos do ritmo não entram na lista de mudanças (seriam dezenas por semana); ficam juntos, por
+    // ritmo, com quantas mudanças de verba o Liame fez e em quantos objetos.
+    const doMes = await api.call('GET', '/v1/budget/month', { cookie: e.cookie });
+    expect(doMes.status, JSON.stringify(doMes.body)).toBe(200);
+    const verbaDoMes = BudgetMonthResponse.parse(doMes.body);
+    expect(verbaDoMes.changes).toEqual([]);
+    expect(verbaDoMes.rhythms).toEqual([{ id, status: 'aprovado', week: { from: segundaDe(HOJE), to: diasDepois(segundaDe(HOJE), 6) }, action_id: null, steps: 2, objects: 2 }]);
 
     // Uma pessoa não pede o passo direto: ele só sai pelo ritmo aprovado.
     const direto = await api.call('POST', '/v1/actions', {
@@ -307,6 +338,11 @@ describe.skipIf(!hasDb)('o ritmo da semana: os passos do dia (R7, parte 1b-2)', 
     expect(await pedidosDe(e)).toEqual([]);
     expect(await volta()).toEqual([]);
     expect([verbasNaMeta(mudada.id), verbasNaMeta(pausada.id)]).toEqual([[], []]);
+    // Na tela: as duas fora do ritmo, com a verba de antes como a que o Liame deixou (ele não chegou a mexer).
+    expect(campanhasDo(await guardado(e, id))).toEqual([
+      ['Verba mudada', 'fora', 60 * REAL, [[HOJE, 'ritmo', 'fora', 66 * REAL]]],
+      ['Pausada', 'fora', 40 * REAL, [[HOJE, 'ritmo', 'fora', 44 * REAL]]],
+    ]);
   }, 120_000);
 
   it('parar o ritmo: sem o código do app; o passo na fila não sai, e a verba que já subiu volta à de antes', async () => {
@@ -345,8 +381,9 @@ describe.skipIf(!hasDb)('o ritmo da semana: os passos do dia (R7, parte 1b-2)', 
     const doOutro = await ritmo(o, [{ recurso: b.recurso, nome: 'Smash em dobro', base: 40, dias: todosOsDias(44) }]);
     const outra = novaRotina();
     const voltaDoOutro = (agora = new Date()) => outra.executarPassos(20, { tenantIds: [o.tenantId] }, agora);
-    // O ritmo de outra empresa não se para daqui.
+    // O ritmo de outra empresa não se para daqui, nem se lê.
     expect((await api.call('POST', `/v1/region/rhythm/${doOutro}/stop`, { cookie: e.cookie })).status).toBe(404);
+    expect((await api.call('GET', `/v1/region/rhythms/${doOutro}`, { cookie: e.cookie })).status).toBe(404);
     expect(resumo(await voltaDoOutro())).toEqual([[b.recurso, 'pedido']]);
     await executar(o);
     expect(await voltaDoOutro()).toEqual([]);
@@ -413,6 +450,9 @@ describe.skipIf(!hasDb)('o ritmo da semana: os passos do dia (R7, parte 1b-2)', 
     ]);
     expect((await ownerQuery(`select status, version from liame.budget_rhythm where id = $1`, [id]))[0]).toEqual({ status: 'encerrado', version: 2 });
     expect(await volta(depois)).toEqual([]);
+    // Na tela: encerrado, as duas de volta à verba de antes.
+    const encerrado = await guardado(e, id);
+    expect([encerrado.status, encerrado.campaigns.map((c) => [c.state, c.left_micros])]).toEqual(['encerrado', [['voltou', 60 * REAL], ['voltou', 40 * REAL]]]);
   }, 120_000);
 
   it('parar com a verba mais de 10% longe da de antes: a volta leva dois dias', async () => {
@@ -430,6 +470,11 @@ describe.skipIf(!hasDb)('o ritmo da semana: os passos do dia (R7, parte 1b-2)', 
     await executar(e);
     expect(verbasNaMeta(a.id)).toEqual(['4320']);
     expect(await volta()).toEqual([]);
+    // Na tela: parado, por quem, e a campanha ainda voltando (em R$ 43,20; a de antes é R$ 40,00).
+    const parado = await guardado(e, id);
+    expect(parado).toMatchObject({ status: 'parado', stopped_by: { id: e.userId } });
+    expect(parado.stopped_at).not.toBeNull();
+    expect(parado.campaigns.map((c) => [c.state, c.left_micros, c.base_micros])).toEqual([['voltando', 43.2 * REAL, 40 * REAL]]);
     // Amanhã: R$ 43,20 → R$ 40,00, a de antes.
     expect(resumo(await volta(meioDiaDe(diasDepois(HOJE, 1))))).toEqual([[a.recurso, 'pedido']]);
     expect((await passos(id)).at(-1)).toMatchObject({ dia: diasDepois(HOJE, 1), kind: 'volta', status: 'pedido', target: String(40 * REAL), expected: String(43.2 * REAL) });

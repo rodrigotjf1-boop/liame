@@ -50,6 +50,13 @@ describe('e-mail do relatório do mês: as partes', () => {
     ]);
     // A preposição vai com o nome de cada plataforma (V121): "da Meta", "do Google Ads".
     expect(verbaEEquipe(verba({ missing: ['meta_ads', 'google_ads'] }), undefined)[2]).toBe('O gasto da Meta e do Google Ads vale até a última leitura, que não chegou ao fim do mês.');
+    // O ritmo da semana (plano da região, R7): as mudanças de verba dele ficam numa linha à parte, fora da contagem.
+    expect(verbaEEquipe(verba({ changes: [mudanca], rhythm: { weeks: 2, steps: 31 } }), undefined)).toEqual([
+      'R$ 350,00 gastos de R$ 500,00 do teto do mês.',
+      '1 mudança aprovada nas campanhas.',
+      'O ritmo da semana rodou em 2 semanas: 31 mudanças de verba, dentro do que foi aprovado.',
+    ]);
+    expect(verbaEEquipe(verba({ rhythm: { weeks: 1, steps: 1 } }), undefined)[2]).toBe('O ritmo da semana rodou em 1 semana: 1 mudança de verba, dentro do que foi aprovado.');
     // O relatório gerado antes da parte 2 não tem nenhuma das duas: a parte some do e-mail.
     expect(verbaEEquipe(undefined, undefined)).toEqual([]);
   });

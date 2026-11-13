@@ -519,6 +519,17 @@ export const RegionRhythmReason = z.strictObject({
 });
 export type RegionRhythmReason = z.infer<typeof RegionRhythmReason>;
 
+/** A referência a um ritmo guardado (o pedido de uma semana), para a tela abrir o detalhe dele ou o pedido em Aprovações. */
+export const RegionRhythmRef = z.strictObject({
+  id: z.uuid(),
+  /** `pedido` (espera a aprovação), `aprovado`, `parado`, `encerrado` ou `cancelado` (recusado ou expirado). */
+  status: Slug,
+  week: z.strictObject({ from: z.string(), to: z.string() }),
+  /** O pedido em Aprovações. */
+  action_id: z.uuid().nullable(),
+});
+export type RegionRhythmRef = z.infer<typeof RegionRhythmRef>;
+
 /**
  * O ritmo da semana que vem, como o Gestor de tráfego o montaria (R7; a prévia: nada é pedido nem executado). A verba de
  * cada dia segue os pedidos da loja por dia da semana (ou a referência do setor), a chuva prevista e as datas, com os
@@ -566,6 +577,12 @@ export const RegionRhythmResponse = z.strictObject({
   week_micros: z.int(),
   /** O horário dos pedidos (o mesmo do plano de mídia, D-RG-29): o bloco e quando os anúncios começam; nulo sem ele. */
   hours: z.strictObject({ source: Slug, from: z.string(), to: z.string(), ads_from: z.string() }).nullable(),
+  /**
+   * O ritmo que está rodando nesta semana (aprovado, ou parado e devolvendo a verba) e o que o Gestor de tráfego pediu
+   * para a semana desta prévia (em qualquer situação); nulos quando não há.
+   */
+  running: RegionRhythmRef.nullable(),
+  proposed: RegionRhythmRef.nullable(),
   generated_at: z.iso.datetime(),
 });
 export type RegionRhythmResponse = z.infer<typeof RegionRhythmResponse>;
@@ -581,3 +598,71 @@ export const RegionRhythmStopResponse = z.strictObject({
   stopped_at: z.iso.datetime(),
 });
 export type RegionRhythmStopResponse = z.infer<typeof RegionRhythmStopResponse>;
+
+/** O passo de um dia numa campanha do ritmo: o que o Liame pediu, fez ou não pôde fazer. */
+export const RegionRhythmStep = z.strictObject({
+  day: z.string(),
+  /** `ritmo` (a verba do dia) ou `volta` (a volta à verba de antes). */
+  kind: Slug,
+  /** `pedido` (na fila), `feito`, `igual` (não havia o que mudar), `bloqueado` (não coube: o motivo) ou `fora` (a campanha saiu do ritmo). */
+  status: Slug,
+  /** A verba que o passo deixa e a que ele esperava encontrar (a que o Liame tinha deixado), em micros. */
+  target_micros: z.int(),
+  expected_micros: z.int(),
+  reason: z.string().nullable(),
+  /** O pedido no trilho de ações, quando o passo virou pedido. */
+  action_id: z.uuid().nullable(),
+  at: z.iso.datetime(),
+});
+export type RegionRhythmStep = z.infer<typeof RegionRhythmStep>;
+
+const PessoaDoRitmo = z.strictObject({ id: z.uuid(), name: z.string() });
+
+/**
+ * Um ritmo guardado, com o que aconteceu em cada campanha (plano da região, R7): o que a pessoa aprova (os 7 dias com o
+ * porquê, a verba de cada campanha em cada dia) e os passos que o Liame deu. `status`: `pedido`, `aprovado`, `parado`,
+ * `encerrado` ou `cancelado`.
+ */
+export const RegionRhythmDetailResponse = z.strictObject({
+  id: z.uuid(),
+  brand_id: z.uuid(),
+  unit: z.strictObject({ id: z.uuid(), name: z.string() }),
+  status: Slug,
+  week: z.strictObject({ from: z.string(), to: z.string() }),
+  source: Slug,
+  /** O dia de hoje no fuso da loja. */
+  today: z.string(),
+  action_id: z.uuid().nullable(),
+  requested_at: z.iso.datetime(),
+  approved_at: z.iso.datetime().nullable(),
+  approved_by: PessoaDoRitmo.nullable(),
+  stopped_at: z.iso.datetime().nullable(),
+  stopped_by: PessoaDoRitmo.nullable(),
+  days: z.array(z.strictObject({ day: z.string(), weekday: z.int(), weight: z.number(), total_micros: z.int(), reasons: z.array(RegionRhythmReason) })),
+  campaigns: z.array(
+    z.strictObject({
+      /** O objeto na Meta: `campanha:<id>` ou `conjunto:<id>`. */
+      resource: z.string(),
+      name: z.string(),
+      base_micros: z.int(),
+      days_micros: z.array(z.int()),
+      week_micros: z.int(),
+      /**
+       * `proposta` (o ritmo ainda não roda), `no_ritmo`, `fora` (mexida por fora: fica como a pessoa deixou), `voltando`
+       * (a verba ainda não voltou à de antes) ou `voltou`.
+       */
+      state: Slug,
+      /** A verba que o Liame deixou no último passo feito (a de antes, se nenhum saiu). */
+      left_micros: z.int(),
+      steps: z.array(RegionRhythmStep),
+    }),
+  ),
+  out: z.array(z.strictObject({ name: z.string(), reason: Slug })),
+  base_micros: z.int(),
+  base_week_micros: z.int(),
+  week_micros: z.int(),
+  /** O teto por campanha da empresa quando o ritmo foi montado; nulo sem teto. */
+  ceiling_micros: z.int().nullable(),
+  generated_at: z.iso.datetime(),
+});
+export type RegionRhythmDetailResponse = z.infer<typeof RegionRhythmDetailResponse>;

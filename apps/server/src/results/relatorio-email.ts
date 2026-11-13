@@ -43,6 +43,11 @@ export function verbaEEquipe(verba: VerbaDoMesGuardada | undefined, equipe: Mont
     linhas.push(verba.limit_micros === null ? `${gasto} gastos no mês; a empresa não tem teto do mês.` : `${gasto} gastos de ${dinheiro(verba.limit_micros, verba.currency)} do teto do mês.`);
     const n = verba.changes.length;
     linhas.push(n === 0 ? 'Nenhuma mudança nas campanhas pelo Liame.' : `${inteiro(n)} ${n === 1 ? 'mudança aprovada' : 'mudanças aprovadas'} nas campanhas.`);
+    // O ritmo da semana (plano da região, R7): as mudanças de verba dele ficam à parte, dentro do que foi aprovado por semana.
+    if (verba.rhythm) {
+      const { weeks, steps } = verba.rhythm;
+      linhas.push(`O ritmo da semana rodou em ${inteiro(weeks)} ${weeks === 1 ? 'semana' : 'semanas'}: ${inteiro(steps)} ${steps === 1 ? 'mudança' : 'mudanças'} de verba, dentro do que foi aprovado.`);
+    }
     // A conta cuja leitura não chegou ao último dia deixa o gasto incompleto: o e-mail diz qual.
     // A preposição vai com o nome de cada plataforma ("da Meta", "do Google Ads"): V121.
     if (verba.missing.length) linhas.push(`O gasto ${verba.missing.map((p) => comDe(plataforma(p) ?? p)).join(' e ')} vale até a última leitura, que não chegou ao fim do mês.`);

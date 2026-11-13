@@ -1,5 +1,6 @@
 import { randomInt, randomUUID } from 'node:crypto';
 import type { Database } from '@liame/database';
+import { RegionRhythmDetailResponse } from '@liame/contracts';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { ActionService } from '../../src/actions/action.service.js';
 import { BudgetService } from '../../src/actions/budget.service.js';
@@ -139,6 +140,19 @@ describe.skipIf(!hasDb)('o ritmo da semana: o pedido do Gestor de tráfego (R7, 
     expect(visto.status, JSON.stringify(visto.body)).toBe(200);
     expect(visto.body).toMatchObject({ tool: 'ritmo_da_semana', status: 'aguardando_aprovacao' });
 
+    // O ritmo guardado, como a tela do pedido o lê: ainda uma proposta, sem passo nenhum.
+    const lido = await api.call('GET', `/v1/region/rhythms/${r!.id}`, { cookie: e.cookie });
+    expect(lido.status, JSON.stringify(lido.body)).toBe(200);
+    const detalhe = RegionRhythmDetailResponse.parse(lido.body);
+    expect(detalhe).toMatchObject({ id: r!.id, status: 'pedido', source: 'setor', week: { from: SEMANA.de, to: SEMANA.ate }, action_id: r!.action_id, approved_at: null, approved_by: null, base_micros: 100_000_000, base_week_micros: 700_000_000 });
+    expect(detalhe.week_micros).toBeLessThanOrEqual(700_000_000);
+    expect(detalhe.days.map((d) => d.day)).toEqual(['2026-11-16', '2026-11-17', '2026-11-18', '2026-11-19', '2026-11-20', '2026-11-21', '2026-11-22']);
+    expect(detalhe.campaigns.map((c) => [c.name, c.state, c.left_micros, c.steps])).toEqual([
+      ['Combo sexta', 'proposta', 60_000_000, []],
+      ['Smash em dobro', 'proposta', 40_000_000, []],
+    ]);
+    expect(detalhe.out).toEqual([{ name: 'Campanha pequena', reason: 'verba_pequena' }]);
+
     // Uma pessoa não pede o ritmo direto: quem monta e pede é a rotina; a pessoa aprova ou recusa.
     const direto = await api.call('POST', '/v1/actions', { cookie: e.cookie, body: { tool: 'ritmo_da_semana', brand_id: e.brandId, provider: 'meta_ads', account_id: e.conta, resource_id: `ritmo:${r!.id}`, params: {} } });
     expect(direto.status, JSON.stringify(direto.body)).toBe(422);
@@ -165,6 +179,10 @@ describe.skipIf(!hasDb)('o ritmo da semana: o pedido do Gestor de tráfego (R7, 
     const [depois] = await ritmos(e);
     expect(depois).toMatchObject({ status: 'aprovado', version: 2 });
     expect(depois!.approved_at).not.toBeNull();
+    // Na tela: aprovado, por quem aprovou com o código do app.
+    const aprovadoNaTela = RegionRhythmDetailResponse.parse((await api.call('GET', `/v1/region/rhythms/${r!.id}`, { cookie: e.cookie })).body);
+    expect(aprovadoNaTela).toMatchObject({ status: 'aprovado', approved_by: { id: e.userId } });
+    expect(aprovadoNaTela.approved_at).not.toBeNull();
     expect(meta.criados.length).toBe(escritasAntes);
 
     // Outra empresa recusa o dela: na volta seguinte, o ritmo fica cancelado (e não há outro para a mesma semana).

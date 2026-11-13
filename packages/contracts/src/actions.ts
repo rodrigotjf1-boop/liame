@@ -612,6 +612,20 @@ export const BudgetChangeCheck = z.strictObject({
 export type BudgetChangeCheck = z.infer<typeof BudgetChangeCheck>;
 
 /** Uma mudança que o Liame executou numa plataforma de anúncio, com a conferência dela. */
+/** Um ritmo da semana na Verba do mês: a semana, a situação e quantas mudanças de verba o Liame fez por ele no mês. */
+export const BudgetMonthRhythm = z.strictObject({
+  id: z.uuid(),
+  /** `aprovado`, `parado` ou `encerrado`. */
+  status: z.string(),
+  week: z.strictObject({ from: Dia, to: Dia }),
+  /** O pedido da semana em Aprovações. */
+  action_id: z.uuid().nullable(),
+  /** As mudanças de verba feitas pelo ritmo no mês (os passos de cada dia e os da volta) e em quantos objetos. */
+  steps: z.int(),
+  objects: z.int(),
+});
+export type BudgetMonthRhythm = z.infer<typeof BudgetMonthRhythm>;
+
 export const BudgetMonthChange = z.strictObject({
   action_id: z.uuid(),
   executed_at: z.iso.datetime(),
@@ -716,6 +730,12 @@ export const BudgetMonthResponse = z.strictObject({
    * que a plataforma informa e com o que ela gastou (D-A4-24).
    */
   changes: z.array(BudgetMonthChange),
+  /**
+   * O ritmo da semana no mês (plano da região, R7): cada ritmo com passos feitos no mês, do mais novo ao mais antigo. O
+   * pedido da semana e os passos diários dele não entram em `changes` (são dezenas por semana): ficam aqui, juntos.
+   * Opcional: a resposta de antes de 13/11/2026 não traz.
+   */
+  rhythms: z.array(BudgetMonthRhythm).optional(),
   /**
    * As mudanças que continuam valendo e cuja conferência mais recente (de hoje ou de ontem) diz que o objeto gastou
    * mais do que a verba permite: o mesmo aviso da Atenção, já em palavras, para a faixa do topo da tela.
