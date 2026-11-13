@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Campanha nova · Liame</title>
 <!--
-@prototipo Liame · A4 · P42 · Campanha nova com a foto ou o vídeo da loja (APROVADO PELO DONO EM 11/11/2026, com as recomendações D-A4-42 a D-A4-46) · REVISÃO R6 de 13/11/2026 (plano da região: a campanha com raio, os objetivos de alcance e de seguidores, a estimativa de público no raio, o teto de 25% e a frequência; D-RG-48 a D-RG-52 como recomendadas), APROVADA PELO DONO em 13/11/2026 · REVISÃO R6-3 de 13/11/2026 (quem vê por bairros, além do raio: pedido do dono em 13/11/2026; D-RG-53 a D-RG-57 como recomendadas), APROVADA PELO DONO em 13/11/2026
+@prototipo Liame · A4 · P42 · Campanha nova com a foto ou o vídeo da loja (APROVADO PELO DONO EM 11/11/2026, com as recomendações D-A4-42 a D-A4-46) · REVISÃO R6 de 13/11/2026 (plano da região: a campanha com raio, os objetivos de alcance e de seguidores, a estimativa de público no raio, o teto de 25% e a frequência; D-RG-48 a D-RG-52 como recomendadas), APROVADA PELO DONO em 13/11/2026 · REVISÃO R6-3 de 13/11/2026 (quem vê por bairros, além do raio: pedido do dono em 13/11/2026; D-RG-53 a D-RG-57 como recomendadas), APROVADA PELO DONO em 13/11/2026 · REVISÃO R7 de 13/11/2026 (plano da região: o ritmo da semana, do Gestor de tráfego, em Aprovações; seletor "Ritmo"; D-RG-58 a D-RG-65 propostas), PARA APROVAR
 base: o P10 (prototipo-criativos.html, aprovado em 05/10/2026): Criativos, a peça aprovada, a gaveta "Campanha nova,
       pausada" e os pedidos em Aprovações ficam como estão lá, no seletor "Criativos"; o P42 entra por cima, no
       seletor "Campanha nova".
@@ -8686,6 +8686,317 @@ selP45.addEventListener('change', () => p45Estado(selP45.value, { focar: true })
   } };
 })();
 if (params.get('p45')) p45Estado(params.get('p45'));
+</script>
+<style>
+/* ===================== Região · R7 · O ritmo da semana (para aprovar) ===================== */
+.r7-envolve { container: r7 / inline-size; }
+.r7-tabela th, .r7-tabela td { vertical-align: top; }
+.r7-tabela .r7-dia { white-space: nowrap; font-weight: 600; }
+.r7-tabela .r7-dia small { display: block; color: var(--text-muted); font-size: var(--text-xs); font-weight: 400; }
+.r7-var { display: inline-flex; align-items: center; min-height: 20px; padding: 0 7px; border-radius: var(--radius-full); background: var(--bg-subtle); color: var(--text-muted); font-size: var(--text-xs); font-weight: 600; white-space: nowrap; }
+.r7-var--mais { background: var(--success-soft); color: var(--success); }
+.r7-var--menos { background: var(--warning-soft); color: var(--warning); }
+.r7-verba b { font-family: var(--font-mono); font-weight: 600; white-space: nowrap; }
+.r7-verba small, .r7-liga small { display: block; color: var(--text-muted); font-size: var(--text-xs); }
+.r7-porques { display: grid; gap: 4px; margin: 0; padding: 0; list-style: none; }
+.r7-porques li { display: grid; grid-template-columns: 16px minmax(0, 1fr); gap: 6px; align-items: start; font-size: var(--text-sm); }
+.r7-porques .ic { width: 14px; height: 14px; margin-top: 3px; color: var(--text-muted); }
+.r7-liga { white-space: nowrap; }
+.r7-tabela tr.r7-hoje { background: var(--primary-soft); }
+.r7-tabela tfoot th, .r7-tabela tfoot td { font-weight: 600; border-top: 2px solid var(--border-strong); }
+/* campanha por campanha: 10 colunas não cabem no painel em nenhuma largura; cada campanha vira um cartão em grade, e a
+   linha quebra sozinha (nenhuma barra de rolagem lateral) */
+.r7-tabela.r7-camp thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+.r7-tabela.r7-camp, .r7-tabela.r7-camp tbody { display: block; }
+.r7-tabela.r7-camp tr { display: grid; grid-template-columns: repeat(auto-fill, minmax(118px, 1fr)); gap: 4px var(--sp-4); padding: var(--sp-3) 0; border-bottom: 1px solid var(--border); }
+.r7-tabela.r7-camp tbody tr:last-child { border-bottom: 0; }
+.r7-tabela.r7-camp th[scope="row"] { display: block; grid-column: 1 / -1; padding: 0; border: 0; font-size: var(--text-sm); }
+.r7-tabela.r7-camp td { display: block; margin: 0; padding: 0; border: 0; font-family: var(--font-mono); font-size: var(--text-xs); white-space: nowrap; }
+.r7-tabela.r7-camp td[data-col]::before { content: attr(data-col) ": "; display: inline; color: var(--text-muted); font-family: var(--font-sans); font-size: var(--text-xs); font-weight: 400; }
+.r7-acoes { display: flex; flex-wrap: wrap; gap: var(--sp-2); margin-top: var(--sp-3); }
+.r7-decisoes { margin-bottom: var(--sp-5); }
+@container r7 (max-width: 640px) {
+  .r7-tabela thead { display: none; }
+  .r7-tabela, .r7-tabela tbody, .r7-tabela tfoot, .r7-tabela tr, .r7-tabela th, .r7-tabela td { display: block; }
+  .r7-tabela tr { padding: var(--sp-3) var(--sp-4); border-bottom: 1px solid var(--border); }
+  .r7-tabela tbody tr:last-child { border-bottom: 0; }
+  .r7-tabela th, .r7-tabela td { padding: 0; border: 0; white-space: normal; }
+  .r7-tabela td { margin-top: var(--sp-2); }
+  .r7-tabela td[data-col]::before { content: attr(data-col); display: block; color: var(--text-muted); font-size: var(--text-xs); font-family: var(--font-sans); font-weight: 400; }
+  .r7-tabela tfoot th, .r7-tabela tfoot td { border-top: 0; }
+  .r7-tabela tfoot tr { border-top: 2px solid var(--border-strong); border-bottom: 0; }
+}
+</style>
+<script>
+/* =====================================================================================================================
+   Região · R7 · O ritmo da semana (plano da região, R7; decisões propostas D-RG-58 a D-RG-65), PARA APROVAR.
+   Uma camada por cima da tela Aprovações que já está no app: um tipo novo de pedido, do Gestor de tráfego, montado por
+   regra (sem IA) com o que o Liame já lê: os pedidos da loja por dia da semana e por hora (Sua região, R3), a previsão
+   do tempo, os feriados, as datas do varejo e o prazo do salário (A semana que vem, R2) e as campanhas ativas com verba
+   diária própria. Uma aprovação por semana, com o código do app; depois, o Liame muda a verba de cada campanha no começo
+   de cada dia e liga os anúncios só no horário dos pedidos. As regras de dinheiro são as que já valem: cada mudança de
+   no máximo 10% (política da Liame, D-A4-6), nunca mais de 20% acima ou abaixo da verba de hoje (base §7.1: escala de
+   +20%, nunca +30% de uma vez), e a semana não gasta mais do que gastaria sem o ritmo. Pausar não reinicia o aprendizado
+   da Meta (base §7.1). A programação nativa da Meta pede verba de período, que o Liame recusa (D-RG-5): por isso o
+   horário é ligar e pausar. Dados de exemplo: Mister Burgers · Loja Centro, semana de 05/10 a 11/10/2026 (o 5º dia útil
+   cai na quarta, 07/10; 12/10 é feriado e Dia das Crianças).
+   ===================================================================================================================== */
+var r7 = null;
+const R7_ESTADOS = {
+  'R7 · O ritmo da semana (para aprovar)': {
+    'r7-pedido': 'Em Aprovações: o ritmo da semana, do Gestor de tráfego',
+    'r7-rodando': 'Aprovado e rodando: o que já foi feito e o dia de hoje',
+    'r7-mexeram': 'Alguém mudou a verba na Meta: a campanha sai do ritmo',
+    'r7-parado': 'Você parou o ritmo: a verba de antes volta',
+    'r7-decisoes': 'As decisões propostas (D-RG-58 a D-RG-65)',
+  },
+};
+const R7_TODOS = Object.assign({}, ...Object.values(R7_ESTADOS));
+$('#i-x')?.parentNode.insertAdjacentHTML('beforeend', '<symbol id="i-cloud-rain" viewBox="0 0 24 24"><path d="M4 14.899A7 7 0 1 1 15.71 8h1.79a4.5 4.5 0 0 1 2.5 8.242"/><path d="M16 14v6"/><path d="M8 14v6"/><path d="M12 16v6"/></symbol>');
+
+/* A semana do exemplo e as campanhas que entram: as ativas, com verba diária própria (a campanha ou o conjunto). */
+const R7_SEMANA = { de: '05/10', ate: '11/10', pediu: 'domingo, 04/10, 18:00', volta: 'segunda, 12/10' };
+const R7_CAMPANHAS = [
+  { id: 'c1', nome: 'Combo sexta', base: 60 },
+  { id: 'c2', nome: 'Smash em dobro', base: 40 },
+  { id: 'j1', nome: 'Delivery noite · raio de 3 km', base: 18 },
+];
+/* Cada dia: o peso (a parte da verba de hoje), os porquês e a janela em que os anúncios ficam ligados. Os pesos somam
+   7,00: a semana gasta o mesmo que gastaria sem o ritmo. De um dia para o outro, a mudança nunca passa de 10%. */
+const R7_DIAS = [
+  { id: 'seg', dia: 'Seg, 05/10', f: 0.90, liga: ['17:00', '23:00'], porques: [['i-chart', 'Dia fraco: 9% dos pedidos da semana (a média de um dia é 14%)']] },
+  { id: 'ter', dia: 'Ter, 06/10', f: 0.84, liga: ['17:00', '23:00'], porques: [['i-chart', 'Dia fraco: 10% dos pedidos da semana']] },
+  { id: 'qua', dia: 'Qua, 07/10', f: 0.92, liga: ['17:00', '23:00'], porques: [['i-chart', 'Abaixo da média: 12% dos pedidos'], ['i-calendar', 'Prazo do salário (5º dia útil): segura a queda']] },
+  { id: 'qui', dia: 'Qui, 08/10', f: 1.00, liga: ['17:00', '23:00'], porques: [['i-chart', 'Na média: 14% dos pedidos'], ['i-cloud-rain', 'Chuva prevista: pancadas à tarde e à noite, 19° a 24°']] },
+  { id: 'sex', dia: 'Sex, 09/10', f: 1.09, liga: ['17:00', '23:59'], porques: [['i-chart', 'Dia forte: 19% dos pedidos']] },
+  { id: 'sab', dia: 'Sáb, 10/10', f: 1.18, liga: ['17:00', '23:59'], porques: [['i-chart', 'O dia mais forte: 20% dos pedidos'], ['i-cloud-rain', 'Chuva prevista: chuva à noite, 18° a 22°']] },
+  { id: 'dom', dia: 'Dom, 11/10', f: 1.07, liga: ['11:00', '23:00'], porques: [['i-chart', 'Acima da média: 16% dos pedidos; no domingo, eles começam no almoço'], ['i-calendar', 'Véspera do feriado de 12/10 (Dia das Crianças)']] },
+];
+const r7Base = () => R7_CAMPANHAS.reduce((t, c) => t + c.base, 0);
+const r7Verba = (c, d) => d2(c.base * d.f);
+const r7DoDia = (d) => d2(R7_CAMPANHAS.reduce((t, c) => t + r7Verba(c, d), 0));
+const r7DaSemana = () => d2(R7_DIAS.reduce((t, d) => t + r7DoDia(d), 0));
+function r7Variacao(f) {
+  const pct = Math.round((f - 1) * 100);
+  if (pct === 0) return '<span class="r7-var">igual a hoje</span>';
+  return `<span class="r7-var r7-var--${pct > 0 ? 'mais' : 'menos'}">${pct > 0 ? '+' : '−'}${Math.abs(pct)}%</span>`;
+}
+const r7Hash = () => curto(fnv(JSON.stringify([R7_SEMANA, R7_DIAS.map((d) => [d.id, d.f, d.liga]), R7_CAMPANHAS])));
+
+/* O ritmo, dia a dia: a verba do dia (as 3 campanhas somadas), por quê e quando os anúncios ficam ligados. `hoje` marca
+   o dia de hoje, no ritmo que está rodando. */
+function r7Tabela(hoje) {
+  const linhas = R7_DIAS.map((d, i) => {
+    const feito = hoje != null && i < hoje, eHoje = hoje === i;
+    const marca = eHoje ? '<small>hoje</small>' : feito ? '<small>feito</small>' : '';
+    return `<tr${eHoje ? ' class="r7-hoje"' : ''}><th scope="row" class="r7-dia">${d.dia}${marca}</th>
+      <td class="r7-verba" data-col="Verba do dia"><b>${moeda(r7DoDia(d))}</b> ${r7Variacao(d.f)}<small>hoje: ${moeda(r7Base())} por dia</small></td>
+      <td data-col="Por quê"><ul class="r7-porques">${d.porques.map(([icone, txt]) => `<li>${ic(icone)}<span>${txt}</span></li>`).join('')}</ul></td>
+      <td class="r7-liga" data-col="Anúncios ligados">${d.liga[0]} às ${d.liga[1]}<small>fora disso, pausados</small></td></tr>`;
+  }).join('');
+  return `<div class="r7-envolve"><div class="table-wrap"><table class="tabela r7-tabela" id="r7-tabela"><caption class="sr-only">O ritmo da semana, dia a dia: a verba do dia, por quê e quando os anúncios ficam ligados</caption>
+    <thead><tr><th scope="col">Dia</th><th scope="col">Verba do dia</th><th scope="col">Por quê</th><th scope="col">Anúncios ligados</th></tr></thead>
+    <tbody>${linhas}</tbody>
+    <tfoot><tr><th scope="row">A semana</th><td data-col="Verba dos 7 dias"><b>${moeda(r7DaSemana())}</b><small>sem o ritmo: ${moeda(d2(r7Base() * 7))}</small></td><td colspan="2" data-col="">O ritmo muda o dia, não o total: o que sai da segunda e da terça vai para sexta, sábado e domingo.</td></tr></tfoot></table></div></div>`;
+}
+/* Campanha por campanha (nos detalhes): a verba de hoje e a de cada dia. */
+function r7PorCampanha() {
+  return `<div class="r7-envolve"><div class="table-wrap"><table class="tabela r7-tabela r7-camp"><caption class="sr-only">A verba de cada campanha em cada dia do ritmo</caption>
+    <thead><tr><th scope="col">Campanha</th><th scope="col">Hoje</th>${R7_DIAS.map((d) => `<th scope="col">${d.dia.slice(0, 3)}</th>`).join('')}<th scope="col">Semana</th></tr></thead>
+    <tbody>${R7_CAMPANHAS.map((c) => `<tr><th scope="row">${esc(c.nome)}</th><td data-col="Hoje">${moeda(c.base)}</td>${R7_DIAS.map((d) => `<td data-col="${d.dia.slice(0, 3)}">${moeda(r7Verba(c, d))}</td>`).join('')}<td data-col="Semana">${moeda(d2(R7_DIAS.reduce((t, d) => t + r7Verba(c, d), 0)))}</td></tr>`).join('')}</tbody></table></div></div>`;
+}
+/* O caminho do ritmo que está rodando: cada dia, o que o Liame fez e o que falta. */
+function r7Trilha(hoje, mexeram) {
+  const passo = (st, titulo, sub) => `<li><span class="passo${st === 'ok' ? '' : ` passo--${st}`}" aria-hidden="true">${ic({ ok: 'i-check', espera: 'i-clock', falha: 'i-x', depois: 'i-arrow-right' }[st])}</span><span><b>${titulo}</b>${sub ? `<small>${sub}</small>` : ''}</span></li>`;
+  const gasto = { seg: 104.9, ter: 97.35 };
+  let h = passo('ok', 'Pedido pelo Gestor de tráfego', R7_SEMANA.pediu) + passo('ok', 'Aprovado por Rodrigo, com o código do app', 'domingo, 04/10, 18:42');
+  R7_DIAS.forEach((d, i) => {
+    if (i < hoje) h += passo('ok', `${d.dia}: verba do dia ${moeda(r7DoDia(d))}, ligados das ${d.liga[0]} às ${d.liga[1]}`, `00:05 a verba · ${d.liga[0]} ligou · ${d.liga[1]} pausou · a Meta gastou ${moeda(gasto[d.id] ?? r7DoDia(d))}`);
+    else if (i === hoje && mexeram) h += passo('falha', `${d.dia}: a campanha “Smash em dobro” saiu do ritmo`, `00:05 · a verba dela na Meta estava em ${moeda(45)}, e não nos ${moeda(r7Verba(R7_CAMPANHAS[1], R7_DIAS[i - 1]))} que o Liame deixou na terça · as outras 2 seguem: ${moeda(d2(r7DoDia(d) - r7Verba(R7_CAMPANHAS[1], d)))} no dia`);
+    else if (i === hoje) h += passo('espera', `${d.dia} (hoje): verba do dia ${moeda(r7DoDia(d))}, posta às 00:05`, `os anúncios ligam às ${d.liga[0]} e pausam às ${d.liga[1]}`);
+    else h += passo('depois', `${d.dia}: ${moeda(mexeram ? d2(r7DoDia(d) - r7Verba(R7_CAMPANHAS[1], d)) : r7DoDia(d))}, das ${d.liga[0]} às ${d.liga[1]}`);
+  });
+  return h + passo('depois', `${maiuscula(R7_SEMANA.volta)}: a verba volta à de antes (${moeda(r7Base())} por dia) e os anúncios ficam ligados o dia todo`);
+}
+function r7HtmlItem(grupo) {
+  const atual = p8.sel === 'ritmo' ? ' aria-current="true"' : '';
+  const sit = { aprovado: 'Rodando', recusado: 'Recusado', parado: 'Parado por você' }[p8.planos.ritmo?.estado] ?? '';
+  const meta = grupo === 'pendente'
+    ? `<span class="dinheiro">sem verba nova</span><span class="risco risco--medio">Risco médio</span><span>vale até dom, ${R7_SEMANA.ate}</span>`
+    : `<span>Gestor de tráfego</span><span>${sit}</span>`;
+  return `<li><button class="ap-item" type="button" data-p8-item="ritmo"${atual}><span class="ap-av ap-av--func" aria-hidden="true">${ic('i-sliders')}</span><span><span class="ap-titulo">Ritmo da semana: ${R7_SEMANA.de} a ${R7_SEMANA.ate}</span><span class="ap-meta">${meta}</span></span></button></li>`;
+}
+function r7Html() {
+  const pl = p8.planos.ritmo, u = p8.ui, pro = shell.modo === 'pro', detalhado = pro || u.detalhes;
+  const cab = `${VOLTAR()}<div class="det-cab"><span><b>Gestor de tráfego</b> pediu</span><span>· ${R7_SEMANA.pediu} · por regra, sem IA: os pedidos da loja, a previsão do tempo e as datas</span></div><h2 class="det-titulo" id="ap-det-titulo" tabindex="-1">Ritmo da semana: ${R7_SEMANA.de} a ${R7_SEMANA.ate}</h2>`;
+  const idPlano = (vale) => `<p class="plano-id">Plano 1 · hash <b>${r7Hash()}</b>${vale ? ' · a aprovação vale só para este ritmo, nestes 7 dias' : ''}</p>`;
+  const dias = (hoje) => `<div class="secao"><p class="rotulo-marca">O ritmo, dia a dia</p>${r7Tabela(hoje)}</div>`;
+  const campanhas = `<div class="secao"><p class="rotulo-marca">Campanha por campanha</p>${r7PorCampanha()}${linha('i-info', 'Entram as 3 campanhas ativas com verba diária própria. O conjunto “Noite · quem já pediu” está pausado por uma pessoa e fica fora: o ritmo não liga o que alguém pausou.')}</div>`;
+  if (pl.estado === 'recusado') {
+    return `${cab}${idPlano(false)}<div class="secao"><div class="politica">${ic('i-x')}<span><b>Recusado por Rodrigo.</b> Motivo: ${esc(pl.motivo)}. Nada mudou nas campanhas. O Gestor de tráfego monta outro ritmo na semana que vem.</span></div></div>${dias(null)}`;
+  }
+  if (pl.estado === 'parado') {
+    return `${cab}${idPlano(false)}<div class="secao"><div class="politica">${ic('i-pause')}<span><b>Você parou o ritmo na quarta, 07/10, às 15:20.</b> A verba de antes voltou: ${R7_CAMPANHAS.map((c) => `${esc(c.nome)} ${moeda(c.base)}`).join(', ')}. Os anúncios ficam ligados o dia todo, como antes do ritmo.</span></div>
+      ${linha('i-info', 'A volta respeita o limite de 10% por mudança: quando a diferença é maior (num sábado, por exemplo), a verba volta em dois dias.')}
+      ${linha('i-clock', 'O Gestor de tráfego monta outro ritmo no domingo, 11/10. Ele só roda com outra aprovação.')}</div>
+      <div class="secao"><p class="rotulo-marca">O caminho do ritmo</p><ol class="trilha-pedido" id="r7-trilha">${r7Trilha(2, false).split('<li>').slice(0, 5).join('<li>')}<li><span class="passo passo--falha" aria-hidden="true">${ic('i-pause')}</span><span><b>Qua, 07/10: parado por você às 15:20</b><small>a verba de antes voltou às 15:21 · conferido na Meta</small></span></li></ol></div>${dias(null)}`;
+  }
+  if (pl.estado === 'aprovado') {
+    const mexeram = !!r7?.mexeram;
+    const aviso = mexeram
+      ? `<div class="pd-aviso pd-aviso--perigo" id="r7-mexeram" role="alert">${ic('i-alert-circle')}<div><b>A campanha “Smash em dobro” saiu do ritmo</b><span>Na quarta, 07/10, a verba dela na Meta estava em ${moeda(45)}, e não nos ${moeda(r7Verba(R7_CAMPANHAS[1], R7_DIAS[1]))} que o Liame deixou na terça: alguém mudou por fora. O Liame não mexe mais nela nesta semana, e ela fica como está na Meta. As outras 2 campanhas seguem no ritmo.</span></div></div>`
+      : '';
+    return `${cab}${idPlano(false)}<div class="secao"><div class="politica">${ic('i-check')}<span><b>Aprovado por Rodrigo no domingo, 04/10, às 18:42.</b> O ritmo está rodando: hoje é quarta, 07/10. O Liame muda a verba no começo de cada dia e liga os anúncios só no horário dos pedidos.</span></div>${aviso}
+      <div class="r7-acoes"><button class="btn" type="button" data-r7-parar>${ic('i-pause')}Parar o ritmo</button></div>
+      ${linha('i-undo', 'Parar devolve a verba de antes a cada campanha e deixa os anúncios ligados o dia todo. Não precisa do código: parar nunca gasta mais.')}</div>
+      <div class="secao"><p class="rotulo-marca">O caminho do ritmo</p><ol class="trilha-pedido" id="r7-trilha">${r7Trilha(2, mexeram)}</ol></div>${dias(2)}${campanhas}`;
+  }
+  const FRASE = `Nesta semana, a verba de cada dia segue os pedidos da loja: <b>menos na segunda e na terça, mais de sexta a domingo</b>. Entram também a chuva prevista para quinta e sábado e as datas (o prazo do salário na quarta e a véspera do Dia das Crianças no domingo). <b>A semana não gasta mais:</b> ${moeda(r7DaSemana())} nos 7 dias, o mesmo de hoje. Se você aprovar, o Liame muda a verba das 3 campanhas no começo de cada dia e liga os anúncios só no horário dos pedidos.`;
+  const lite = `<div class="secao secao--lite"><p class="lite-frase lite-frase--grande">${FRASE}</p>
+    <div class="lite-chips"><span class="risco risco--medio">Risco médio</span><span class="lite-chip">Não aumenta o gasto da semana</span><span class="lite-chip">Dá para parar a qualquer hora</span><span class="lite-chip">vale até domingo, ${R7_SEMANA.ate}</span></div>${botaoDetalhes(u)}</div>`;
+  const risco = `<div class="secao"><p class="rotulo-marca">Risco e limites</p><div class="politica">${ic('i-shield')}<span><b class="risco risco--medio">Risco médio.</b> Muda a verba de 3 campanhas todo dia e pausa os anúncios fora do horário, mas não aumenta o gasto da semana (${moeda(r7DaSemana())}, o mesmo de hoje), e cada dia fica abaixo do teto por campanha (${moeda(p9?.limites?.tetoCampanha ?? 80)} por dia).</span></div>
+    ${linha('i-sliders', 'Cada mudança segue os limites que já valem: no máximo 10% de um dia para o outro, e nunca mais de 20% acima ou abaixo da verba de hoje.')}
+    ${linha('i-shield', 'O aprovado é o teto de cada dia. Se a previsão de chuva mudar, o Liame tira o acréscimo da chuva; nunca põe mais do que você aprovou.')}
+    ${linha('i-check-circle', 'A Meta confere antes de cada mudança. Se ela recusar, a campanha fica como está e o motivo aparece aqui.')}
+    ${linha('i-alert-circle', 'Se alguém mudar a verba ou pausar uma campanha por fora, o ritmo dessa campanha para e a Atenção avisa. As outras seguem.')}
+    ${linha('i-undo', 'Dá para parar a qualquer hora: “Parar o ritmo” devolve a verba de hoje e deixa os anúncios ligados o dia todo.')}
+    ${linha('i-clock', `Aprovado depois que a semana começou, vale só para os dias que faltam. Na ${R7_SEMANA.volta}, a verba volta à de hoje; outro ritmo, só com outra aprovação.`)}
+    ${linha('i-info', `${p42Conferir('A Meta gastar a verba do dia dentro do horário ligado')}: o Liame mede na primeira semana e mostra aqui o que ela gastou em cada dia.`)}</div>`;
+  return `${cab}${lite}${dias(null)}<div id="ap-detalhes"${detalhado ? '' : ' hidden'}>${idPlano(true)}${campanhas}${risco}</div>
+    ${htmlDecisao(MOTIVOS_PEDIDO, 'O código de 6 números que o app autenticador mostra agora. Uma aprovação vale para os 7 dias deste ritmo.')}`;
+}
+
+/* As decisões propostas da R7. */
+const R7_DECISOES = [
+  { id: 'D-RG-58', titulo: 'O ritmo é um pedido do Gestor de tráfego, uma vez por semana', oque: 'Todo domingo, às 18h, o Gestor de tráfego monta o ritmo da semana seguinte (de segunda a domingo) e pede em Aprovações. É regra do código, sem IA. Só para a empresa com a função ligada, a loja no mapa e pelo menos uma campanha ativa com verba diária própria.', porque: 'D-RG-5 (b), que você aprovou: um plano por semana, e não um pedido a cada mudança. No domingo, a previsão do tempo já cobre quase toda a semana.', rec: 'Assim.' },
+  { id: 'D-RG-59', titulo: 'O peso de cada dia', oque: 'O peso sai dos pedidos da loja por dia da semana (as 4 semanas de Sua região). A chuva prevista e as datas (feriado, véspera, data do varejo, prazo do salário) dão um acréscimo pequeno ao dia. Sem pedidos que bastem (ou sem o Regem), vale a referência do setor: mais peso de sexta a domingo.', porque: 'É a jogada 4 do plano (mais peso nos dias fortes) com as jogadas 5 e 6 (clima e calendário), provadas depois pelo caixa.', rec: 'Assim; os acréscimos começam em 5 pontos cada e se ajustam pelo caixa.' },
+  { id: 'D-RG-60', titulo: 'Os limites do dinheiro', oque: 'A semana com ritmo nunca gasta mais do que gastaria sem ele: o que sobe num dia desce em outro. Cada dia fica entre 20% abaixo e 20% acima da verba de hoje, a mudança de um dia para o outro é de no máximo 10%, e nenhum dia passa do teto por campanha.', porque: 'São os limites que já valem: 10% por mudança (política da Liame, D-A4-6) e a regra de escala da base (20%, nunca 30% de uma vez).', rec: 'Assim.' },
+  { id: 'D-RG-61', titulo: 'O horário: ligar e pausar', oque: 'Em cada dia, os anúncios ficam ligados de 2 horas antes do começo dos pedidos até o fim deles (a janela sai dos pedidos por hora da loja); fora disso, pausados. O Liame liga e pausa na hora.', porque: 'A Meta só programa horário com verba de período, que o Liame recusa (D-RG-5). Pausar não reinicia o aprendizado da Meta. Na loja do exemplo, 34% dos cliques vinham do almoço e os pedidos são à noite.', rec: 'Assim, na parte 2 da entrega: a parte 1 muda só a verba do dia; o horário entra depois da primeira semana rodando. A conferir: a Meta gastar a verba do dia dentro da janela.' },
+  { id: 'D-RG-62', titulo: 'Uma aprovação vale para a semana', oque: 'O pedido tem risco médio e pede o código do app uma vez. Depois, o Liame executa cada passo sozinho, e cada passo confere antes: a função ligada, a trava geral, os limites e a campanha como o Liame deixou. O aprovado é o teto de cada dia: o Liame pode fazer menos (tirar o acréscimo da chuva que não veio), nunca mais.', porque: 'É o "aprovadas em lote" do plano. Sem isso seriam 21 pedidos por semana.', rec: 'Assim.' },
+  { id: 'D-RG-63', titulo: 'Parar, e o que acontece se alguém mexer por fora', oque: '"Parar o ritmo" devolve a verba de antes (em dois dias, se a diferença passar de 10%) e deixa os anúncios ligados o dia todo; não pede o código, porque nunca gasta mais. Se alguém mudar a verba ou pausar uma campanha na Meta, o ritmo dessa campanha para, ela fica como a pessoa deixou e a Atenção avisa. No fim da semana, tudo volta à verba de antes.', porque: 'O Liame nunca desfaz o que uma pessoa fez por fora, como nas outras ações.', rec: 'Assim.' },
+  { id: 'D-RG-64', titulo: 'Quais campanhas entram', oque: 'As ativas, da Meta, com verba diária própria (na campanha ou no conjunto), inclusive as criadas pelo Liame. Ficam fora: as pausadas por uma pessoa, as de verba de período e as de alcance e de seguidores (o teto de 25% já cuida delas).', porque: 'O ritmo mexe só onde o Liame já pode mexer hoje.', rec: 'Assim; o Google entra na R9, com a programação de horário do próprio Google.' },
+  { id: 'D-RG-65', titulo: 'Como saber se valeu', oque: 'A revisão de segunda compara o caixa da semana com ritmo com as 4 semanas anteriores, dia a dia, e diz se os dias fortes venderam mais. Sua região › A semana que vem ganha a linha do ritmo, com o caminho para Aprovações.', porque: 'A régua é o caixa, como no resto do plano.', rec: 'Assim.' },
+];
+function r7DecisoesHtml() {
+  const lista = R7_DECISOES.map((d) => `<li><div><b>${d.id} · ${esc(d.titulo)}</b><span><b>O que é:</b> ${esc(d.oque)}</span><span><b>Por quê:</b> ${esc(d.porque)}</span><span><b>Recomendação:</b> ${esc(d.rec)}</span></div><span class="st st--espera">Proposta</span></li>`).join('');
+  return `<section class="card p42-decisoes r7-decisoes" id="r7-decisoes" aria-labelledby="r7-dec-t"><div class="card-cab"><div><h2 id="r7-dec-t" tabindex="-1">R7 · O ritmo da semana (D-RG-58 a D-RG-65)</h2><p class="card-sub">Do plano da região (R7: propostas de verba por horário, clima e calendário, aprovadas em lote para a semana). Para aprovar. Estados do seletor "Ritmo".</p></div></div><ul class="rev-decisoes">${lista}</ul></section>`;
+}
+
+/* ---------- a camada: o pedido entra na fila de Aprovações e abre pelo mesmo caminho dos outros ---------- */
+/* O Resumo lista o que espera a decisão pelo nome e diz se algum pede verba nova (o campo `risco` diferente de "baixo"):
+   o ritmo não pede verba nova, então aqui ele conta como os que não pedem. O selo do pedido (risco médio) é o da camada. */
+DEF.ritmo = { nome: 'o ritmo da semana', risco: () => 'baixo' };
+const itensAprovR7 = itensAprov;
+itensAprov = function () {
+  const itens = itensAprovR7();
+  if (r7?.ativo && p8.planos.ritmo) itens.unshift({ id: 'ritmo', grupo: p8.planos.ritmo.estado === 'pendente' ? 'pendente' : 'feito' });
+  return itens;
+};
+const htmlItemR7 = htmlItem;
+htmlItem = function (id, grupo) { return id === 'ritmo' ? r7HtmlItem(grupo) : htmlItemR7(id, grupo); };
+const htmlPlanoR7 = htmlPlano;
+htmlPlano = function (k) { return k === 'ritmo' ? r7Html() : htmlPlanoR7(k); };
+/* Aprovar, recusar e parar: antes dos ouvintes da tela, que não conhecem este pedido. */
+document.addEventListener('submit', (e) => {
+  const f = e.target instanceof Element ? e.target : null;
+  if (!f || !r7?.ativo || p8.sel !== 'ritmo' || !f.matches('[data-p8-aprovar]')) return;
+  e.preventDefault(); e.stopImmediatePropagation();
+  const cod = $('#ap-codigo').value.trim(), u = p8.ui;
+  if (!/^\d{6}$/.test(cod)) { u.erro = 'Digite os 6 números do app autenticador.'; desenharP8(); $('#ap-codigo').focus(); return; }
+  if (cod === '000000') { u.erro = 'Código incorreto ou já usado. Espere o próximo código do app e tente de novo.'; desenharP8(); $('#ap-codigo').focus(); return; }
+  p8.planos.ritmo.estado = 'aprovado'; p8.ui = uiBase(); desenharP8();
+  $('#ap-det-titulo')?.focus({ preventScroll: true });
+  toast('Aprovado. O ritmo começa na segunda, 05/10: o Liame muda a verba no começo de cada dia.');
+}, true);
+document.addEventListener('click', (e) => {
+  const t = e.target instanceof Element ? e.target : null;
+  if (!t || !r7?.ativo || p8.sel !== 'ritmo') return;
+  const mot = t.closest('[data-p8-motivo]');
+  if (mot) {
+    e.stopImmediatePropagation();
+    Object.assign(p8.planos.ritmo, { estado: 'recusado', motivo: mot.dataset.p8Motivo }); p8.ui = uiBase(); desenharP8();
+    $('#ap-det-titulo')?.focus({ preventScroll: true });
+    toast('Recusado. Nada mudou nas campanhas.');
+    return;
+  }
+  if (t.closest('[data-r7-parar]')) {
+    p8.planos.ritmo.estado = 'parado'; r7.mexeram = false; desenharP8();
+    $('#ap-det-titulo')?.focus({ preventScroll: true });
+    toast('Ritmo parado. A verba de antes voltou e os anúncios ficam ligados o dia todo.');
+  }
+}, true);
+
+/* ---------- o seletor "Ritmo" (faixa do protótipo) ---------- */
+$('#rev-p42')?.closest('label')?.insertAdjacentHTML('beforebegin', '<label>Ritmo <select id="rev-r7"></select></label>');
+const selR7 = $('#rev-r7');
+selR7.replaceChildren(...Object.entries(R7_ESTADOS).map(([grupo, itens]) => {
+  const g = document.createElement('optgroup'); g.label = grupo;
+  g.append(...Object.entries(itens).map(([id, rot]) => new Option(rot, id)));
+  return g;
+}));
+selR7.selectedIndex = -1;
+function r7Desligar() {
+  if (r7) r7.ativo = false;
+  $('#r7-decisoes')?.remove();
+  selR7.selectedIndex = -1;
+}
+const p42EstadoR7 = p42Estado;
+p42Estado = function (v, opts) { r7Desligar(); p42EstadoR7(v, opts); };
+const p45EstadoR7 = p45Estado;
+p45Estado = function (v, opts) { r7Desligar(); p45EstadoR7(v, opts); };
+const definirP10R7 = definirP10;
+definirP10 = function (v, opts) { r7Desligar(); definirP10R7(v, opts); };
+function r7Estado(v, { focar = false } = {}) {
+  if (!R7_TODOS[v]) v = 'r7-pedido';
+  // A base é Aprovações como está no app, com os pedidos que já esperam na fila.
+  p42EstadoR7('aprovacoes-criar');
+  p45Desligar();
+  selP42.selectedIndex = -1;
+  r7 = { ativo: true, estado: v, mexeram: v === 'r7-mexeram' };
+  p8.planos.ritmo = { versao: 1, estado: { 'r7-rodando': 'aprovado', 'r7-mexeram': 'aprovado', 'r7-parado': 'parado' }[v] ?? 'pendente', motivo: '' };
+  Object.assign(p8, { sel: 'ritmo', mostraDetalhe: v !== 'r7-decisoes', ui: uiBase() });
+  if (selR7.value !== v) selR7.value = v;
+  desenharP8();
+  if (v === 'r7-decisoes') {
+    $('#aprovacoes')?.insertAdjacentHTML('afterbegin', r7DecisoesHtml());
+    if (focar) $('#r7-dec-t')?.focus({ preventScroll: true });
+    return;
+  }
+  if (focar) $('#ap-det-titulo')?.focus({ preventScroll: true });
+}
+selR7.addEventListener('change', () => r7Estado(selR7.value, { focar: true }));
+const marcaR7 = $('.revisao-marca b');
+if (marcaR7) marcaR7.textContent += ' · R7 (o ritmo da semana), para aprovar';
+
+/* ---------- cenários da R7 para a conferência no navegador sem janela ---------- */
+(() => {
+  const exige = (cond, msg) => { if (!cond) throw new Error(msg); };
+  const texto = (sel) => ($(sel)?.textContent ?? '').replace(/\s+/g, ' ');
+  for (const id of Object.keys(R7_TODOS)) {
+    window.uiuxCenarios['r7-' + id.slice(3)] = { larguras: [1440, 375], executar: async () => {
+      definirModo('lite', { silencioso: true }); r7Estado(id); await esperar(300);
+      exige(selR7.value === id && selP42.selectedIndex === -1, 'os seletores: ' + selR7.value);
+      exige(!$('#tela-aprovacoes').hidden, 'Aprovações não abriu');
+      if (id === 'r7-decisoes') { exige($$('#r7-decisoes .rev-decisoes > li').length === 8, 'as 8 decisões'); return; }
+      exige(texto('#ap-det-titulo') === 'Ritmo da semana: 05/10 a 11/10', 'o título: ' + texto('#ap-det-titulo'));
+      exige($$('#r7-tabela tbody tr').length === 7 && texto('#r7-tabela tfoot').includes('R$ 826,00'), 'os 7 dias e a soma da semana');
+      if (id === 'r7-pedido') exige(!!$('#ap-codigo') && texto('#aprovacoes').includes('A semana não gasta mais'), 'o pedido com o código');
+      if (id === 'r7-rodando') exige(!!$('[data-r7-parar]') && $$('#r7-trilha .passo--espera').length === 1 && !!$('#r7-tabela tr.r7-hoje'), 'o ritmo rodando');
+      if (id === 'r7-mexeram') exige(texto('#r7-mexeram').includes('saiu do ritmo') && $$('#r7-trilha .passo--falha').length === 1, 'a campanha que saiu do ritmo');
+      if (id === 'r7-parado') exige(texto('#aprovacoes').includes('Você parou o ritmo') && !$('[data-r7-parar]'), 'o ritmo parado');
+    } };
+  }
+  window.uiuxCenarios['r7-fluxo-aprovar-e-parar'] = { larguras: [1440, 375], executar: async () => {
+    definirModo('lite', { silencioso: true }); r7Estado('r7-pedido'); await esperar(200);
+    $('#ap-codigo').value = '000000'; $('[data-p8-aprovar]').requestSubmit(); await esperar(120);
+    exige(texto('#ap-erro').startsWith('Código incorreto'), 'o código recusado');
+    $('#ap-codigo').value = '482913'; $('[data-p8-aprovar]').requestSubmit(); await esperar(200);
+    exige(p8.planos.ritmo.estado === 'aprovado' && !!$('[data-r7-parar]'), 'o ritmo não foi aprovado');
+    $('[data-r7-parar]').click(); await esperar(200);
+    exige(p8.planos.ritmo.estado === 'parado' && texto('#aprovacoes').includes('Você parou o ritmo'), 'o ritmo não parou');
+  } };
+})();
+if (params.get('r7')) r7Estado(params.get('r7'));
 </script>
 </body>
 </html>
