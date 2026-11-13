@@ -44,6 +44,15 @@ export function nomeComparavel(texto: string): string {
   return texto.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/\s+/g, ' ').trim();
 }
 
+/**
+ * O bairro de uma área de entrega. O Perfil da Empresa no Google escreve o lugar inteiro ("Penha, Rio de Janeiro - RJ,
+ * Brasil"); a pessoa costuma escrever só o bairro. Vale o que vem antes da primeira vírgula (ERR-227: comparado inteiro,
+ * nenhuma área da Mister Burgers casava com os bairros do IBGE).
+ */
+export function bairroDaArea(area: string): string {
+  return area.split(',')[0]!.trim() || area.trim();
+}
+
 /** O número de verdade do endereço (os algarismos do começo: "450", "450A" → "450"); "s/n" e vazio não têm. */
 export function numeroDoEndereco(numero: string | null): string | null {
   const t = (numero ?? '').trim();

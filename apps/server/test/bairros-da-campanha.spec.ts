@@ -10,6 +10,7 @@ import {
 } from '../src/campanhas/bairros-da-campanha.js';
 import { textoDoPublicoPequenoNosBairros } from '../src/campanhas/campanhas-novas.service.js';
 import { alvoDosLugares } from '../src/campanhas/publico-no-raio.js';
+import { bairroDaArea } from '../src/regiao/coordenada.js';
 
 // R6, parte 3 (D-RG-53 a D-RG-56), sem rede e sem banco: o círculo de cada bairro pelo tamanho dele no IBGE, o centro a
 // partir da loja para a prévia em escala, o bairro da Meta só com o mesmo nome na mesma cidade, os lugares que vão para a
@@ -68,6 +69,13 @@ describe('os bairros da campanha nova (R6, parte 3)', () => {
       age_min: 18,
       targeting_automation: { advantage_audience: 0 },
     });
+  });
+
+  it('o bairro da área de entrega: o Perfil do Google escreve o lugar inteiro; vale o que vem antes da vírgula (ERR-227)', () => {
+    expect(bairroDaArea('Penha, Rio de Janeiro - RJ, Brasil')).toBe('Penha');
+    expect(bairroDaArea('  Vila da Penha  ')).toBe('Vila da Penha');
+    expect(bairroDaArea('Brás de Pina,Rio de Janeiro')).toBe('Brás de Pina');
+    expect(bairroDaArea(', Rio de Janeiro')).toBe(', Rio de Janeiro');
   });
 
   it('as palavras: os bairros e o público pequeno nos bairros, com o que fazer', () => {

@@ -32,7 +32,7 @@ import { FlagService } from '../flags/flag.service.js';
 import { VaultService } from '../vault/vault.service.js';
 import { buscarCep, cepNormalizado, type EnderecoDoCep } from './cep.js';
 import { FONTE_CENSO_BAIRRO } from './censo.js';
-import { type Coordenada, nomeComparavel, procuraDeCoordenada } from './coordenada.js';
+import { bairroDaArea, type Coordenada, nomeComparavel, procuraDeCoordenada } from './coordenada.js';
 import { MUNICIPIOS_DO_IPCA, RMS_DO_IPCA } from './ibge.js';
 import { diaNoFuso } from '../results/fora-do-normal.js';
 import { BAIRROS_NA_SECAO, type BairroParaComparar, compararBairros } from './bairros.js';
@@ -472,7 +472,7 @@ export class RegiaoService {
 
     // A gente das áreas de entrega: as que casam com bairros do Censo do município.
     const areas = Array.isArray(loja.delivery_areas) ? loja.delivery_areas.filter((a): a is string => typeof a === 'string') : [];
-    const chaves = [...new Set(areas.map((a) => nomeComparavel(a)))];
+    const chaves = [...new Set(areas.map((a) => nomeComparavel(bairroDaArea(a))))];
     const entrega = chaves.length
       ? (
           await tx.execute<{ casaram: number; pessoas: number | null; codigos: string[] | null }>(sql`
@@ -892,7 +892,7 @@ export class RegiaoService {
     const doMunicipio = (c: string | null) => !c || !municipio || nomeComparavel(c) === nomeComparavel(municipio);
     const lidos = linhas.filter((l) => l.kind === 'bairro' && l.district && doMunicipio(l.city));
     const daEntrega = new Map<string, string>();
-    for (const a of areas) if (!daEntrega.has(nomeComparavel(a))) daEntrega.set(nomeComparavel(a), a);
+    for (const a of areas.map(bairroDaArea)) if (!daEntrega.has(nomeComparavel(a))) daEntrega.set(nomeComparavel(a), a);
     const chaves = [...new Set([...lidos.map((l) => nomeComparavel(l.district!)), ...daEntrega.keys()])];
     const gente = chaves.length
       ? (

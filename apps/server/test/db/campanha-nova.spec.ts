@@ -373,7 +373,8 @@ describe.skipIf(!hasDb)('a campanha nova na Meta (A4 · X5, parte 1)', () => {
     await ownerQuery(`update liame.unit set ibge_city_code = $2, delivery_areas = $3::jsonb where id = $1`, [
       e.unitId,
       cidade,
-      JSON.stringify(['Centro Teste', 'LAPA TESTE', 'Sem Mapa Teste', 'Bairro Que Não Existe']),
+      // Como o Perfil da Empresa no Google escreve (ERR-227): o lugar inteiro; vale o bairro.
+      JSON.stringify(['Centro Teste', 'LAPA TESTE, Rio de Janeiro - RJ, Brasil', 'Sem Mapa Teste', 'Bairro Que Não Existe, Rio de Janeiro - RJ, Brasil']),
     ]);
     const [regem] = await ownerQuery<{ id: string }>(`select id from liame.connected_account where tenant_id = $1 and provider = 'regem' limit 1`, [e.tenantId]);
     await ownerQuery(
