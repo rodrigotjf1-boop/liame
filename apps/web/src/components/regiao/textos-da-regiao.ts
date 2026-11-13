@@ -1,4 +1,5 @@
-import type { RegionNumber, RegionOverviewResponse, RegionSourceStatus } from '@liame/contracts';
+import type { NewCampaignAudienceResponse, RegionNumber, RegionOverviewResponse, RegionSourceStatus } from '@liame/contracts';
+import { kmEscrito, pessoasEscritas } from '@/components/criativos/campanha-nova-textos';
 
 // Sua região (protótipo P40, aprovado em 11/11/2026; plano da região, R2, parte 2): os textos e as contas da tela, sem
 // React. Todo número leva a fonte e o período (base §19.3); a renda do Censo é de 2022, sem correção (D-RG-20).
@@ -286,4 +287,34 @@ export function situacaoEmPalavras(s: RegionSourceStatus): { texto: string; tipo
   if (s.status === 'em_dia') return { texto: 'Em dia', tipo: 'ok' };
   if (s.status === 'falhou') return { texto: s.next_try_at ? `Não respondeu · de novo às ${hora(s.next_try_at)}` : 'Não respondeu', tipo: 'falhou' };
   return { texto: 'Lendo', tipo: 'lendo' };
+}
+
+// ------------------------------------------------------------------ o público no raio, na Meta (R6, D-RG-50)
+
+/** O raio da estimativa: o raio de entrega da loja na régua da Meta (de 1 a 15 km, em passos de 0,5 km); sem raio, 3 km. */
+export const raioDaEstimativa = (raioDeEntrega: number | null): number => Math.min(15, Math.max(1, Math.round((raioDeEntrega ?? 3) * 2) / 2));
+
+export type PublicoNoRaio = { falta: boolean; valor: string; obs: string; fonte: string; pro?: string };
+
+/**
+ * O número "pessoas no raio, na Meta" do grupo Gente: a mesma estimativa que a gaveta da campanha nova lê (quantas
+ * pessoas de 18 anos ou mais a Meta alcança com anúncio no raio). É gente que usa o Facebook e o Instagram, não quem
+ * mora: por isso fica ao lado do Censo, e não no lugar dele. Sem número, a tela diz por quê.
+ */
+export function publicoNoRaio(e: NewCampaignAudienceResponse | 'falhou', km: number): PublicoNoRaio {
+  const fonte = 'Meta · estimativa de público para anúncios';
+  if (e !== 'falhou' && e.status === 'pronta' && e.lower !== null && e.upper !== null) {
+    return {
+      falta: false,
+      valor: `${pessoasEscritas(e.lower)} a ${pessoasEscritas(e.upper)}`,
+      obs: `pessoas de 18 anos ou mais que a Meta estima alcançar com anúncio no raio de ${kmEscrito(km)} em volta da loja`,
+      fonte: `${fonte}, lida agora`,
+      pro: 'a estimativa da gaveta da campanha nova (reachestimate, sem a ampliação do público) · conta quem usa o Facebook e o Instagram, não quem mora',
+    };
+  }
+  if (e !== 'falhou' && e.status === 'sem_estimativa') {
+    return { falta: true, valor: 'Sem estimativa agora', obs: `A Meta não estimou o público do raio de ${kmEscrito(km)} agora. Não quer dizer que não há gente.`, fonte };
+  }
+  if (e === 'falhou') return { falta: true, valor: 'Pessoas no raio, na Meta', obs: 'Não deu para ler a estimativa da Meta agora.', fonte };
+  return { falta: true, valor: 'Pessoas no raio, na Meta', obs: 'Aparece com uma conta de anúncios da Meta conectada (uma só) e a loja no mapa pelo endereço.', fonte };
 }
