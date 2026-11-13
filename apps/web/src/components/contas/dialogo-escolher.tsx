@@ -48,7 +48,10 @@ export function DialogoEscolher({ conexao, existentes, marca, reserva, aoLigar, 
   const voltaAPublicar = new Set(opcoes.filter((o) => o.publicar).map((o) => chave(o.conta.provider, o.conta.external_id)));
   // A Página e o Instagram que ganham os comentários com esta autorização (A6, Z11): também só troca.
   const ganhamComentarios = new Set(opcoes.filter((o) => o.comentarios).map((o) => chave(o.conta.provider, o.conta.external_id)));
-  const soTrocaA = (k: string) => renovaveis.has(k) || comPermissao.has(k) || comEscrita.has(k) || tokenNovo.has(k) || voltaAPublicar.has(k) || ganhamComentarios.has(k);
+  // E as que ganham as mensagens, o Direct e o Messenger (A6, Z12 e Z14; ERR-178, reincidência de 13/11/2026): também só troca.
+  const ganhamMensagens = new Set(opcoes.filter((o) => o.mensagens).map((o) => chave(o.conta.provider, o.conta.external_id)));
+  const soTrocaA = (k: string) =>
+    renovaveis.has(k) || comPermissao.has(k) || comEscrita.has(k) || tokenNovo.has(k) || voltaAPublicar.has(k) || ganhamComentarios.has(k) || ganhamMensagens.has(k);
   // Reconectar já vem marcado; uma conta nova só, também. Várias novas: a pessoa escolhe (nada ligado sem querer). A
   // Página e o Instagram (P19, parte B): o Instagram e a Página dele vêm marcados (sem Instagram, a primeira Página),
   // e nada se liga antes de a pessoa confirmar.
@@ -219,6 +222,7 @@ export function DialogoEscolher({ conexao, existentes, marca, reserva, aoLigar, 
                     {tokenNovo.has(k) && <span className="lite-chip">passa para o token novo</span>}
                     {voltaAPublicar.has(k) && <span className="lite-chip">volta a publicar</span>}
                     {ganhamComentarios.has(k) && <span className="lite-chip">ganha os comentários</span>}
+                    {ganhamMensagens.has(k) && <span className="lite-chip">ganha as mensagens</span>}
                     {renovaveis.has(k) && <span className="lite-chip lite-chip--atraso">a autorização atual vence antes: renovar</span>}
                     {comPermissao.has(k) && !renovaveis.has(k) && (
                       <span className="lite-chip">{d.provider === 'google_ads' ? 'passa a poder informar vendas' : 'passa para esta autorização'}</span>

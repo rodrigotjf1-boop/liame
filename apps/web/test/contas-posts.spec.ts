@@ -4,8 +4,10 @@ import {
   type ConnectionResponse,
   type DiscoveredAccount,
   META_INSTAGRAM_COMMENTS_SCOPES,
+  META_INSTAGRAM_MESSAGES_SCOPES,
   META_INSTAGRAM_PUBLISH_SCOPE,
   META_PAGE_COMMENTS_SCOPES,
+  META_PAGE_MESSAGES_SCOPES,
   META_PAGE_PUBLISH_SCOPE,
 } from '@liame/contracts';
 import { createElement } from 'react';
@@ -404,6 +406,64 @@ describe('conectar e escolher com os posts', () => {
       createElement(DialogoEscolher, { existentes, marca: 'Mister Burgers', reserva: { current: null }, aoLigar: () => {}, aoFechar: () => {}, conexao: nova }),
     );
     expect(html.match(/<span class="lite-chip">ganha os comentários<\/span>/g)).toHaveLength(2);
+    expect(html).not.toMatch(/NaN|undefined|\[object Object\]/);
+  });
+
+  it('a Página e o Instagram ligados por uma autorização sem as mensagens entram na escolha da que as tem (Z12 e Z14; ERR-178, 13/11/2026)', () => {
+    // O caso do piloto em 13/11/2026: a autorização de hoje publica e tem os comentários; a nova, pela mesma configuração
+    // de escrita, ganhou as permissões do Direct e do Messenger, e chegava em "aguardando escolha" sem "Escolher contas".
+    const COMENTA = [...PUBLICA, ...META_INSTAGRAM_COMMENTS_SCOPES, ...META_PAGE_COMMENTS_SCOPES];
+    const MENSAGENS = [...COMENTA, ...META_INSTAGRAM_MESSAGES_SCOPES, ...META_PAGE_MESSAGES_SCOPES];
+    const pagina = { ...PAGINA, linked: true };
+    const instagram = { ...INSTAGRAM, linked: true };
+    const antiga = conexao({
+      id: ANTIGA,
+      scopes: COMENTA,
+      accounts: [conta('facebook_page', PAGINA.external_id, { connection_id: ANTIGA }), conta('instagram', INSTAGRAM.external_id, { connection_id: ANTIGA })],
+    });
+    const nova = conexao({ status: 'aguardando_escolha', scopes: MENSAGENS, discovered: [pagina, instagram] });
+    const existentes = contasExistentes([antiga]);
+    expect(existentes.map((e) => [e.provider, e.publica, e.comenta, e.mensagens])).toEqual([
+      ['facebook_page', true, true, false],
+      ['instagram', true, true, false],
+    ]);
+    expect(escolhiveis(nova, existentes)).toEqual([
+      { conta: pagina, reconectar: true, mensagens: true },
+      { conta: instagram, reconectar: true, mensagens: true },
+    ]);
+    // Só o Direct na autorização nova: só o Instagram ganha; a Página, sem o `pages_messaging`, fica.
+    const soDirect = conexao({ ...nova, scopes: [...COMENTA, ...META_INSTAGRAM_MESSAGES_SCOPES] });
+    expect(escolhiveis(soDirect, existentes)).toEqual([{ conta: instagram, reconectar: true, mensagens: true }]);
+    // A autorização de hoje que já tem as mensagens, ou a que não se sabe: nada a trocar.
+    expect(escolhiveis(nova, contasExistentes([{ ...antiga, scopes: MENSAGENS }]))).toEqual([]);
+    expect(escolhiveis(nova, contasExistentes([{ ...antiga, scopes: [] }]))).toEqual([]);
+    // Sem os comentários e sem as mensagens hoje: a nova traz os dois, marcados juntos.
+    const soPublica = contasExistentes([{ ...antiga, scopes: PUBLICA }]);
+    expect(escolhiveis(nova, soPublica)).toEqual([
+      { conta: pagina, reconectar: true, comentarios: true, mensagens: true },
+      { conta: instagram, reconectar: true, comentarios: true, mensagens: true },
+    ]);
+    expect(faixaDaVolta({ conexao: ID, erro: null }, nova, 'Mister Burgers', { existentes: soPublica })).toEqual({
+      tipo: 'escolher',
+      titulo: 'A Meta autorizou o Liame a ler e responder os comentários e as mensagens.',
+      texto: 'Confirme a Página e o Instagram para os comentários e o Direct e o Messenger passarem a usar esta autorização.',
+    });
+    // Só as mensagens: a faixa da volta pede para confirmar, e o diálogo marca a troca em cada um.
+    expect(faixaDaVolta({ conexao: ID, erro: null }, nova, 'Mister Burgers', { existentes })).toEqual({
+      tipo: 'escolher',
+      titulo: 'A Meta autorizou o Liame a ler e responder as mensagens.',
+      texto: 'Confirme a Página e o Instagram para o Direct e o Messenger passarem a usar esta autorização.',
+    });
+    expect(faixaDaVolta({ conexao: ID, erro: null }, soDirect, 'Mister Burgers', { existentes })).toEqual({
+      tipo: 'escolher',
+      titulo: 'A Meta autorizou o Liame a ler e responder as mensagens.',
+      texto: 'Confirme o Instagram para o Direct passar a usar esta autorização.',
+    });
+    const html = renderToStaticMarkup(
+      createElement(DialogoEscolher, { existentes, marca: 'Mister Burgers', reserva: { current: null }, aoLigar: () => {}, aoFechar: () => {}, conexao: nova }),
+    );
+    expect(html.match(/<span class="lite-chip">ganha as mensagens<\/span>/g)).toHaveLength(2);
+    expect(html).not.toContain('desconectada: ligar de novo');
     expect(html).not.toMatch(/NaN|undefined|\[object Object\]/);
   });
 

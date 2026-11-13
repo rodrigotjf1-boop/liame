@@ -49,6 +49,16 @@ export const META_INSTAGRAM_COMMENTS_SCOPES: readonly string[] = ['instagram_man
 export const META_PAGE_COMMENTS_SCOPES: readonly string[] = ['pages_read_user_content', 'pages_manage_engagement'];
 
 /**
+ * As permissões das mensagens da Meta (A6, Z12 e Z14; migrations 0130, 0131 e 0134): no Instagram, ler e responder o
+ * Direct; na Página, as conversas do Messenger; nos dois, `pages_manage_metadata`, que inscreve o app na Página. O Direct e
+ * o Messenger leem com a credencial da autorização a que a conta está ligada: a tela de Contas confere se a autorização
+ * as tem, para oferecer a Página e o Instagram já ligados por uma autorização sem elas (V50, ERR-178, reincidência de
+ * 13/11/2026).
+ */
+export const META_INSTAGRAM_MESSAGES_SCOPES: readonly string[] = ['instagram_manage_messages', 'pages_manage_metadata'];
+export const META_PAGE_MESSAGES_SCOPES: readonly string[] = ['pages_messaging', 'pages_manage_metadata'];
+
+/**
  * Plataforma da conta ligada. `google_business`: a loja do Perfil da Empresa no Google; `search_console`: um site do
  * Search Console (as duas vêm na autorização do Google, cada uma com a função dela ligada). `facebook_page` e
  * `instagram`: a Página e o Instagram onde o post sai (vêm na autorização da Meta com a permissão de publicar, com a

@@ -40,9 +40,15 @@ no mesmo dia pela sessão da região, a pedido do dono:
   `read_insights`, Agenda › o post publicado › "O que o post trouxe"; 14: só a conta da própria marca, nenhum seguidor por
   nome). O bloco da conta de teste ficou como estava.
 
-**Faltam no rascunho:** os vídeos (o dono decidiu, em 12/11/2026, deixá-los para o fim do roadmap); a certificação do
-`ads_read` (o dono); e as permissões de comentários e de mensagens, que entram no **mesmo rascunho**, com a seção delas nas
-Instruções da análise a partir do passo 15. Ninguém clicou em "Enviar para análise".
+**Faltam no rascunho:** os vídeos (o dono decidiu, em 12/11/2026, deixá-los para o fim do roadmap); e as permissões de
+comentários e de mensagens, que entram no **mesmo rascunho**, com a seção delas nas Instruções da análise a partir do passo
+15. Ninguém clicou em "Enviar para análise".
+
+**Feito em 13/11/2026:** a certificação do `ads_read` (Uso permitido › Renovação: "Certifico que todo e qualquer uso de
+ads_read está dentro do permitido"). A caixa só fica gravada ao **avançar de etapa**: marcada sem avançar, volta desmarcada
+ao recarregar (duas sessões marcaram e se perderam; a terceira marcação, seguida de "Avançar", ficou). As permissões de
+mensagens (`instagram_manage_messages`, `pages_messaging` e `pages_manage_metadata`) entraram na configuração de login de
+escrita, e o dono autorizou de novo; o Instagram da marca já liberava as mensagens para as ferramentas conectadas.
 
 ## 2. As permissões
 

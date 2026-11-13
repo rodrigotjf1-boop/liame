@@ -6,8 +6,10 @@ import {
   GOOGLE_ADS_SCOPE,
   GOOGLE_ANALYTICS_SCOPE,
   META_INSTAGRAM_COMMENTS_SCOPES,
+  META_INSTAGRAM_MESSAGES_SCOPES,
   META_INSTAGRAM_PUBLISH_SCOPE,
   META_PAGE_COMMENTS_SCOPES,
+  META_PAGE_MESSAGES_SCOPES,
   META_PAGE_PUBLISH_SCOPE,
 } from '@liame/contracts';
 import { dataCompleta, dia, diasAte, quandoComHora } from '@/lib/formato';
@@ -202,6 +204,11 @@ export type ContaExistente = Pick<ConnectedAccountResponse, 'provider' | 'extern
    * = não se sabe.
    */
   comenta?: boolean;
+  /**
+   * A Página ou o Instagram: a autorização que hoje o alcança tem as permissões das mensagens dele (o Messenger e o
+   * Direct; A6, Z12 e Z14); ausente = não se sabe.
+   */
+  mensagens?: boolean;
 };
 
 /** A permissão de publicar no canal, pela autorização; nula quando a autorização não diz (permissões não lidas). */
@@ -217,6 +224,15 @@ function publicaPelaAutorizacao(provider: string, scopes: readonly string[] | un
 export function comentaPelaAutorizacao(provider: string, scopes: readonly string[] | undefined): boolean | null {
   if (!scopes?.length || (provider !== 'facebook_page' && provider !== 'instagram')) return null;
   return (provider === 'facebook_page' ? META_PAGE_COMMENTS_SCOPES : META_INSTAGRAM_COMMENTS_SCOPES).every((s) => scopes.includes(s));
+}
+
+/**
+ * As permissões das mensagens do canal (A6, Z12 e Z14), pela autorização: no Instagram, o Direct; na Página, o Messenger.
+ * Nula quando a autorização não diz (permissões não lidas).
+ */
+export function mensagensPelaAutorizacao(provider: string, scopes: readonly string[] | undefined): boolean | null {
+  if (!scopes?.length || (provider !== 'facebook_page' && provider !== 'instagram')) return null;
+  return (provider === 'facebook_page' ? META_PAGE_MESSAGES_SCOPES : META_INSTAGRAM_MESSAGES_SCOPES).every((s) => scopes.includes(s));
 }
 
 /** Meta: a autorização foi pela configuração do login que também pede para gerenciar anúncios (`requested_access`). */
@@ -239,6 +255,7 @@ export function contasExistentes(
     c.accounts.map((a) => {
       const publica = publicaPelaAutorizacao(a.provider, c.scopes);
       const comenta = comentaPelaAutorizacao(a.provider, c.scopes);
+      const mensagens = mensagensPelaAutorizacao(a.provider, c.scopes);
       return {
         ...a,
         vence_em: c.refresh_expires_at ?? null,
@@ -246,6 +263,7 @@ export function contasExistentes(
         ...(c.provider === 'meta' && c.requested_access !== undefined && escritaNaMeta ? { escreve: autorizaEscrita(c) } : {}),
         ...(publica !== null ? { publica } : {}),
         ...(comenta !== null ? { comenta } : {}),
+        ...(mensagens !== null ? { mensagens } : {}),
       };
     }),
   );
@@ -256,7 +274,8 @@ export function contasExistentes(
  * `escrita`: esta é a de escrita da Meta e a de hoje é a de leitura (ERR-138); `token`: a conta do RegemCast passa para o
  * token novo que a distribuição registrou; `publicar`: a Página ou o Instagram que a autorização de hoje não deixa mais
  * publicar, e esta deixa (P19, parte B; V50); `comentarios`: a Página ou o Instagram que a autorização de hoje não deixa
- * ler e responder os comentários, e esta deixa (A6, Z11; V50, ERR-178).
+ * ler e responder os comentários, e esta deixa (A6, Z11; V50, ERR-178); `mensagens`: o mesmo com o Direct e o Messenger
+ * (A6, Z12 e Z14; ERR-178, reincidência de 13/11/2026).
  */
 export type Escolhivel = {
   conta: DiscoveredAccount;
@@ -267,6 +286,7 @@ export type Escolhivel = {
   token?: boolean;
   publicar?: boolean;
   comentarios?: boolean;
+  mensagens?: boolean;
 };
 
 /**
@@ -313,6 +333,14 @@ export function escolhiveis(
       .filter((e) => e.disconnected_at === null && e.connection_id !== c.id && e.comenta === false && comentaPelaAutorizacao(e.provider, c.scopes) === true)
       .map((e) => `${e.provider}:${e.external_id}`),
   );
+  // O mesmo com as mensagens (A6, Z12 e Z14): o Direct e o Messenger leem e respondem com a credencial da autorização a que
+  // a conta está ligada. Sem isso, a autorização nova com as permissões delas ficava parada em "aguardando escolha", sem
+  // "Escolher contas" (ERR-178, reincidência de 13/11/2026).
+  const ganhamMensagens = new Set(
+    existentes
+      .filter((e) => e.disconnected_at === null && e.connection_id !== c.id && e.mensagens === false && mensagensPelaAutorizacao(e.provider, c.scopes) === true)
+      .map((e) => `${e.provider}:${e.external_id}`),
+  );
   const fimDesta = c.refresh_expires_at ? new Date(c.refresh_expires_at).getTime() : Number.POSITIVE_INFINITY;
   const renovaveis = new Set(
     existentes
@@ -344,8 +372,13 @@ export function escolhiveis(
     if (recusadas.has(k) || trocaDeToken.has(k)) return [{ conta: d, reconectar: true }];
     if (renovaveis.has(k)) return [{ conta: d, reconectar: true, renovar: true, ...(ganhamPermissao.has(k) ? { permissao: true } : {}) }];
     if (ganhamEscrita.has(k)) return [{ conta: d, reconectar: true, escrita: true }];
-    if (ganhamPublicar.has(k)) return [{ conta: d, reconectar: true, publicar: true, ...(ganhamComentarios.has(k) ? { comentarios: true } : {}) }];
-    if (ganhamComentarios.has(k)) return [{ conta: d, reconectar: true, comentarios: true }];
+    // O canal que ganha publicar, os comentários ou as mensagens: cada ganho marcado (a troca vale para todos de uma vez).
+    const publicar = ganhamPublicar.has(k);
+    const comentarios = ganhamComentarios.has(k);
+    const mensagens = ganhamMensagens.has(k);
+    if (publicar || comentarios || mensagens) {
+      return [{ conta: d, reconectar: true, ...(publicar ? { publicar: true } : {}), ...(comentarios ? { comentarios: true } : {}), ...(mensagens ? { mensagens: true } : {}) }];
+    }
     return ganhamPermissao.has(k) ? [{ conta: d, reconectar: true, permissao: true }] : [];
   });
 }
@@ -434,13 +467,27 @@ export function faixaDaVolta(
         texto: `Confirme ${opcoes.length === 1 ? (opcoes[0]!.conta.provider === 'instagram' ? 'o Instagram' : 'a Página') : 'a Página e o Instagram'} para os posts aprovados da marca voltarem a sair ${opcoes.length === 1 ? (opcoes[0]!.conta.provider === 'instagram' ? 'nele' : 'nela') : 'neles'}.`,
       };
     }
-    // Só a Página e o Instagram que ganham os comentários (A6, Z11): falta confirmar que eles passam a esta autorização.
-    if (opcoes.every((o) => o.comentarios)) {
+    // Só a Página e o Instagram que ganham os comentários (A6, Z11) ou as mensagens (Z12 e Z14): falta confirmar que eles
+    // passam a esta autorização.
+    if (opcoes.every((o) => o.comentarios || o.mensagens)) {
       const uma = opcoes.length === 1;
+      const canal = uma ? (opcoes[0]!.conta.provider === 'instagram' ? 'o Instagram' : 'a Página') : 'a Página e o Instagram';
+      const conversas = uma ? (opcoes[0]!.conta.provider === 'instagram' ? 'o Direct' : 'o Messenger') : 'o Direct e o Messenger';
+      const comentarios = opcoes.some((o) => o.comentarios);
+      const mensagens = opcoes.some((o) => o.mensagens);
+      if (!mensagens) {
+        return {
+          tipo: 'escolher',
+          titulo: 'A Meta autorizou o Liame a ler e responder os comentários.',
+          texto: `Confirme ${canal} para a leitura e as respostas dos comentários passarem a usar esta autorização.`,
+        };
+      }
       return {
         tipo: 'escolher',
-        titulo: 'A Meta autorizou o Liame a ler e responder os comentários.',
-        texto: `Confirme ${uma ? (opcoes[0]!.conta.provider === 'instagram' ? 'o Instagram' : 'a Página') : 'a Página e o Instagram'} para a leitura e as respostas dos comentários passarem a usar esta autorização.`,
+        titulo: comentarios ? 'A Meta autorizou o Liame a ler e responder os comentários e as mensagens.' : 'A Meta autorizou o Liame a ler e responder as mensagens.',
+        texto: comentarios
+          ? `Confirme ${canal} para os comentários e ${conversas} passarem a usar esta autorização.`
+          : `Confirme ${canal} para ${conversas} ${uma ? 'passar' : 'passarem'} a usar esta autorização.`,
       };
     }
     if (a === 'regem') {
