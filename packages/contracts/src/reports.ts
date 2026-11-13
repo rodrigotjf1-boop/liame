@@ -181,6 +181,11 @@ export const MonthlyReportBudget = z.strictObject({
   missing: z.array(Slug),
   /** As mudanças executadas no mês, da mais nova para a mais antiga. */
   changes: z.array(MonthlyReportBudgetChange),
+  /**
+   * O ritmo da semana no mês (plano da região, R7): em quantas semanas rodou e quantas mudanças de verba o Liame fez por
+   * ele. Os passos do ritmo não entram em `changes`. Ausente quando o ritmo não rodou (e nos relatórios de antes dele).
+   */
+  rhythm: z.strictObject({ weeks: z.int(), steps: z.int() }).optional(),
 });
 export type MonthlyReportBudget = z.infer<typeof MonthlyReportBudget>;
 

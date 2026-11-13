@@ -209,3 +209,41 @@
 @media (prefers-reduced-motion: reduce) {
   .inbox-det .av-bloco .av-sug-giro { animation: none; }
 }
+
+/* O ritmo da semana (plano da região, R7; protótipo aprovado em 13/11/2026): a tabela dos dias com o porquê, a verba de
+   cada campanha em cartões, o dia de hoje e as ações. A tabela decide pelo espaço dela (o detalhe muda de largura com a
+   lista ao lado): no estreito, cada dia vira um bloco, sem barra de rolagem. */
+.r7-envolve { container: r7 / inline-size; }
+.r7-tabela th, .r7-tabela td { vertical-align: top; }
+.r7-tabela .r7-dia { white-space: nowrap; font-weight: 600; }
+.r7-tabela .r7-dia small { display: block; color: var(--text-muted); font-size: var(--text-xs); font-weight: 400; }
+.r7-var { display: inline-flex; align-items: center; min-height: 20px; padding: 0 7px; border-radius: var(--radius-full); background: var(--bg-subtle); color: var(--text-muted); font-size: var(--text-xs); font-weight: 600; white-space: nowrap; }
+.r7-var--mais { background: var(--success-soft); color: var(--success); }
+.r7-var--menos { background: var(--warning-soft); color: var(--warning); }
+.r7-verba b { font-family: var(--font-mono); font-weight: 600; white-space: nowrap; }
+.r7-verba small { display: block; color: var(--text-muted); font-size: var(--text-xs); }
+.r7-porques { display: grid; gap: 4px; margin: 0; padding: 0; list-style: none; }
+.r7-porques li { display: grid; grid-template-columns: 16px minmax(0, 1fr); gap: 6px; align-items: start; font-size: var(--text-sm); }
+.r7-porques .ic { width: 14px; height: 14px; margin-top: 3px; color: var(--text-muted); }
+.r7-tabela tr.r7-hoje { background: var(--primary-soft); }
+.r7-tabela tfoot th, .r7-tabela tfoot td { font-weight: 600; border-top: 2px solid var(--border-strong); }
+.r7-tabela tfoot small { display: block; color: var(--text-muted); font-size: var(--text-xs); font-weight: 400; }
+.r7-tabela.r7-camp thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+.r7-tabela.r7-camp, .r7-tabela.r7-camp tbody { display: block; }
+.r7-tabela.r7-camp tr { display: grid; grid-template-columns: repeat(auto-fill, minmax(118px, 1fr)); gap: 4px var(--sp-4); padding: var(--sp-3) 0; border-bottom: 1px solid var(--border); }
+.r7-tabela.r7-camp tbody tr:last-child { border-bottom: 0; }
+.r7-tabela.r7-camp th[scope="row"] { display: flex; flex-wrap: wrap; gap: var(--sp-2); align-items: center; grid-column: 1 / -1; padding: 0; border: 0; font-size: var(--text-sm); overflow-wrap: anywhere; }
+.r7-tabela.r7-camp td { display: block; margin: 0; padding: 0; border: 0; font-family: var(--font-mono); font-size: var(--text-xs); white-space: nowrap; }
+.r7-tabela.r7-camp td[data-col]::before { content: attr(data-col) ": "; display: inline; color: var(--text-muted); font-family: var(--font-sans); font-size: var(--text-xs); font-weight: 400; }
+.r7-acoes { display: flex; flex-wrap: wrap; gap: var(--sp-2); margin-top: var(--sp-3); }
+@container r7 (max-width: 640px) {
+  .r7-tabela:not(.r7-camp) thead { display: none; }
+  .r7-tabela:not(.r7-camp), .r7-tabela:not(.r7-camp) tbody, .r7-tabela:not(.r7-camp) tfoot, .r7-tabela:not(.r7-camp) tr, .r7-tabela:not(.r7-camp) th, .r7-tabela:not(.r7-camp) td { display: block; }
+  .r7-tabela:not(.r7-camp) tr { padding: var(--sp-3) var(--sp-4); border-bottom: 1px solid var(--border); }
+  .r7-tabela:not(.r7-camp) tbody tr:last-child { border-bottom: 0; }
+  .r7-tabela:not(.r7-camp) th, .r7-tabela:not(.r7-camp) td { padding: 0; border: 0; white-space: normal; }
+  .r7-tabela:not(.r7-camp) td { margin-top: var(--sp-2); }
+  .r7-tabela:not(.r7-camp) td[data-col]:not([data-col=""])::before { content: attr(data-col); display: block; color: var(--text-muted); font-size: var(--text-xs); font-family: var(--font-sans); font-weight: 400; }
+  .r7-tabela:not(.r7-camp) tfoot th, .r7-tabela:not(.r7-camp) tfoot td { border-top: 0; }
+  .r7-tabela:not(.r7-camp) tfoot tr { border-top: 2px solid var(--border-strong); border-bottom: 0; }
+}

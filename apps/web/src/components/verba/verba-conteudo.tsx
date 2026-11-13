@@ -403,6 +403,27 @@ export function VerbaConteudo({
             {m.vazio.texto}
           </Estado>
         )}
+        {m.ritmos.length > 0 && (
+          <div className="vb-ritmos">
+            <h3 className="rotulo-marca">O ritmo da semana</h3>
+            <ul className="vb-ritmos-lista">
+              {m.ritmos.map((r) => (
+                <li key={r.id}>
+                  <Icone nome="history" />
+                  <div>
+                    <b>{r.titulo}</b>
+                    <span>{r.texto}</span>
+                    {r.href && (
+                      <Link className="link-bt" href={r.href}>
+                        Ver o ritmo em Aprovações
+                      </Link>
+                    )}
+                  </div>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
       </article>
 
       <ListaDeFontes lista={tela.fontes} estado={fontes} id="verba-fontes" />

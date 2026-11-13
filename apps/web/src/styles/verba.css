@@ -224,3 +224,11 @@
   .vb-plats--partes .vb-valor { flex-direction: column; align-items: flex-end; gap: 0; }
   .limites-partes { grid-template-columns: minmax(0, 1fr); padding: var(--sp-3); }
 }
+
+/* O ritmo da semana na Verba do mês (plano da região, R7): os passos diários ficam juntos, uma linha por semana. */
+.vb-ritmos { display: grid; gap: var(--sp-3); margin-top: var(--sp-5); padding-top: var(--sp-4); border-top: 1px solid var(--border); }
+.vb-ritmos-lista { display: grid; gap: var(--sp-3); margin: 0; padding: 0; list-style: none; }
+.vb-ritmos-lista li { display: grid; grid-template-columns: 16px minmax(0, 1fr); gap: var(--sp-2); font-size: var(--text-sm); line-height: 1.45; }
+.vb-ritmos-lista li .ic { width: 16px; height: 16px; margin-top: 2px; color: var(--text-muted); }
+.vb-ritmos-lista li > div { display: grid; gap: 2px; min-width: 0; justify-items: start; }
+.vb-ritmos-lista li span { color: var(--text-muted); }

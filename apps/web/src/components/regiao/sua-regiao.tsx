@@ -14,6 +14,7 @@ import { DemandaDaLoja } from './demanda-da-loja';
 import { GavetaFontes } from './gaveta-fontes';
 import { MidiaNaRegiao } from './midia-na-regiao';
 import { PublicoNasRedes } from './publico-nas-redes';
+import { RitmoNaRegiao } from './ritmo-na-regiao';
 import { Numero } from './numero';
 import {
   comparaDensidade,
@@ -596,6 +597,7 @@ export function SuaRegiao({ brandId, lojas }: { brandId: string; lojas: StoreLoc
                 <Icone nome="info" pequeno />
                 <span>Chuva e frio costumam aumentar o pedido em casa (referência do setor); a prova vem do caixa da própria loja.</span>
               </p>
+              <RitmoNaRegiao brandId={brandId} unitId={loja.unit_id} />
             </section>
           )}
 

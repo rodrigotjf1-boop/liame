@@ -208,3 +208,10 @@
 .rg-hora .num { font-size: 0.65rem; color: var(--text-muted); white-space: nowrap; min-height: 1em; }
 .rg-pico { display: flex; gap: var(--sp-2); align-items: flex-start; font-size: var(--text-sm); }
 .rg-pico .ic { flex: none; width: 18px; height: 18px; margin-top: 2px; color: var(--chart-foco); }
+
+/* A linha do ritmo em Sua região › A semana que vem (plano da região, R7; D-RG-65). */
+.rg-ritmo { display: grid; gap: var(--sp-2); margin: 0; padding: var(--sp-3) 0 0; list-style: none; border-top: 1px solid var(--border); font-size: var(--text-sm); }
+.rg-ritmo li { display: flex; gap: var(--sp-2); min-width: 0; line-height: 1.45; }
+.rg-ritmo .ic { flex: none; width: 16px; height: 16px; margin-top: 2px; color: var(--text-muted); }
+.rg-ritmo span { min-width: 0; overflow-wrap: anywhere; }
+.rg-ritmo b { font-weight: 600; }

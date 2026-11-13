@@ -1,8 +1,9 @@
-import type { BudgetLimitsRequest, BudgetMonthChange, BudgetMonthResponse, BudgetPolicyRequest, BudgetResponse } from '@liame/contracts';
+import type { BudgetLimitsRequest, BudgetMonthChange, BudgetMonthResponse, BudgetMonthRhythm, BudgetPolicyRequest, BudgetResponse } from '@liame/contracts';
 import { type Tx, uuidv7 } from '@liame/database';
 import { Injectable } from '@nestjs/common';
 import { type SQL, sql } from 'drizzle-orm';
 import { type AuthContext, auditDetail, currentTx } from '../context/request-context.js';
+import { FERRAMENTA_DA_VERBA_DO_DIA, FERRAMENTA_DO_RITMO } from '../campanhas/ritmo-plano.js';
 import { AppProblem, ValidationProblem } from '../errors/problems.js';
 import { FlagService } from '../flags/flag.service.js';
 import { PLATFORM_POLICY } from '../policy/engine.js';
@@ -93,6 +94,7 @@ type LinhaDaMudanca = {
   desde: string | null;
   depois_id: string | null;
   depois_em: Date | string | null;
+  depois_tool: string | null;
 };
 
 /** A situação e a verba de um estado guardado no pedido, como a resposta mostra (verba zero ou ausente: não mora no objeto). */
@@ -290,6 +292,7 @@ export class BudgetService {
     const regras = regrasDaVerba([PLATFORM_POLICY], PLATAFORMA_DA_ESCRITA);
     const { mes } = conta;
     const mudancas = await this.mudancasDoMes(tx, { tenantId, fuso, inicio: mes.inicio, hoje: mes.hoje });
+    const ritmos = await this.ritmosDoMes(tx, { tenantId, inicio: mes.inicio, ate: mes.hoje });
     const comEscrita = await this.plataformasComEscrita(tx, tenantId, auth.userId);
     // A divisão por plataforma (D-A4-36), com a função ligada: a parte de cada uma e o que pesa hoje nela.
     const divisaoLigada = await this.divisaoLigada(tenantId);
@@ -351,6 +354,7 @@ export class BudgetService {
       days: conta.dias.map((d) => ({ day: d.dia, spend_micros: Number(d.gasto), missing: d.faltam })),
       rules: regras,
       changes: mudancas,
+      rhythms: ritmos,
       overspend: avisosDeGasto(mudancas, mes.ontem),
       largest_daily_micros: await this.maiorVerbaDiaria(tx, tenantId),
       generated_at: agora.toISOString(),
@@ -404,18 +408,21 @@ export class BudgetService {
                where k2.action_request_id = r.id and k2.status = k.status
                  and not exists (select 1 from liame.action_spend_check k3
                                   where k3.action_request_id = r.id and k3.checked_on > k2.checked_on and k3.status <> k.status)) as desde,
-             s.id as depois_id, s.updated_at as depois_em
+             s.id as depois_id, s.updated_at as depois_em, s.tool as depois_tool
         from liame.action_request r
         left join liame.app_user u on u.id = r.requested_by
         left join lateral (select * from liame.action_spend_check k where k.action_request_id = r.id order by k.checked_on desc limit 1) k on true
         left join lateral (
-          select s.id, s.updated_at from liame.action_request s
+          select s.id, s.updated_at, s.tool from liame.action_request s
            where s.tenant_id = r.tenant_id and s.provider = r.provider and s.account_id = r.account_id and s.resource_id = r.resource_id
              and s.status = 'executada' and (s.updated_at, s.id) > (r.updated_at, r.id) and ${escreveu(sql`s.id`)}
            order by s.updated_at, s.id limit 1
         ) s on true
        where r.tenant_id = ${e.tenantId} and r.provider in ${PROVEDORES_QUE_GASTAM} and r.status = 'executada' and ${escreveu(sql`r.id`)}
          and ${periodo}
+         -- O ritmo da semana (plano da região, R7): o pedido da semana e os passos diários dele ficam no resumo
+         -- (ritmosDoMes), e não nesta lista: dezenas de passos por semana tirariam dela as mudanças que alguém pediu.
+         and r.tool not in (${FERRAMENTA_DO_RITMO}, ${FERRAMENTA_DA_VERBA_DO_DIA})
        order by r.updated_at desc, r.id desc
        limit ${MUDANCAS_NA_TELA}`);
     const campanhaDe = await this.campanhasDosObjetos(tx, r.rows);
@@ -455,9 +462,46 @@ export class BudgetService {
                 spend_after_micros: Number(l.spend_after_micros ?? 0),
               }
             : null,
-        superseded_by: l.depois_id && l.depois_em ? { action_id: l.depois_id, executed_at: new Date(l.depois_em).toISOString() } : null,
+        // O pedido de depois pode ser um passo do ritmo da semana, que não está nesta lista: a tela diz que foi o ritmo.
+        superseded_by:
+          l.depois_id && l.depois_em
+            ? { action_id: l.depois_id, executed_at: new Date(l.depois_em).toISOString(), ...(l.depois_tool === FERRAMENTA_DA_VERBA_DO_DIA ? { rhythm: true } : {}) }
+            : null,
       };
     });
+  }
+
+  /**
+   * O ritmo da semana no período (plano da região, R7; D-RG-73): cada ritmo com passos feitos de `inicio` a `ate`, do
+   * mais novo ao mais antigo, com quantas mudanças de verba o Liame fez por ele e em quantos objetos.
+   */
+  private async ritmosDoMes(tx: Tx, e: { tenantId: string; inicio: string; ate: string }): Promise<BudgetMonthRhythm[]> {
+    const r = await tx.execute<{ id: string; status: string; week_start: string; week_end: string; action_id: string | null; passos: string; objetos: string }>(sql`
+      select b.id, b.status, b.week_start::text as week_start, b.week_end::text as week_end, b.action_id,
+             count(*)::text as passos, count(distinct s.resource_id)::text as objetos
+        from liame.budget_rhythm b
+        join liame.budget_rhythm_step s on s.rhythm_id = b.id and s.tenant_id = b.tenant_id
+       where b.tenant_id = ${e.tenantId} and s.status = 'feito' and s.day >= ${e.inicio}::date and s.day <= ${e.ate}::date
+       group by b.id
+       order by b.week_start desc, b.id desc
+       limit 12`);
+    return r.rows.map((l) => ({ id: l.id, status: l.status, week: { from: l.week_start, to: l.week_end }, action_id: l.action_id, steps: Number(l.passos), objects: Number(l.objetos) }));
+  }
+
+  /**
+   * O total do ritmo da semana num mês fechado, para o relatório: em quantas SEMANAS ele rodou e quantas mudanças de
+   * verba fez. É um agregado próprio, sem corte: o ritmo é um por marca e por semana (e um parado seguido de outro
+   * aprovado na mesma semana são duas linhas), então contar as linhas de `ritmosDoMes` diria semanas a mais, e a lista
+   * cortada somaria passos a menos. Nulo quando o ritmo não rodou.
+   */
+  private async ritmoDoMesFechado(tx: Tx, e: { tenantId: string; inicio: string; ate: string }): Promise<{ weeks: number; steps: number } | null> {
+    const r = await tx.execute<{ semanas: string; passos: string }>(sql`
+      select count(distinct b.week_start)::text as semanas, count(*)::text as passos
+        from liame.budget_rhythm b
+        join liame.budget_rhythm_step s on s.rhythm_id = b.id and s.tenant_id = b.tenant_id
+       where b.tenant_id = ${e.tenantId} and s.status = 'feito' and s.day >= ${e.inicio}::date and s.day <= ${e.ate}::date`);
+    const passos = Number(r.rows[0]?.passos ?? 0);
+    return passos > 0 ? { weeks: Number(r.rows[0]!.semanas), steps: passos } : null;
   }
 
   /** A maior verba diária entre as campanhas e os conjuntos ativos das contas em que o Liame muda verba (a leitura mais recente). */
@@ -649,6 +693,7 @@ export class BudgetService {
     const env = await tx.execute<{ limit_micros: string }>(sql`
       select limit_micros::text as limit_micros from liame.budget_policy where tenant_id = ${tenantId} and brand_id is null`);
     const mudancas = await this.mudancasDoMes(tx, { tenantId, fuso, inicio: mes.from, hoje: seguinte, fim: seguinte });
+    const ritmo = await this.ritmoDoMesFechado(tx, { tenantId, inicio: mes.from, ate: mes.to });
     const aprovou = await this.quemAprovou(tx, mudancas.map((m) => m.action_id));
     const estado = (x: { status: string; daily_micros: number | null }) => ({ status: x.status, daily_micros: x.daily_micros === null ? null : String(x.daily_micros) });
     return {
@@ -669,6 +714,8 @@ export class BudgetService {
         agent_key: m.agent_key,
         check: m.check?.status ?? null,
       })),
+      // O ritmo da semana no mês (R7): quantas semanas e quantas mudanças de verba; os passos não entram em `changes`.
+      ...(ritmo ? { rhythm: ritmo } : {}),
     };
   }
 

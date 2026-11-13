@@ -27,6 +27,8 @@ import { FERRAMENTAS_DA_CAMPANHA_NOVA } from '@/components/criativos/campanha-no
 import { DetalheAnuncio, type Volta } from './detalhe-anuncio';
 import { DetalheCampanhaGoogle } from './detalhe-campanha-google';
 import { DetalheCampanhaNova } from './detalhe-campanha-nova';
+import { DetalheRitmo } from './detalhe-ritmo';
+import { ehPedidoDoRitmo } from './ritmo-textos';
 import { DetalheMensagem, type Feito } from './detalhe-mensagem';
 import { type AcaoDeMensagem, ehPedidoDeMensagem, etiquetaDaMensagem, mensagemApresentada } from './mensagem-textos';
 import { type AcaoDeComentario, canalETipoDaLista, comentarioApresentado, ehPedidoDeComentario, etiquetaDoComentario, operacaoDo } from './comentario-textos';
@@ -175,9 +177,16 @@ export function AprovacoesTela() {
     });
     // O número do menu só muda com a leitura inteira (sem os planos, ficaria menor do que é).
     if (!planos || planos.ok) definirContador(pendentesDe(montarLista(acoes.data.items, planos?.ok ? planos.data.planos : [], new Date()), podeDecidir, podeDecidirPlanos));
-    if (acaoInicial && !acoes.data.items.some((a) => a.id === acaoInicial)) {
-      const um = await chamar(() => api.GET('/v1/actions/{id}', { params: { path: { id: acaoInicial } } }));
-      if (id === seq.current) setAvulso(um.ok ? um.data : null);
+    if (acaoInicial) {
+      const daLista = acoes.data.items.find((a) => a.id === acaoInicial);
+      if (!daLista) {
+        const um = await chamar(() => api.GET('/v1/actions/{id}', { params: { path: { id: acaoInicial } } }));
+        if (id === seq.current) setAvulso(um.ok ? um.data : null);
+      } else if (grupoDe(daLista, new Date()) === null) {
+        // Veio entre os mais recentes, mas não aparece em nenhum grupo (decidido em outro dia): abre avulso, como o que
+        // não veio. É por aqui que se abre o ritmo da semana que está rodando há dias (plano da região, R7).
+        setAvulso(daLista);
+      }
     }
     // `definirContador` é estável (o `setState` do provedor); os iniciais vêm da rota.
   }, [acaoInicial, definirContador, podeVerPlanos, podeDecidir, podeDecidirPlanos]);
@@ -952,6 +961,23 @@ export function AprovacoesTela() {
         aoAprovar={aprovar}
         aoRecusar={recusar}
         aoPedirAtivar={pedirAtivarCampanhaGoogle}
+      />
+    );
+  } else if (aberta?.tipo === 'acao' && ehPedidoDoRitmo(aberta.acao)) {
+    detalhe = (
+      <DetalheRitmo
+        acao={aberta.acao}
+        grupo={grupoDe(aberta.acao, agora)}
+        agora={agora}
+        podeDecidir={podeDecidir}
+        podeOperar={pode('campanhas.operar')}
+        temApp={temApp}
+        temChave={temChave}
+        titulo={tituloDoDetalhe}
+        campoCodigo={campoCodigo}
+        aoVoltar={voltarParaALista}
+        aoAprovar={aprovar}
+        aoRecusar={recusar}
       />
     );
   } else if (aberta?.tipo === 'acao' && ehPedidoDeCampanhaNova(aberta.acao)) {

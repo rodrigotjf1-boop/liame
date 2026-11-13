@@ -326,7 +326,12 @@ function CartaoDaVerba({ verba: b, mes, periodo, podeDefinir }: VerbaProps) {
               })}
             </ul>
           ) : (
-            <p className="rev-nada">O Liame não mudou nada nas campanhas em {mes}.</p>
+            <p className="rev-nada">{b.rhythm ? `Fora do ritmo da semana, o Liame não mudou nada nas campanhas em ${mes}.` : `O Liame não mudou nada nas campanhas em ${mes}.`}</p>
+          )}
+          {b.rhythm && (
+            <p className="eixo-nota">
+              O ritmo da semana rodou em {b.rhythm.weeks === 1 ? '1 semana' : `${b.rhythm.weeks} semanas`}: {b.rhythm.steps === 1 ? '1 mudança' : `${b.rhythm.steps} mudanças`} de verba, dentro do que foi aprovado. Elas não entram na lista acima.
+            </p>
           )}
         </div>
         <div className="rm-acoes">

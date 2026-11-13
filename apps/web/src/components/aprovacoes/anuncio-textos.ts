@@ -62,6 +62,17 @@ export function alvoNaFrase(a: AcaoDeAnuncio): { o: string; do: string; no: stri
   return { o: `o ${tipo} ${nome}`, do: `do ${tipo} ${nome}`, no: `no ${tipo}`, fem: false };
 }
 
+/**
+ * O passo de um dia do ritmo da semana (plano da região, R7) desfeito tira o objeto do ritmo: no passo seguinte a verba
+ * já não é a que o Liame deixou, e ele não mexe mais nela nesta semana (D-RG-63). A confirmação do "Desfazer" diz isso;
+ * nos outros pedidos, nada.
+ */
+export function avisoDoDesfazerNoRitmo(a: AcaoDeAnuncio): string | null {
+  if (a.tool !== 'orcamento_do_ritmo') return null;
+  const alvo = alvoNaFrase(a);
+  return `Este é um passo do ritmo da semana: desfazer devolve a verba de antes deste dia, e ${alvo.o} sai do ritmo. O Liame não muda mais a verba ${alvo.fem ? 'dela' : 'dele'} nesta semana.`;
+}
+
 /** O que a tela precisa saber do mês para dizer quanto o pedido pesa até o fim dele e quais limites ele passou. */
 export type MesDoPedido = { nome: string; faltam: number; tetoPorCampanha: number | null; passo: number | null; mudancasPorHora: number | null };
 
@@ -222,6 +233,8 @@ export function anuncioApresentado(a: AcaoDeAnuncio, mes: MesDoPedido | null = n
 /** "· pela recomendação do Gestor de tráfego" ou "· é a volta de outro pedido", no cabeçalho do pedido. */
 export function origemDoAnuncio(a: Acao): string | null {
   if (a.undoes) return 'é a volta de outro pedido';
+  // O passo de um dia do ritmo da semana (plano da região, R7): sai sem outro pedido de aprovação, pelo ritmo aprovado.
+  if (a.tool === 'orcamento_do_ritmo') return 'pelo ritmo da semana que uma pessoa aprovou';
   return a.recommendation && !a.agent_key ? 'pela recomendação do Gestor de tráfego' : null;
 }
 
