@@ -4,7 +4,7 @@ import { reaisDeMicros } from '@/lib/formato';
 
 // O ritmo da semana em Aprovações (plano da região, R7, parte 1b-3; protótipo aprovado pelo dono em 13/11/2026): as
 // frases da tela, sem React. O pedido é do Gestor de tráfego, por regra e sem IA: a verba de cada dia segue os pedidos
-// da loja, a chuva prevista e as datas, sem gastar mais na semana. Aqui ficam o título, o porquê de cada dia, a
+// da loja, a chuva prevista e as datas, sem aumentar a soma das verbas da semana. Aqui ficam o título, o porquê de cada dia, a
 // situação do ritmo e de cada campanha, o caminho (o que o Liame já fez em cada dia) e o motivo do que ficou bloqueado.
 
 export const FERRAMENTA_DO_RITMO = 'ritmo_da_semana';
@@ -95,7 +95,7 @@ export function fraseDoRitmo(r: Pick<Ritmo, 'days' | 'source' | 'week_micros' | 
   const partes = [menos.length ? `menos ${lista(menos)}` : null, mais.length ? `mais ${lista(mais)}` : null].filter((x): x is string => x !== null);
   const dias = partes.length ? `Nesta semana, a verba de cada dia segue ${base}: ${partes.join('; ')}.` : `Nesta semana, a verba de cada dia fica igual à de hoje: ${base} não ${r.source === 'loja' ? 'pedem' : 'pede'} mudança.`;
   const n = r.campaigns.length;
-  const semana = `A semana não gasta mais: ${reais(r.week_micros)} nos 7 dias (sem o ritmo, ${reais(r.base_week_micros)}), em ${n === 1 ? '1 campanha' : `${n} campanhas`}.`;
+  const semana = `A soma das verbas da semana não aumenta: ${reais(r.week_micros)} nos 7 dias (sem o ritmo, ${reais(r.base_week_micros)}), em ${n === 1 ? '1 campanha' : `${n} campanhas`}.`;
   return { dias, semana };
 }
 

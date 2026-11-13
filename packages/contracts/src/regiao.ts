@@ -534,7 +534,7 @@ export type RegionRhythmRef = z.infer<typeof RegionRhythmRef>;
  * O ritmo da semana que vem, como o Gestor de tráfego o montaria (R7; a prévia: nada é pedido nem executado). A verba de
  * cada dia segue os pedidos da loja por dia da semana (ou a referência do setor), a chuva prevista e as datas, com os
  * limites: cada dia entre 20% abaixo e 20% acima da verba de hoje, até 10% de mudança de um dia para o outro, nenhum dia
- * acima do teto por campanha, e a semana sem gastar mais do que gastaria sem o ritmo. `status`: `pronto`, `desligado`
+ * acima do teto por campanha, e a soma das verbas da semana sem passar de 7 vezes a verba de hoje. `status`: `pronto`, `desligado`
  * (a função da região), `sem_endereco` (a loja fora do mapa), `sem_permissao` (quem pergunta não vê Resultados) ou
  * `sem_campanhas` (nenhuma campanha ativa da Meta com verba diária própria que caiba nas regras).
  */

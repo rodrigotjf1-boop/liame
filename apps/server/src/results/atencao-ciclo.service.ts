@@ -3,6 +3,7 @@ import { uuidv7 } from '@liame/database';
 import { Injectable } from '@nestjs/common';
 import { sql } from 'drizzle-orm';
 import { nomeDaPlataforma, textoDoGastoAcima, verbaDaLeitura } from '../actions/conferencia-do-gasto.js';
+import { avisosDoRitmoDasMarcas, textoDoAvisoDoRitmo } from '../campanhas/ritmo-avisos.js';
 import { CONNECTORS } from '../actions/connectors.js';
 import { MODELO_PADRAO } from '../attribution/motor.js';
 import { ESCOPO_DATA_MANAGER } from '../connectors/google-ads/data-manager.js';
@@ -369,6 +370,11 @@ export class AtencaoCicloService {
            order by k.checked_on desc, r.id`)
       : { rows: [] };
 
+    // O ritmo da semana (plano da região, R7; D-RG-73): a campanha que saiu do ritmo, a que ainda não voltou à verba de
+    // antes e a que gastou mais do que a soma das verbas de cada dia. Calculado agora, dos passos guardados e do gasto
+    // lido; sem ritmo nenhum nas marcas, é uma consulta só.
+    const doRitmo = await avisosDoRitmoDasMarcas(tx, marcas, instante);
+
     const politicasDaMarca = new Map<string, LoadedPolicy[]>();
     for (const m of linhasDasMarcas) {
       if (sugestoes.rows.some((s) => s.brand_id === m.id)) politicasDaMarca.set(m.id, (await carregarPoliticas(tx, m.tenant_id, m.id)).policies);
@@ -380,6 +386,8 @@ export class AtencaoCicloService {
     const marcaDoAviso = new Map<ItemCiclo, string>();
     // A recomendação por trás de cada sugestão, só na leitura da tela (X3).
     const recomendacaoDoAviso = new Map<ItemCiclo, AttentionRecommendation>();
+    // O ritmo de que o aviso fala e o pedido dele em Aprovações, só na leitura da tela (R7).
+    const ritmoDoAviso = new Map<ItemCiclo, { id: string; action_id: string | null }>();
     const empresaDaMarca = new Map(linhasDasMarcas.map((m) => [m.id, m.tenant_id]));
     /** A escrita na plataforma está ligada para esta conta? (A flag do conector, como no pedido.) Uma conta por vez na memória. */
     const escritaLigada = new Map<string, boolean>();
@@ -471,6 +479,14 @@ export class AtencaoCicloService {
             nomeDaPlataforma(g.provider),
           );
           itens.push({ kind: 'gasto_acima_da_verba', severity: 'atencao', ...texto, connected_account_id: g.conta, campaign_id: g.campaign_id, provider: g.provider });
+        }
+
+        // O ritmo da semana (R7): um aviso por campanha, com o caminho para o ritmo em Aprovações (para quem vê os pedidos).
+        for (const r of doRitmo) {
+          if (r.marca !== marca) continue;
+          const item: ItemCiclo = { ...textoDoAvisoDoRitmo(r.aviso, reais), connected_account_id: r.conta, campaign_id: r.campanha, provider: 'meta_ads' };
+          itens.push(item);
+          if (leitor) ritmoDoAviso.set(item, { id: r.aviso.ritmo, action_id: leitor.vePedidos ? r.aviso.acao : null });
         }
 
         // O envio das vendas ao Google parou sem ninguém mandar parar: falta a permissão, ou o Google está recusando.
@@ -600,7 +616,8 @@ export class AtencaoCicloService {
     return {
       items: ordenarCiclo(itens).map((i) => {
         const recomendacao = recomendacaoDoAviso.get(i);
-        return { ...i, brand_id: marcaDoAviso.get(i) ?? null, ...(recomendacao ? { recommendation: recomendacao } : {}) };
+        const ritmo = ritmoDoAviso.get(i);
+        return { ...i, brand_id: marcaDoAviso.get(i) ?? null, ...(recomendacao ? { recommendation: recomendacao } : {}), ...(ritmo ? { rhythm: ritmo } : {}) };
       }),
       generated_at: agora.toISOString(),
     };

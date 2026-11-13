@@ -1,5 +1,5 @@
 import type { AttentionItem, SourceFreshness, SummaryResponse, TeamResponse } from '@liame/contracts';
-import { acaoDoAviso, destinoDasVendasAoGoogle, destinoDoAviso, destinoPedeVendas, gravidadeDe } from '@/components/atencao/textos';
+import { acaoDoAviso, destinoDasVendasAoGoogle, destinoDoAviso, destinoDoRitmo, destinoPedeVendas, gravidadeDe } from '@/components/atencao/textos';
 import { inteiro } from '@/lib/formato';
 import { diaMes, nomesDe, porcentagem, type Trecho } from '@/components/resultados/textos';
 
@@ -169,6 +169,9 @@ function destinoDe(item: AttentionItem, podeVerVendas: boolean, podeVerContas: b
   // O envio das vendas ao Google parou: o botão diz o que fazer e abre Contas conectadas no cartão da conta.
   const vendasAoGoogle = podeVerContas ? destinoDasVendasAoGoogle(item) : null;
   if (vendasAoGoogle) return { rotulo: vendasAoGoogle.curto, href: vendasAoGoogle.href };
+  // O aviso do ritmo da semana abre o ritmo em Aprovações (plano da região, R7).
+  const doRitmo = destinoDoRitmo(item);
+  if (doRitmo) return { rotulo: doRitmo.curto, href: doRitmo.href };
   const acao = acaoDoAviso(item.kind);
   if ((acao === 'abrir-contas' || acao === 'reconectar') && podeVerContas) return { rotulo: acao === 'reconectar' ? 'Reconectar' : 'Ver', href: '/contas' };
   const destino = acao && (podeVerVendas || !destinoPedeVendas(acao)) ? destinoDoAviso(acao) : null;

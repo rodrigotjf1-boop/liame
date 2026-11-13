@@ -172,7 +172,7 @@ function ritmoDaSemana(a: ActionResponse): PedidoApresentado {
   const conta = a.account_name ? ` em ${a.account_name}` : '';
   return {
     titulo: `Ritmo da semana${conta}`,
-    resumo: 'O Gestor de tráfego montou a verba de cada dia da semana pelos pedidos da loja, a chuva prevista e as datas, sem gastar mais na semana. Uma aprovação vale para os 7 dias.',
+    resumo: 'O Gestor de tráfego montou a verba de cada dia da semana pelos pedidos da loja, a chuva prevista e as datas, sem aumentar a soma das verbas da semana. Uma aprovação vale para os 7 dias.',
     impacto: 'sem verba nova',
     mudancas: [['Verba de cada dia', 'a de hoje, todos os dias', 'menos nos dias fracos, mais nos fortes']],
     desfazer: 'Dá para parar a qualquer hora: “Parar o ritmo” devolve a verba de antes, em até 10% por dia, sem pedir o código.',

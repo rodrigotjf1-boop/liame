@@ -281,7 +281,7 @@ export function DetalheRitmo({ acao, grupo, agora, podeDecidir, podeOperar, temA
             {frase.dias} <b>{frase.semana}</b> Se você aprovar, o Liame muda a verba d{campanhas} no começo de cada dia.
           </p>
           <div className="lite-chips">
-            <span className="lite-chip">Não aumenta o gasto da semana</span>
+            <span className="lite-chip">A soma das verbas da semana não aumenta</span>
             <span className="lite-chip">Dá para parar a qualquer hora</span>
             <span className="lite-chip">vale até {diaMes(r.week.to)}</span>
           </div>
@@ -344,7 +344,7 @@ export function DetalheRitmo({ acao, grupo, agora, podeDecidir, podeOperar, temA
                 )}
               </div>
               <p className="campo-dica" id={`${ids}-parar-d`}>
-                Parar devolve a verba de antes a cada campanha, em até 10% por dia. Não precisa do código: parar nunca gasta mais. Outro ritmo, só na semana que vem.
+                Parar devolve a verba de antes a cada campanha, em até 10% por dia. Não precisa do código: parar só devolve a verba que cada campanha já tinha. Outro ritmo, só na semana que vem.
               </p>
               {erroParar && (
                 <p className="campo-erro" role="alert">
@@ -428,8 +428,9 @@ export function DetalheRitmo({ acao, grupo, agora, podeDecidir, podeOperar, temA
             <div className="politica">
               <Icone nome="shield" />
               <span>
-                <b className={`risco risco--${risco}`}>{ROTULO_RISCO[risco]}.</b> Muda a verba d{campanhas} todo dia, mas não aumenta o gasto da semana ({reais(r.week_micros)}, contra {reais(r.base_week_micros)} sem o ritmo)
-                {r.ceiling_micros !== null ? `, e nenhum dia passa do teto por campanha (${reais(r.ceiling_micros)} por dia)` : ''}. {politicaDe(acao)}
+                <b className={`risco risco--${risco}`}>{ROTULO_RISCO[risco]}.</b> Muda a verba d{campanhas} todo dia, mas a soma das verbas da semana não aumenta ({reais(r.week_micros)}, contra {reais(r.base_week_micros)} sem o ritmo)
+                {r.ceiling_micros !== null ? `, e nenhum dia passa do teto por campanha (${reais(r.ceiling_micros)} por dia)` : ''}. O gasto de cada dia é a Meta que decide: ela pode passar da verba num dia e compensar em outro. O
+                Liame confere os 7 dias e avisa na Atenção se o gasto passar da soma. {politicaDe(acao)}
               </span>
             </div>
             {LIMITES.map(([icone, texto]) => (

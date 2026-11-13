@@ -1,5 +1,5 @@
 import { randomInt, randomUUID } from 'node:crypto';
-import { BudgetMonthResponse, RegionRhythmDetailResponse, RegionRhythmResponse, RegionRhythmStopResponse } from '@liame/contracts';
+import { BudgetMonthResponse, ClosedLoopAttentionResponse, RegionRhythmDetailResponse, RegionRhythmResponse, RegionRhythmStopResponse } from '@liame/contracts';
 import type { Database } from '@liame/database';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { ActionService } from '../../src/actions/action.service.js';
@@ -11,6 +11,7 @@ import { GESTOR_DE_TRAFEGO } from '../../src/equipe/membros.js';
 import { FlagService } from '../../src/flags/flag.service.js';
 import { KillSwitchService } from '../../src/kill-switch/kill-switch.service.js';
 import { RegiaoService } from '../../src/regiao/regiao.service.js';
+import { AtencaoCicloService } from '../../src/results/atencao-ciclo.service.js';
 import { diaDaSemana } from '../../src/regiao/ritmo-da-semana.js';
 import { diasDepois } from '../../src/regiao/semana.js';
 import { diaNoFuso } from '../../src/results/fora-do-normal.js';
@@ -35,7 +36,9 @@ import { hasDb } from './env.js';
 //   - o limite da empresa que não deixa a verba SUBIR tira a campanha do ritmo, e a volta é tentada todo dia até sair;
 //   - o pedido de ontem que ficou na fila não gasta a tentativa de hoje;
 //   - a conferência do gasto não trata o passo do ritmo como uma mudança só;
-//   - o ritmo guardado, como a tela o lê (parte 1b-3): a situação, cada campanha com a verba em que ficou e os passos.
+//   - o ritmo guardado, como a tela o lê (parte 1b-3): a situação, cada campanha com a verba em que ficou e os passos;
+//   - os avisos do ritmo na Atenção (parte 1b-3c): a campanha que saiu, a que não voltou à verba de antes e a que gastou
+//     mais do que a soma das verbas de cada dia.
 
 const REAL = 1_000_000;
 const HOJE = diaNoFuso(new Date(), 'America/Sao_Paulo');
@@ -605,6 +608,128 @@ describe.skipIf(!hasDb)('o ritmo da semana: os passos do dia (R7, parte 1b-2)', 
     const fechado = await naTransacaoDaEmpresa(database, { tenantId: e.tenantId, userId: null }, () => api.app.get(BudgetService).doMesFechado(e.tenantId, { from: `${HOJE.slice(0, 7)}-01`, to: fim }));
     expect(fechado.rhythm).toEqual({ weeks: 1, steps: 2 });
     expect(fechado.changes.map((m) => m.action)).toEqual(['orcamento.aumentar']);
+  }, 120_000);
+
+  it('a Atenção avisa: a campanha que saiu do ritmo, a que não voltou à verba de antes e a que gastou mais do que o ritmo permite', async () => {
+    const e = await cenario('Brasa Avisos Do Ritmo');
+    const lerAvisos = async () => {
+      const r = await api.call('GET', `/v1/results/attention?brand_id=${e.brandId}`, { cookie: e.cookie });
+      expect(r.status, JSON.stringify(r.body)).toBe(200);
+      return ClosedLoopAttentionResponse.parse(r.body).items.filter((i) => i.kind.startsWith('ritmo_'));
+    };
+    // Sem ritmo nenhum, nenhum aviso.
+    expect(await lerAvisos()).toEqual([]);
+
+    const gastou = await objetoLido(meta, e, 'campanha', { name: 'Gastou demais', daily_budget: '10000' });
+    const parada = await objetoLido(meta, e, 'campanha', { name: 'Não voltou', daily_budget: '9000' });
+    const mexida = await objetoLido(meta, e, 'campanha', { name: 'Mexida por fora', daily_budget: '7000' });
+    const linhaDe = async (externo: string) => (await ownerQuery<{ id: string }>(`select id from liame.campaign where connected_account_id = $1 and external_id = $2`, [e.conta, externo]))[0]!.id;
+    /** A verba da campanha como a leitura de hoje a mostra. */
+    const verbaLida = (externo: string, reais: number) =>
+      ownerQuery(`update liame.campaign set daily_budget_micros = $3, last_seen_at = now() where connected_account_id = $1 and external_id = $2`, [e.conta, externo, reais * REAL]);
+    // A semana passada: uma campanha subiu no sábado e voltou no domingo (está na verba de antes); a outra desceu no
+    // sábado e ficou lá (nenhum passo desde então). O dia de hoje não muda o resultado: o domingo passado está sempre
+    // nos 7 dias conferidos, e o sábado passado nunca é ontem.
+    const passada = diasDepois(segundaDe(HOJE), -7);
+    const [sabado, domingo] = [diasDepois(passada, 5), diasDepois(passada, 6)];
+    const antiga = await ritmo(
+      e,
+      [
+        { recurso: gastou.recurso, nome: 'Gastou demais', base: 100, dias: todosOsDias(100) },
+        { recurso: parada.recurso, nome: 'Não voltou', base: 100, dias: todosOsDias(100) },
+      ],
+      { inicio: passada },
+    );
+    await passoFeito(e, antiga, sabado, gastou.recurso, 110, 100);
+    await passoFeito(e, antiga, domingo, gastou.recurso, 100, 110);
+    await passoFeito(e, antiga, sabado, parada.recurso, 90, 100);
+    await verbaLida(gastou.id, 100);
+    await verbaLida(parada.id, 90);
+    // O pedido do ritmo em Aprovações (um pedido qualquer da empresa serve de alvo para a ligação).
+    const pedido = await api.call('POST', '/v1/actions', { cookie: e.cookie, body: { tool: 'campanha_pausar', provider: 'meta_ads', account_id: e.conta, resource_id: mexida.recurso, params: {} } });
+    expect(pedido.status, JSON.stringify(pedido.body)).toBe(201);
+    const pedidoDoRitmo = (pedido.body as { id: string }).id;
+    await ownerQuery(`update liame.budget_rhythm set action_id = $2 where id = $1`, [antiga, pedidoDoRitmo]);
+    // Esta semana: alguém mexeu por fora na terceira, hoje.
+    const atual = await ritmo(e, [{ recurso: mexida.recurso, nome: 'Mexida por fora', base: 60, dias: todosOsDias(66) }]);
+    await ownerQuery(
+      `insert into liame.budget_rhythm_step (id, tenant_id, rhythm_id, day, resource_id, kind, target_micros, expected_micros, status, reason)
+       values (gen_random_uuid(), $1, $2, $3::date, $4, 'ritmo', $5, $6, 'fora', 'a campanha não está como o Liame deixou')`,
+      [e.tenantId, atual, HOJE, mexida.recurso, 66 * REAL, 60 * REAL],
+    );
+    // O gasto lido da Meta: no domingo passado (o último dia em que o ritmo conduziu a campanha), a primeira gastou
+    // R$ 5.000,00, e os 7 dias dela iriam a pouco mais de R$ 700,00.
+    const [conjunto, anuncio] = [randomUUID(), randomUUID()];
+    await ownerQuery(
+      `insert into liame.ad_group (id, tenant_id, connected_account_id, campaign_id, provider, external_id, name, status) values ($1, $2, $3, $4, 'meta_ads', $5, 'Conjunto', 'ativa')`,
+      [conjunto, e.tenantId, e.conta, await linhaDe(gastou.id), `7${randomInt(1_000_000, 9_999_999)}`],
+    );
+    const externoDoAnuncio = `8${randomInt(1_000_000, 9_999_999)}`;
+    await ownerQuery(`insert into liame.ad (id, tenant_id, connected_account_id, ad_group_id, provider, external_id, name, status) values ($1, $2, $3, $4, 'meta_ads', $5, 'Anúncio', 'ativa')`, [
+      anuncio,
+      e.tenantId,
+      e.conta,
+      conjunto,
+      externoDoAnuncio,
+    ]);
+    const gastoEm = (dia: string, reais: number) =>
+      ownerQuery(
+        `insert into liame.metric_latest (connected_account_id, level, external_entity_id, metric_date, metric_name, attribution_window, tenant_id, brand_id, provider, entity_id, metric_value, currency, timezone, observed_at, changed_at)
+         values ($1, 'ad', $2, $3::date, 'spend', '', $4, $5, 'meta_ads', $6, $7, 'BRL', 'America/Sao_Paulo', now(), now())
+         on conflict (connected_account_id, level, external_entity_id, metric_date, metric_name, attribution_window) do update set metric_value = excluded.metric_value`,
+        [e.conta, externoDoAnuncio, dia, e.tenantId, e.brandId, anuncio, reais],
+      );
+    await gastoEm(domingo, 5000);
+
+    const itens = await lerAvisos();
+    const resumido = itens.map((i) => ({ kind: i.kind, severity: i.severity, title: i.title, campaign_id: i.campaign_id, provider: i.provider, conta: i.connected_account_id, brand_id: i.brand_id, rhythm: i.rhythm }));
+    const comum = { provider: 'meta_ads', conta: e.conta, brand_id: e.brandId };
+    expect(resumido).toEqual([
+      {
+        ...comum,
+        kind: 'ritmo_gasto_acima',
+        severity: 'atencao',
+        title: 'A campanha "Gastou demais" gastou mais do que o ritmo da semana permite',
+        campaign_id: await linhaDe(gastou.id),
+        rhythm: { id: antiga, action_id: pedidoDoRitmo },
+      },
+      { ...comum, kind: 'ritmo_sem_volta', severity: 'atencao', title: 'A campanha "Não voltou" ainda não voltou à verba de antes do ritmo', campaign_id: await linhaDe(parada.id), rhythm: { id: antiga, action_id: pedidoDoRitmo } },
+      { ...comum, kind: 'ritmo_campanha_saiu', severity: 'info', title: 'A campanha "Mexida por fora" saiu do ritmo da semana', campaign_id: await linhaDe(mexida.id), rhythm: { id: atual, action_id: null } },
+    ]);
+    const frase = (kind: string) => itens.find((i) => i.kind === kind)!.detail.replaceAll(String.fromCharCode(160), ' ');
+    expect(frase('ritmo_gasto_acima')).toContain(`De ${diasDepois(domingo, -6).slice(8, 10)}/${diasDepois(domingo, -6).slice(5, 7)} a ${domingo.slice(8, 10)}/${domingo.slice(5, 7)}, ela gastou R$ 5.000,00`);
+    expect(frase('ritmo_sem_volta')).toContain('ela está com R$ 90,00 por dia; antes do ritmo eram R$ 100,00');
+
+    // Quem não vê os pedidos recebe o aviso com o ritmo, sem o pedido dele; a rotina (sem leitor) nem recebe o ritmo.
+    const peloServico = (leitor: { userId: string; podePedir: boolean; vePedidos: boolean } | null) =>
+      naTransacaoDaEmpresa(database, { tenantId: e.tenantId, userId: null }, () => api.app.get(AtencaoCicloService).atencao(e.brandId, new Date(), leitor));
+    const semPedidos = (await peloServico({ userId: e.userId, podePedir: false, vePedidos: false })).items.filter((i) => i.kind.startsWith('ritmo_'));
+    expect(semPedidos.map((i) => [i.kind, i.rhythm])).toEqual([
+      ['ritmo_gasto_acima', { id: antiga, action_id: null }],
+      ['ritmo_sem_volta', { id: antiga, action_id: null }],
+      ['ritmo_campanha_saiu', { id: atual, action_id: null }],
+    ]);
+    expect((await peloServico(null)).items.filter((i) => i.kind.startsWith('ritmo_')).map((i) => [i.kind, i.rhythm, i.brand_id])).toEqual([
+      ['ritmo_gasto_acima', undefined, e.brandId],
+      ['ritmo_sem_volta', undefined, e.brandId],
+      ['ritmo_campanha_saiu', undefined, e.brandId],
+    ]);
+
+    // O gasto de depois do último passo do ritmo não é dele: a pessoa pode ter aumentado a verba. Só o de domingo conta.
+    await gastoEm(domingo, 100);
+    await gastoEm(diasDepois(HOJE, -1) === domingo ? domingo : diasDepois(HOJE, -1), diasDepois(HOJE, -1) === domingo ? 100 : 5000);
+    expect((await lerAvisos()).map((i) => i.kind)).toEqual(['ritmo_sem_volta', 'ritmo_campanha_saiu']);
+    // Alguém acertou à mão a verba da que não tinha voltado: a leitura de hoje mostra outra verba, e o aviso sai.
+    await verbaLida(parada.id, 100);
+    expect((await lerAvisos()).map((i) => i.kind)).toEqual(['ritmo_campanha_saiu']);
+    // De volta à verba que o Liame deixou, o aviso volta; com a volta andando (um passo hoje), sai de novo.
+    await verbaLida(parada.id, 90);
+    expect((await lerAvisos()).map((i) => i.kind)).toEqual(['ritmo_sem_volta', 'ritmo_campanha_saiu']);
+    await ownerQuery(
+      `insert into liame.budget_rhythm_step (id, tenant_id, rhythm_id, day, resource_id, kind, target_micros, expected_micros, status) values (gen_random_uuid(), $1, $2, $3::date, $4, 'volta', $5, $6, 'feito')`,
+      [e.tenantId, antiga, HOJE, parada.recurso, 99 * REAL, 90 * REAL],
+    );
+    expect((await lerAvisos()).map((i) => i.kind)).toEqual(['ritmo_campanha_saiu']);
   }, 120_000);
 
   it('a semana que continua de outra: a verba de hoje é a de antes do ritmo, e a segunda parte da verba de domingo', async () => {

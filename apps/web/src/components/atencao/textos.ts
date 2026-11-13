@@ -100,6 +100,15 @@ export function destinoDasVendasAoGoogle(item: { kind: string; connected_account
     : { href, rotulo: 'Ver o motivo em Contas conectadas', curto: 'Ver o motivo' };
 }
 
+/**
+ * Os avisos do ritmo da semana (plano da região, R7) abrem o ritmo em Aprovações: é lá que se acompanha cada dia e se
+ * para o ritmo. Só para quem vê os pedidos (o servidor manda o pedido do ritmo só a eles). `curto`: o do Resumo.
+ */
+export function destinoDoRitmo(item: { kind: string; rhythm?: { action_id: string | null } | undefined }): { href: string; rotulo: string; curto: string } | null {
+  if (!item.kind.startsWith('ritmo_') || !item.rhythm?.action_id) return null;
+  return { href: `/aprovacoes?pedido=${item.rhythm.action_id}`, rotulo: 'Ver o ritmo em Aprovações', curto: 'Ver o ritmo' };
+}
+
 /** Para onde leva o botão de tela (os de Contas e de reconectar têm o próprio tratamento). */
 export function destinoDoAviso(acao: AcaoDoAviso): { href: string; rotulo: string } | null {
   if (acao === 'abrir-links') return { href: '/links', rotulo: 'Abrir Links e cupons' };
