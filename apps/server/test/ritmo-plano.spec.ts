@@ -77,13 +77,13 @@ describe('o ritmo da semana como pedido (R7, parte 1b)', () => {
     expect(() => t.plan(estado({ situacao: 'aprovado' }) as never, {})).toThrow('Este ritmo já foi aprovado.');
   });
 
-  it('a política da distribuição (v15): o ritmo sempre em Aprovação; o automático só nas ações próprias do passo, e só para o funcionário de IA', () => {
+  it('a política da distribuição (v15): o ritmo sempre em Aprovação; o automático só nas ações próprias do passo, só na Meta e só para o funcionário de IA', () => {
     expect(PLATFORM_POLICY.version).toBe(15);
     const autonomia = PLATFORM_POLICY.document.rules.filter((r) => r.type === 'autonomy');
     expect(autonomia.filter((r) => r.action === 'ritmo.*')).toEqual([{ type: 'autonomy', action: 'ritmo.*', mode: 'APPROVAL' }]);
     expect(autonomia.filter((r) => r.action?.startsWith('orcamento.'))).toEqual([
-      { type: 'autonomy', action: 'orcamento.ritmo_aumentar', actor: 'agent', mode: 'AUTO' },
-      { type: 'autonomy', action: 'orcamento.ritmo_reduzir', actor: 'agent', mode: 'AUTO' },
+      { type: 'autonomy', action: 'orcamento.ritmo_aumentar', provider: 'meta_ads', actor: 'agent', mode: 'AUTO' },
+      { type: 'autonomy', action: 'orcamento.ritmo_reduzir', provider: 'meta_ads', actor: 'agent', mode: 'AUTO' },
     ]);
     // O que a regra nova NÃO liga (D-A7-11): nenhuma regra automática alcança o pedido de verba comum.
     expect(autonomia.some((r) => (r.mode === 'AUTO' || r.mode === 'LIMITED_AUTO') && ['orcamento.*', 'orcamento.aumentar', 'orcamento.reduzir'].includes(r.action ?? ''))).toBe(false);

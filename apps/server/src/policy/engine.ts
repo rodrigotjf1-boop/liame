@@ -112,9 +112,10 @@ export const PLATFORM_POLICY: LoadedPolicy = {
       // não alcança o pedido de verba comum de um agente (`orcamento.aumentar` e `orcamento.reduzir`, D-A7-11), e os
       // limites de `orcamento.*` (10% por mudança e as mudanças por hora) valem para elas. O portão do ritmo (a função, o
       // ritmo aprovado e não parado, o passo de hoje, o valor dentro do aprovado e a campanha como o Liame deixou) é
-      // conferido no pedido e de novo na execução; a ferramenta chega na parte seguinte da R7.
-      { type: 'autonomy', action: 'orcamento.ritmo_aumentar', actor: 'agent', mode: 'AUTO' },
-      { type: 'autonomy', action: 'orcamento.ritmo_reduzir', actor: 'agent', mode: 'AUTO' },
+      // conferido no pedido e de novo na execução; a ferramenta chega na parte seguinte da R7. Só na Meta (o ritmo do
+      // Google é a R9): se outra plataforma vier a ter estas ações, ela não herda o automático sem alguém decidir.
+      { type: 'autonomy', action: 'orcamento.ritmo_aumentar', provider: 'meta_ads', actor: 'agent', mode: 'AUTO' },
+      { type: 'autonomy', action: 'orcamento.ritmo_reduzir', provider: 'meta_ads', actor: 'agent', mode: 'AUTO' },
     ],
   },
 };
