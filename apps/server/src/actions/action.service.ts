@@ -345,6 +345,20 @@ export class ActionService {
   }
 
   /**
+   * O pedido do ritmo da semana, que o Gestor de tráfego monta uma vez por semana (plano da região, R7; D-RG-58 e
+   * D-RG-62). Quem chama é a rotina do worker, na transação da empresa, com o ritmo já guardado. Passa pelo mesmo trilho
+   * do pedido de uma pessoa (trava, flag de escrita, política) e sempre espera a aprovação com o código do app: a
+   * política da distribuição põe `ritmo.*` em Aprovação para quem quer que peça, e a ferramenta tem a trava
+   * `alwaysApproval`. Não depende do modo Aprovação do Gestor para as recomendações. `emNomeDe` é o dono da empresa.
+   */
+  async pedirRitmoPeloFuncionario(alvo: { tenantId: string; agentKey: string; agentLabel: string; emNomeDe: string }, input: CreateActionRequest): Promise<string> {
+    if (input.tool !== 'ritmo_da_semana') {
+      throw new AppProblem(400, 'ferramenta-nao-e-o-ritmo', 'Não é o ritmo da semana', 'Por aqui o funcionário só pede o ritmo da semana.');
+    }
+    return this.pedirEmNomeDoFuncionario(alvo, input, { rhythm: true });
+  }
+
+  /**
    * O pedido de envio de mensagem que o funcionário de CRM e mensageria propõe (A5, Y5 e Y6; D-A5-11), depois de montar
    * a campanha em rascunho no RegemCast. Quem chama é o serviço do pedido de mensagem, na transação da empresa. Passa
    * pelo mesmo trilho do pedido de uma pessoa (trava, flag de escrita, política) e sempre espera a aprovação com o
@@ -715,6 +729,11 @@ export class ActionService {
     // A ferramenta que só se pede pela rota do recurso (A6, Z12: a resposta no Direct, que pede o atendimento aberto).
     if (tool.onlyByRoute && (!pelaRota || quem.ator !== 'human')) {
       throw new AppProblem(422, 'acao-so-pela-rota', 'Esta ação não se pede direto', 'Esta ação só se pede pela tela do recurso: para responder no Direct, use a conversa, com o atendimento aberto.');
+    }
+    // O pedido que só o funcionário de IA faz, pela rotina dele (plano da região, R7: o ritmo da semana, que o Gestor de
+    // tráfego monta e guarda antes de pedir). A pessoa aprova ou recusa; o recusado não volta por um pedido avulso.
+    if (tool.onlyByAgent && quem.ator !== 'agent') {
+      throw new AppProblem(422, 'acao-so-pelo-funcionario', 'Esta ação não se pede direto', 'O ritmo da semana é montado pelo Gestor de tráfego, uma vez por semana: você aprova ou recusa em Aprovações.');
     }
     // A resposta automática (A6, Z11, parte 2e-1) só se pede pelo atendimento automático, que conferiu o portão antes.
     if (tool.atendimentoAutomatico && (!automatico || quem.ator !== 'agent')) {

@@ -203,6 +203,9 @@ export const DATA_CLASSES: Record<string, TableClassification> = {
   // A campanha nova na Meta (A4, X5): o que a pessoa pediu e o que já foi criado na Meta, passo a passo; quem pediu fica
   // ligado ao pedido.
   ad_campaign_new: { class: 'PERSONAL', retention: 'com a marca (quem pediu fica ligado à campanha nova)' },
+  // O ritmo da semana (plano da região, R7; migration 0156): a tabela da semana e os passos de cada dia.
+  budget_rhythm: { class: 'PERSONAL', retention: 'com a marca (quem parou fica ligado ao ritmo)' },
+  budget_rhythm_step: { class: 'CONFIDENTIAL', retention: 'com o ritmo da semana (a verba de cada dia em cada campanha)' },
   // A campanha nova no Google (A5, Y9; migration 0150): a peça e os textos nos tamanhos do Google, a foto de Fotos, a loja
   // do raio, a verba e o fim, e o que existe no Google; quem pediu fica ligado ao pedido.
   google_campaign_new: { class: 'PERSONAL', retention: 'com a marca (quem pediu fica ligado à campanha nova do Google)' },

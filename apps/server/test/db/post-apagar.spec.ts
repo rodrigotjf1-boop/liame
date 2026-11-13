@@ -195,7 +195,7 @@ describe.skipIf(!hasDb)('"Apagar das redes" (A6 · Z5d, parte 6)', () => {
     const novo = await pedidoDe(r.body.removal.action_id);
     expect(novo).toMatchObject({ tool: 'post_apagar', status: 'aprovada', mode: 'APPROVAL', provider: 'instagram', account_id: e.instagram!.id, requested_by: e.userId, compensates_action_id: pedido });
     const doPedido = await api.call('GET', `/v1/actions/${r.body.removal.action_id}`, { cookie: e.cookie });
-    expect(doPedido.body.policy.versions[0]).toBe('plataforma@14');
+    expect(doPedido.body.policy.versions[0]).toBe('plataforma@15');
     const [ev] = await ownerQuery<{ before: Record<string, unknown>; after: Record<string, unknown> }>(
       `select before, after from liame.audit_event where tenant_id = $1 and action = 'posts.apagar_das_redes'`,
       [e.tenantId],

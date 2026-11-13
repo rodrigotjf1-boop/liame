@@ -24,6 +24,7 @@ import {
 import { EstadoDaMensagem, faseDaMensagem, impedimentoDaMensagem } from './mensagem-plano.js';
 import { planoDaCampanhaGoogle, planoDeAtivarNoGoogle, planoDePausarNoGoogle } from '../campanhas/campanha-google-plano.js';
 import { planoDaCampanhaNova, planoDeAtivar, planoDePausar } from '../campanhas/campanha-nova-plano.js';
+import { planoDoRitmo } from '../campanhas/ritmo-plano.js';
 import { EstadoDoPost, planoDeApagarOPost, planoDeTentarDeNovo, planoDoPost, quandoSai } from '../posts/post-plano.js';
 import { motivoDoCompartilhado, orcamentoCompartilhado } from './orcamento-compartilhado.js';
 
@@ -131,6 +132,11 @@ export interface ToolDefinition {
    * (`POST /v1/actions`), nem por um funcionário de IA.
    */
   onlyByRoute?: boolean;
+  /**
+   * Só o funcionário de IA pede, pela rotina dele, que monta e guarda o recurso antes (plano da região, R7: o ritmo da
+   * semana, do Gestor de tráfego). Uma pessoa não pede direto (`POST /v1/actions`): ela aprova ou recusa.
+   */
+  onlyByAgent?: boolean;
   /**
    * A trava (kill switch) de outra ferramenta que também para esta (A6, Z5d: a trava do `post_publicar` para a nova
    * tentativa do post). Conferida no pedido e na execução, junto com a desta.
@@ -431,6 +437,39 @@ export const TOOLS: Record<string, ToolDefinition> = {
       return { action: 'campanha.pausar', budgetImpact: 'decrease', valueMicros: null, currentValueMicros: null, reserveMicros: 0, desiredState: plano.desejado as unknown as ResourceState };
     },
     undo: () => ({ tool: 'campanha_nova_ativar', params: {} }),
+  },
+  // O ritmo da semana (plano da região, R7, parte 1b; protótipo aprovado em 13/11/2026; D-RG-58 e D-RG-62): o Gestor de
+  // tráfego monta a verba de cada dia das campanhas da Meta e pede; a pessoa aprova uma vez, com o código do app, e a
+  // aprovação vale para os 7 dias. Aprovar não muda nada na Meta nem reserva verba: cada dia sai depois como um passo
+  // próprio, dentro do que foi aprovado, com os limites de sempre. Sempre com uma pessoa (`alwaysApproval`), só com a
+  // função `ritmo_da_semana`, e só a rotina do Gestor pede (`onlyByAgent`): o ritmo recusado não volta por outro pedido.
+  ritmo_da_semana: {
+    name: 'ritmo_da_semana',
+    version: 1,
+    owner: 'midia',
+    description:
+      'Aprova o ritmo da semana que o Gestor de tráfego montou: a verba de cada dia das campanhas da Meta, pelos pedidos da loja, a chuva prevista e as datas, sem gastar mais na semana. Aprovar não muda nada na Meta: cada dia sai depois como um passo próprio, dentro do que foi aprovado.',
+    // Muda a verba de várias campanhas ao longo da semana, mas não aumenta o gasto dela e cada passo tem os limites dele.
+    risk: 'R2',
+    providers: ['meta_ads'],
+    compensation: 'parar_o_ritmo',
+    alwaysApproval: true,
+    onlyByAgent: true,
+    flag: 'ritmo_da_semana',
+    params: NoParams,
+    plan(before) {
+      const plano = planoDoRitmo(before);
+      if (!plano.ok) throw new PlanoRecusado(plano.motivo);
+      return {
+        action: 'ritmo.aprovar',
+        // A semana com ritmo não gasta mais do que sem ele: nada a reservar no envelope do mês.
+        budgetImpact: 'none',
+        valueMicros: null,
+        currentValueMicros: null,
+        reserveMicros: 0,
+        desiredState: plano.desejado as unknown as ResourceState,
+      };
+    },
   },
   // A campanha nova no Google, criada pausada (A5, Y9, parte 2; P45; D-A5-21 a D-A5-26): a peça aprovada, com os textos
   // nos tamanhos do Google e uma foto da loja recortada, vira uma Performance Max pausada, numa requisição só (o Google
