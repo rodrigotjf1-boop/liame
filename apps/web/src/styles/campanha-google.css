@@ -1,0 +1,53 @@
+/* ===================== A5 · Y9 · A campanha nova no Google (protótipo P45, pré-aprovado em 12/11/2026) =====================
+   Nenhuma cor nova: os tokens do tema. A gaveta reaproveita a da campanha na Meta (cn-gaveta, cn-grade e a lista de Fotos,
+   po-*); aqui fica só o que é do Google: as listas de textos com a contagem, a proposta do Criativo, os recortes da foto,
+   a logo e as prévias da Pesquisa e do Display. */
+
+.cg-lista { display: grid; gap: var(--sp-2); margin: 0; padding: 0; list-style: none; }
+.cg-lista li { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; align-items: center; gap: var(--sp-2); min-width: 0; }
+.cg-lista .input { min-width: 0; width: 100%; }
+.cg-linha { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: var(--sp-2); min-width: 0; }
+.cg-linha .input { min-width: 0; width: 100%; }
+.cg-conta { font-family: var(--font-mono); font-size: var(--text-xs); color: var(--text-muted); white-space: nowrap; }
+.cg-conta[data-passou] { color: var(--danger); font-weight: 600; }
+.cg-mais { justify-self: start; }
+.cg-acoes { display: flex; flex-wrap: wrap; gap: var(--sp-2); }
+.cg-acoes .btn { max-width: 100%; height: auto; white-space: normal; }
+.cg-proposta { display: grid; gap: var(--sp-2); padding: var(--sp-3); border: 1px dashed var(--border); border-radius: var(--radius); background: var(--surface-2); }
+.cg-proposta h3 { margin: 0; font-size: var(--text-sm); }
+.cg-proposta h3:focus { outline: none; }
+.cg-proposta ol, .cg-proposta ul { margin: 0; padding-left: 1.2em; display: grid; gap: 2px; font-size: var(--text-sm); overflow-wrap: anywhere; }
+
+/* os recortes da foto, pelo centro */
+.cg-recortes { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--sp-3); margin: 0; padding: 0; list-style: none; align-items: end; }
+@container cng (max-width: 440px) { .cg-recortes { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.cg-recortes figure { display: grid; gap: 4px; margin: 0; min-width: 0; }
+.cg-recortes figcaption { font-size: var(--text-xs); color: var(--text-muted); overflow-wrap: anywhere; }
+.cg-recortes figcaption b { display: block; color: var(--text); font-weight: 600; }
+.cg-ruim { color: var(--danger); font-weight: 600; }
+.cg-quadro { position: relative; overflow: hidden; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--bg-subtle); }
+.cg-quadro img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.cg-quadro--deitada { aspect-ratio: 1.91 / 1; }
+.cg-quadro--quadrada { aspect-ratio: 1 / 1; }
+.cg-quadro--em_pe { aspect-ratio: 4 / 5; }
+.cg-quadro--ruim { opacity: .45; }
+
+/* o nome e a logo da loja */
+.cg-logo { display: flex; align-items: center; gap: var(--sp-3); min-width: 0; }
+.cg-logo-img { display: grid; place-items: center; width: 48px; height: 48px; flex: none; overflow: hidden; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--surface); color: var(--text-subtle); }
+.cg-logo-img img { display: block; width: 100%; height: 100%; object-fit: contain; }
+.cg-logo span { min-width: 0; overflow-wrap: anywhere; }
+.cg-logo small { display: block; }
+
+/* as prévias: a Pesquisa e o Display */
+.cg-previa { width: 100%; max-width: 300px; overflow: hidden; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); }
+.cg-busca { display: grid; gap: 4px; padding: var(--sp-3); }
+.cg-url { display: flex; align-items: center; gap: var(--sp-2); min-width: 0; font-size: var(--text-xs); }
+.cg-url span:last-child { min-width: 0; overflow-wrap: anywhere; }
+.cg-tit { color: var(--link); font-weight: 500; line-height: 1.3; overflow-wrap: anywhere; }
+.cg-busca p { margin: 0; color: var(--text-muted); font-size: var(--text-sm); overflow-wrap: anywhere; }
+.cg-display .cg-quadro { border-width: 0 0 1px; border-radius: 0; }
+.cg-display-txt { display: grid; grid-template-columns: 32px minmax(0, 1fr); align-items: start; gap: var(--sp-2); padding: var(--sp-3); }
+.cg-display-txt .cg-logo-img { width: 32px; height: 32px; }
+.cg-display-txt b { overflow-wrap: anywhere; }
+.cg-display-txt p { margin: 2px 0 0; color: var(--text-muted); font-size: var(--text-xs); overflow-wrap: anywhere; }
