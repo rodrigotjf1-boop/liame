@@ -1,4 +1,4 @@
-import { nomeComparavel } from './coordenada.js';
+import { bairroDaArea, nomeComparavel } from './coordenada.js';
 import { porcentoDe } from './midia-paga.js';
 
 // Os cliques por bairro e de fora da área de entrega (plano da região, R4, os bairros; P40, revisão aprovada pelo dono
@@ -54,7 +54,7 @@ const ehCep = (s: string): boolean => s.length === 5 && [...s].every((c) => c >=
  * só com a cidade da loja nunca contam como fora (D-RG-46).
  */
 export function cliquesPorBairro(e: EntradaDosCliques): CliquesPorBairro {
-  const daEntrega = new Set(e.areas.map((a) => nomeComparavel(a)));
+  const daEntrega = new Set(e.areas.map((a) => nomeComparavel(bairroDaArea(a))));
   const temArea = daEntrega.size > 0;
   const porChave = new Map<string, ItemDosCliques>();
   for (const l of e.locais) {

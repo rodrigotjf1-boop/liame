@@ -256,9 +256,11 @@ describe.skipIf(!hasDb)('a mídia por região e por hora, pela rotina do worker 
        on conflict (district_code) do nothing`,
       [cidade],
     );
+    // O mês da contagem é antigo de propósito (ERR-229): a tabela é do sistema inteiro, e a rotina do CNPJ do teste da R2,
+    // que roda junto, decide pelo maior mês dela; com o mês "de verdade", ela via o mês já lido e parava.
     await ownerQuery(
       `insert into liame.region_food_count (geo_code, area_kind, area_key, period, active, active_restaurant, active_snack, active_bar, active_home, opened_12m, closed_12m)
-       values ($1, 'cep', $2, '2026-10', 1, 1, 0, 0, 0, 0, 0) on conflict do nothing`,
+       values ($1, 'cep', $2, '2000-01', 1, 1, 0, 0, 0, 0, 0) on conflict do nothing`,
       [cidade, cep],
     );
     const r = await api.call('GET', `/v1/region/overview?brand_id=${e.brandId}&unit_id=${loja}`, { cookie: e.cookie });

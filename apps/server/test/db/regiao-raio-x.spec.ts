@@ -194,7 +194,7 @@ describe.skipIf(!hasDb)('Sua região: a rotina das fontes públicas e o retrato 
       `insert into liame.unit (id, tenant_id, brand_id, name, address_postal_code, address_street, address_number, address_district, address_city, address_state,
                                ibge_city_code, latitude, longitude, location_precision, location_source, delivery_radius_km, delivery_areas)
        values ($1, $2, $3, 'Loja Tijuca', '20520054', 'Rua Conde de Bonfim', '450', 'Tijuca', 'Rio de Janeiro', 'RJ', $4, -22.9244, -43.2327, 'endereco', 'cep', 3,
-               '["Tijuca", "Maracana", "Bairro Inventado"]'::jsonb)`,
+               '["Tijuca", "Maracana, Rio de Janeiro - RJ, Brasil", "Bairro Inventado"]'::jsonb)`,
       [tijuca, tenantId, brandId, RIO],
     );
     await ligarFlagDaEmpresa(api, 'regiao', tenantId, true);

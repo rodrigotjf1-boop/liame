@@ -24,7 +24,7 @@ import { FlagService } from '../flags/flag.service.js';
 import { PolicyService } from '../policy/policy.service.js';
 import { tetoDaVerba } from '../policy/teto-da-verba.js';
 import { destinoDoPost } from '../posts/link-do-post.js';
-import { nomeComparavel } from '../regiao/coordenada.js';
+import { bairroDaArea, nomeComparavel } from '../regiao/coordenada.js';
 import { centrosDosBairros } from '../worker/centros-dos-bairros.js';
 import {
   BairroDaCampanha,
@@ -631,7 +631,10 @@ export class CampanhasNovasService {
     const cidade = loja.ibge_city_code;
 
     // As áreas de entrega (Minha marca › Região) e os bairros com pedidos (Sua região), pelo nome, nos bairros do IBGE.
-    const areas = (Array.isArray(loja.delivery_areas) ? loja.delivery_areas : []).filter((a): a is string => typeof a === 'string').slice(0, MAXIMO_DE_BAIRROS);
+    const areas = (Array.isArray(loja.delivery_areas) ? loja.delivery_areas : [])
+      .filter((a): a is string => typeof a === 'string')
+      .map(bairroDaArea)
+      .slice(0, MAXIMO_DE_BAIRROS);
     const pedidos = (
       await tx.execute<{ district: string; orders: string; dias: number }>(sql`
         select district, sum(orders)::text as orders, max(day_to - day_from + 1)::int as dias from liame.region_order_district

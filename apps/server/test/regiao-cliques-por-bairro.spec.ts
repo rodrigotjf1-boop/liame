@@ -30,7 +30,8 @@ const base = (o: Partial<EntradaDosCliques> = {}): EntradaDosCliques => ({
     ['grajau', 'Grajaú'],
   ]),
   cepsDoMunicipio: new Set(['20550', '21941']),
-  areas: ['Tijuca', 'Maracanã', 'Vila Isabel', 'Praça da Bandeira', 'Andaraí', 'Grajaú', 'Rio Comprido'],
+  // Como o Perfil da Empresa no Google escreve algumas (ERR-227): o lugar inteiro; vale o bairro.
+  areas: ['Tijuca', 'Maracanã', 'Vila Isabel, Rio de Janeiro - RJ, Brasil', 'Praça da Bandeira, Rio de Janeiro - RJ, Brasil', 'Andaraí', 'Grajaú', 'Rio Comprido'],
   papeis: new Map([
     ['tijuca', 'manter' as const],
     ['vila isabel', 'atacar' as const],
