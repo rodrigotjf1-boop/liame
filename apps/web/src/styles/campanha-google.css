@@ -51,3 +51,7 @@
 .cg-display-txt .cg-logo-img { width: 32px; height: 32px; }
 .cg-display-txt b { overflow-wrap: anywhere; }
 .cg-display-txt p { margin: 2px 0 0; color: var(--text-muted); font-size: var(--text-xs); overflow-wrap: anywhere; }
+
+/* Aprovações: o aviso da não criada leva o motivo do Google com o código (`criterionError.X`), que não tem onde quebrar */
+.cg-aviso > div { min-width: 0; }
+.cg-aviso span { overflow-wrap: anywhere; }

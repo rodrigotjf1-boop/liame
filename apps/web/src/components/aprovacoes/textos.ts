@@ -131,6 +131,41 @@ function campanhaNova(a: ActionResponse): PedidoApresentado {
   };
 }
 
+// A campanha nova no Google (A5, Y9; P45): o detalhe próprio mostra os textos, os recortes e o que existe no Google;
+// aqui, a linha da lista.
+function campanhaGoogle(a: ActionResponse): PedidoApresentado {
+  const conta = a.account_name ? ` em ${a.account_name}` : '';
+  const verba = a.value_micros === null ? null : `até ${reaisDeMicros(String(a.value_micros))}/dia`;
+  if (a.tool === 'campanha_google_ativar') {
+    return {
+      titulo: `Ativar a campanha nova no Google${conta}`,
+      resumo: `${a.requested_by.name} pediu para ativar a campanha nova criada pausada no Google. Ativada, ela gasta ${verba ?? 'a verba diária'}, depois que o Google revisar os textos e as imagens.`,
+      impacto: verba,
+      mudancas: [['Situação', 'pausada', 'ativa']],
+      desfazer: 'A volta é pausar a campanha, também com aprovação.',
+      depoisDeAprovar: 'O Liame confere com o Google e ativa a campanha em instantes; o Google revisa os textos e as imagens antes de mostrar.',
+    };
+  }
+  if (a.tool === 'campanha_google_pausar') {
+    return {
+      titulo: `Pausar a campanha nova no Google${conta}`,
+      resumo: `${a.requested_by.name} pediu para pausar a campanha nova no Google. Pausada, ela para de aparecer e de gastar.`,
+      impacto: null,
+      mudancas: [['Situação', 'ativa', 'pausada']],
+      desfazer: 'Dá para ativar de novo, com outro pedido.',
+      depoisDeAprovar: 'O Liame pausa a campanha em instantes.',
+    };
+  }
+  return {
+    titulo: `Criar uma campanha nova no Google${conta}, pausada`,
+    resumo: `${a.requested_by.name} pediu uma Performance Max no Google com uma peça aprovada em Criativos. Ela nasce pausada: não aparece para ninguém e não gasta.`,
+    impacto: null,
+    mudancas: [['Campanha no Google', 'não existe', 'criada, pausada']],
+    desfazer: 'A campanha fica pausada no Google; quem remove é uma pessoa, no Google Ads.',
+    depoisDeAprovar: 'O Liame confere com o Google e cria tudo numa requisição só, pausado: se o Google recusar, nada é criado.',
+  };
+}
+
 const POR_FERRAMENTA: Record<string, (a: ActionResponse) => PedidoApresentado> = {
   regem_cupom_criar: cupom,
   orcamento_ajustar: orcamento,
@@ -138,6 +173,9 @@ const POR_FERRAMENTA: Record<string, (a: ActionResponse) => PedidoApresentado> =
   campanha_criar: campanhaNova,
   campanha_nova_ativar: campanhaNova,
   campanha_nova_pausar: campanhaNova,
+  campanha_google_criar: campanhaGoogle,
+  campanha_google_ativar: campanhaGoogle,
+  campanha_google_pausar: campanhaGoogle,
 };
 
 export function apresentar(a: ActionResponse): PedidoApresentado {
