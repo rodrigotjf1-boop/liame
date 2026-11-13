@@ -7,6 +7,7 @@ import { Icone } from '@/components/ui/icone';
 import { api, chamar, mensagemDe, type Problema } from '@/lib/api';
 import { disparar } from '@/lib/disparar';
 import { quandoComHora } from '@/lib/formato';
+import { SugestaoDoSocial } from './sugestao-social';
 import {
   anexoDaMensagem,
   appDaConversa,
@@ -14,10 +15,12 @@ import {
   ESPACO_DA_RESPOSTA,
   erroDaResposta,
   janelaDaConversa,
+  podePedirAoSocial,
   quemEscreveu,
   recusaDaResposta,
   saiuSozinha,
   situacaoDoEnvio,
+  ultimaDaPessoa,
 } from './textos';
 
 // A conversa aberta (P39): quem escreveu, a janela da Meta, as mensagens guardadas e a resposta. Mandar passa pelo
@@ -210,6 +213,12 @@ export function ConversaDoDirect({ marca, marcaNome, id, leitura, focar, agora, 
   const app = appDaConversa(c.channel);
   const usados = bytesDoTexto(texto.trim());
   const naJanela = c.status !== 'fora' && c.window_until !== null;
+  /** "Usar esta": o texto vai para o campo da resposta, e a pessoa ainda lê, muda e manda. */
+  const usar = (t: string) => {
+    setTexto(t);
+    setErro(null);
+    campo.current?.focus();
+  };
 
   return (
     <>
@@ -247,19 +256,20 @@ export function ConversaDoDirect({ marca, marcaNome, id, leitura, focar, agora, 
           </div>
         )}
       </div>
-      {sugestao && (
-        <SugestaoDoDirect
-          s={sugestao}
-          app={app.nome}
-          aoUsar={
-            podeResponder && naJanela
-              ? (t) => {
-                  setTexto(t);
-                  setErro(null);
-                  campo.current?.focus();
-                }
-              : null
-          }
+      {sugestao && <SugestaoDoDirect s={sugestao} app={app.nome} aoUsar={podeResponder && naJanela ? usar : null} />}
+      {/* A sugestão do Social media, a pedido (parte 4b-2b; P39): só para quem responde, na pergunta e na reclamação que
+          esperam resposta. A chave é a última mensagem da pessoa: chegou outra, a sugestão antiga sai da tela. */}
+      {podeResponder && naJanela && podePedirAoSocial(c) && (
+        <SugestaoDoSocial
+          key={`${c.id}:${ultimaDaPessoa(messages)}`}
+          marca={marca}
+          conversa={c.id}
+          tipo={c.kind}
+          aoUsar={usar}
+          aoReler={() => {
+            setTentativa((t) => t + 1);
+            aoMudar();
+          }}
         />
       )}
       {!podeResponder ? (
