@@ -269,6 +269,9 @@ describe.skipIf(!hasDb)('a mídia por região e por hora, pela rotina do worker 
     await ownerQuery(`delete from liame.ad_local_daily where connected_account_id = $1 and geo_target_id = any($2::bigint[])`, [e.conta, [gBairro, gFora, gCep, gCidade]]);
     await ownerQuery(`delete from liame.region_district where city_code = $1`, [cidade]);
     await ownerQuery(`delete from liame.region_food_count where geo_code = $1`, [cidade]);
+    // A loja do município de mentira sai também (ERR-232): a rotina das fontes da região lê todo município com loja, e
+    // as que sobram de cada rodada enchem o lote dela nos outros arquivos.
+    await ownerQuery(`delete from liame.unit where id = $1`, [loja]);
     expect(r.status, JSON.stringify(r.body)).toBe(200);
     const m = r.body.paid_media;
     expect(m.districts).toEqual({

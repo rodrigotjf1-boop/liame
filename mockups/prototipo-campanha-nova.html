@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Campanha nova · Liame</title>
 <!--
-@prototipo Liame · A4 · P42 · Campanha nova com a foto ou o vídeo da loja (APROVADO PELO DONO EM 11/11/2026, com as recomendações D-A4-42 a D-A4-46) · REVISÃO R6 de 13/11/2026 (plano da região: a campanha com raio, os objetivos de alcance e de seguidores, a estimativa de público no raio, o teto de 25% e a frequência; D-RG-48 a D-RG-52 como recomendadas), APROVADA PELO DONO em 13/11/2026 · REVISÃO R6-3 de 13/11/2026 (quem vê por bairros, além do raio: pedido do dono em 13/11/2026; D-RG-53 a D-RG-57 como recomendadas), APROVADA PELO DONO em 13/11/2026 · REVISÃO R7 de 13/11/2026 (plano da região: o ritmo da semana, do Gestor de tráfego, em Aprovações; seletor "Ritmo"; D-RG-58 a D-RG-65 propostas), PARA APROVAR
+@prototipo Liame · A4 · P42 · Campanha nova com a foto ou o vídeo da loja (APROVADO PELO DONO EM 11/11/2026, com as recomendações D-A4-42 a D-A4-46) · REVISÃO R6 de 13/11/2026 (plano da região: a campanha com raio, os objetivos de alcance e de seguidores, a estimativa de público no raio, o teto de 25% e a frequência; D-RG-48 a D-RG-52 como recomendadas), APROVADA PELO DONO em 13/11/2026 · REVISÃO R6-3 de 13/11/2026 (quem vê por bairros, além do raio: pedido do dono em 13/11/2026; D-RG-53 a D-RG-57 como recomendadas), APROVADA PELO DONO em 13/11/2026 · REVISÃO R7 de 13/11/2026 (plano da região: o ritmo da semana, do Gestor de tráfego, em Aprovações; seletor "Ritmo"; D-RG-58 a D-RG-65 como recomendadas), APROVADA PELO DONO em 13/11/2026
 base: o P10 (prototipo-criativos.html, aprovado em 05/10/2026): Criativos, a peça aprovada, a gaveta "Campanha nova,
       pausada" e os pedidos em Aprovações ficam como estão lá, no seletor "Criativos"; o P42 entra por cima, no
       seletor "Campanha nova".
@@ -8688,7 +8688,7 @@ selP45.addEventListener('change', () => p45Estado(selP45.value, { focar: true })
 if (params.get('p45')) p45Estado(params.get('p45'));
 </script>
 <style>
-/* ===================== Região · R7 · O ritmo da semana (para aprovar) ===================== */
+/* ===================== Região · R7 · O ritmo da semana (aprovado em 13/11/2026) ===================== */
 .r7-envolve { container: r7 / inline-size; }
 .r7-tabela th, .r7-tabela td { vertical-align: top; }
 .r7-tabela .r7-dia { white-space: nowrap; font-weight: 600; }
@@ -8729,7 +8729,7 @@ if (params.get('p45')) p45Estado(params.get('p45'));
 </style>
 <script>
 /* =====================================================================================================================
-   Região · R7 · O ritmo da semana (plano da região, R7; decisões propostas D-RG-58 a D-RG-65), PARA APROVAR.
+   Região · R7 · O ritmo da semana (plano da região, R7; D-RG-58 a D-RG-65, aprovadas pelo dono em 13/11/2026).
    Uma camada por cima da tela Aprovações que já está no app: um tipo novo de pedido, do Gestor de tráfego, montado por
    regra (sem IA) com o que o Liame já lê: os pedidos da loja por dia da semana e por hora (Sua região, R3), a previsão
    do tempo, os feriados, as datas do varejo e o prazo do salário (A semana que vem, R2) e as campanhas ativas com verba
@@ -8743,12 +8743,12 @@ if (params.get('p45')) p45Estado(params.get('p45'));
    ===================================================================================================================== */
 var r7 = null;
 const R7_ESTADOS = {
-  'R7 · O ritmo da semana (para aprovar)': {
+  'R7 · O ritmo da semana': {
     'r7-pedido': 'Em Aprovações: o ritmo da semana, do Gestor de tráfego',
     'r7-rodando': 'Aprovado e rodando: o que já foi feito e o dia de hoje',
     'r7-mexeram': 'Alguém mudou a verba na Meta: a campanha sai do ritmo',
     'r7-parado': 'Você parou o ritmo: a verba de antes volta',
-    'r7-decisoes': 'As decisões propostas (D-RG-58 a D-RG-65)',
+    'r7-decisoes': 'As decisões aprovadas (D-RG-58 a D-RG-65)',
   },
 };
 const R7_TODOS = Object.assign({}, ...Object.values(R7_ESTADOS));
@@ -8764,12 +8764,12 @@ const R7_CAMPANHAS = [
 /* Cada dia: o peso (a parte da verba de hoje), os porquês e a janela em que os anúncios ficam ligados. Os pesos somam
    7,00: a semana gasta o mesmo que gastaria sem o ritmo. De um dia para o outro, a mudança nunca passa de 10%. */
 const R7_DIAS = [
-  { id: 'seg', dia: 'Seg, 05/10', f: 0.90, liga: ['17:00', '23:00'], porques: [['i-chart', 'Dia fraco: 9% dos pedidos da semana (a média de um dia é 14%)']] },
-  { id: 'ter', dia: 'Ter, 06/10', f: 0.84, liga: ['17:00', '23:00'], porques: [['i-chart', 'Dia fraco: 10% dos pedidos da semana']] },
-  { id: 'qua', dia: 'Qua, 07/10', f: 0.92, liga: ['17:00', '23:00'], porques: [['i-chart', 'Abaixo da média: 12% dos pedidos'], ['i-calendar', 'Prazo do salário (5º dia útil): segura a queda']] },
-  { id: 'qui', dia: 'Qui, 08/10', f: 1.00, liga: ['17:00', '23:00'], porques: [['i-chart', 'Na média: 14% dos pedidos'], ['i-cloud-rain', 'Chuva prevista: pancadas à tarde e à noite, 19° a 24°']] },
-  { id: 'sex', dia: 'Sex, 09/10', f: 1.09, liga: ['17:00', '23:59'], porques: [['i-chart', 'Dia forte: 19% dos pedidos']] },
-  { id: 'sab', dia: 'Sáb, 10/10', f: 1.18, liga: ['17:00', '23:59'], porques: [['i-chart', 'O dia mais forte: 20% dos pedidos'], ['i-cloud-rain', 'Chuva prevista: chuva à noite, 18° a 22°']] },
+  { id: 'seg', dia: 'Seg, 05/10', f: 0.90, liga: ['18:00', '23:00'], porques: [['i-chart', 'Dia fraco: 9% dos pedidos da semana (a média de um dia é 14%)']] },
+  { id: 'ter', dia: 'Ter, 06/10', f: 0.84, liga: ['18:00', '23:00'], porques: [['i-chart', 'Dia fraco: 10% dos pedidos da semana']] },
+  { id: 'qua', dia: 'Qua, 07/10', f: 0.92, liga: ['18:00', '23:00'], porques: [['i-chart', 'Abaixo da média: 12% dos pedidos'], ['i-calendar', 'Prazo do salário (5º dia útil): segura a queda']] },
+  { id: 'qui', dia: 'Qui, 08/10', f: 1.00, liga: ['18:00', '23:00'], porques: [['i-chart', 'Na média: 14% dos pedidos'], ['i-cloud-rain', 'Chuva prevista: pancadas à tarde e à noite, 19° a 24°']] },
+  { id: 'sex', dia: 'Sex, 09/10', f: 1.09, liga: ['18:00', '23:59'], porques: [['i-chart', 'Dia forte: 19% dos pedidos']] },
+  { id: 'sab', dia: 'Sáb, 10/10', f: 1.18, liga: ['18:00', '23:59'], porques: [['i-chart', 'O dia mais forte: 20% dos pedidos'], ['i-cloud-rain', 'Chuva prevista: chuva à noite, 18° a 22°']] },
   { id: 'dom', dia: 'Dom, 11/10', f: 1.07, liga: ['11:00', '23:00'], porques: [['i-chart', 'Acima da média: 16% dos pedidos; no domingo, eles começam no almoço'], ['i-calendar', 'Véspera do feriado de 12/10 (Dia das Crianças)']] },
 ];
 const r7Base = () => R7_CAMPANHAS.reduce((t, c) => t + c.base, 0);
@@ -8871,15 +8871,15 @@ const R7_DECISOES = [
   { id: 'D-RG-58', titulo: 'O ritmo é um pedido do Gestor de tráfego, uma vez por semana', oque: 'Todo domingo, às 18h, o Gestor de tráfego monta o ritmo da semana seguinte (de segunda a domingo) e pede em Aprovações. É regra do código, sem IA. Só para a empresa com a função ligada, a loja no mapa e pelo menos uma campanha ativa com verba diária própria.', porque: 'D-RG-5 (b), que você aprovou: um plano por semana, e não um pedido a cada mudança. No domingo, a previsão do tempo já cobre quase toda a semana.', rec: 'Assim.' },
   { id: 'D-RG-59', titulo: 'O peso de cada dia', oque: 'O peso sai dos pedidos da loja por dia da semana (as 4 semanas de Sua região). A chuva prevista e as datas (feriado, véspera, data do varejo, prazo do salário) dão um acréscimo pequeno ao dia. Sem pedidos que bastem (ou sem o Regem), vale a referência do setor: mais peso de sexta a domingo.', porque: 'É a jogada 4 do plano (mais peso nos dias fortes) com as jogadas 5 e 6 (clima e calendário), provadas depois pelo caixa.', rec: 'Assim; os acréscimos começam em 5 pontos cada e se ajustam pelo caixa.' },
   { id: 'D-RG-60', titulo: 'Os limites do dinheiro', oque: 'A semana com ritmo nunca gasta mais do que gastaria sem ele: o que sobe num dia desce em outro. Cada dia fica entre 20% abaixo e 20% acima da verba de hoje, a mudança de um dia para o outro é de no máximo 10%, e nenhum dia passa do teto por campanha.', porque: 'São os limites que já valem: 10% por mudança (política da Liame, D-A4-6) e a regra de escala da base (20%, nunca 30% de uma vez).', rec: 'Assim.' },
-  { id: 'D-RG-61', titulo: 'O horário: ligar e pausar', oque: 'Em cada dia, os anúncios ficam ligados de 2 horas antes do começo dos pedidos até o fim deles (a janela sai dos pedidos por hora da loja); fora disso, pausados. O Liame liga e pausa na hora.', porque: 'A Meta só programa horário com verba de período, que o Liame recusa (D-RG-5). Pausar não reinicia o aprendizado da Meta. Na loja do exemplo, 34% dos cliques vinham do almoço e os pedidos são à noite.', rec: 'Assim, na parte 2 da entrega: a parte 1 muda só a verba do dia; o horário entra depois da primeira semana rodando. A conferir: a Meta gastar a verba do dia dentro da janela.' },
+  { id: 'D-RG-61', titulo: 'O horário: ligar e pausar', oque: 'Em cada dia, os anúncios ficam ligados de 1 hora antes do bloco dos pedidos até o fim dele (o mesmo bloco do plano de mídia, D-RG-29, tirado dos pedidos por hora da loja); fora disso, pausados. O Liame liga e pausa na hora.', porque: 'A Meta só programa horário com verba de período, que o Liame recusa (D-RG-5). Pausar não reinicia o aprendizado da Meta. Na loja do exemplo, 34% dos cliques vinham do almoço e os pedidos são à noite.', rec: 'Assim, na parte 2 da entrega: a parte 1 muda só a verba do dia; o horário entra depois da primeira semana rodando. A conferir: a Meta gastar a verba do dia dentro da janela.' },
   { id: 'D-RG-62', titulo: 'Uma aprovação vale para a semana', oque: 'O pedido tem risco médio e pede o código do app uma vez. Depois, o Liame executa cada passo sozinho, e cada passo confere antes: a função ligada, a trava geral, os limites e a campanha como o Liame deixou. O aprovado é o teto de cada dia: o Liame pode fazer menos (tirar o acréscimo da chuva que não veio), nunca mais.', porque: 'É o "aprovadas em lote" do plano. Sem isso seriam 21 pedidos por semana.', rec: 'Assim.' },
   { id: 'D-RG-63', titulo: 'Parar, e o que acontece se alguém mexer por fora', oque: '"Parar o ritmo" devolve a verba de antes (em dois dias, se a diferença passar de 10%) e deixa os anúncios ligados o dia todo; não pede o código, porque nunca gasta mais. Se alguém mudar a verba ou pausar uma campanha na Meta, o ritmo dessa campanha para, ela fica como a pessoa deixou e a Atenção avisa. No fim da semana, tudo volta à verba de antes.', porque: 'O Liame nunca desfaz o que uma pessoa fez por fora, como nas outras ações.', rec: 'Assim.' },
   { id: 'D-RG-64', titulo: 'Quais campanhas entram', oque: 'As ativas, da Meta, com verba diária própria (na campanha ou no conjunto), inclusive as criadas pelo Liame. Ficam fora: as pausadas por uma pessoa, as de verba de período e as de alcance e de seguidores (o teto de 25% já cuida delas).', porque: 'O ritmo mexe só onde o Liame já pode mexer hoje.', rec: 'Assim; o Google entra na R9, com a programação de horário do próprio Google.' },
   { id: 'D-RG-65', titulo: 'Como saber se valeu', oque: 'A revisão de segunda compara o caixa da semana com ritmo com as 4 semanas anteriores, dia a dia, e diz se os dias fortes venderam mais. Sua região › A semana que vem ganha a linha do ritmo, com o caminho para Aprovações.', porque: 'A régua é o caixa, como no resto do plano.', rec: 'Assim.' },
 ];
 function r7DecisoesHtml() {
-  const lista = R7_DECISOES.map((d) => `<li><div><b>${d.id} · ${esc(d.titulo)}</b><span><b>O que é:</b> ${esc(d.oque)}</span><span><b>Por quê:</b> ${esc(d.porque)}</span><span><b>Recomendação:</b> ${esc(d.rec)}</span></div><span class="st st--espera">Proposta</span></li>`).join('');
-  return `<section class="card p42-decisoes r7-decisoes" id="r7-decisoes" aria-labelledby="r7-dec-t"><div class="card-cab"><div><h2 id="r7-dec-t" tabindex="-1">R7 · O ritmo da semana (D-RG-58 a D-RG-65)</h2><p class="card-sub">Do plano da região (R7: propostas de verba por horário, clima e calendário, aprovadas em lote para a semana). Para aprovar. Estados do seletor "Ritmo".</p></div></div><ul class="rev-decisoes">${lista}</ul></section>`;
+  const lista = R7_DECISOES.map((d) => `<li><div><b>${d.id} · ${esc(d.titulo)}</b><span><b>O que é:</b> ${esc(d.oque)}</span><span><b>Por quê:</b> ${esc(d.porque)}</span><span><b>Recomendação:</b> ${esc(d.rec)}</span></div><span class="st st--concluido">Aprovada</span></li>`).join('');
+  return `<section class="card p42-decisoes r7-decisoes" id="r7-decisoes" aria-labelledby="r7-dec-t"><div class="card-cab"><div><h2 id="r7-dec-t" tabindex="-1">R7 · O ritmo da semana (D-RG-58 a D-RG-65)</h2><p class="card-sub">Do plano da região (R7: propostas de verba por horário, clima e calendário, aprovadas em lote para a semana). Aprovadas pelo dono em 13/11/2026, com as recomendações. Estados do seletor "Ritmo".</p></div></div><ul class="rev-decisoes">${lista}</ul></section>`;
 }
 
 /* ---------- a camada: o pedido entra na fila de Aprovações e abre pelo mesmo caminho dos outros ---------- */
@@ -8966,7 +8966,7 @@ function r7Estado(v, { focar = false } = {}) {
 }
 selR7.addEventListener('change', () => r7Estado(selR7.value, { focar: true }));
 const marcaR7 = $('.revisao-marca b');
-if (marcaR7) marcaR7.textContent += ' · R7 (o ritmo da semana), para aprovar';
+if (marcaR7) marcaR7.textContent += ' · R7 (o ritmo da semana), aprovado em 13/11/2026';
 
 /* ---------- cenários da R7 para a conferência no navegador sem janela ---------- */
 (() => {

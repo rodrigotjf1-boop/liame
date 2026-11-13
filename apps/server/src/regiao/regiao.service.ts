@@ -5,6 +5,7 @@ import {
   type GoogleProfileAddressRequest,
   type GoogleProfileAddressResponse,
   type RegionOverviewResponse,
+  type RegionRhythmResponse,
   type SaveStoreLocationRequest,
   type SaveStoreLocationResponse,
   type StoreAddress,
@@ -16,7 +17,7 @@ import {
 import { type Database, uuidv7 } from '@liame/database';
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import { sql } from 'drizzle-orm';
-import { type BlocoDosAnuncios, LOJAS_NO_PLANO, type LojaDaMidia, RAIO_PADRAO_KM } from '../ai/estrategista/midia.js';
+import { type BlocoDosAnuncios, horariosDaLoja, LOJAS_NO_PLANO, type LojaDaMidia, RAIO_PADRAO_KM } from '../ai/estrategista/midia.js';
 import { naTransacaoDaEmpresa } from '../ai/na-empresa.js';
 import { APP_CONFIG, type AppConfig } from '../config.js';
 import { contaConectada } from '../connections/conectada.js';
@@ -34,13 +35,16 @@ import { buscarCep, cepNormalizado, type EnderecoDoCep } from './cep.js';
 import { FONTE_CENSO_BAIRRO } from './censo.js';
 import { bairroDaArea, type Coordenada, nomeComparavel, procuraDeCoordenada } from './coordenada.js';
 import { MUNICIPIOS_DO_IPCA, RMS_DO_IPCA } from './ibge.js';
+import { carregarPoliticas } from '../policy/policy.service.js';
+import { tetoDaVerba } from '../policy/teto-da-verba.js';
 import { diaNoFuso } from '../results/fora-do-normal.js';
 import { BAIRROS_NA_SECAO, type BairroParaComparar, compararBairros } from './bairros.js';
 import { type DemandaDaLoja, demandaDaLoja, janelas, type LinhaDaDemanda } from './demanda.js';
 import { blocoMaisForte, CIDADES_NA_SECAO, DATASET_DA_MIDIA, janelaDaMidia, porcentoDe, somaDoBloco } from './midia-paga.js';
 import { type CliquesPorBairro, cliquesPorBairro, type PapelDoBairro, TIPO_DO_CEP, TIPOS_DE_BAIRRO } from './cliques-por-bairro.js';
 import { type LinhaDoPublico, retratoDoPublico } from './publico-nas-redes.js';
-import { type DataGuardada, datasDaSemana, diaEmBrasilia, REFERENCIAS_DO_SETOR } from './semana.js';
+import { type DataGuardada, datasDaSemana, diaEmBrasilia, quintoDiaUtil, REFERENCIAS_DO_SETOR } from './semana.js';
+import { pesosDaSemana, semanaQueVem, verbaDoRitmo } from './ritmo-da-semana.js';
 import { DIAS_DA_PREVISAO } from './tempo.js';
 import {
   acimaDe,
@@ -611,6 +615,116 @@ export class RegiaoService {
    * fuso da loja), agrupados por dia da semana e hora em que o cliente pediu. Os números de venda vão só para quem vê
    * Resultados (`vendas.ver`), como lá; sem o Regem ligado na marca, o Liame não tem os pedidos.
    */
+  /**
+   * O ritmo da semana que vem, em prévia (R7, parte 1; D-RG-58 a D-RG-60): o que o Gestor de tráfego montaria com o que
+   * o Liame já lê. Só leitura: nada é pedido nem executado. O peso de cada dia vem dos pedidos da loja por dia da semana
+   * (as 4 semanas de Sua região; sem pedidos que bastem, a referência do setor), da chuva prevista e das datas; entram
+   * as campanhas ativas da Meta com verba diária própria (na campanha, ou no conjunto quando a campanha não tem), fora
+   * as de alcance e de seguidores criadas pelo Liame (o teto de 25% já cuida delas, D-RG-64).
+   */
+  async ritmoDaSemana(auth: AuthContext, brandId: string, unitId: string, agora = new Date()): Promise<RegionRhythmResponse> {
+    const tx = currentTx();
+    await this.marca(brandId);
+    const vazio = { week: null, source: null, days: [], campaigns: [], out: [], base_micros: 0, base_week_micros: 0, week_micros: 0, hours: null, generated_at: agora.toISOString() };
+    if (!(await this.ligada(auth, brandId))) return { status: 'desligado', ...vazio };
+    const loja = (
+      await tx.execute<{ ibge_city_code: string | null; timezone: string | null }>(sql`
+        select ibge_city_code, timezone from liame.unit where id = ${unitId} and brand_id = ${brandId}`)
+    ).rows[0];
+    if (!loja) throw new AppProblem(404, 'loja-nao-encontrada', 'Não encontramos', 'Loja não encontrada nesta marca.');
+    if (!loja.ibge_city_code) return { status: 'sem_endereco', ...vazio };
+    if (!auth.permissions.has('vendas.ver')) return { status: 'sem_permissao', ...vazio };
+
+    const semana = semanaQueVem(diaNoFuso(agora, loja.timezone ?? 'America/Sao_Paulo'));
+    const { demanda } = await this.demandaDaLoja(true, brandId, unitId, agora);
+    const pedidos = demanda?.status === 'pronto' ? Array.from({ length: 7 }, (_, d) => demanda.by_weekday.find((x) => x.weekday === d)?.orders ?? 0) : null;
+    const previsao = (
+      await tx.execute<{ day: string; condition: string; condition_desc: string; min_c: number; max_c: number }>(sql`
+        select to_char(day, 'YYYY-MM-DD') as day, condition, condition_desc, min_c, max_c from liame.region_weather
+         where geo_code = ${loja.ibge_city_code} and day between ${semana.de}::date and ${semana.ate}::date order by day`)
+    ).rows;
+    // As datas da semana e a do dia seguinte ao fim dela (a véspera); os feriados do mês inteiro entram na conta do
+    // prazo do salário (o 5º dia útil), que é conta do sistema.
+    const guardadas = (
+      await tx.execute<DataGuardada>(sql`
+        select to_char(day, 'YYYY-MM-DD') as day, name, kind, source from liame.commercial_date
+         where day between date_trunc('month', ${semana.de}::date)::date and ${semana.ate}::date + 1 order by day, name`)
+    ).rows;
+    const feriados = new Set(guardadas.filter((d) => d.kind === 'feriado_nacional').map((d) => d.day));
+    const salarios = [...new Set([semana.de.slice(0, 7), semana.ate.slice(0, 7)])].map((mes) => quintoDiaUtil(mes, feriados));
+    const datas = [
+      ...guardadas.filter((d) => d.day >= semana.de).map((d) => ({ day: d.day, name: d.name, kind: d.kind })),
+      ...salarios.filter((d) => d >= semana.de && d <= semana.ate).map((day) => ({ day, name: 'Prazo do salário (5º dia útil)', kind: 'salario' })),
+    ];
+    const dias = pesosDaSemana({
+      dias: semana.dias,
+      pedidosPorDiaDaSemana: pedidos,
+      previsao: previsao.map((p) => ({ day: p.day, condition: p.condition, description: p.condition_desc, min: p.min_c, max: p.max_c })),
+      datas,
+    });
+
+    // As campanhas: a verba diária mora na campanha ou, quando ela não tem, no conjunto (nunca nas duas).
+    const candidatas = (
+      await tx.execute<{ id: string; nivel: string; nome: string; verba: string }>(sql`
+        select c.id, 'campanha' as nivel, c.name as nome, c.daily_budget_micros::text as verba
+          from liame.campaign c
+          join liame.connected_account a on a.id = c.connected_account_id and a.tenant_id = c.tenant_id
+         where a.brand_id = ${brandId} and a.provider = 'meta_ads' and ${contaConectada('a')}
+           and c.status = 'ativa' and c.daily_budget_micros > 0 and c.lifetime_budget_micros is null
+           and not exists (select 1 from liame.ad_campaign_new n
+                            where n.tenant_id = c.tenant_id and n.meta_campaign_id = c.external_id and n.objective in ('alcance', 'seguidores'))
+        union all
+        select g.id, 'conjunto' as nivel, c.name || ' · ' || g.name as nome, g.daily_budget_micros::text as verba
+          from liame.ad_group g
+          join liame.campaign c on c.id = g.campaign_id
+          join liame.connected_account a on a.id = c.connected_account_id and a.tenant_id = c.tenant_id
+         where a.brand_id = ${brandId} and a.provider = 'meta_ads' and ${contaConectada('a')}
+           and c.status = 'ativa' and g.status = 'ativa' and c.daily_budget_micros is null and c.lifetime_budget_micros is null and g.daily_budget_micros > 0
+           and not exists (select 1 from liame.ad_campaign_new n
+                            where n.tenant_id = c.tenant_id and n.meta_campaign_id = c.external_id and n.objective in ('alcance', 'seguidores'))
+         order by nome, id`)
+    ).rows;
+    const { policies } = await carregarPoliticas(tx, this.quem(auth).tenantId, brandId);
+    const teto = tetoDaVerba(policies, 'meta_ads');
+    const pesos = dias.map((d) => d.weight);
+    const campaigns: RegionRhythmResponse['campaigns'] = [];
+    const out: RegionRhythmResponse['out'] = [];
+    for (const c of candidatas) {
+      const base = Number(c.verba);
+      const v = verbaDoRitmo(base, pesos, teto);
+      if (!v.ok) out.push({ name: c.nome, reason: v.motivo });
+      else campaigns.push({ id: c.id, level: c.nivel, name: c.nome, base_micros: base, days_micros: v.dias, week_micros: v.dias.reduce((s, x) => s + x, 0) });
+    }
+    const base = campaigns.reduce((s, c) => s + c.base_micros, 0);
+    const horarios = horariosDaLoja(demanda);
+    return {
+      status: campaigns.length ? 'pronto' : 'sem_campanhas',
+      week: { from: semana.de, to: semana.ate },
+      source: pedidos ? 'loja' : 'setor',
+      days: dias.map((d, i) => ({
+        day: d.day,
+        weekday: d.weekday,
+        weight: d.weight,
+        total_micros: campaigns.reduce((s, c) => s + c.days_micros[i]!, 0),
+        reasons: d.reasons.map((r) => ({
+          kind: r.kind,
+          share_pct: r.kind === 'pedidos' ? r.share_pct : null,
+          text: r.kind === 'chuva' ? r.description : r.kind === 'data' ? r.name : null,
+          min: r.kind === 'chuva' ? r.min : null,
+          max: r.kind === 'chuva' ? r.max : null,
+          eve: r.kind === 'data' ? r.eve : null,
+        })),
+      })),
+      campaigns,
+      out,
+      base_micros: base,
+      base_week_micros: base * 7,
+      week_micros: campaigns.reduce((s, c) => s + c.week_micros, 0),
+      hours: { source: horarios.source, from: horarios.from, to: horarios.to, ads_from: horarios.ads_from },
+      generated_at: agora.toISOString(),
+    };
+  }
+
   private async demandaDaLoja(podeVerVendas: boolean, brandId: string, unitId: string, agora: Date): Promise<{ status: string; demanda: DemandaDaLoja | null }> {
     if (!podeVerVendas) return { status: 'sem_permissao', demanda: null };
     if (!(await this.temRegem(brandId))) return { status: 'sem_regem', demanda: null };
