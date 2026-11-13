@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Campanha nova · Liame</title>
 <!--
-@prototipo Liame · A4 · P42 · Campanha nova com a foto ou o vídeo da loja (APROVADO PELO DONO EM 11/11/2026, com as recomendações D-A4-42 a D-A4-46) · REVISÃO R6 de 13/11/2026 (plano da região: a campanha com raio, os objetivos de alcance e de seguidores, a estimativa de público no raio, o teto de 25% e a frequência; D-RG-48 a D-RG-52 como recomendadas), APROVADA PELO DONO em 13/11/2026 · REVISÃO R6-3 de 13/11/2026 (quem vê por bairros, além do raio: pedido do dono em 13/11/2026; D-RG-53 a D-RG-57 como recomendadas), APROVADA PELO DONO em 13/11/2026 · REVISÃO R7 de 13/11/2026 (plano da região: o ritmo da semana, do Gestor de tráfego, em Aprovações; seletor "Ritmo"; D-RG-58 a D-RG-65 como recomendadas), APROVADA PELO DONO em 13/11/2026 · REVISÃO R8 de 13/11/2026 (plano da região: os testes de criativo e de região, em Aprovações; seletor "Testes"; D-RG-76 a D-RG-84 como recomendadas), PROPOSTA: ESPERA A APROVAÇÃO DO DONO · REVISÃO R9 de 13/11/2026 (plano da região: o Google pela região, revisão do P45: os bairros e os temas de busca na campanha do Google e o ritmo da semana com ela; seletor "Google local"; D-RG-85 a D-RG-89 como recomendadas), PROPOSTA: ESPERA A APROVAÇÃO DO DONO
+@prototipo Liame · A4 · P42 · Campanha nova com a foto ou o vídeo da loja (APROVADO PELO DONO EM 11/11/2026, com as recomendações D-A4-42 a D-A4-46) · REVISÃO R6 de 13/11/2026 (plano da região: a campanha com raio, os objetivos de alcance e de seguidores, a estimativa de público no raio, o teto de 25% e a frequência; D-RG-48 a D-RG-52 como recomendadas), APROVADA PELO DONO em 13/11/2026 · REVISÃO R6-3 de 13/11/2026 (quem vê por bairros, além do raio: pedido do dono em 13/11/2026; D-RG-53 a D-RG-57 como recomendadas), APROVADA PELO DONO em 13/11/2026 · REVISÃO R7 de 13/11/2026 (plano da região: o ritmo da semana, do Gestor de tráfego, em Aprovações; seletor "Ritmo"; D-RG-58 a D-RG-65 como recomendadas), APROVADA PELO DONO em 13/11/2026 · REVISÃO R8 de 13/11/2026 (plano da região: os testes de criativo e de região, em Aprovações; seletor "Testes"; D-RG-76 a D-RG-84 como recomendadas), APROVADA PELO DONO em 13/11/2026 · REVISÃO R9 de 13/11/2026 (plano da região: o Google pela região, revisão do P45: os bairros e os temas de busca na campanha do Google e o ritmo da semana com ela; seletor "Google local"; D-RG-85 a D-RG-89 como recomendadas), APROVADA PELO DONO em 13/11/2026
 base: o P10 (prototipo-criativos.html, aprovado em 05/10/2026): Criativos, a peça aprovada, a gaveta "Campanha nova,
       pausada" e os pedidos em Aprovações ficam como estão lá, no seletor "Criativos"; o P42 entra por cima, no
       seletor "Campanha nova".
@@ -9000,7 +9000,7 @@ if (params.get('r7')) r7Estado(params.get('r7'));
 </script>
 <!-- R8:camada:inicio -->
 <style>
-/* ===================== Região · R8 · Os testes (PROPOSTO em 13/11/2026, espera a aprovação do dono) ===================== */
+/* ===================== Região · R8 · Os testes (APROVADO PELO DONO em 13/11/2026) ===================== */
 .r8-envolve { container: r8 / inline-size; }
 .r8-tabela th, .r8-tabela td { vertical-align: top; }
 .r8-tabela td.n, .r8-tabela th.n { text-align: right; font-family: var(--font-mono); white-space: nowrap; }
@@ -9042,7 +9042,7 @@ if (params.get('r7')) r7Estado(params.get('r7'));
 </style>
 <script>
 /* =====================================================================================================================
-   Região · R8 · Os testes (plano da região, R8; D-RG-76 a D-RG-84, PROPOSTAS em 13/11/2026: esperam a aprovação do dono).
+   Região · R8 · Os testes (plano da região, R8; D-RG-76 a D-RG-84, APROVADAS PELO DONO em 13/11/2026).
    Uma camada por cima da tela Aprovações que já está no app, no mesmo molde do ritmo da semana (R7): dois tipos novos
    de pedido, os dois por regra e sem IA, e a mesma tela acompanha o teste depois de aprovado.
      - Teste de criativo: dois conjuntos iguais numa campanha, só o criativo muda (uma variável por vez), cada um com o
@@ -9070,7 +9070,7 @@ const R8_ESTADOS = {
     'r8-regiao-resultado': 'O resultado: quanto o anúncio traz no bairro',
   },
   'Decisões': {
-    'r8-decisoes': 'As decisões propostas (D-RG-76 a D-RG-84)',
+    'r8-decisoes': 'As decisões aprovadas (D-RG-76 a D-RG-84)',
   },
 };
 const R8_TODOS = Object.assign({}, ...Object.values(R8_ESTADOS));
@@ -9282,7 +9282,7 @@ const R8_DECISOES = [
 ];
 function r8DecisoesHtml() {
   const lista = R8_DECISOES.map((d) => `<li><div><b>${d.id} · ${esc(d.titulo)}</b><span><b>O que é:</b> ${esc(d.oque)}</span><span><b>Por quê:</b> ${esc(d.porque)}</span><span><b>Recomendação:</b> ${esc(d.rec)}</span></div><span class="st st--espera">Proposta</span></li>`).join('');
-  return `<section class="card p42-decisoes r8-decisoes" id="r8-decisoes" aria-labelledby="r8-dec-t"><div class="card-cab"><div><h2 id="r8-dec-t" tabindex="-1">R8 · Os testes (D-RG-76 a D-RG-84)</h2><p class="card-sub">Do plano da região (R8: teste de criativo e de região; concorrentes no raio). Propostas em 13/11/2026: esperam a sua aprovação. Estados do seletor “Testes”.</p></div></div><ul class="rev-decisoes">${lista}</ul></section>`;
+  return `<section class="card p42-decisoes r8-decisoes" id="r8-decisoes" aria-labelledby="r8-dec-t"><div class="card-cab"><div><h2 id="r8-dec-t" tabindex="-1">R8 · Os testes (D-RG-76 a D-RG-84)</h2><p class="card-sub">Do plano da região (R8: teste de criativo e de região; concorrentes no raio). Aprovadas pelo dono em 13/11/2026. Estados do seletor “Testes”.</p></div></div><ul class="rev-decisoes">${lista}</ul></section>`;
 }
 
 /* ---------- a camada: os dois pedidos entram na fila de Aprovações e abrem pelo mesmo caminho dos outros ---------- */
@@ -9437,7 +9437,7 @@ if (params.get('r8')) r8Estado(params.get('r8'));
 <!-- R8:camada:fim -->
 <!-- R9:camada:inicio -->
 <style>
-/* ===================== Região · R9 · O Google pela região (PROPOSTO em 13/11/2026, espera a aprovação do dono) ===================== */
+/* ===================== Região · R9 · O Google pela região (APROVADO PELO DONO em 13/11/2026) ===================== */
 .r9-quem { display: grid; gap: var(--sp-3); }
 .r9-bairros { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: var(--sp-2); margin: 0; padding: 0; list-style: none; }
 .r9-bairro { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: var(--sp-2); align-items: start; padding: var(--sp-2) var(--sp-3); border: 1px solid var(--border); border-radius: var(--radius); cursor: pointer; }
@@ -9468,8 +9468,8 @@ if (params.get('r8')) r8Estado(params.get('r8'));
 </style>
 <script>
 /* =====================================================================================================================
-   Região · R9 · O Google pela região (plano da região, R9; D-RG-85 a D-RG-89, PROPOSTAS em 13/11/2026: esperam a
-   aprovação do dono). Revisão da campanha nova no Google (P45), por cima da gaveta e do pedido em Aprovações que já
+   Região · R9 · O Google pela região (plano da região, R9; D-RG-85 a D-RG-89, APROVADAS PELO DONO em 13/11/2026).
+   Revisão da campanha nova no Google (P45), por cima da gaveta e do pedido em Aprovações que já
    existem. O raio da loja já está na campanha (Y9). Entram:
      - quem vê por bairros, além do raio: um ou outro, porque no Google os dois juntos somariam as áreas. O bairro que o
        Google tem como lugar vai pelo lugar dele; o que ele não tem, por um círculo no centro (como na Meta, D-RG-54);
@@ -9492,7 +9492,7 @@ const R9_ESTADOS = {
     'r9-ritmo': 'O ritmo da semana com a campanha do Google junto',
   },
   'Decisões': {
-    'r9-decisoes': 'As decisões propostas (D-RG-85 a D-RG-89)',
+    'r9-decisoes': 'As decisões aprovadas (D-RG-85 a D-RG-89)',
   },
 };
 const R9_TODOS = Object.assign({}, ...Object.values(R9_ESTADOS));
@@ -9678,7 +9678,7 @@ const R9_DECISOES = [
 ];
 function r9DecisoesHtml() {
   const lista = R9_DECISOES.map((d) => `<li><div><b>${d.id} · ${esc(d.titulo)}</b><span><b>O que é:</b> ${esc(d.oque)}</span><span><b>Por quê:</b> ${esc(d.porque)}</span><span><b>Recomendação:</b> ${esc(d.rec)}</span></div><span class="st st--espera">Proposta</span></li>`).join('');
-  return `<section class="card p42-decisoes r9-card" id="r9-decisoes" aria-labelledby="r9-dec-t"><div class="card-cab"><div><h2 id="r9-dec-t" tabindex="-1">R9 · O Google pela região (D-RG-85 a D-RG-89)</h2><p class="card-sub">Do plano da região (R9: a campanha do Google com raio, as buscas “perto de mim” e por bairro; o volume de busca depois do nível Básico). Propostas em 13/11/2026: esperam a sua aprovação. Estados do seletor “Google local”.</p></div></div><ul class="rev-decisoes">${lista}</ul></section>`;
+  return `<section class="card p42-decisoes r9-card" id="r9-decisoes" aria-labelledby="r9-dec-t"><div class="card-cab"><div><h2 id="r9-dec-t" tabindex="-1">R9 · O Google pela região (D-RG-85 a D-RG-89)</h2><p class="card-sub">Do plano da região (R9: a campanha do Google com raio, as buscas “perto de mim” e por bairro; o volume de busca depois do nível Básico). Aprovadas pelo dono em 13/11/2026. Estados do seletor “Google local”.</p></div></div><ul class="rev-decisoes">${lista}</ul></section>`;
 }
 
 /* ---------- o seletor "Google local" (faixa do protótipo) ---------- */
