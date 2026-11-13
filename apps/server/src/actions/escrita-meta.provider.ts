@@ -7,6 +7,7 @@ import { versaoRegistrada } from '../connectors/tipos.js';
 import { DATABASE } from '../database/database.module.js';
 import { ARMAZEM_DE_IMAGENS, type ArmazemDeImagens } from '../imagens/armazem.js';
 import { VaultService } from '../vault/vault.service.js';
+import { publicoNoRaio } from '../campanhas/publico-no-raio.js';
 import { campanhaNovaNaMetaConnector } from './campanha-nova-na-meta.js';
 import { metaAnunciosConnector } from './meta-anuncios.js';
 
@@ -43,6 +44,14 @@ export class EscritaMeta implements OnModuleInit {
       appSecret: this.config.plataformas.metaAppSecret,
       versao: (capacidade) => versaoRegistrada(database.db, 'meta_ads', capacidade),
       armazem: this.armazem,
+    });
+    // A estimativa de público no raio da campanha nova (R6, parte 2): leitura, uma tentativa, na hora da gaveta e do pedido.
+    publicoNoRaio.ligar({
+      lerSegredo: (tx, secretId) => this.vault.readSecret(tx, secretId),
+      cliente: () => new ClienteConector(database.db, { enderecos: enderecosDasPlataformas(this.config.plataformas), tentativas: 1 }),
+      graphUrl: this.config.plataformas.metaGraphUrl,
+      appSecret: this.config.plataformas.metaAppSecret,
+      versao: (capacidade) => versaoRegistrada(database.db, 'meta_ads', capacidade),
     });
   }
 }

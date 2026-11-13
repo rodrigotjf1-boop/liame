@@ -125,6 +125,8 @@ export async function lerCampanhaNova(tx: Tx, ref: ResourceRef, travar = false):
       unit_nome: string;
       latitude: string | null;
       longitude: string | null;
+      audience_lower: string | null;
+      audience_upper: string | null;
       currency: string | null;
       timezone: string | null;
     }
@@ -139,7 +141,7 @@ export async function lerCampanhaNova(tx: Tx, ref: ResourceRef, travar = false):
            case when c.instagram_media_id is not null then im.media_id is not null
                 else coalesce(m.status = 'pronta' and m.removed_at is null, false) end as midia_viva,
            p.external_id as pagina_externa, p.name as pagina_nome, ig.external_id as instagram_externo, ig.name as instagram_nome,
-           u.id as unit_id, u.name as unit_nome, u.latitude::text, u.longitude::text,
+           u.id as unit_id, u.name as unit_nome, u.latitude::text, u.longitude::text, c.audience_lower::text, c.audience_upper::text,
            a.external_id as conta_externa, a.credential_secret_id, a.currency, o.timezone
       from liame.ad_campaign_new c
       left join liame.ad_piece_version v on v.piece_id = c.piece_id and v.version = c.piece_version and v.tenant_id = c.tenant_id
@@ -177,6 +179,7 @@ export async function lerCampanhaNova(tx: Tx, ref: ResourceRef, travar = false):
     fim: l.end_date,
     fuso: l.timezone ?? 'America/Sao_Paulo',
     link: l.link,
+    publico: l.audience_lower !== null && l.audience_upper !== null ? { de: Number(l.audience_lower), ate: Number(l.audience_upper) } : null,
     situacao: l.status,
     ativa: l.active,
   });

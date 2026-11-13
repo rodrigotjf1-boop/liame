@@ -1,4 +1,6 @@
 import type { BrandPhoto, NewCampaignOptionsResponse, NewCampaignResponse } from '@liame/contracts';
+import { createElement, createRef } from 'react';
+import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 import {
   type CamposDaCampanha,
@@ -8,14 +10,17 @@ import {
   erroDoPedido,
   falaDoLinkDaBio,
   idDaCampanhaNova,
+  linhaDaEstimativa,
   linhaDoTopo,
   linkDoGerenciador,
   nomeDaCampanhaDoReels,
   notaDoLinkDaBio,
   passosDaCriacao,
+  pessoasEscritas,
   raiosDaLoja,
   situacaoDaCampanha,
 } from '../src/components/criativos/campanha-nova-textos';
+import { EstimativaDoRaio } from '../src/components/criativos/estimativa-do-raio';
 
 // A campanha nova (A4, X5, parte 5; P42): a tela confere o mesmo que o servidor antes de mandar, a recusa do servidor vai
 // para o campo certo, e Aprovações mostra a criação passo a passo.
@@ -146,5 +151,48 @@ describe('campanha nova: a situação e o passo a passo', () => {
   it('o recurso do pedido aponta para a campanha nova', () => {
     expect(idDaCampanhaNova('campanha_nova:0190a000-0000-7000-8000-0000000000aa')).toBe('0190a000-0000-7000-8000-0000000000aa');
     expect(idDaCampanhaNova('campanha:123')).toBeNull();
+  });
+});
+
+describe('campanha nova: a estimativa de público no raio (R6, parte 2; D-RG-50)', () => {
+  const pronta = (lower: number, upper: number, enough: boolean) => ({ status: 'pronta' as const, lower, upper, minimum: 1000, enough });
+
+  it('as pessoas escritas de forma curta, como no protótipo', () => {
+    expect(pessoasEscritas(760)).toBe('760');
+    expect(pessoasEscritas(1500)).toBe('1.500');
+    expect(pessoasEscritas(182_400)).toBe('182 mil');
+    expect(pessoasEscritas(999_600)).toBe('1 milhão');
+    expect(pessoasEscritas(1_240_000)).toBe('1,2 milhão');
+    expect(pessoasEscritas(2_400_000)).toBe('2,4 milhões');
+  });
+
+  it('a linha: a faixa no raio; pequeno demais com a frase do servidor; sem a estimativa, o pedido segue', () => {
+    expect(linhaDaEstimativa(pronta(182_000, 214_000, true), 5, 'Loja Centro')).toMatchObject({ tom: 'ok', destaque: 'Cerca de 182 mil a 214 mil pessoas' });
+    expect(linhaDaEstimativa(pronta(182_000, 214_000, true), 5, 'Loja Centro').texto).toContain('no raio de 5 km, pela estimativa da Meta (lida agora)');
+    // A mesma frase da recusa `publico-pequeno` do servidor (`textoDoPublicoPequeno`).
+    expect(linhaDaEstimativa(pronta(640, 760, false), 2.5, 'Loja Centro')).toEqual({
+      tom: 'pequeno',
+      titulo: 'Público pequeno demais no raio',
+      destaque: null,
+      texto: 'A Meta estima de 640 a 760 pessoas de 18 anos ou mais num raio de 2,5 km em volta da Loja Centro: com menos de 1.000 pessoas, ela não entrega bem. Aumente o raio.',
+    });
+    const sem = { status: 'sem_estimativa' as const, lower: null, upper: null, minimum: 1000, enough: null };
+    expect(linhaDaEstimativa(sem, 5, 'Loja Centro')).toMatchObject({ tom: 'sem', texto: 'A Meta não deu a estimativa deste raio agora: o pedido pode seguir sem ela.' });
+    expect(linhaDaEstimativa({ ...sem, status: 'indisponivel' }, 5, 'Loja Centro').tom).toBe('sem');
+    expect(linhaDaEstimativa('falhou', 5, 'Loja Centro').texto).toBe('Não deu para ler a estimativa da Meta agora: o pedido pode seguir sem ela.');
+  });
+
+  it('a tela: lendo, a faixa como informação e o pequeno como aviso que impede', () => {
+    const aviso = createRef<HTMLDivElement>();
+    const html = (e: Parameters<typeof EstimativaDoRaio>[0]['estimativa']) => renderToStaticMarkup(createElement(EstimativaDoRaio, { id: 'p', estimativa: e, km: 3, loja: 'Loja Centro', aviso }));
+    expect(html('lendo')).toContain('Lendo a estimativa da Meta para este raio…');
+    expect(html('lendo')).toContain('role="status"');
+    const ok = html(pronta(64_000, 75_000, true));
+    expect(ok).toContain('<b>Cerca de 64 mil a 75 mil pessoas</b>');
+    expect(ok).toContain('role="status"');
+    const pequeno = html(pronta(640, 760, false));
+    expect(pequeno).toContain('role="alert"');
+    expect(pequeno).toContain('<b>Público pequeno demais no raio</b>');
+    expect(pequeno).toContain('num raio de 3 km em volta da Loja Centro');
   });
 });

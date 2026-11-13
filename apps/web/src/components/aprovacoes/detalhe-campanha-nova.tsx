@@ -12,6 +12,7 @@ import {
   FREQUENCIA_DO_ALCANCE,
   idDaCampanhaNova,
   kmEscrito,
+  pessoasEscritas,
   linkDoGerenciador,
   OBJETIVOS,
   passosDaCriacao,
@@ -346,6 +347,15 @@ export function DetalheCampanhaNova({ acao, grupo, agora, podeDecidir, podeOpera
             {kmEscrito(c.radius_km)} em volta da loja
             <small>pessoas de 18 anos ou mais; o público ampliado da Meta fica desligado</small>
           </dd>
+          {c.audience && (
+            <>
+              <dt>Pessoas no raio</dt>
+              <dd>
+                de {pessoasEscritas(c.audience.lower)} a {pessoasEscritas(c.audience.upper)}
+                <small>pela estimativa da Meta ao pedir</small>
+              </dd>
+            </>
+          )}
           <dt>Verba diária</dt>
           <dd>
             {verba}

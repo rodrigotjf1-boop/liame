@@ -11,6 +11,7 @@ import { api, chamar } from '@/lib/api';
 import { disparar } from '@/lib/disparar';
 import { reaisDeMicros } from '@/lib/formato';
 import { BlocoDoReels, PreviaDoReels } from './campanha-do-reels';
+import { EstimativaDoRaio, type EstimativaNaGaveta } from './estimativa-do-raio';
 import {
   linhaDoTopo,
   FREQUENCIA_DO_ALCANCE,
@@ -85,6 +86,8 @@ export function GavetaCampanhaNova({ brandId, origem, opcoes, hoje, reserva, aoF
   const [erroGeral, setErroGeral] = useState<string | null>(null);
   const [enviando, setEnviando] = useState(false);
   const [criado, setCriado] = useState<NewCampaignResponse | null>(null);
+  /** A estimativa de público no raio (R6, D-RG-50): nula enquanto não há o que perguntar à Meta. */
+  const [publico, setPublico] = useState<EstimativaNaGaveta | null>(null);
   /** O campo que recebe o foco depois do próximo desenho (os campos ficam desligados enquanto o pedido vai). */
   const [focoEm, setFocoEm] = useState<CampoComErro | null>(null);
 
@@ -115,6 +118,33 @@ export function GavetaCampanhaNova({ brandId, origem, opcoes, hoje, reserva, aoF
   const semEndereco = loja !== null && !loja.has_address;
   const destino = destinoDoObjetivo(campos.objetivo, loja, pagina);
   const raios = raiosDaLoja(loja);
+  const publicoPequeno = publico !== null && typeof publico === 'object' && publico.status === 'pronta' && publico.enough === false;
+
+  // A estimativa ao abrir e ao trocar a loja ou o raio, só com a loja no endereço e nada impedindo o pedido. Vale só a
+  // resposta da leitura mais nova (a troca rápida de raio não deixa uma resposta velha por cima).
+  const lojaId = loja?.id ?? null;
+  const lojaComPonto = loja?.has_address ?? false;
+  const temBloqueio = bloqueio !== null;
+  useEffect(() => {
+    if (!lojaId || !lojaComPonto || temBloqueio) {
+      setPublico(null);
+      return;
+    }
+    let viva = true;
+    setPublico('lendo');
+    // Espera o raio parar de mudar (as setas do teclado passam por vários) antes de perguntar à Meta.
+    const espera = setTimeout(() => {
+      disparar(
+        chamar(() => api.GET('/v1/new-campaigns/audience-estimate', { params: { query: { brand_id: brandId, unit_id: lojaId, radius_km: campos.raio } } })).then((r) => {
+          if (viva) setPublico(r.ok ? r.data : 'falhou');
+        }),
+      );
+    }, 350);
+    return () => {
+      viva = false;
+      clearTimeout(espera);
+    };
+  }, [brandId, lojaId, lojaComPonto, temBloqueio, campos.raio]);
 
   function mudar(p: Partial<CamposDaCampanha>, campo?: CampoComErro) {
     setCampos((c) => ({ ...c, ...p }));
@@ -131,8 +161,8 @@ export function GavetaCampanhaNova({ brandId, origem, opcoes, hoje, reserva, aoF
   async function mandar(ev: FormEvent) {
     ev.preventDefault();
     if (enviando) return;
-    // O que impede pedir (a conta, a Página, a loja sem o endereço): o aviso recebe o foco e é lido de novo.
-    if (bloqueio || semEndereco) return aviso.current?.focus();
+    // O que impede pedir (a conta, a Página, a loja sem o endereço, o público pequeno no raio): o aviso recebe o foco.
+    if (bloqueio || semEndereco || publicoPequeno) return aviso.current?.focus();
     const e = conferirCampanha(campos, opcoes, prontas, hoje, reels !== null);
     setErros(e);
     if (Object.values(e).some(Boolean)) return focar(e);
@@ -487,6 +517,7 @@ export function GavetaCampanhaNova({ brandId, origem, opcoes, hoje, reserva, aoF
                       {dicaDoRaio(campos.raio, loja)}
                     </span>
                   )}
+                  {loja && publico !== null && <EstimativaDoRaio id={`${ids}-publico`} estimativa={publico} km={campos.raio} loja={loja.name} aviso={aviso} />}
                 </fieldset>
                 <div className="campo">
                   <label htmlFor={`${ids}-verba`}>Verba diária</label>
@@ -630,8 +661,8 @@ export function GavetaCampanhaNova({ brandId, origem, opcoes, hoje, reserva, aoF
               className="btn btn--primary"
               type="submit"
               disabled={enviando}
-              aria-disabled={bloqueio || semEndereco ? true : undefined}
-              aria-describedby={semEndereco ? `${ids}-sem-endereco` : undefined}
+              aria-disabled={bloqueio || semEndereco || publicoPequeno ? true : undefined}
+              aria-describedby={semEndereco ? `${ids}-sem-endereco` : publicoPequeno ? `${ids}-publico` : undefined}
             >
               {enviando ? 'Pedindo…' : 'Pedir a criação'}
             </button>

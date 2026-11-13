@@ -15,6 +15,11 @@
 .cn-op video { display: block; width: 100%; aspect-ratio: 1 / 1; object-fit: cover; }
 .cn-midia video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
 .cn-gaveta fieldset.campo { min-width: 0; margin: 0; padding: 0; border: 0; }
+/* a estimativa de público no raio (R6, D-RG-50), debaixo de "Quem vê" */
+.cn-estimativa { display: flex; gap: var(--sp-2); align-items: flex-start; margin: var(--sp-2) 0 0; }
+.cn-estimativa .ic { flex: none; margin-top: 2px; }
+.cn-estimativa b { font-weight: 600; }
+.cn-estimativa-aviso { margin-top: var(--sp-2); }
 .cn-gaveta .campo > legend { margin-bottom: var(--sp-2); font-weight: 600; }
 .cn-grade { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--sp-5); min-width: 0; }
 .cn-f1, .cn-f2 { display: grid; gap: var(--sp-5); align-content: start; min-width: 0; }
