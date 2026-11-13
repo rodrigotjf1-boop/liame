@@ -9,6 +9,7 @@ import {
   RegionOverviewResponse,
   RegionRhythmQuery,
   RegionRhythmResponse,
+  RegionRhythmStopResponse,
   ResourceId,
   SaveStoreLocationRequest,
   SaveStoreLocationResponse,
@@ -88,6 +89,24 @@ export class RegiaoController {
   @ApiNotFoundResponse({ standardSchema: ProblemDetails })
   ritmoDaSemana(@Auth() auth: AuthContext, @Query({ schema: RegionRhythmQuery }) query: RegionRhythmQuery): Promise<RegionRhythmResponse> {
     return this.regiao.ritmoDaSemana(auth, query.brand_id, query.unit_id);
+  }
+
+  @Post('region/rhythm/:id/stop')
+  @HttpCode(200)
+  @Permissao('campanhas.operar')
+  @Auditar('ritmo.parar', { recurso: 'budget_rhythm' })
+  @ApiOperation({
+    summary: 'Parar o ritmo da semana',
+    description:
+      'Para o ritmo da semana que uma pessoa aprovou (plano da região, R7; D-RG-63). Não pede o código do aplicativo autenticador. O passo que estiver na fila não sai, e a verba de cada campanha volta à de antes pelos passos seguintes, em até 10% por dia. O ritmo que ainda espera a aprovação se recusa em Aprovações (409).',
+  })
+  @ApiOkResponse({ standardSchema: RegionRhythmStopResponse })
+  @ApiBadRequestResponse({ standardSchema: ProblemDetails })
+  @ApiForbiddenResponse({ standardSchema: ProblemDetails })
+  @ApiNotFoundResponse({ standardSchema: ProblemDetails })
+  @ApiConflictResponse({ standardSchema: ProblemDetails })
+  pararRitmo(@Auth() auth: AuthContext, @Param('id', { schema: ResourceId }) id: string): Promise<RegionRhythmStopResponse> {
+    return this.regiao.pararRitmo(auth, id);
   }
 
   @Post('region/address-lookup')

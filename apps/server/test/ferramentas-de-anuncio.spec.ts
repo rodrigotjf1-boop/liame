@@ -54,6 +54,8 @@ describe('ferramentas de anúncio (A4 · X2)', () => {
       campanha_nova_pausar: ['R1', 'meta_ads', 'reativar_se_inalterado'],
       // O ritmo da semana (plano da região, R7, parte 1b): aprovar não muda nada na Meta; quem para é a pessoa, sem código.
       ritmo_da_semana: ['R2', 'meta_ads', 'parar_o_ritmo'],
+      // O passo de um dia do ritmo aprovado (R7, parte 1b-2): a mesma mudança de verba, dentro do que a pessoa aprovou.
+      orcamento_do_ritmo: ['R2', 'meta_ads', 'restaurar_orcamento_anterior_se_inalterado'],
     });
     for (const t of Object.values(TOOLS)) expect(t.params.safeParse({ qualquer: 1 }).success, t.name).toBe(false);
   });

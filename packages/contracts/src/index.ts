@@ -315,6 +315,7 @@ export {
   RegionRhythmQuery,
   RegionRhythmReason,
   RegionRhythmResponse,
+  RegionRhythmStopResponse,
   RegionOverviewResponse,
   RegionSourceStatus,
   SaveStoreLocationRequest,

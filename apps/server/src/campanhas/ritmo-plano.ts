@@ -24,6 +24,21 @@ export function ritmoDoRecurso(resourceId: string): string | null {
   return UUID.test(id) ? id : null;
 }
 
+/** A função do ritmo da semana (nasce desligada; só a distribuição liga, por empresa). */
+export const FLAG_DO_RITMO = 'ritmo_da_semana';
+/** As ferramentas do ritmo no trilho de ações: o pedido da semana e o passo de um dia. */
+export const FERRAMENTA_DO_RITMO = 'ritmo_da_semana';
+export const FERRAMENTA_DO_PASSO = 'orcamento_do_ritmo';
+
+/**
+ * O motivo do passo que não sai porque a campanha não está como o Liame deixou (D-RG-63): alguém mudou a verba ou
+ * pausou por fora. A campanha sai do ritmo e fica como a pessoa deixou; a rotina reconhece a recusa por esta frase.
+ */
+export const FORA_DO_RITMO = 'A campanha não está como o Liame deixou (a verba ou a situação mudou por fora): ela sai do ritmo e fica como está.';
+
+/** O passo de um dia: o ritmo, o dia (no fuso da loja) e o tipo (`ritmo`: a verba do dia; `volta`: a verba de antes). */
+export type PassoDoRitmo = { ritmo: string; dia: string; tipo: 'ritmo' | 'volta' };
+
 /** Até quantas campanhas entram num ritmo (o resto fica fora, com o motivo). */
 export const CAMPANHAS_NO_RITMO = 30;
 
@@ -60,6 +75,8 @@ export const EstadoDoRitmo = z.object({
         nome: z.string().min(1).max(300),
         base_micros: z.number().int().positive(),
         dias_micros: z.array(z.number().int().positive()).length(7),
+        /** A verba da véspera da semana, quando a campanha continua de outro ritmo; ausente: a verba de hoje. */
+        partida_micros: z.number().int().positive().optional(),
       }),
     )
     .min(1)
@@ -86,7 +103,7 @@ export function planoDoRitmo(before: unknown): PlanoDoRitmo {
   const e = lido.data;
   if (e.situacao !== 'pedido') return { ok: false, motivo: MOTIVO_DA_SITUACAO[e.situacao] };
   for (const c of e.campanhas) {
-    const problemas = problemasDaVerba(c.base_micros, c.dias_micros, e.teto_micros);
+    const problemas = problemasDaVerba(c.base_micros, c.dias_micros, e.teto_micros, c.partida_micros ?? c.base_micros);
     if (problemas.length) return { ok: false, motivo: `A verba da campanha "${c.nome}" sai dos limites do ritmo (${problemas[0]}).` };
   }
   return { ok: true, desejado: { ...e, situacao: 'aprovado' } };
