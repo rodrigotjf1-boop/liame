@@ -245,6 +245,68 @@ export const DirectConversationResponse = z.strictObject({
 });
 export type DirectConversationResponse = z.infer<typeof DirectConversationResponse>;
 
+// ---- A sugestão do Social media numa conversa (A6, Z12, parte 4b-2; P39; D-A6-110 e D-A6-145)
+
+/** Quantas sugestões já vistas o "Pedir outra" manda de volta (uma na pergunta; três na reclamação). */
+export const DIRECT_AI_SUGGESTIONS_MAX = 3;
+
+/**
+ * Pedir ao Social media a sugestão de resposta para uma conversa que espera resposta (a pergunta ou a reclamação).
+ * `previous`: o "Pedir outra", com as sugestões que a pessoa já viu, para as novas serem outras.
+ */
+export const DirectAiSuggestionRequest = z.strictObject({
+  brand_id: z.uuid(),
+  previous: z
+    .array(z.strictObject({ focus: z.string().trim().min(1).max(60), text: z.string().trim().min(1).max(600) }))
+    .max(DIRECT_AI_SUGGESTIONS_MAX)
+    .default([]),
+});
+export type DirectAiSuggestionRequest = z.infer<typeof DirectAiSuggestionRequest>;
+
+/**
+ * Por que o Social media não sugeriu. Os da IA (desligada, sem a rota do modelo, no teto, fora do ar, a entrada grande),
+ * o funcionário desligado na marca, a resposta fora do formato, tudo barrado pela conferência, e `tipo_sem_ia`: a
+ * conversa não é pergunta nem reclamação (o elogio e a menção têm a resposta pronta; o golpe, nenhuma). A lista pode
+ * crescer (V23).
+ */
+export const DIRECT_AI_SUGGESTION_NO_AI_REASONS = [
+  'ia_desligada',
+  'funcionario_desligado',
+  'sem-rota',
+  'teto',
+  'limite-usuario',
+  'travada',
+  'parada',
+  'indisponivel',
+  'entrada-grande',
+  'formato',
+  'barrado',
+  'tipo_sem_ia',
+] as const;
+
+/**
+ * A sugestão do Social media, já conferida (as regras da resposta, as da Liame e da marca e os números): a que a
+ * conferência barra não volta (`dropped` conta). `kind`: o tipo da conversa (`pergunta` ou `reclamacao`). `answered`: na
+ * pergunta, ele respondeu só com o que Minha marca diz; falso, "precisa de você", com o que faltou em `missing` (nulo
+ * quando ele não disse de um jeito que a tela mostre). Sem a IA, `origin` é `sem_ia`, com o motivo, e a pessoa escreve.
+ * Nada é guardado: a sugestão vive na tela de quem pediu.
+ */
+export const DirectAiSuggestionResponse = z.strictObject({
+  origin: z.enum(['ia', 'sem_ia']),
+  reason: z.enum(DIRECT_AI_SUGGESTION_NO_AI_REASONS).nullable(),
+  kind: z.enum(['pergunta', 'reclamacao']).nullable(),
+  suggestions: z.array(z.strictObject({ focus: z.string().min(1).max(60), text: z.string().min(1).max(600), check: z.enum(['passou', 'aviso']) })).max(DIRECT_AI_SUGGESTIONS_MAX),
+  answered: z.boolean(),
+  missing: z.string().max(80).nullable(),
+  /** Quantas sugestões ficaram de fora (vazias, longas, repetidas, com dado pessoal ou barradas pela conferência). */
+  dropped: z.int().min(0),
+  /** No teto de custo: quando a IA volta. */
+  retry_at: z.iso.datetime({ offset: true }).nullable(),
+  /** A chamada em `ai_usage` (para o retorno da pessoa); nula sem a IA. */
+  usage_id: z.uuid().nullable(),
+});
+export type DirectAiSuggestionResponse = z.infer<typeof DirectAiSuggestionResponse>;
+
 // ---- O atendimento automático do Direct (A6, Z12, parte 5a; P39 versão 2; D-A6-115 e D-A6-119)
 
 /**

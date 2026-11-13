@@ -119,6 +119,8 @@ describe('A1-4: toda rota declara o acesso e nega sem sessão', () => {
     // `POST /v1/video-montages/texts` (A6 · Z15, parte 3b): o caminho do Explicar, para os textos do vídeo pelo Social
     // media (a leitura numa transação curta, a IA sem transação aberta, a recusa noutra).
     // `POST /v1/google-campaigns/texts` (A5 · Y9, parte 4): o mesmo caminho, para os textos do Google pelo Criativo.
+    // `POST /v1/direct/conversations/:id/suggestion` (A6 · Z12, parte 4b-2): o mesmo caminho, para a sugestão do Social
+    // media numa conversa do Direct (a conversa lida numa transação curta, a IA sem transação aberta).
     expect(semTransacao).toEqual([
       'GET /v1/actions/options',
       'GET /v1/agency-logos/:arquivo',
@@ -136,6 +138,7 @@ describe('A1-4: toda rota declara o acesso e nega sem sessão', () => {
       'POST /v1/brand-photos/:id/video',
       'POST /v1/connections',
       'POST /v1/conversations/messages',
+      'POST /v1/direct/conversations/:id/suggestion',
       'POST /v1/google-campaigns/texts',
       'POST /v1/region/address-lookup',
       'POST /v1/region/google-profile-address',

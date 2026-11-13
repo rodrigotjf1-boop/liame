@@ -1,4 +1,6 @@
 import {
+  DirectAiSuggestionRequest,
+  DirectAiSuggestionResponse,
   DirectAttendanceRequest,
   DirectAttendanceResponse,
   DirectAutoReplyPreviewResponse,
@@ -34,7 +36,9 @@ import {
 import { Auditar, SemAuditoria } from '../audit/auditar.js';
 import { Auth, Permissao } from '../auth/access.js';
 import type { AuthContext } from '../context/request-context.js';
+import { SemTransacao } from '../context/sem-transacao.js';
 import { DirectService } from './direct.service.js';
+import { DirectSuggestionService } from './sugestao.service.js';
 
 // O Direct do Instagram (A6, Z12; protótipo P39): o ajuste da marca, o que a tela Direct lê e o contador do menu. As
 // rotas de leitura só leem o que a rotina `direct` do worker guardou; responder, com o atendimento aberto, é a parte 2.
@@ -43,7 +47,10 @@ import { DirectService } from './direct.service.js';
 @ApiCookieAuth('liame_sessao')
 @Controller('direct')
 export class DirectController {
-  constructor(private readonly direct: DirectService) {}
+  constructor(
+    private readonly direct: DirectService,
+    private readonly sugestoes: DirectSuggestionService,
+  ) {}
 
   @Get('settings')
   @Permissao('campanhas.ver')
@@ -235,6 +242,30 @@ export class DirectController {
     @Body({ schema: DirectReplyRequest }) body: DirectReplyRequest,
   ): Promise<DirectReplyResponse> {
     return this.direct.responder(auth, id, body);
+  }
+
+  @Post('conversations/:id/suggestion')
+  @HttpCode(200)
+  @Permissao('acoes.aprovar')
+  @SemTransacao('espera o Social media (um modelo de IA) por segundos: a leitura e o registro do uso abrem transações curtas')
+  @SemAuditoria('pedir a sugestão não muda dado da empresa nem manda nada: cada chamada à IA fica em ai_usage, e a sugestão barrada conta em Sua equipe')
+  @ApiOperation({
+    summary: 'Pedir a sugestão ao Social media',
+    description:
+      'O Social media sugere a resposta para uma conversa do Direct ou do Messenger que espera resposta (A6, Z12, parte 4b-2; P39, "Sugestão do Social media"; D-A6-110 e D-A6-145): uma sugestão para a pergunta, só com o que Minha marca diz, e três caminhos para a reclamação. Ele recebe as dez últimas mensagens da conversa, sem o nome nem o nome de usuário de quem escreveu, e Minha marca; cada sugestão é conferida antes de voltar (a compensação prometida, o nome que aparece na conversa, as regras da Liame e da marca e o número fora da conversa e de Minha marca), e a que não passa fica de fora. `answered` diz se a pergunta foi respondida só com o que Minha marca diz; quando não, `missing` diz o que faltou ("precisa de você"). `previous` é o "Pedir outra". Nada é guardado e nada é enviado: a resposta só sai quando a pessoa manda, com o atendimento aberto. Sem a IA (desligada, sem a rota do modelo, no teto, fora do ar, o Social media desligado na marca, a conversa que não é pergunta nem reclamação), `origin` é `sem_ia`, com o motivo. 409 `conversa-nao-espera`: a conversa não espera resposta.',
+  })
+  @ApiOkResponse({ standardSchema: DirectAiSuggestionResponse })
+  @ApiBadRequestResponse({ standardSchema: ProblemDetails })
+  @ApiForbiddenResponse({ standardSchema: ProblemDetails })
+  @ApiNotFoundResponse({ standardSchema: ProblemDetails })
+  @ApiConflictResponse({ standardSchema: ProblemDetails })
+  @ApiUnprocessableEntityResponse({ standardSchema: ProblemDetails })
+  sugerir(
+    @Auth() auth: AuthContext,
+    @Param('id', { schema: DirectConversationId }) id: string,
+    @Body({ schema: DirectAiSuggestionRequest }) body: DirectAiSuggestionRequest,
+  ): Promise<DirectAiSuggestionResponse> {
+    return this.sugestoes.sugerir(auth, id, body);
   }
 
   @Post('conversations/:id/conclude')
