@@ -123,6 +123,7 @@ export const DATA_CLASSES: Record<string, TableClassification> = {
   exchange_rate: { class: 'PUBLIC', retention: 'do produto (cotação pública do Banco Central)' },
   // Os números da região (plano da região, R2; migration 0137; padrão da PTAX): dado público do IBGE, sem empresa.
   region_district: { class: 'PUBLIC', retention: 'do produto (bairros do Censo 2022 do IBGE, até o próximo Censo)' },
+  region_district_point: { class: 'PUBLIC', retention: 'do produto (o centro de cada bairro pelo OpenStreetMap e o bairro na busca da Meta, com o bairro do IBGE)' },
   region_fact: { class: 'PUBLIC', retention: 'do produto (números públicos do IBGE por lugar e período)' },
   region_source_read: { class: 'INTERNAL', retention: 'do produto (a última leitura de cada fonte pública)' },
   region_food_count: { class: 'PUBLIC', retention: 'do produto (contagens de restaurantes do CNPJ aberto da Receita, só o mês mais novo; sem nome, endereço nem CNPJ)' },

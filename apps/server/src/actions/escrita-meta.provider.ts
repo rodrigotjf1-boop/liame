@@ -8,6 +8,7 @@ import { DATABASE } from '../database/database.module.js';
 import { ARMAZEM_DE_IMAGENS, type ArmazemDeImagens } from '../imagens/armazem.js';
 import { VaultService } from '../vault/vault.service.js';
 import { publicoNoRaio } from '../campanhas/publico-no-raio.js';
+import { centrosDosBairros } from '../worker/centros-dos-bairros.js';
 import { campanhaNovaNaMetaConnector } from './campanha-nova-na-meta.js';
 import { metaAnunciosConnector } from './meta-anuncios.js';
 
@@ -53,5 +54,7 @@ export class EscritaMeta implements OnModuleInit {
       appSecret: this.config.plataformas.metaAppSecret,
       versao: (capacidade) => versaoRegistrada(database.db, 'meta_ads', capacidade),
     });
+    // O cache dos bairros da campanha (R6, parte 3): o centro pelo OpenStreetMap e o bairro na Meta, gravados pelo sistema.
+    centrosDosBairros.ligar({ db: database.db });
   }
 }

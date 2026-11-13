@@ -209,3 +209,37 @@ describe('a campanha com raio (R6 do plano da região; D-RG-48 a D-RG-51)', () =
     expect(perfilDoInstagram('a'.repeat(31))).toBeNull();
   });
 });
+
+describe('a campanha por bairros (R6, parte 3; D-RG-53 e D-RG-54)', () => {
+  const bairros = [
+    { codigo: '3304557001', nome: 'Centro', meta: '333', latitude: -22.9, longitude: -43.17, raio_km: 2 },
+    { codigo: '3304557002', nome: 'Glória', meta: null, latitude: -22.92, longitude: -43.175, raio_km: 1 },
+    { codigo: '3304557003', nome: 'Lapa', meta: null, latitude: -22.913, longitude: -43.18, raio_km: 1 },
+  ];
+
+  it('o conjunto: os bairros da Meta pela chave e os círculos dos outros, em km; o nome diz quantos bairros', () => {
+    const c = parametrosDoConjunto(estado({ raio_km: null, bairros }), '111');
+    expect(JSON.parse(c.targeting as string)).toEqual({
+      geo_locations: {
+        custom_locations: [
+          { latitude: -22.92, longitude: -43.175, radius: 1, distance_unit: 'kilometer' },
+          { latitude: -22.913, longitude: -43.18, radius: 1, distance_unit: 'kilometer' },
+        ],
+        neighborhoods: [{ key: '333' }],
+      },
+      age_min: 18,
+      targeting_automation: { advantage_audience: 0 },
+    });
+    expect(c.name).toMatch(/ · 3 bairros$/);
+  });
+
+  it('o plano: o raio ou os bairros, um dos dois; o estado antigo (sem bairros) continua valendo', () => {
+    expect(planoDaCampanhaNova(estado({ raio_km: null, bairros })).ok).toBe(true);
+    expect(planoDaCampanhaNova(estado({ raio_km: 5, bairros: null })).ok).toBe(true);
+    expect(planoDaCampanhaNova(estado({ raio_km: 5 })).ok).toBe(true);
+    expect(planoDaCampanhaNova(estado({ raio_km: 5, bairros }))).toEqual({ ok: false, motivo: 'Quem vê a campanha é o raio em volta da loja ou os bairros: um dos dois.' });
+    expect(planoDaCampanhaNova(estado({ raio_km: null, bairros: null })).ok).toBe(false);
+    // O bairro fora da régua (o círculo de 1 a 3 km, o código de 10 algarismos) não vira plano.
+    expect(planoDaCampanhaNova(estado({ raio_km: null, bairros: [{ ...bairros[1]!, raio_km: 4 }] })).ok).toBe(false);
+  });
+});

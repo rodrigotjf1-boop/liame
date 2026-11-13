@@ -11,6 +11,7 @@ import { api, chamar } from '@/lib/api';
 import { disparar } from '@/lib/disparar';
 import { reaisDeMicros } from '@/lib/formato';
 import { BlocoDoReels, PreviaDoReels } from './campanha-do-reels';
+import { BairrosDaCampanha } from './bairros-da-campanha';
 import { EstimativaDoRaio, type EstimativaNaGaveta } from './estimativa-do-raio';
 import {
   linhaDoTopo,
@@ -77,6 +78,8 @@ export function GavetaCampanhaNova({ brandId, origem, opcoes, hoje, reserva, aoF
       : `${peca!.current.title} · ${new Intl.DateTimeFormat('pt-BR', { month: 'long' }).format(new Date(`${hoje}T12:00:00`))}`.slice(0, 80),
     objetivo: lojaInicial && !lojaInicial.menu_available ? 'whatsapp' : 'cardapio',
     raio: 5,
+    quem: 'raio',
+    bairros: [],
     verba: '30,00',
     fim: '',
   });
@@ -125,8 +128,10 @@ export function GavetaCampanhaNova({ brandId, origem, opcoes, hoje, reserva, aoF
   const lojaId = loja?.id ?? null;
   const lojaComPonto = loja?.has_address ?? false;
   const temBloqueio = bloqueio !== null;
+  const porBairros = campos.quem === 'bairros';
+  const bairrosTexto = campos.bairros.join(',');
   useEffect(() => {
-    if (!lojaId || !lojaComPonto || temBloqueio) {
+    if (!lojaId || !lojaComPonto || temBloqueio || (porBairros && !bairrosTexto)) {
       setPublico(null);
       return;
     }
@@ -135,7 +140,11 @@ export function GavetaCampanhaNova({ brandId, origem, opcoes, hoje, reserva, aoF
     // Espera o raio parar de mudar (as setas do teclado passam por vários) antes de perguntar à Meta.
     const espera = setTimeout(() => {
       disparar(
-        chamar(() => api.GET('/v1/new-campaigns/audience-estimate', { params: { query: { brand_id: brandId, unit_id: lojaId, radius_km: campos.raio } } })).then((r) => {
+        chamar(() =>
+          api.GET('/v1/new-campaigns/audience-estimate', {
+            params: { query: { brand_id: brandId, unit_id: lojaId, ...(porBairros ? { districts: bairrosTexto } : { radius_km: campos.raio }) } },
+          }),
+        ).then((r) => {
           if (viva) setPublico(r.ok ? r.data : 'falhou');
         }),
       );
@@ -144,7 +153,7 @@ export function GavetaCampanhaNova({ brandId, origem, opcoes, hoje, reserva, aoF
       viva = false;
       clearTimeout(espera);
     };
-  }, [brandId, lojaId, lojaComPonto, temBloqueio, campos.raio]);
+  }, [brandId, lojaId, lojaComPonto, temBloqueio, campos.raio, porBairros, bairrosTexto]);
 
   function mudar(p: Partial<CamposDaCampanha>, campo?: CampoComErro) {
     setCampos((c) => ({ ...c, ...p }));
@@ -153,7 +162,7 @@ export function GavetaCampanhaNova({ brandId, origem, opcoes, hoje, reserva, aoF
   }
 
   function focar(e: ErrosDaCampanha) {
-    const ordem: CampoComErro[] = ['midia', 'loja', 'nome', 'objetivo', 'verba', 'fim'];
+    const ordem: CampoComErro[] = ['midia', 'loja', 'nome', 'objetivo', 'bairros', 'verba', 'fim'];
     const primeiro = ordem.find((c) => e[c]);
     if (primeiro) setFocoEm(primeiro);
   }
@@ -175,7 +184,7 @@ export function GavetaCampanhaNova({ brandId, origem, opcoes, hoje, reserva, aoF
           unit_id: campos.loja!,
           name: campos.nome.trim(),
           objective: campos.objetivo,
-          radius_km: campos.raio,
+          ...(campos.quem === 'bairros' ? { districts: campos.bairros } : { radius_km: campos.raio }),
           daily_budget_micros: Number(microsDeReais(campos.verba)),
           ...(campos.fim ? { end_date: campos.fim } : {}),
         },
@@ -496,6 +505,32 @@ export function GavetaCampanhaNova({ brandId, origem, opcoes, hoje, reserva, aoF
                 </fieldset>
                 <fieldset className="campo">
                   <legend>Quem vê</legend>
+                  <div className="seg cn-quem" role="group" aria-label="Como escolher quem vê">
+                    {(
+                      [
+                        ['raio', 'Raio em volta da loja', 'compass'],
+                        ['bairros', 'Bairros', 'map-pin'],
+                      ] as const
+                    ).map(([q, rotulo, icone]) => (
+                      <button key={q} type="button" aria-pressed={campos.quem === q} disabled={enviando || semEndereco} onClick={() => mudar({ quem: q }, 'bairros')}>
+                        <Icone nome={icone} pequeno />
+                        {rotulo}
+                      </button>
+                    ))}
+                  </div>
+                  {campos.quem === 'bairros' && loja ? (
+                    <BairrosDaCampanha
+                      key={loja.id}
+                      id={`${ids}-b`}
+                      brandId={brandId}
+                      loja={{ id: loja.id, name: loja.name }}
+                      marcados={campos.bairros}
+                      aoMudar={(bairros) => mudar({ bairros }, 'bairros')}
+                      desligado={enviando || semEndereco}
+                      erro={erros.bairros}
+                    />
+                  ) : (
+                  <>
                   <div className="pd-escolha">
                     {raios.map((r) => (
                       <label key={r.rotulo} className="pd-opcao">
@@ -517,7 +552,11 @@ export function GavetaCampanhaNova({ brandId, origem, opcoes, hoje, reserva, aoF
                       {dicaDoRaio(campos.raio, loja)}
                     </span>
                   )}
-                  {loja && publico !== null && <EstimativaDoRaio id={`${ids}-publico`} estimativa={publico} km={campos.raio} loja={loja.name} aviso={aviso} />}
+                  </>
+                  )}
+                  {loja && publico !== null && (
+                    <EstimativaDoRaio id={`${ids}-publico`} estimativa={publico} km={campos.raio} loja={loja.name} bairros={porBairros ? campos.bairros.length : null} aviso={aviso} />
+                  )}
                 </fieldset>
                 <div className="campo">
                   <label htmlFor={`${ids}-verba`}>Verba diária</label>

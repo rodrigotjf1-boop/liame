@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Campanha nova · Liame</title>
 <!--
-@prototipo Liame · A4 · P42 · Campanha nova com a foto ou o vídeo da loja (APROVADO PELO DONO EM 11/11/2026, com as recomendações D-A4-42 a D-A4-46) · REVISÃO R6 de 13/11/2026 (plano da região: a campanha com raio, os objetivos de alcance e de seguidores, a estimativa de público no raio, o teto de 25% e a frequência; D-RG-48 a D-RG-52 como recomendadas), APROVADA PELO DONO em 13/11/2026 · REVISÃO R6-3 de 13/11/2026 (quem vê por bairros, além do raio: pedido do dono em 13/11/2026; D-RG-53 a D-RG-57 propostas), PARA APROVAR
+@prototipo Liame · A4 · P42 · Campanha nova com a foto ou o vídeo da loja (APROVADO PELO DONO EM 11/11/2026, com as recomendações D-A4-42 a D-A4-46) · REVISÃO R6 de 13/11/2026 (plano da região: a campanha com raio, os objetivos de alcance e de seguidores, a estimativa de público no raio, o teto de 25% e a frequência; D-RG-48 a D-RG-52 como recomendadas), APROVADA PELO DONO em 13/11/2026 · REVISÃO R6-3 de 13/11/2026 (quem vê por bairros, além do raio: pedido do dono em 13/11/2026; D-RG-53 a D-RG-57 como recomendadas), APROVADA PELO DONO em 13/11/2026
 base: o P10 (prototipo-criativos.html, aprovado em 05/10/2026): Criativos, a peça aprovada, a gaveta "Campanha nova,
       pausada" e os pedidos em Aprovações ficam como estão lá, no seletor "Criativos"; o P42 entra por cima, no
       seletor "Campanha nova".
@@ -7139,12 +7139,12 @@ const P42_ESTADOS = {
     'r6-teto': 'Alcance e seguidores passam de 25% da verba do mês (não pede)',
     'r6-aprovacoes': 'Em Aprovações: a campanha de alcance',
   },
-  'R6-3 · Quem vê por bairros (para aprovar)': {
+  'R6-3 · Quem vê por bairros': {
     'r6-bairros': 'Bairros: as áreas de entrega e os bairros dos pedidos, com a prévia em escala',
     'r6-bairros-outro': 'Bairros: outro bairro da cidade (a busca)',
     'r6-bairros-nenhum': 'Bairros: nenhum marcado (não pede)',
     'r6-bairros-aprovacoes': 'Em Aprovações: a campanha por bairros',
-    'decisoes-r6-3': 'As decisões propostas (D-RG-53 a D-RG-57)',
+    'decisoes-r6-3': 'As decisões aprovadas (D-RG-53 a D-RG-57)',
   },
   'Decisões': {
     decisoes: 'As decisões propostas (D-A4-42 a D-A4-46)',
@@ -7342,8 +7342,8 @@ const P42_DECISOES_R6_3 = [
   { id: 'D-RG-57', titulo: 'O Google fica para a R9', oque: 'O Google tem bairros do Brasil: no Liame já aparecem 12 bairros, 62 distritos e 112 CEPs de 5 dígitos, lidos dos cliques em 13/11/2026. A mesma escolha entra na campanha do Google na R9, pelo bairro do Google, ou pelo CEP quando ele não tiver o bairro.', porque: 'A campanha desta gaveta é da Meta; a do Google (P45) ganha a escolha com a R9, que já trata das buscas por bairro.', rec: 'Na R9.' },
 ];
 function r6bDecisoesHtml() {
-  const lista = P42_DECISOES_R6_3.map((d) => `<li><div><b>${d.id} · ${esc(d.titulo)}</b><span><b>O que é:</b> ${esc(d.oque)}</span><span><b>Por quê:</b> ${esc(d.porque)}</span><span><b>Recomendação:</b> ${esc(d.rec)}</span></div><span class="st st--espera">Proposta</span></li>`).join('');
-  return `<section class="card p42-decisoes" id="p42-decisoes-r6-3" aria-labelledby="p42-dec-r6-3-t"><div class="card-cab"><div><h2 id="p42-dec-r6-3-t" tabindex="-1">Revisão R6-3: quem vê por bairros (D-RG-53 a D-RG-57)</h2><p class="card-sub">Pedido do dono em 13/11/2026 ("é possível escolher como na Meta por raio ou por bairro?"). Para aprovar. Estados do grupo "R6-3" no seletor.</p></div></div><ul class="rev-decisoes">${lista}</ul></section>`;
+  const lista = P42_DECISOES_R6_3.map((d) => `<li><div><b>${d.id} · ${esc(d.titulo)}</b><span><b>O que é:</b> ${esc(d.oque)}</span><span><b>Por quê:</b> ${esc(d.porque)}</span><span><b>Recomendação:</b> ${esc(d.rec)}</span></div><span class="st st--concluido">Aprovada</span></li>`).join('');
+  return `<section class="card p42-decisoes" id="p42-decisoes-r6-3" aria-labelledby="p42-dec-r6-3-t"><div class="card-cab"><div><h2 id="p42-dec-r6-3-t" tabindex="-1">Revisão R6-3: quem vê por bairros (D-RG-53 a D-RG-57)</h2><p class="card-sub">Pedido do dono em 13/11/2026 ("é possível escolher como na Meta por raio ou por bairro?"). Aprovada pelo dono em 13/11/2026, com as recomendações. Estados do grupo "R6-3" no seletor.</p></div></div><ul class="rev-decisoes">${lista}</ul></section>`;
 }
 
 

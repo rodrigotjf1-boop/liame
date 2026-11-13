@@ -3,8 +3,13 @@ import { createElement, createRef } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 import {
+  bairroEscolhivel,
+  bairrosEmAprovacoes,
   type CamposDaCampanha,
+  comoVaiNaMeta,
   conferirCampanha,
+  deOndeVemOBairro,
+  dicaDosBairros,
   diaDoReels,
   efeitoDaCampanha,
   erroDoPedido,
@@ -21,6 +26,7 @@ import {
   situacaoDaCampanha,
 } from '../src/components/criativos/campanha-nova-textos';
 import { EstimativaDoRaio } from '../src/components/criativos/estimativa-do-raio';
+import { PreviaDosBairros } from '../src/components/criativos/previa-dos-bairros';
 
 // A campanha nova (A4, X5, parte 5; P42): a tela confere o mesmo que o servidor antes de mandar, a recusa do servidor vai
 // para o campo certo, e Aprovações mostra a criação passo a passo.
@@ -45,7 +51,7 @@ const opcoes = (o: Partial<NewCampaignOptionsResponse> = {}): NewCampaignOptions
 });
 const midia = (o: Partial<BrandPhoto> = {}): BrandPhoto =>
   ({ id: 'f1', brand_id: 'b', product: 'Smash', description: '', width: 1080, height: 1350, kind: 'foto_produto', thumbnail_url: 'x', url: 'x', ...o }) as BrandPhoto;
-const campos = (o: Partial<CamposDaCampanha> = {}): CamposDaCampanha => ({ midia: 'f1', loja: LOJA, nome: 'Combo sexta', objetivo: 'cardapio', raio: 5, verba: '30,00', fim: '', ...o });
+const campos = (o: Partial<CamposDaCampanha> = {}): CamposDaCampanha => ({ midia: 'f1', loja: LOJA, nome: 'Combo sexta', objetivo: 'cardapio', raio: 5, quem: 'raio', bairros: [], verba: '30,00', fim: '', ...o });
 
 describe('campanha nova: a conferência da gaveta', () => {
   it('o pedido certo passa; cada recusa vai para o seu campo, com as palavras do servidor', () => {
@@ -194,5 +200,82 @@ describe('campanha nova: a estimativa de público no raio (R6, parte 2; D-RG-50)
     expect(pequeno).toContain('role="alert"');
     expect(pequeno).toContain('<b>Público pequeno demais no raio</b>');
     expect(pequeno).toContain('num raio de 3 km em volta da Loja Centro');
+  });
+});
+
+describe('campanha nova: quem vê por bairros (R6, parte 3; D-RG-53 a D-RG-56)', () => {
+  const bairro = (o: Record<string, unknown> = {}) => ({
+    code: '3304557001',
+    name: 'Centro',
+    delivery_area: true,
+    orders: null,
+    orders_days: null,
+    how: 'circulo',
+    radius_km: 1.5,
+    x_km: 0.2,
+    y_km: 0.1,
+    ...o,
+  });
+
+  it('a conferência: nos bairros, pelo menos um e até 20; a recusa do servidor vai para os bairros', () => {
+    expect(conferirCampanha(campos({ quem: 'bairros', bairros: [] }), opcoes(), [midia()], '2026-11-13').bairros).toBe(
+      'Marque pelo menos um bairro, ou volte para o raio em volta da loja.',
+    );
+    expect(conferirCampanha(campos({ quem: 'bairros', bairros: ['3304557001'] }), opcoes(), [midia()], '2026-11-13').bairros).toBeUndefined();
+    expect(conferirCampanha(campos({ quem: 'bairros', bairros: Array.from({ length: 21 }, (_, i) => String(3304557000 + i)) }), opcoes(), [midia()], '2026-11-13').bairros).toBe(
+      'Até 20 bairros por campanha.',
+    );
+    // No raio, os bairros marcados antes não contam.
+    expect(conferirCampanha(campos({ quem: 'raio', bairros: [] }), opcoes(), [midia()], '2026-11-13').bairros).toBeUndefined();
+    expect(erroDoPedido({ status: 422, code: 'bairro-sem-centro', title: 't', detail: 'O Liame ainda não tem o centro de Glória no mapa.' })).toEqual({
+      campo: 'bairros',
+      texto: 'O Liame ainda não tem o centro de Glória no mapa.',
+    });
+  });
+
+  it('como cada bairro vai para a Meta e de onde ele veio; só o que tem o centro pode ser marcado', () => {
+    expect(comoVaiNaMeta(bairro({ how: 'meta' }))).toBe('na Meta, o bairro dela');
+    expect(comoVaiNaMeta(bairro({ how: 'circulo', radius_km: 1.5 }))).toBe('na Meta, um círculo de 1,5 km no centro');
+    expect(comoVaiNaMeta(bairro({ how: 'procurando', radius_km: null }))).toBe('procurando o centro do bairro no mapa…');
+    expect(comoVaiNaMeta(bairro({ how: 'sem_centro', radius_km: null }))).toBe('o mapa não achou o centro deste bairro: não dá para escolher');
+    expect([bairroEscolhivel({ how: 'meta' }), bairroEscolhivel({ how: 'circulo' }), bairroEscolhivel({ how: 'procurando' }), bairroEscolhivel({ how: 'sem_centro' })]).toEqual([true, true, false, false]);
+    expect(deOndeVemOBairro({ delivery_area: true, orders: 312, orders_days: 28 })).toBe('área de entrega · 312 pedidos em 28 dias');
+    expect(deOndeVemOBairro({ delivery_area: false, orders: 37, orders_days: 28 })).toBe('37 pedidos em 28 dias');
+    expect(deOndeVemOBairro({ delivery_area: false, orders: null, orders_days: null })).toBe('da busca');
+    expect(dicaDosBairros(4)).toMatch(/^4 de até 20 bairros\. /);
+    expect(bairrosEmAprovacoes([
+      { code: '1', name: 'Centro', meta: true, radius_km: 2 },
+      { code: '2', name: 'Glória', meta: false, radius_km: 1 },
+    ])).toBe('Centro (o bairro da Meta), Glória (círculo de 1 km)');
+  });
+
+  it('a estimativa nos bairros: a faixa dos bairros juntos e o pequeno com a frase do servidor', () => {
+    const pronta = (lower: number, upper: number, enough: boolean) => ({ status: 'pronta' as const, lower, upper, minimum: 1000, enough });
+    expect(linhaDaEstimativa(pronta(81_000, 97_000, true), 5, 'Loja Centro', 4)).toMatchObject({ tom: 'ok', destaque: 'Cerca de 81 mil a 97 mil pessoas' });
+    expect(linhaDaEstimativa(pronta(81_000, 97_000, true), 5, 'Loja Centro', 4).texto).toContain('nos 4 bairros escolhidos');
+    // A mesma frase da recusa `publico-pequeno` do servidor (`textoDoPublicoPequenoNosBairros`).
+    expect(linhaDaEstimativa(pronta(300, 400, false), 5, 'Loja Centro', 1)).toEqual({
+      tom: 'pequeno',
+      titulo: 'Público pequeno demais nos bairros',
+      destaque: null,
+      texto: 'A Meta estima de 300 a 400 pessoas de 18 anos ou mais no bairro escolhido: com menos de 1.000 pessoas, ela não entrega bem. Escolha mais bairros.',
+    });
+  });
+
+  it('a prévia em escala: a loja, o círculo do Liame e o bairro da Meta, com o título que diz quem é quem', () => {
+    const html = renderToStaticMarkup(
+      createElement(PreviaDosBairros, {
+        bairros: [bairro({ code: 'a', name: 'Centro', how: 'meta', radius_km: 2 }), bairro({ code: 'b', name: 'Glória', how: 'circulo', radius_km: 1, x_km: -0.8, y_km: -2.2 })],
+        loja: 'Loja Centro',
+        id: 'pv',
+      }),
+    );
+    expect(html).toContain('role="img"');
+    expect(html).toContain('Prévia em escala: a Loja Centro e os 2 bairros marcados. Pelo bairro da Meta: Centro. Por um círculo no centro: Glória.');
+    expect(html).toContain('class="cn-c-meta"');
+    expect(html).toContain('class="cn-c-liame"');
+    expect(html).toContain('1 km');
+    // Sem bairro com o centro, não desenha nada.
+    expect(renderToStaticMarkup(createElement(PreviaDosBairros, { bairros: [bairro({ x_km: null, y_km: null, radius_km: null })], loja: 'Loja Centro', id: 'pv' }))).toBe('');
   });
 });

@@ -11,6 +11,8 @@ import {
   ehVideo,
   FREQUENCIA_DO_ALCANCE,
   idDaCampanhaNova,
+  bairrosEmAprovacoes,
+  bairrosEscritos,
   kmEscrito,
   pessoasEscritas,
   linkDoGerenciador,
@@ -343,13 +345,20 @@ export function DetalheCampanhaNova({ acao, grupo, agora, podeDecidir, podeOpera
             </small>
           </dd>
           <dt>Quem vê</dt>
-          <dd>
-            {kmEscrito(c.radius_km)} em volta da loja
-            <small>pessoas de 18 anos ou mais; o público ampliado da Meta fica desligado</small>
-          </dd>
+          {c.districts ? (
+            <dd>
+              {bairrosEscritos(c.districts.length)}
+              <small>{bairrosEmAprovacoes(c.districts)}; pessoas de 18 anos ou mais; o público ampliado da Meta fica desligado</small>
+            </dd>
+          ) : (
+            <dd>
+              {c.radius_km === null ? 'Em volta da loja' : `${kmEscrito(c.radius_km)} em volta da loja`}
+              <small>pessoas de 18 anos ou mais; o público ampliado da Meta fica desligado</small>
+            </dd>
+          )}
           {c.audience && (
             <>
-              <dt>Pessoas no raio</dt>
+              <dt>{c.districts ? 'Pessoas nos bairros' : 'Pessoas no raio'}</dt>
               <dd>
                 de {pessoasEscritas(c.audience.lower)} a {pessoasEscritas(c.audience.upper)}
                 <small>pela estimativa da Meta ao pedir</small>

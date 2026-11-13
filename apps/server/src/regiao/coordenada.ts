@@ -136,6 +136,24 @@ export class ProcuraDeCoordenada {
     return valor;
   }
 
+  /**
+   * O centro de um bairro do município (R6, parte 3; D-RG-54): só a consulta do bairro, nunca a da cidade (o centro da
+   * cidade num bairro errado). `falhou`: o mapa não respondeu agora (pergunta de novo depois); `nao_achado`: respondeu e
+   * não achou o bairro no município.
+   */
+  async procurarBairro(bairro: string, cidade: string, uf: string): Promise<{ status: 'achado'; coordenada: Coordenada } | { status: 'nao_achado' } | { status: 'falhou' }> {
+    const consulta = consultasDoEndereco({ rua: null, numero: null, bairro, cidade, uf }).find((c) => c.precisao === 'bairro');
+    if (!consulta) return { status: 'nao_achado' };
+    let json: unknown;
+    try {
+      json = await this.consultar(enderecoDaConsulta(consulta.params));
+    } catch {
+      return { status: 'falhou' };
+    }
+    const achada = coordenadaDaResposta(json, cidade, 'bairro');
+    return achada ? { status: 'achado', coordenada: achada } : { status: 'nao_achado' };
+  }
+
   /** A coordenada mais precisa que o OpenStreetMap acha para o endereço; nula se nenhuma tentativa achou ou ele não respondeu. */
   async procurar(e: EnderecoParaProcurar): Promise<Coordenada | null> {
     for (const c of consultasDoEndereco(e)) {
@@ -152,6 +170,12 @@ export class ProcuraDeCoordenada {
     return null;
   }
 }
+
+/**
+ * A fila do Nominatim do processo da API: a loja no mapa (R1) e o centro dos bairros da campanha (R6, parte 3) dividem a
+ * mesma, para nunca passar de uma consulta por segundo.
+ */
+export const procuraDeCoordenada = new ProcuraDeCoordenada();
 
 /** Uma consulta ao Nominatim: endereço fixo, sem redirecionamento, com prazo e limite de tamanho. */
 export async function buscarNoNominatim(url: string, tempoLimiteMs = 6_000): Promise<unknown> {

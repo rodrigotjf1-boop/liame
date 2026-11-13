@@ -160,7 +160,9 @@ const limpar = async () => {
   await ownerQuery(`delete from liame.region_food_count`);
   await ownerQuery(`delete from liame.region_source_read`);
   await ownerQuery(`delete from liame.region_fact`);
-  await ownerQuery(`delete from liame.region_district`);
+  // Só os municípios de verdade: os de mentira (o código começa com 9) são de outros arquivos que rodam junto, no mesmo
+  // banco (a mídia na região, a campanha por bairros).
+  await ownerQuery(`delete from liame.region_district where city_code < '9'`);
 };
 
 describe.skipIf(!hasDb)('Sua região: a rotina das fontes públicas e o retrato da loja (plano da região, R2, parte 1)', () => {

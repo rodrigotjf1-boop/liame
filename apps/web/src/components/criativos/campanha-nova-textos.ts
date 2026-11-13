@@ -1,4 +1,13 @@
-import type { BrandPhoto, NewCampaignAudienceResponse, NewCampaignObjective, NewCampaignOptionsResponse, NewCampaignResponse, NewCampaignUnitOption } from '@liame/contracts';
+import {
+  type BrandPhoto,
+  NEW_CAMPAIGN_DISTRICTS_MAX,
+  type NewCampaignAudienceResponse,
+  type NewCampaignDistrict,
+  type NewCampaignObjective,
+  type NewCampaignOptionsResponse,
+  type NewCampaignResponse,
+  type NewCampaignUnitOption,
+} from '@liame/contracts';
 import type { Problema } from '@/lib/api';
 import { reaisDeMicros } from '@/lib/formato';
 import { microsDeReais } from '@/components/links/cupons-textos';
@@ -66,7 +75,26 @@ export function linhaDaEstimativa(
   e: NewCampaignAudienceResponse | 'falhou',
   km: number,
   loja: string,
+  /** Nos bairros (R6, parte 3): quantos estão marcados; a frase fala deles, e não do raio. */
+  bairros: number | null = null,
 ): { tom: 'ok' | 'pequeno' | 'sem'; titulo: string | null; destaque: string | null; texto: string } {
+  if (bairros !== null && e !== 'falhou' && e.status === 'pronta' && e.lower !== null && e.upper !== null) {
+    const onde = bairros === 1 ? 'no bairro escolhido' : `nos ${bairros} bairros escolhidos`;
+    if (e.enough === false) {
+      return {
+        tom: 'pequeno',
+        titulo: 'Público pequeno demais nos bairros',
+        destaque: null,
+        texto: `A Meta estima de ${e.lower.toLocaleString('pt-BR')} a ${e.upper.toLocaleString('pt-BR')} pessoas de 18 anos ou mais ${onde}: com menos de ${e.minimum.toLocaleString('pt-BR')} pessoas, ela não entrega bem. Escolha mais bairros.`,
+      };
+    }
+    return {
+      tom: 'ok',
+      titulo: null,
+      destaque: `Cerca de ${pessoasEscritas(e.lower)} a ${pessoasEscritas(e.upper)} pessoas`,
+      texto: ` de 18 anos ou mais ${onde}, pela estimativa da Meta (lida agora, todos os lugares juntos). Com menos de ${e.minimum.toLocaleString('pt-BR')} pessoas, o pedido não sai.`,
+    };
+  }
   if (e !== 'falhou' && e.status === 'pronta' && e.lower !== null && e.upper !== null) {
     if (e.enough === false) {
       return {
@@ -88,6 +116,36 @@ export function linhaDaEstimativa(
   }
   return { tom: 'sem', titulo: null, destaque: null, texto: 'Não deu para ler a estimativa da Meta agora: o pedido pode seguir sem ela.' };
 }
+
+/** O bairro pode ser marcado: o centro foi achado (vai como o bairro da Meta ou como um círculo). */
+export const bairroEscolhivel = (b: Pick<NewCampaignDistrict, 'how'>): boolean => b.how === 'meta' || b.how === 'circulo';
+
+/** Como o bairro vai para a Meta (D-RG-54), com as palavras da revisão R6-3 da P42. */
+export function comoVaiNaMeta(b: Pick<NewCampaignDistrict, 'how' | 'radius_km'>): string {
+  if (b.how === 'meta') return 'na Meta, o bairro dela';
+  if (b.how === 'circulo' && b.radius_km !== null) return `na Meta, um círculo de ${kmEscrito(b.radius_km)} no centro`;
+  if (b.how === 'procurando') return 'procurando o centro do bairro no mapa…';
+  return 'o mapa não achou o centro deste bairro: não dá para escolher';
+}
+
+/** De onde o bairro veio: a área de entrega e os pedidos (Sua região); sem nenhum dos dois, da busca. */
+export function deOndeVemOBairro(b: Pick<NewCampaignDistrict, 'delivery_area' | 'orders' | 'orders_days'>): string {
+  const partes = [b.delivery_area ? 'área de entrega' : null, b.orders ? `${b.orders.toLocaleString('pt-BR')} pedidos em ${b.orders_days ?? 30} dias` : null];
+  return partes.filter(Boolean).join(' · ') || 'da busca';
+}
+
+/** A frase de quem vê nos bairros (D-RG-54), debaixo da lista. */
+export function dicaDosBairros(marcados: number): string {
+  return `${marcados} de até ${NEW_CAMPAIGN_DISTRICTS_MAX} bairros. Pessoas de 18 anos ou mais que estão nos bairros marcados. Onde a Meta tem o bairro (a busca de lugares dela acha o nome na mesma cidade), o anúncio vai para o bairro dela; onde não tem, o Liame usa um círculo no centro do bairro, do tamanho dele pelo IBGE (de 1 a 3 km), que pode pegar um pedaço do vizinho. O público ampliado da Meta fica desligado.`;
+}
+
+/** Quem vê nos bairros, em Aprovações: cada bairro com o jeito de ir para a Meta. */
+export function bairrosEmAprovacoes(bairros: NonNullable<NewCampaignResponse['districts']>): string {
+  return bairros.map((b) => `${b.name} (${b.meta ? 'o bairro da Meta' : `círculo de ${kmEscrito(b.radius_km)}`})`).join(', ');
+}
+
+/** "1 bairro", "3 bairros". */
+export const bairrosEscritos = (n: number): string => `${n} ${n === 1 ? 'bairro' : 'bairros'}`;
 
 /** Para onde o anúncio leva, com as palavras do P42. */
 export function destinoDoObjetivo(objetivo: NewCampaignObjective, loja: NewCampaignUnitOption | null, pagina: string | null): { leva: string; onde: string } {
@@ -117,10 +175,13 @@ export type CamposDaCampanha = {
   nome: string;
   objetivo: NewCampaignObjective;
   raio: number;
+  /** Quem vê (R6, parte 3; D-RG-53): o raio em volta da loja ou os bairros marcados (os códigos do IBGE). */
+  quem: 'raio' | 'bairros';
+  bairros: string[];
   verba: string;
   fim: string;
 };
-export type CampoComErro = 'midia' | 'loja' | 'nome' | 'objetivo' | 'verba' | 'fim';
+export type CampoComErro = 'midia' | 'loja' | 'nome' | 'objetivo' | 'bairros' | 'verba' | 'fim';
 export type ErrosDaCampanha = Partial<Record<CampoComErro, string>>;
 
 /**
@@ -141,6 +202,10 @@ export function conferirCampanha(c: CamposDaCampanha, opcoes: NewCampaignOptions
   else if ((c.objetivo === 'cardapio' || c.objetivo === 'alcance') && !loja.menu_available) e.objetivo = loja.menu_block ?? 'A loja não tem o cardápio online ligado ao Liame.';
   if (c.objetivo === 'seguidores' && !opcoes.instagram) {
     e.objetivo = 'Seguidores no Instagram leva ao perfil do Instagram ligado à Página da marca. Ligue o Instagram à Página na Meta e conecte de novo em Contas conectadas.';
+  }
+  if (c.quem === 'bairros') {
+    if (c.bairros.length === 0) e.bairros = 'Marque pelo menos um bairro, ou volte para o raio em volta da loja.';
+    else if (c.bairros.length > NEW_CAMPAIGN_DISTRICTS_MAX) e.bairros = `Até ${NEW_CAMPAIGN_DISTRICTS_MAX} bairros por campanha.`;
   }
   if (!c.nome.trim()) e.nome = 'Dê um nome à campanha.';
   else if ([...c.nome.trim()].length > 80) e.nome = 'O nome vai até 80 caracteres.';
@@ -170,6 +235,8 @@ export function erroDoPedido(p: Problema): { campo: CampoComErro | null; texto: 
     'verba-invalida': 'verba',
     'acima-do-teto': 'verba',
     'fim-no-passado': 'fim',
+    'bairro-sem-centro': 'bairros',
+    'bairro-fora-da-cidade': 'bairros',
   };
   return { campo: (p.code && porCodigo[p.code]) || null, texto };
 }

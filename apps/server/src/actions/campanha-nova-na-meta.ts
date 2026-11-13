@@ -103,7 +103,7 @@ export async function lerCampanhaNova(tx: Tx, ref: ResourceRef, travar = false):
       brand_id: string;
       name: string;
       objective: ObjetivoDaCampanhaNova;
-      radius_km: string;
+      radius_km: string | null;
       daily_budget_micros: string;
       end_date: string | null;
       link: string | null;
@@ -127,6 +127,7 @@ export async function lerCampanhaNova(tx: Tx, ref: ResourceRef, travar = false):
       longitude: string | null;
       audience_lower: string | null;
       audience_upper: string | null;
+      districts: unknown;
       currency: string | null;
       timezone: string | null;
     }
@@ -141,7 +142,7 @@ export async function lerCampanhaNova(tx: Tx, ref: ResourceRef, travar = false):
            case when c.instagram_media_id is not null then im.media_id is not null
                 else coalesce(m.status = 'pronta' and m.removed_at is null, false) end as midia_viva,
            p.external_id as pagina_externa, p.name as pagina_nome, ig.external_id as instagram_externo, ig.name as instagram_nome,
-           u.id as unit_id, u.name as unit_nome, u.latitude::text, u.longitude::text, c.audience_lower::text, c.audience_upper::text,
+           u.id as unit_id, u.name as unit_nome, u.latitude::text, u.longitude::text, c.audience_lower::text, c.audience_upper::text, c.districts,
            a.external_id as conta_externa, a.credential_secret_id, a.currency, o.timezone
       from liame.ad_campaign_new c
       left join liame.ad_piece_version v on v.piece_id = c.piece_id and v.version = c.piece_version and v.tenant_id = c.tenant_id
@@ -173,7 +174,8 @@ export async function lerCampanhaNova(tx: Tx, ref: ResourceRef, travar = false):
     pagina: { id: l.pagina_externa, nome: l.pagina_nome },
     instagram: l.instagram_externo ? { id: l.instagram_externo, nome: l.instagram_nome ?? '' } : null,
     loja: { id: l.unit_id, nome: l.unit_nome, latitude: Number(l.latitude), longitude: Number(l.longitude) },
-    raio_km: Number(l.radius_km),
+    raio_km: l.radius_km === null ? null : Number(l.radius_km),
+    bairros: l.districts ?? null,
     verba_diaria_micros: Number(l.daily_budget_micros),
     moeda: l.currency ?? 'BRL',
     fim: l.end_date,

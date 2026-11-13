@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { REGRAS } from '../links/construtor.js';
+import { BairroDaCampanha, bairrosEscritos, lugaresDoRaio, lugaresDosBairros, MAXIMO_DE_BAIRROS } from './bairros-da-campanha.js';
 
 // A campanha nova na Meta, criada pausada (A4, X5, parte 1; P10 aprovado em 05/10/2026; D-A4-31, D-A4-35, D-A4-40 e
 // D-A4-41). A peça de texto aprovada em Criativos, com a foto ou o vídeo da loja, vira um pedido de criar a campanha, o
@@ -69,7 +70,10 @@ export const EstadoDaCampanhaNova = z.object({
   /** A estimativa de público da Meta no raio quando a pessoa pediu (R6, D-RG-50); nula quando a Meta não estimou. */
   publico: z.object({ de: z.number().int().nonnegative(), ate: z.number().int().nonnegative() }).nullable().optional(),
   loja: z.object({ id: z.string().regex(UUID), nome: z.string(), latitude: z.number().min(-90).max(90), longitude: z.number().min(-180).max(180) }),
-  raio_km: z.number().min(1).max(15),
+  /** O raio em volta da loja; nulo na campanha por bairros (R6, parte 3): um ou outro. */
+  raio_km: z.number().min(1).max(15).nullable(),
+  /** Os bairros da campanha por bairros (R6, parte 3; D-RG-53 e D-RG-54); ausente ou nulo na campanha com raio. */
+  bairros: z.array(BairroDaCampanha).min(1).max(MAXIMO_DE_BAIRROS).nullable().optional(),
   verba_diaria_micros: z.number().int().positive(),
   moeda: z.string().min(3).max(3),
   fim: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable(),
@@ -95,6 +99,7 @@ export function planoDaCampanhaNova(before: unknown): PlanoDaCampanhaNova {
   if (e.situacao === 'cancelada') return { ok: false, motivo: 'Esta campanha nova foi cancelada.' };
   if (e.situacao === 'nao_criada') return { ok: false, motivo: 'Esta campanha nova não foi criada: peça de novo pela peça.' };
   if (levaAoCardapio(e.objetivo) !== (e.link !== null)) return { ok: false, motivo: 'O destino da campanha não bate com o objetivo.' };
+  if ((e.raio_km === null) === !e.bairros?.length) return { ok: false, motivo: 'Quem vê a campanha é o raio em volta da loja ou os bairros: um dos dois.' };
   if (e.objetivo === 'seguidores' && !e.instagram) return { ok: false, motivo: 'Seguidores no Instagram pede o Instagram ligado à Página: conecte o Instagram da marca antes.' };
   // As duas origens (D-A4-46): a peça com a foto ou o vídeo de Fotos, ou o Reels sozinho (o texto é a legenda dele).
   const doReels = e.midia.tipo === 'reels';
@@ -231,6 +236,16 @@ export function fimDoDia(dia: string, fuso: string): string {
 }
 
 /**
+ * Os lugares de quem vê (`geo_locations`): o raio em volta da loja, em quilômetros, ou os bairros (os da Meta pela chave
+ * e um círculo no centro de cada um dos outros; R6, parte 3, D-RG-54).
+ */
+export function lugaresDaCampanha(e: EstadoDaCampanhaNova): Record<string, unknown> {
+  if (e.raio_km !== null) return lugaresDoRaio(e.loja.latitude, e.loja.longitude, e.raio_km);
+  if (!e.bairros?.length) throw new Error('a campanha nova sem o raio e sem os bairros');
+  return lugaresDosBairros(e.bairros);
+}
+
+/**
  * O conjunto (`POST /act_{id}/adsets`): a verba diária, o lance de menor custo sem limite, o raio em volta da loja em
  * quilômetros (o padrão da Meta é milha), 18 anos ou mais, sem o público ampliado da Meta, o posicionamento automático
  * e pausado. O WhatsApp leva o destino e a Página promovida.
@@ -239,12 +254,12 @@ export function parametrosDoConjunto(e: EstadoDaCampanhaNova, campanhaId: string
   const verba = verbaNaMenorUnidade(e.verba_diaria_micros);
   if (verba === null) throw new Error('verba diária com fração de centavo');
   const targeting = {
-    geo_locations: { custom_locations: [{ latitude: e.loja.latitude, longitude: e.loja.longitude, radius: e.raio_km, distance_unit: 'kilometer' }] },
+    geo_locations: lugaresDaCampanha(e),
     age_min: 18,
     targeting_automation: { advantage_audience: 0 },
   };
   return {
-    name: `${e.nome} · ${e.raio_km.toLocaleString('pt-BR')} km`,
+    name: e.raio_km !== null ? `${e.nome} · ${e.raio_km.toLocaleString('pt-BR')} km` : `${e.nome} · ${bairrosEscritos(e.bairros?.length ?? 0)}`,
     campaign_id: campanhaId,
     status: 'PAUSED',
     daily_budget: String(verba),
