@@ -28,6 +28,8 @@ import {
   fonteDaRendaDoBairro,
   fonteDoNumero,
   fraseDaRenda,
+  publicoNoRaio,
+  raioDaEstimativa,
   frescor,
   grande,
   inteiro,
@@ -518,6 +520,26 @@ describe('Sua região (R2, parte 2)', () => {
     expect(desenhar({ social_audience_status: 'sem_redes', social_audience: null })).toContain('href="/contas"');
     expect(desenhar({ social_audience_status: 'lendo', social_audience: null })).toContain('Lendo o Instagram e a Página');
     expect(desenhar({ social_audience_status: 'sem_endereco', social_audience: null })).toBe('');
+  });
+
+  it('as pessoas no raio, na Meta (R6, D-RG-50): a estimativa em palavras, o raio na régua da Meta e o porquê de quando não há número', () => {
+    // O raio de entrega da loja na régua da estimativa: de 1 a 15 km, em passos de 0,5 km; sem raio, 3 km.
+    expect([null, 3, 0.4, 2.3, 4.74, 22].map(raioDaEstimativa)).toEqual([3, 3, 1, 2.5, 4.5, 15]);
+    const pronta = publicoNoRaio({ status: 'pronta', lower: 85_000, upper: 100_400, minimum: 1000, enough: true }, 3);
+    expect(pronta).toEqual({
+      falta: false,
+      valor: '85 mil a 100 mil',
+      obs: 'pessoas de 18 anos ou mais que a Meta estima alcançar com anúncio no raio de 3 km em volta da loja',
+      fonte: 'Meta · estimativa de público para anúncios, lida agora',
+      pro: 'a estimativa da gaveta da campanha nova (reachestimate, sem a ampliação do público) · conta quem usa o Facebook e o Instagram, não quem mora',
+    });
+    expect(publicoNoRaio({ status: 'pronta', lower: 1_200_000, upper: 1_400_000, minimum: 1000, enough: true }, 4.5).obs).toContain('no raio de 4,5 km');
+    // Sem número, o cartão diz por quê (e nunca "zero pessoas").
+    const sem = (status: 'sem_estimativa' | 'indisponivel') => publicoNoRaio({ status, lower: null, upper: null, minimum: 1000, enough: null }, 3);
+    expect(sem('sem_estimativa')).toMatchObject({ falta: true, valor: 'Sem estimativa agora', obs: 'A Meta não estimou o público do raio de 3 km agora. Não quer dizer que não há gente.' });
+    expect(sem('indisponivel')).toMatchObject({ falta: true, valor: 'Pessoas no raio, na Meta', obs: 'Aparece com uma conta de anúncios da Meta conectada (uma só) e a loja no mapa pelo endereço.' });
+    expect(publicoNoRaio('falhou', 3)).toMatchObject({ falta: true, obs: 'Não deu para ler a estimativa da Meta agora.' });
+    expect(sem('indisponivel').pro).toBeUndefined();
   });
 
   it('o frescor e a situação de cada fonte em palavras', () => {

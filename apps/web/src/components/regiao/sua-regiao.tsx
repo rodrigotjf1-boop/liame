@@ -14,6 +14,7 @@ import { DemandaDaLoja } from './demanda-da-loja';
 import { GavetaFontes } from './gaveta-fontes';
 import { MidiaNaRegiao } from './midia-na-regiao';
 import { PublicoNasRedes } from './publico-nas-redes';
+import { PublicoNoRaio } from './publico-no-raio';
 import { RitmoNaRegiao } from './ritmo-na-regiao';
 import { Numero } from './numero';
 import {
@@ -305,6 +306,7 @@ export function SuaRegiao({ brandId, lojas }: { brandId: string; lojas: StoreLoc
                 />
               )}
               {semBairro}
+              <PublicoNoRaio brandId={brandId} loja={loja} mostraPro={mostraPro} />
             </div>
             <p className="eixo-nota">O bairro só tem número no Censo de 2022: nenhuma pesquisa mais nova desce até o bairro.</p>
           </section>
@@ -629,8 +631,7 @@ export function SuaRegiao({ brandId, lojas }: { brandId: string; lojas: StoreLoc
             </div>
             <ul className="rg-ainda">
               {[
-                ['Pessoas no raio, na Meta', 'Aparece com a conta de anúncios: a Meta estima quantas pessoas há no raio, por faixa de idade, antes de gastar (R6).'],
-                ['Concorrentes no raio', 'Aparece com o servidor de mapas próprio (R8). Hoje, a conta é a do município.'],
+                ['Concorrentes no raio', 'Os pontos no mapa dependem de um servidor de mapas próprio (R8). Hoje, a conta é a de Concorrência, acima: o município e, com o CNPJ da Receita lido, o bairro, o CEP e a área de entrega.'],
               ].map(([t, s]) => (
                 <li key={t}>
                   <span className="st st--espera">Ainda não</span>
