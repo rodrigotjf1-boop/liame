@@ -25,3 +25,18 @@ export function esperaDaVirada(agora: Date, fusos: readonly string[] = FUSOS_DA_
   const perto = fusos.map((f) => faltaParaAMeiaNoite(agora, f)).filter((falta) => falta <= margemMs);
   return perto.length ? Math.max(...perto) + 2_000 : 0;
 }
+
+// A virada da janela fixa (V70; ERR-235). O "Ler agora" vale uma vez por janela alinhada ao relógio (5 minutos nos
+// comentários, 15 nos resultados). O teste que pede, lê a rota e pede de novo precisa das três coisas na MESMA janela:
+// se ela vira no meio, a "próxima vez" já passou e o pedido repetido é aceito.
+
+/** Quanto falta, em milissegundos, para o fim da janela fixa de `janelaMs` em que `agora` cai. */
+export function faltaParaOFimDaJanela(agora: Date, janelaMs: number): number {
+  return janelaMs - (agora.getTime() % janelaMs);
+}
+
+/** A menos de `folgaMs` do fim da janela, espera a seguinte (e mais um instante); longe do fim, não espera nada. */
+export async function longeDoFimDaJanela(janelaMs: number, folgaMs = 5_000): Promise<void> {
+  const falta = faltaParaOFimDaJanela(new Date(), janelaMs);
+  if (falta < folgaMs) await new Promise((ok) => setTimeout(ok, falta + 100));
+}

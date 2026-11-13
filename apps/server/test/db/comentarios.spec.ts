@@ -14,6 +14,7 @@ import { ownerQuery, resetIpRateLimits, startApi, type TestApi } from '../helper
 import { InstagramDeMentira, SEGREDO_DO_APP, TOKEN_DO_INSTAGRAM } from '../helpers/instagram-de-mentira.js';
 import { ligarFlagDaEmpresa } from '../helpers/meta-de-mentira.js';
 import { type EmpresaComCanais, empresaComCanais } from '../helpers/posts-semeados.js';
+import { longeDoFimDaJanela } from '../helpers/virada.js';
 import { hasDb, OWNER_URL } from './env.js';
 
 // A6 · Z11, parte 1: a leitura dos comentários (migration 0123; P38, D-A6-84 a D-A6-90), contra a Meta local (o
@@ -304,6 +305,11 @@ describe.skipIf(!hasDb)('Comentários: a leitura e a rota (A6 · Z11, parte 1)',
     meta.comentouNoInstagram(antigo, { texto: 'Qual o valor do combo?' });
     const agora = new Date();
     await ler(e, agora);
+
+    // A janela do "Ler agora" é fixa e alinhada ao relógio (V70). Perto do fim dela, o teste espera a seguinte: o pedido,
+    // a rota e o pedido repetido precisam cair na MESMA janela. No CI, a virada no meio (o pedido às 14:59:59 e a
+    // conferência às 15:00:00,002) reprovou o teste uma vez (ERR-235).
+    await longeDoFimDaJanela(5 * MIN_MS);
 
     const pedido = await pedir(e);
     expect(pedido.status, JSON.stringify(pedido.body)).toBe(202);
