@@ -379,6 +379,38 @@ export const RegionOverviewResponse = z.strictObject({
       orders_block: z.strictObject({ from_hour: z.number().int(), to_hour: z.number().int(), clicks_pct: z.number().int() }).nullable(),
       cities_status: Slug,
       cities: z.array(z.strictObject({ id: z.string(), name: z.string(), full_name: z.string(), clicks: z.number().int(), impressions: z.number().int(), clicks_pct: z.number().int() })),
+      /**
+       * Os cliques por bairro (R4, os bairros; D-RG-44 e D-RG-45), só do Google: o local mais específico de quem viu
+       * e clicou, no município da loja (`city`, com `city_clicks` cliques). `located`: os cliques com o bairro ou o
+       * CEP; `few`: menos de 10, pouco para tirar conclusão. `items` (até 12): o bairro (o nome do Censo, quando casa)
+       * ou o CEP (5 dígitos, sem traduzir), os cliques, se está na área de entrega (nulo: o CEP, ou a loja sem a área)
+       * e o papel do bairro em `order_districts` (nunca para o de fora da área). Nula sem conta do Google.
+       */
+      districts: z
+        .strictObject({
+          city: z.string(),
+          city_clicks: z.number().int(),
+          located: z.number().int(),
+          few: z.boolean(),
+          items: z.array(z.strictObject({ name: z.string(), kind: Slug, clicks: z.number().int(), in_delivery_area: z.boolean().nullable(), role: Slug.nullable() })),
+        })
+        .nullable(),
+      /**
+       * Os cliques de fora da área de entrega (D-RG-46), só do Google: os de outros municípios (`other_cities`) e os
+       * de bairros localizados fora da área (`outside_districts`, com até 3 nomes); o CEP e o clique só com a cidade
+       * da loja nunca contam como fora. `has_area`: a loja tem a área de entrega (sem ela, só os outros municípios).
+       * Nula sem clique do Google.
+       */
+      outside_area: z
+        .strictObject({
+          clicks: z.number().int(),
+          pct: z.number().int(),
+          other_cities: z.number().int(),
+          outside_districts: z.number().int(),
+          outside_names: z.array(z.string()),
+          has_area: z.boolean(),
+        })
+        .nullable(),
     })
     .nullable(),
   /**

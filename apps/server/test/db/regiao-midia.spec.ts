@@ -216,6 +216,80 @@ describe.skipIf(!hasDb)('a mídia por região e por hora, pela rotina do worker 
     expect(dela).toEqual([{ id: [antigo, novo].sort((a, b) => Number(a) - Number(b))[0], name: nome, full_name: `${nome},State of Rio de Janeiro,Brazil`, clicks: 6, impressions: 50, clicks_pct: expect.any(Number) }]);
   });
 
+  it('os cliques por bairro e de fora da área (R4, os bairros): o bairro do Censo do município, o CEP do município e os outros municípios', async () => {
+    // Um município de mentira (o código não existe no IBGE), com dois bairros do Censo e um CEP da Receita: as tabelas
+    // do sistema são divididas entre os testes (ERR-215), então tudo é novo a cada rodada.
+    const cidade = String(randomInt(9_100_000, 9_999_999));
+    const sufixo = randomInt(100_000, 999_999);
+    const municipio = `Cidade dos Bairros ${sufixo}`;
+    const outra = `Outra Cidade ${sufixo}`;
+    const cep = String(randomInt(90_000, 99_999));
+    const [gCidade, gOutra, gBairro, gFora, gCep] = Array.from({ length: 5 }, (_, i) => String(700_000_000 + sufixo * 10 + i));
+    await ownerQuery(
+      `insert into liame.region_geo_target (id, name, canonical_name, target_type, country_code) values
+         ($1, $6, $6 || ',State of Rio de Janeiro,Brazil', 'City', 'BR'), ($2, $7, $7 || ',State of Rio de Janeiro,Brazil', 'City', 'BR'),
+         ($3, 'Jardim Acao', 'Jardim Acao,State of Rio de Janeiro,Brazil', 'Neighborhood', 'BR'),
+         ($4, 'Morro Alto', 'Morro Alto,State of Rio de Janeiro,Brazil', 'District', 'BR'),
+         ($5, $8, $8 || ',State of Rio de Janeiro,Brazil', 'Postal Code', 'BR')`,
+      [gCidade, gOutra, gBairro, gFora, gCep, municipio, outra, cep],
+    );
+    const dia = `(now() at time zone 'America/Sao_Paulo')::date - 2`;
+    await ownerQuery(
+      `insert into liame.ad_city_daily (connected_account_id, tenant_id, brand_id, provider, day, geo_target_id, impressions, clicks, spend)
+       values ($1, $2, $3, 'google_ads', ${dia}, $4, 300, 30, 1), ($1, $2, $3, 'google_ads', ${dia}, $5, 100, 10, 1)`,
+      [e.conta, e.tenantId, e.brandId, gCidade, gOutra],
+    );
+    await ownerQuery(
+      `insert into liame.ad_local_daily (connected_account_id, tenant_id, brand_id, provider, day, geo_target_id, impressions, clicks, spend)
+       values ($1, $2, $3, 'google_ads', ${dia}, $4, 120, 12, 1), ($1, $2, $3, 'google_ads', ${dia}, $5, 50, 5, 1),
+              ($1, $2, $3, 'google_ads', ${dia}, $6, 30, 3, 1), ($1, $2, $3, 'google_ads', ${dia}, $7, 100, 10, 1)`,
+      [e.conta, e.tenantId, e.brandId, gBairro, gFora, gCep, gCidade],
+    );
+    const loja = randomUUID();
+    await ownerQuery(
+      `insert into liame.unit (id, tenant_id, brand_id, name, address_postal_code, address_district, address_city, address_state, ibge_city_code, location_source, delivery_radius_km, delivery_areas)
+       values ($1, $2, $3, 'Loja dos Bairros', '20520054', 'Jardim Ação', $4, 'RJ', $5, 'cep', 3, '["Jardim Ação"]'::jsonb)`,
+      [loja, e.tenantId, e.brandId, municipio, cidade],
+    );
+    await ownerQuery(
+      `insert into liame.region_district (district_code, city_code, name, name_key, population) values ($1 || '001', $1, 'Jardim Ação', 'jardim acao', 1000), ($1 || '002', $1, 'Morro Alto', 'morro alto', 2000)
+       on conflict (district_code) do nothing`,
+      [cidade],
+    );
+    await ownerQuery(
+      `insert into liame.region_food_count (geo_code, area_kind, area_key, period, active, active_restaurant, active_snack, active_bar, active_home, opened_12m, closed_12m)
+       values ($1, 'cep', $2, '2026-10', 1, 1, 0, 0, 0, 0, 0) on conflict do nothing`,
+      [cidade, cep],
+    );
+    const r = await api.call('GET', `/v1/region/overview?brand_id=${e.brandId}&unit_id=${loja}`, { cookie: e.cookie });
+    // As linhas desta prova saem antes das conferências: os testes seguintes contam o que foi lido da conta.
+    await ownerQuery(`delete from liame.ad_city_daily where connected_account_id = $1 and geo_target_id = any($2::bigint[])`, [e.conta, [gCidade, gOutra]]);
+    await ownerQuery(`delete from liame.ad_local_daily where connected_account_id = $1 and geo_target_id = any($2::bigint[])`, [e.conta, [gBairro, gFora, gCep, gCidade]]);
+    await ownerQuery(`delete from liame.region_district where city_code = $1`, [cidade]);
+    await ownerQuery(`delete from liame.region_food_count where geo_code = $1`, [cidade]);
+    expect(r.status, JSON.stringify(r.body)).toBe(200);
+    const m = r.body.paid_media;
+    expect(m.districts).toEqual({
+      city: municipio,
+      city_clicks: 30,
+      located: 20,
+      few: false,
+      items: [
+        { name: 'Jardim Ação', kind: 'bairro', clicks: 12, in_delivery_area: true, role: null },
+        { name: 'Morro Alto', kind: 'bairro', clicks: 5, in_delivery_area: false, role: null },
+        { name: `CEP ${cep}`, kind: 'cep', clicks: 3, in_delivery_area: null, role: null },
+      ],
+    });
+    // Os outros municípios são todos os cliques do Google menos os do município da loja (inclui o que as provas
+    // anteriores leram para a conta): a conta confere a relação.
+    const totalDoGoogle = (m.cities as Array<{ clicks: number; clicks_pct: number }>).length ? Math.round((m.cities[0].clicks * 100) / Math.max(m.cities[0].clicks_pct, 1)) : 0;
+    expect(m.outside_area).toMatchObject({ outside_districts: 5, outside_names: ['Morro Alto'], has_area: true });
+    expect(m.outside_area.clicks).toBe(m.outside_area.other_cities + 5);
+    expect(m.outside_area.other_cities).toBeGreaterThanOrEqual(10);
+    expect(totalDoGoogle).toBeGreaterThan(0);
+    expect(JSON.stringify(m.districts)).not.toMatch(/spend|gasto|micros/);
+  });
+
   it('a conta lida pela versão anterior da leitura fica devida já, sem esperar o dia; lida de novo, não', async () => {
     const daqui = new Date(AGORA.getTime() + 24 * 3_600_000).toISOString();
     await ownerQuery(`update liame.sync_state set cursor = jsonb_build_object('proxima', $2::text, 'versao', 1) where connected_account_id = $1 and dataset = 'regiao_midia'`, [e.conta, daqui]);

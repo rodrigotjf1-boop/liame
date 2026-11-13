@@ -126129,6 +126129,127 @@
                             ],
                             "additionalProperties": false
                           }
+                        },
+                        "districts": {
+                          "type": [
+                            "object",
+                            "null"
+                          ],
+                          "properties": {
+                            "city": {
+                              "type": "string"
+                            },
+                            "city_clicks": {
+                              "type": "integer",
+                              "minimum": -9007199254740991,
+                              "maximum": 9007199254740991
+                            },
+                            "located": {
+                              "type": "integer",
+                              "minimum": -9007199254740991,
+                              "maximum": 9007199254740991
+                            },
+                            "few": {
+                              "type": "boolean"
+                            },
+                            "items": {
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "properties": {
+                                  "name": {
+                                    "type": "string"
+                                  },
+                                  "kind": {
+                                    "type": "string",
+                                    "maxLength": 60,
+                                    "pattern": "^[a-z0-9_]+$"
+                                  },
+                                  "clicks": {
+                                    "type": "integer",
+                                    "minimum": -9007199254740991,
+                                    "maximum": 9007199254740991
+                                  },
+                                  "in_delivery_area": {
+                                    "type": [
+                                      "boolean",
+                                      "null"
+                                    ]
+                                  },
+                                  "role": {
+                                    "type": [
+                                      "string",
+                                      "null"
+                                    ],
+                                    "maxLength": 60,
+                                    "pattern": "^[a-z0-9_]+$"
+                                  }
+                                },
+                                "required": [
+                                  "name",
+                                  "kind",
+                                  "clicks",
+                                  "in_delivery_area",
+                                  "role"
+                                ],
+                                "additionalProperties": false
+                              }
+                            }
+                          },
+                          "required": [
+                            "city",
+                            "city_clicks",
+                            "located",
+                            "few",
+                            "items"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "outside_area": {
+                          "type": [
+                            "object",
+                            "null"
+                          ],
+                          "properties": {
+                            "clicks": {
+                              "type": "integer",
+                              "minimum": -9007199254740991,
+                              "maximum": 9007199254740991
+                            },
+                            "pct": {
+                              "type": "integer",
+                              "minimum": -9007199254740991,
+                              "maximum": 9007199254740991
+                            },
+                            "other_cities": {
+                              "type": "integer",
+                              "minimum": -9007199254740991,
+                              "maximum": 9007199254740991
+                            },
+                            "outside_districts": {
+                              "type": "integer",
+                              "minimum": -9007199254740991,
+                              "maximum": 9007199254740991
+                            },
+                            "outside_names": {
+                              "type": "array",
+                              "items": {
+                                "type": "string"
+                              }
+                            },
+                            "has_area": {
+                              "type": "boolean"
+                            }
+                          },
+                          "required": [
+                            "clicks",
+                            "pct",
+                            "other_cities",
+                            "outside_districts",
+                            "outside_names",
+                            "has_area"
+                          ],
+                          "additionalProperties": false
                         }
                       },
                       "required": [
@@ -126141,7 +126262,9 @@
                         "ad_block",
                         "orders_block",
                         "cities_status",
-                        "cities"
+                        "cities",
+                        "districts",
+                        "outside_area"
                       ],
                       "additionalProperties": false
                     },
