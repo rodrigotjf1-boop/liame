@@ -569,3 +569,15 @@ export const RegionRhythmResponse = z.strictObject({
   generated_at: z.iso.datetime(),
 });
 export type RegionRhythmResponse = z.infer<typeof RegionRhythmResponse>;
+
+/**
+ * Parar o ritmo da semana (plano da região, R7; D-RG-63): o ritmo aprovado passa a parado, sem o código do app. A verba
+ * de cada campanha volta à de antes pelos passos seguintes (até 10% por dia).
+ */
+export const RegionRhythmStopResponse = z.strictObject({
+  id: z.uuid(),
+  status: z.literal('parado'),
+  week: z.strictObject({ from: z.iso.date(), to: z.iso.date() }),
+  stopped_at: z.iso.datetime(),
+});
+export type RegionRhythmStopResponse = z.infer<typeof RegionRhythmStopResponse>;

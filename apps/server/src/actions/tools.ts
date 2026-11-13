@@ -24,7 +24,7 @@ import {
 import { EstadoDaMensagem, faseDaMensagem, impedimentoDaMensagem } from './mensagem-plano.js';
 import { planoDaCampanhaGoogle, planoDeAtivarNoGoogle, planoDePausarNoGoogle } from '../campanhas/campanha-google-plano.js';
 import { planoDaCampanhaNova, planoDeAtivar, planoDePausar } from '../campanhas/campanha-nova-plano.js';
-import { planoDoRitmo } from '../campanhas/ritmo-plano.js';
+import { FORA_DO_RITMO, planoDoRitmo } from '../campanhas/ritmo-plano.js';
 import { EstadoDoPost, planoDeApagarOPost, planoDeTentarDeNovo, planoDoPost, quandoSai } from '../posts/post-plano.js';
 import { motivoDoCompartilhado, orcamentoCompartilhado } from './orcamento-compartilhado.js';
 
@@ -167,7 +167,24 @@ export interface ToolDefinition {
    * confere o portão de novo antes de publicar: desligar ou tirar o tipo segura na hora o que está na fila.
    */
   atendimentoAutomatico?: boolean;
+  /**
+   * O passo de um dia do ritmo da semana (plano da região, R7, parte 1b-2; D-RG-62 e D-RG-63): só o funcionário de IA
+   * pede, só pela rotina do ritmo (que confere o portão antes: a função, o ritmo aprovado e não parado, o passo de hoje
+   * e o valor dentro do aprovado), e o pedido nasce aprovado, sem outro código do app e sem o `autopilot`, pela regra
+   * própria da política (`orcamento.ritmo_*`, só na Meta, só para o funcionário): a pessoa já aprovou a semana. O
+   * executor confere o portão de novo antes de mudar a verba: parar o ritmo ou desligar a função segura o que está na fila.
+   */
+  ritmoDaSemana?: boolean;
 }
+
+/**
+ * A ferramenta cujo pedido sai sem outra aprovação porque uma pessoa já decidiu antes, com o código do app: a resposta do
+ * atendimento automático que a marca ligou, e o passo do ritmo da semana que a pessoa aprovou. Só o funcionário de IA
+ * pede, só pela rotina dela, com o portão conferido no pedido e de novo na execução; nunca depende do `autopilot`. É o
+ * mesmo predicado em todos os pontos do pedido e da execução.
+ */
+export const saiPorDecisaoJaTomada = (tool: Pick<ToolDefinition, 'atendimentoAutomatico' | 'ritmoDaSemana'> | undefined): boolean =>
+  tool?.atendimentoAutomatico === true || tool?.ritmoDaSemana === true;
 
 /** O plano não pode ser montado com este estado (cupom que já existe, loja sem permissão): vira 422 no pedido. */
 export class PlanoRecusado extends Error {}
@@ -202,6 +219,11 @@ const CupomParams = z
 
 const BudgetParams = z.strictObject({ daily_budget_micros: z.int().min(1_000_000).max(Number.MAX_SAFE_INTEGER) });
 const NoParams = z.strictObject({});
+/** O passo do ritmo: a verba que ele deixa e a que ele espera encontrar (a que o Liame deixou no passo anterior). */
+const PassoDoRitmoParams = z.strictObject({
+  daily_budget_micros: z.int().min(1_000_000).max(Number.MAX_SAFE_INTEGER),
+  expected_micros: z.int().min(1_000_000).max(Number.MAX_SAFE_INTEGER),
+});
 
 const budgetOf = (s: ResourceState): number => {
   const v = s.daily_budget_micros;
@@ -239,6 +261,40 @@ const maiuscula = (s: string) => s.charAt(0).toLocaleUpperCase('pt-BR') + s.slic
 
 /** A verba diária do objeto, quando ela mora nele (em micros); nula em anúncio e em quem tem a verba em outro nível. */
 const verbaDiaria = (s: ResourceState): number | null => (typeof s.daily_budget_micros === 'number' && s.daily_budget_micros > 0 ? s.daily_budget_micros : null);
+
+/** As ações da mudança de verba para a política: as do pedido comum e as próprias do passo do ritmo da semana. */
+const ACOES_DA_VERBA = { aumentar: 'orcamento.aumentar', reduzir: 'orcamento.reduzir' } as const;
+const ACOES_DO_RITMO = { aumentar: 'orcamento.ritmo_aumentar', reduzir: 'orcamento.ritmo_reduzir' } as const;
+
+/**
+ * A mudança da verba diária de uma campanha ou de um conjunto: o mesmo plano para o pedido comum (`orcamento_ajustar`) e
+ * para o passo do ritmo da semana (`orcamento_do_ritmo`), que só muda o nome da ação para a política.
+ */
+function planoDaVerba(before: ResourceState, value: number, acoes: { aumentar: string; reduzir: string }): ToolPlan {
+  // Na plataforma de anúncio, a verba diária mora na campanha (orçamento de campanha) ou no conjunto, nunca no anúncio.
+  const tipo = exigirTipo(before, ['campanha', 'conjunto']);
+  if (tipo) {
+    exigirVivo(before, tipo);
+    // No Google, a verba dividida entre campanhas nunca é alterada (D-A5-4): o pedido nem nasce.
+    const dividido = orcamentoCompartilhado(before);
+    if (dividido) throw new PlanoRecusado(motivoDoCompartilhado(dividido));
+    const verba = verbaDiaria(before);
+    if (verba === null) throw new PlanoRecusado(`${maiuscula(NOME[tipo].o)} não tem verba diária própria: a verba fica em outro nível, ou é de período.`);
+    if (value === verba) throw new PlanoRecusado('A verba pedida é igual à de agora.');
+    if (emMenorUnidade(value, typeof before.moeda === 'string' ? before.moeda : null) === null) throw new PlanoRecusado('A verba diária não pode ter fração de centavo.');
+  }
+  const current = budgetOf(before);
+  const increase = value > current;
+  return {
+    action: increase ? acoes.aumentar : acoes.reduzir,
+    budgetImpact: value === current ? 'none' : increase ? 'increase' : 'decrease',
+    valueMicros: value,
+    currentValueMicros: current,
+    // Reserva a diferença de um dia a mais de gasto; redução não reserva.
+    reserveMicros: increase ? value - current : 0,
+    desiredState: { ...before, daily_budget_micros: value },
+  };
+}
 
 /** Pausar: o objeto ativo passa a pausado. Reduz gasto: nada a reservar. */
 function planoDePausa(before: ResourceState, alvo: TipoDeAnuncio): ToolPlan {
@@ -336,29 +392,7 @@ export const TOOLS: Record<string, ToolDefinition> = {
     params: BudgetParams,
     plan(before, params) {
       const { daily_budget_micros: value } = BudgetParams.parse(params);
-      // Na plataforma de anúncio, a verba diária mora na campanha (orçamento de campanha) ou no conjunto, nunca no anúncio.
-      const tipo = exigirTipo(before, ['campanha', 'conjunto']);
-      if (tipo) {
-        exigirVivo(before, tipo);
-        // No Google, a verba dividida entre campanhas nunca é alterada (D-A5-4): o pedido nem nasce.
-        const dividido = orcamentoCompartilhado(before);
-        if (dividido) throw new PlanoRecusado(motivoDoCompartilhado(dividido));
-        const verba = verbaDiaria(before);
-        if (verba === null) throw new PlanoRecusado(`${maiuscula(NOME[tipo].o)} não tem verba diária própria: a verba fica em outro nível, ou é de período.`);
-        if (value === verba) throw new PlanoRecusado('A verba pedida é igual à de agora.');
-        if (emMenorUnidade(value, typeof before.moeda === 'string' ? before.moeda : null) === null) throw new PlanoRecusado('A verba diária não pode ter fração de centavo.');
-      }
-      const current = budgetOf(before);
-      const increase = value > current;
-      return {
-        action: increase ? 'orcamento.aumentar' : 'orcamento.reduzir',
-        budgetImpact: value === current ? 'none' : increase ? 'increase' : 'decrease',
-        valueMicros: value,
-        currentValueMicros: current,
-        // Reserva a diferença de um dia a mais de gasto; redução não reserva.
-        reserveMicros: increase ? value - current : 0,
-        desiredState: { ...before, daily_budget_micros: value },
-      };
+      return planoDaVerba(before, value, ACOES_DA_VERBA);
     },
     // A volta devolve a verba de antes (se ninguém mexeu depois).
     undo: (before) => ({ tool: 'orcamento_ajustar', params: { daily_budget_micros: budgetOf(before) } }),
@@ -470,6 +504,34 @@ export const TOOLS: Record<string, ToolDefinition> = {
         desiredState: plano.desejado as unknown as ResourceState,
       };
     },
+  },
+  // O passo de um dia do ritmo da semana (R7, parte 1b-2; D-RG-62 e D-RG-63): a verba de uma campanha ou de um conjunto
+  // da Meta passa à do dia (ou volta à de antes, no fim da semana ou quando alguém para o ritmo). Só a rotina do ritmo
+  // pede, pelo ritmo que a pessoa aprovou com o código do app (`ritmoDaSemana`); a política tem a regra própria
+  // (`orcamento.ritmo_*`) e os limites de `orcamento.*` valem (10% por mudança, as mudanças por hora, o teto por
+  // campanha). O plano só existe se a campanha está como o Liame deixou: mexida por fora, ela sai do ritmo.
+  orcamento_do_ritmo: {
+    name: 'orcamento_do_ritmo',
+    version: 1,
+    owner: 'midia',
+    description:
+      'Muda a verba diária de uma campanha ou de um conjunto da Meta para a do dia no ritmo da semana que uma pessoa aprovou, ou de volta à verba de antes (no fim da semana ou quando alguém para o ritmo). Só sai se a campanha estiver como o Liame deixou.',
+    // Dentro do que a pessoa aprovou, até 10% por mudança, sem gastar mais na semana.
+    risk: 'R2',
+    providers: ['meta_ads'],
+    compensation: 'restaurar_orcamento_anterior_se_inalterado',
+    ritmoDaSemana: true,
+    flag: 'ritmo_da_semana',
+    params: PassoDoRitmoParams,
+    plan(before, params) {
+      const { daily_budget_micros: value, expected_micros: esperado } = PassoDoRitmoParams.parse(params);
+      if (!exigirTipo(before, ['campanha', 'conjunto'])) throw new PlanoRecusado('O passo do ritmo vale para uma campanha ou um conjunto da Meta.');
+      // A campanha como o Liame deixou (D-RG-63): com a verba de outra, ou pausada por alguém, ela sai do ritmo.
+      if (before.status !== 'ativo' || verbaDiaria(before) !== esperado) throw new PlanoRecusado(FORA_DO_RITMO);
+      return planoDaVerba(before, value, ACOES_DO_RITMO);
+    },
+    // A volta de um passo, pedida por uma pessoa, devolve a verba de antes dele (e a campanha sai do ritmo no passo seguinte).
+    undo: (before) => ({ tool: 'orcamento_ajustar', params: { daily_budget_micros: budgetOf(before) } }),
   },
   // A campanha nova no Google, criada pausada (A5, Y9, parte 2; P45; D-A5-21 a D-A5-26): a peça aprovada, com os textos
   // nos tamanhos do Google e uma foto da loja recortada, vira uma Performance Max pausada, numa requisição só (o Google

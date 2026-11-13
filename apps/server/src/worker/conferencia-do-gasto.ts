@@ -4,6 +4,7 @@ import { type SQL, sql } from 'drizzle-orm';
 import { conferir, DIAS_CONFERINDO, type EstadoConferido, type ResultadoDaConferencia, type SituacaoDoObjeto, situacaoDaLeitura, verbaDaLeitura } from '../actions/conferencia-do-gasto.js';
 import { CONNECTORS } from '../actions/connectors.js';
 import { objetoDoRecurso, type TipoDeObjeto } from '../actions/meta-anuncios.js';
+import { FERRAMENTA_DA_VERBA_DO_DIA } from '../campanhas/ritmo-plano.js';
 import { DATABASE } from '../database/database.module.js';
 import { type JobScope, tenantFilter } from './outbox-publisher.js';
 
@@ -71,7 +72,7 @@ export class ConferenciaDoGasto {
         vigentes as (
           -- A mudança que vale em cada objeto: a executada mais recente. A que achou o objeto já como queria não mudou nada.
           select distinct on (r.tenant_id, r.account_id, r.resource_id)
-                 r.id, r.tenant_id, l.id as conta, l.fuso, r.resource_id, r.before_state, r.desired_state, r.updated_at
+                 r.id, r.tenant_id, l.id as conta, l.fuso, r.resource_id, r.before_state, r.desired_state, r.updated_at, r.tool
             from liame.action_request r
             join lidas l on l.tenant_id = r.tenant_id and l.id::text = r.account_id and l.provider = r.provider
            where r.status = 'executada' and r.updated_at >= ${referencia} - make_interval(days => ${DIAS_CONFERINDO + 1})
@@ -90,6 +91,10 @@ export class ConferenciaDoGasto {
            -- Pelo Liame, o objeto só fica ativo ou pausado. Outro estado desejado não se confere, e não pode ficar
            -- voltando a cada rodada no lugar de quem espera a vez.
            and v.desired_state->>'status' in ('ativo', 'pausado')
+           -- O passo do ritmo da semana (plano da região, R7) muda a verba todo dia: comparar a semana com "a verba de
+           -- antes e a de depois" de um passo só daria gasto acima sem ter havido. Enquanto ele for a mudança que vale
+           -- no objeto, o objeto não é conferido por aqui (e a mudança anterior não volta a ser).
+           and v.tool <> ${FERRAMENTA_DA_VERBA_DO_DIA}
            and not exists (select 1 from liame.action_spend_check k where k.action_request_id = v.id and k.checked_on = ${hojeDa(sql`v.fuso`)})
          order by v.tenant_id, v.conta, v.id
          limit ${limite}`),

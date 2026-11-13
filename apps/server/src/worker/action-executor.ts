@@ -5,9 +5,10 @@ import type { ActionRow } from '../actions/action.service.js';
 import { BudgetService } from '../actions/budget.service.js';
 import { recursoDoComentario } from '../actions/comentario-na-rede.js';
 import { type ApplyResult, CONNECTORS } from '../actions/connectors.js';
-import { TOOLS } from '../actions/tools.js';
+import { saiPorDecisaoJaTomada, TOOLS } from '../actions/tools.js';
 import { writeAudit } from '../audit/audit.js';
 import { conversaDoRecurso, FERRAMENTA_DO_DIRECT_AUTOMATICO } from '../actions/direct-plano.js';
+import { oQueSeguraOPassoDoRitmo } from '../campanhas/ritmo-portao.js';
 import { oQueSeguraOAutomatico } from '../comentarios/automatico.js';
 import { oQueSeguraODirectAutomatico } from '../direct/automatico.js';
 import { ErroConector } from '../connectors/cliente-http.js';
@@ -228,6 +229,12 @@ export class ActionExecutor {
       const segura = await this.portaoDoAutomatico(tx, row);
       if (segura) return { status: 'bloqueada', reason: `atendimento automático: ${segura}` };
     }
+    // O passo do ritmo da semana (plano da região, R7): o portão do ritmo de novo, agora; parar o ritmo ou desligar a
+    // função segura na hora o que está na fila.
+    if (TOOLS[row.tool]?.ritmoDaSemana) {
+      const segura = await this.portaoDoRitmo(tx, row);
+      if (segura) return { status: 'bloqueada', reason: `ritmo da semana: ${segura}` };
+    }
     if (!approvalId && !(await this.autoApproved(row))) return { status: 'bloqueada', reason: 'sem aprovação válida para o plano atual' };
     const connector = CONNECTORS[row.provider];
     if (!connector) return { status: 'falhou', reason: `provedor ${row.provider} sem connector` };
@@ -355,13 +362,29 @@ export class ActionExecutor {
     return oQueSeguraOAutomatico(tx, this.flags, { tenantId: row.tenant_id, brandId: row.brand_id, connectedAccountId: row.account_id, commentId });
   }
 
+  /**
+   * O portão do passo do ritmo da semana na hora de mudar a verba (R7, parte 1b-2): o mesmo do pedido, pelo passo que
+   * este pedido executa. Nulo quando vale; senão, o porquê. Só o pedido do funcionário de IA passa.
+   */
+  private async portaoDoRitmo(tx: Tx, row: ActionRow): Promise<string | null> {
+    const valor = (row.desired_state as { daily_budget_micros?: unknown } | null)?.daily_budget_micros;
+    if (row.actor_type !== 'agent' || !row.brand_id || !row.account_id || !row.resource_id || typeof valor !== 'number') return 'fora_do_ritmo';
+    return oQueSeguraOPassoDoRitmo(
+      tx,
+      this.flags,
+      { tenantId: row.tenant_id, brandId: row.brand_id, accountId: row.account_id, resourceId: row.resource_id, valorMicros: valor, passo: { acao: row.id } },
+      new Date(),
+    );
+  }
+
   private async autoApproved(row: ActionRow): Promise<boolean> {
     // A aprovação é no destino (Hub DMS F5, parte D; F5-9): a flag da ferramenta é conferida logo depois, em `run`.
     if (TOOLS[row.tool]?.aprovacaoNoDestino) return true;
     if (row.mode !== 'LIMITED_AUTO' && row.mode !== 'AUTO') return false;
     if (row.actor_type === 'human' && TOOLS[row.tool]?.directByPerson) return true;
-    // A resposta automática: o portão foi conferido logo antes, em `run` (e na criação); não depende do `autopilot`.
-    if (row.actor_type === 'agent' && TOOLS[row.tool]?.atendimentoAutomatico) return true;
+    // A resposta automática e o passo do ritmo da semana: o portão foi conferido logo antes, em `run` (e na criação);
+    // não dependem do `autopilot`.
+    if (row.actor_type === 'agent' && saiPorDecisaoJaTomada(TOOLS[row.tool])) return true;
     return this.flags.isEnabled('autopilot', this.flags.context({ tenantId: row.tenant_id, brandId: row.brand_id }));
   }
 

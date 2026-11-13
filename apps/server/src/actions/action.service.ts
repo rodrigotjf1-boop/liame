@@ -43,6 +43,8 @@ import type { AcaoSombra } from '../sombra/regras.js';
 import { advance, workflowOf } from '../workflow/workflow.js';
 import { SOCIAL } from '../ai/social/prompt.js';
 import { abrirSegundaRodada, maisSugestoes, oQueDesligaAsSugestoes, paramsDaResposta, type SituacaoDaSugestao } from '../avaliacoes/sugestoes.js';
+import { FERRAMENTA_DA_VERBA_DO_DIA, FERRAMENTA_DO_RITMO, type PassoDoRitmo } from '../campanhas/ritmo-plano.js';
+import { oQueSeguraOPassoDoRitmo } from '../campanhas/ritmo-portao.js';
 import { oQueSeguraOAutomatico } from '../comentarios/automatico.js';
 import { oQueSeguraODirectAutomatico } from '../direct/automatico.js';
 import { conversaDoRecurso, FERRAMENTA_DO_DIRECT_AUTOMATICO } from './direct-plano.js';
@@ -58,7 +60,7 @@ import { avaliacaoDoRecurso } from './perfil-avaliacao.js';
 import type { RegraDoCupom } from './regem-cupom.js';
 import { mensagemDoRecurso } from './regemcast-mensagem.js';
 import { respostaDaPlataforma } from './resposta-da-plataforma.js';
-import { PlanoRecusado, type ResourceState, TOOLS, type ToolDefinition, type ToolPlan } from './tools.js';
+import { PlanoRecusado, type ResourceState, saiPorDecisaoJaTomada, TOOLS, type ToolDefinition, type ToolPlan } from './tools.js';
 
 /** Pedido que ninguém aprova expira (e devolve a reserva). */
 export const ACTION_TTL_HOURS = 72;
@@ -352,10 +354,39 @@ export class ActionService {
    * `alwaysApproval`. Não depende do modo Aprovação do Gestor para as recomendações. `emNomeDe` é o dono da empresa.
    */
   async pedirRitmoPeloFuncionario(alvo: { tenantId: string; agentKey: string; agentLabel: string; emNomeDe: string }, input: CreateActionRequest): Promise<string> {
-    if (input.tool !== 'ritmo_da_semana') {
+    if (input.tool !== FERRAMENTA_DO_RITMO) {
       throw new AppProblem(400, 'ferramenta-nao-e-o-ritmo', 'Não é o ritmo da semana', 'Por aqui o funcionário só pede o ritmo da semana.');
     }
     return this.pedirEmNomeDoFuncionario(alvo, input, { rhythm: true });
+  }
+
+  /**
+   * O passo de um dia do ritmo da semana (R7, parte 1b-2; D-RG-62 e D-RG-63): a verba de uma campanha passa à do dia, ou
+   * volta à de antes. Quem chama é a rotina do ritmo, na transação da empresa, com o passo já guardado. O portão (as
+   * funções, o ritmo aprovado e não parado, o passo de hoje e o valor dentro do aprovado) é conferido aqui, na mesma
+   * transação do pedido, e de novo pelo executor antes de mudar a verba. Fechado o portão, ou a política da empresa
+   * pedindo outra coisa para o passo, 409 (`ritmo-segurado` ou `automatico-segurado`): o passo não sai. O pedido nasce
+   * aprovado (a pessoa aprovou a semana com o código do app) e passa pelos limites de sempre: os 10% por mudança, as
+   * mudanças por hora, o teto por campanha e, quando aumenta, a verba do mês. `emNomeDe` é quem aprovou o ritmo.
+   */
+  async ajustarPeloRitmo(
+    alvo: { tenantId: string; agentKey: string; agentLabel: string; emNomeDe: string },
+    input: CreateActionRequest,
+    passo: PassoDoRitmo,
+    agora = new Date(),
+  ): Promise<string> {
+    const valor = (input.params as { daily_budget_micros?: unknown }).daily_budget_micros;
+    if (input.tool !== FERRAMENTA_DA_VERBA_DO_DIA || !input.brand_id || typeof valor !== 'number') {
+      throw new AppProblem(400, 'ferramenta-nao-e-o-ritmo', 'Não é o passo do ritmo', 'Por aqui o funcionário só pede o passo de um dia do ritmo da semana.');
+    }
+    const segura = await oQueSeguraOPassoDoRitmo(
+      currentTx(),
+      this.flags,
+      { tenantId: alvo.tenantId, brandId: input.brand_id, accountId: input.account_id, resourceId: input.resource_id, valorMicros: valor, passo },
+      agora,
+    );
+    if (segura) throw new AppProblem(409, 'ritmo-segurado', 'O ritmo da semana não muda esta verba', `O ritmo da semana não muda esta verba agora (${segura}).`);
+    return this.pedirEmNomeDoFuncionario(alvo, input, { rhythm: passo.ritmo, day: passo.dia, kind: passo.tipo }, true);
   }
 
   /**
@@ -736,8 +767,16 @@ export class ActionService {
       throw new AppProblem(422, 'acao-so-pelo-funcionario', 'Esta ação não se pede direto', 'O ritmo da semana é montado pelo Gestor de tráfego, uma vez por semana: você aprova ou recusa em Aprovações.');
     }
     // A resposta automática (A6, Z11, parte 2e-1) só se pede pelo atendimento automático, que conferiu o portão antes.
-    if (tool.atendimentoAutomatico && (!automatico || quem.ator !== 'agent')) {
-      throw new AppProblem(422, 'acao-so-pelo-automatico', 'Esta ação não se pede direto', 'A resposta automática só sai pelo atendimento automático da marca: para responder, peça a resposta ao comentário.');
+    // E o passo do ritmo da semana (plano da região, R7) só pela rotina do ritmo: o mesmo predicado, a mesma regra.
+    if (saiPorDecisaoJaTomada(tool) && (!automatico || quem.ator !== 'agent')) {
+      throw new AppProblem(
+        422,
+        'acao-so-pelo-automatico',
+        'Esta ação não se pede direto',
+        tool.ritmoDaSemana
+          ? 'O passo do ritmo só sai pelo ritmo da semana que uma pessoa aprovou: para mudar a verba, peça o ajuste da verba.'
+          : 'A resposta automática só sai pelo atendimento automático da marca: para responder, peça a resposta ao comentário.',
+      );
     }
     // A ferramenta que só existe como a volta de outra ação não se pede direto (A6, Z2: apagar a resposta a uma avaliação).
     if (tool.onlyAsUndo && !volta) {
@@ -778,10 +817,13 @@ export class ActionService {
     const soDoDono = decision.mode === 'ESCALATE' && tool.ownerOnly?.(read.state) === true;
     // A outra exceção é a resposta automática (A6, Z11, parte 2e-1): ela só existe no modo automático da regra própria
     // dela; se a política da empresa ou da marca pedir outra coisa, ela não sai, e o comentário vai para uma pessoa.
-    if (tool.atendimentoAutomatico && decision.mode !== 'AUTO') {
-      throw new AppProblem(409, 'automatico-segurado', 'O atendimento automático não responde este', `A política desta conta pede ${decision.mode} para a resposta automática: o comentário vai para uma pessoa.`);
+    // O passo do ritmo da semana, igual: se a política da empresa ou da marca pedir outra coisa, o passo não sai.
+    if (saiPorDecisaoJaTomada(tool) && decision.mode !== 'AUTO') {
+      throw tool.ritmoDaSemana
+        ? new AppProblem(409, 'automatico-segurado', 'O ritmo da semana não muda esta verba', `A política desta conta pede ${decision.mode} para o passo do ritmo da semana: a verba fica como está.`)
+        : new AppProblem(409, 'automatico-segurado', 'O atendimento automático não responde este', `A política desta conta pede ${decision.mode} para a resposta automática: o comentário vai para uma pessoa.`);
     }
-    if (quem.ator === 'agent' && decision.mode !== 'APPROVAL' && !soDoDono && !tool.atendimentoAutomatico) {
+    if (quem.ator === 'agent' && decision.mode !== 'APPROVAL' && !soDoDono && !saiPorDecisaoJaTomada(tool)) {
       throw new AppProblem(409, 'modo-nao-e-aprovacao', 'O modo não é Aprovação', `Nesta conta, esta ação está em ${decision.mode} para o funcionário de IA: ele não faz o pedido.`);
     }
 
@@ -1526,7 +1568,7 @@ export class ActionService {
     mode: AutonomyMode,
     quem: Pick<Solicitante, 'tenantId' | 'userId' | 'ator'>,
     brandId: string | null,
-    tool?: Pick<ToolDefinition, 'alwaysApproval' | 'directByPerson' | 'atendimentoAutomatico' | 'aprovacaoNoDestino'>,
+    tool?: Pick<ToolDefinition, 'alwaysApproval' | 'directByPerson' | 'atendimentoAutomatico' | 'ritmoDaSemana' | 'aprovacaoNoDestino'>,
     automatico = false,
   ): Promise<{ mode: AutonomyMode; status: ActionStatus; reason: string | null }> {
     if (mode === 'SHADOW') return { mode, status: 'sombra', reason: 'modo sombra: registra, não executa' };
@@ -1538,9 +1580,13 @@ export class ActionService {
       if (tool?.directByPerson && quem.ator === 'human') return { mode, status: 'aprovada', reason: 'pedida por uma pessoa: esta ação não espera aprovação' };
       // A resposta automática (A6, Z11, parte 2e-1): o portão é o do atendimento automático, conferido por quem pediu na
       // mesma transação (e de novo pelo executor), e não o `autopilot`.
-      if (tool?.atendimentoAutomatico) {
-        if (automatico && quem.ator === 'agent') return { mode, status: 'aprovada', reason: 'atendimento automático: a marca ligou, com o código do app' };
-        return { mode: 'APPROVAL', status: 'aguardando_aprovacao', reason: 'a resposta automática só sai pelo atendimento automático' };
+      // O passo do ritmo da semana (R7), igual: o portão é o do ritmo que a pessoa aprovou.
+      if (saiPorDecisaoJaTomada(tool)) {
+        const doRitmo = tool?.ritmoDaSemana === true;
+        if (automatico && quem.ator === 'agent') {
+          return { mode, status: 'aprovada', reason: doRitmo ? 'ritmo da semana: uma pessoa aprovou a semana, com o código do app' : 'atendimento automático: a marca ligou, com o código do app' };
+        }
+        return { mode: 'APPROVAL', status: 'aguardando_aprovacao', reason: doRitmo ? 'o passo do ritmo só sai pelo ritmo da semana aprovado' : 'a resposta automática só sai pelo atendimento automático' };
       }
       const autopilot = await this.flags.isEnabled('autopilot', this.flags.context({ tenantId: quem.tenantId, userId: quem.userId, brandId }));
       if (autopilot) return { mode, status: 'aprovada', reason: 'aprovada pela política (autonomia)' };

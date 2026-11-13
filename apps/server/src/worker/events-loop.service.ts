@@ -190,6 +190,9 @@ export class EventsLoopService implements OnApplicationBootstrap, OnApplicationS
       // que vem e pede em Aprovações, só com as funções `regiao` e `ritmo_da_semana` ligadas; a fila é olhada de 10 em 10 minutos.
       // Só os pedidos feitos contam: com o lote cheio a volta seguinte continua na hora; senão, espera os 10 minutos.
       this.loop('ritmo-da-semana', 3, 600_000, async (n) => (await this.ritmoDaSemana.executarLote(n)).filter((r) => r.situacao === 'pedido').length),
+      // Os passos do dia do ritmo aprovado (R7, parte 1b-2): a verba de cada campanha no começo do dia, a volta à de antes
+      // e o fim do ritmo; de 5 em 5 minutos, e na hora quando o lote de pedidos encheu.
+      this.loop('ritmo-do-dia', 20, 300_000, async (n) => (await this.ritmoDaSemana.executarPassos(n)).filter((r) => r.situacao === 'pedido').length),
       // Hub DMS (F2, A3): as leituras do RegemCast pelas duas credenciais, comparadas; cada conta uma vez por hora, só
       // com a função `comparacao_dms_id` ligada e o aplicativo do Liame no DMS ID configurado; a fila é olhada de 5 em 5 minutos.
       this.loop('comparacao-dms-id', 2, 300_000, async (n) => (await this.comparacao.executarLote(n)).length),

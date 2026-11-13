@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { problemaDaLeitura, recursoNaoEncontrado } from '../src/actions/leitura-na-plataforma.js';
 import { ferramentasPara } from '../src/actions/opcoes-do-pedido.service.js';
-import { PlanoRecusado, type ResourceState, TOOLS } from '../src/actions/tools.js';
+import { PlanoRecusado, type ResourceState, saiPorDecisaoJaTomada, TOOLS } from '../src/actions/tools.js';
 import { ErroConector } from '../src/connectors/cliente-http.js';
 
 // A4 · X8 (parte 1), sem banco: o que a tela do pedido de mudança oferece em cada objeto cabe no que a ferramenta
@@ -10,8 +10,10 @@ import { ErroConector } from '../src/connectors/cliente-http.js';
 
 const REAL = 1_000_000;
 type Tipo = 'campanha' | 'conjunto' | 'anuncio';
+// As ferramentas da Meta que uma pessoa pede. O passo do ritmo da semana (plano da região, R7) só sai pela rotina do
+// ritmo que uma pessoa aprovou: a tela não o oferece, e o pedido direto de uma pessoa é recusado (422).
 const DA_META = Object.values(TOOLS)
-  .filter((t) => t.providers.includes('meta_ads'))
+  .filter((t) => t.providers.includes('meta_ads') && !saiPorDecisaoJaTomada(t))
   .map((t) => t.name);
 
 const estado = (tipo: Tipo, status: string, verba: number | null): ResourceState => ({

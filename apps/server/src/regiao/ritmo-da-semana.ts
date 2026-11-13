@@ -70,6 +70,11 @@ export interface EntradaDoRitmo {
   previsao: ReadonlyArray<{ day: string; condition: string; description: string; min: number; max: number }>;
   /** As datas do calendário: feriado nacional, data do varejo e o prazo do salário. */
   datas: ReadonlyArray<{ day: string; name: string; kind: string }>;
+  /**
+   * O peso do dia anterior à semana: 1 quando a verba está como a pessoa deixou (o padrão); o peso do domingo do ritmo
+   * em curso quando a semana continua dele (a verba de segunda parte da de domingo, não da de antes do ritmo).
+   */
+  partida?: number;
 }
 
 const limitar = (v: number, de: number, ate: number): number => Math.min(Math.max(v, de), ate);
@@ -106,13 +111,14 @@ const novaMemoria = (dias: number): Memoria => ({
 });
 
 /**
- * Entre todos os caminhos que respeitam a faixa e o passo (o primeiro dia a partir da verba de hoje), o MAIS PERTO dos
+ * Entre todos os caminhos que respeitam a faixa e o passo (o primeiro dia a partir de `partida`), o MAIS PERTO dos
  * alvos: a menor soma dos quadrados das diferenças. A conta é exata na grade: dia a dia, o menor desvio acumulado para
  * terminar o dia em cada peso (o mínimo do dia anterior numa janela que só anda para a frente), e a volta pelo caminho.
  * Olhar a semana inteira é o que faz a verba começar a subir ANTES do dia forte: aplicar o passo só de frente para
  * trás deixava a sexta forte, depois da quinta fraca, abaixo da terça. Devolve os pesos em décimos de milésimo.
+ * `partida`: o peso do dia anterior, em décimos de milésimo.
  */
-function caminho(alvos: readonly number[], m: Memoria): number[] {
+function caminho(alvos: readonly number[], m: Memoria, partida: number): number[] {
   let { custo, novo } = m;
   alvos.forEach((alvo, i) => {
     const a = alvo * ESCALA;
@@ -125,8 +131,8 @@ function caminho(alvos: readonly number[], m: Memoria): number[] {
       let antes = Infinity;
       let origem = -1;
       if (i === 0) {
-        // O primeiro dia parte da verba de hoje (peso 1).
-        if (peso * 1000 <= ESCALA * SOBE && peso * 1000 >= ESCALA * DESCE) antes = 0;
+        // O primeiro dia parte do peso do dia anterior (1 = a verba de hoje).
+        if (peso * 1000 <= partida * SOBE && peso * 1000 >= partida * DESCE) antes = 0;
       } else {
         // Entram na fila os pesos de ontem que passaram a caber; saem do fim os mais caros que o novo (nunca seriam o
         // mínimo) e da frente os que ficaram longe demais. O da frente é o mais barato de onde este peso pode vir.
@@ -156,9 +162,13 @@ function caminho(alvos: readonly number[], m: Memoria): number[] {
   return pesos;
 }
 
+/** O peso de partida em décimos de milésimo, dentro da faixa (o peso de um dia de ritmo nunca sai dela). */
+const partidaNaGrade = (partida: number | undefined): number =>
+  limitar(Math.round((partida ?? 1) * ESCALA), PESO_MINIMO, PESO_MINIMO + (PESOS_NA_GRADE - 1) * GRADE);
+
 /** O caminho mais perto dos alvos dentro da faixa e do passo, sem olhar a soma da semana (os pesos, 1 = a verba de hoje). */
-export function caminhoMaisPerto(alvos: readonly number[]): number[] {
-  return caminho(alvos, novaMemoria(alvos.length)).map((v) => v / ESCALA);
+export function caminhoMaisPerto(alvos: readonly number[], partida = 1): number[] {
+  return caminho(alvos, novaMemoria(alvos.length), partidaNaGrade(partida)).map((v) => v / ESCALA);
 }
 
 /**
@@ -205,10 +215,12 @@ export function pesosDaSemana(e: EntradaDoRitmo): DiaDoRitmo[] {
   // (quando quase todos os pedidos caem num dia só, os outros dias sobem até a semana usar a verba inteira). A procura
   // aperta os dois lados: o último caminho que passa de 7 (`acima`) e o primeiro que cabe (`cabe`).
   const memoria = novaMemoria(pedidos.length);
+  const partida = partidaNaGrade(e.partida);
   const com = (c: number): { pesos: number[]; soma: number } => {
     const pesos = caminho(
       pedidos.map((r) => r - c),
       memoria,
+      partida,
     );
     return { pesos, soma: pesos.reduce((t, v) => t + v, 0) };
   };
@@ -229,11 +241,11 @@ export function pesosDaSemana(e: EntradaDoRitmo): DiaDoRitmo[] {
   }
   // A grade não fecha a semana em 7 exatos, e a verba inteira é para ser usada. Os limites são retas: a mistura dos dois
   // caminhos, na proporção que soma 7, também cabe na faixa e no passo. Ela é arredondada para baixo e o passo é
-  // conferido de novo em inteiros (a partir da verba de hoje). Esse acerto pode subir um dia em um décimo de milésimo:
+  // conferido de novo em inteiros (a partir do peso de partida). Esse acerto pode subir um dia em um décimo de milésimo:
   // se a semana passar de 7, a mistura mira um pouco abaixo (com um décimo de milésimo de folga por dia, sempre cabe).
   const mistura = (folga: number): number[] => {
     const parte = acima.soma > semana ? Math.max(0, (semana - folga - cabe.soma) / (acima.soma - cabe.soma)) : 0;
-    let antes = ESCALA;
+    let antes = partida;
     return cabe.pesos.map((v, i) => {
       const peso = limitar(Math.floor(v + parte * (acima.pesos[i]! - v) + 1e-9), Math.ceil((antes * DESCE) / 1000), Math.floor((antes * SOBE) / 1000));
       antes = peso;
@@ -249,15 +261,17 @@ export type VerbaDoRitmo = { ok: true; dias: number[] } | { ok: false; motivo: '
 /**
  * A verba de uma campanha em cada dia do ritmo, em micros, a partir da verba de hoje: centavos inteiros (para baixo),
  * cada mudança dentro dos 10% da política (a partir da verba de hoje), nenhum dia acima do teto por campanha. A campanha
- * que não cabe nas regras fica fora do ritmo, com o motivo.
+ * que não cabe nas regras fica fora do ritmo, com o motivo. `partidaMicros`: a verba em que a campanha está na véspera
+ * da semana, quando ela continua de outro ritmo (o padrão é a verba de hoje, `baseMicros`).
  */
-export function verbaDoRitmo(baseMicros: number, pesos: readonly number[], tetoMicros: number | null): VerbaDoRitmo {
+export function verbaDoRitmo(baseMicros: number, pesos: readonly number[], tetoMicros: number | null, partidaMicros: number = baseMicros): VerbaDoRitmo {
   if (!Number.isInteger(baseMicros) || baseMicros % CENTAVO !== 0) return { ok: false, motivo: 'fracao_de_centavo' };
   if (baseMicros < VERBA_MINIMA_NO_RITMO_MICROS) return { ok: false, motivo: 'verba_pequena' };
   if (tetoMicros !== null && baseMicros > tetoMicros) return { ok: false, motivo: 'acima_do_teto' };
+  if (!Number.isInteger(partidaMicros) || partidaMicros % CENTAVO !== 0 || partidaMicros <= 0) return { ok: false, motivo: 'fracao_de_centavo' };
   const base = baseMicros / CENTAVO;
   const teto = tetoMicros === null ? null : Math.floor(tetoMicros / CENTAVO);
-  let antes = base;
+  let antes = partidaMicros / CENTAVO;
   const dias = pesos.map((p) => {
     // Os limites em inteiros (centavos × 100), para o arredondamento não depender de ponto flutuante.
     let v = limitar(Math.floor(base * p), Math.ceil((antes * (100 - VARIACAO_MAXIMA_DA_VERBA_PCT)) / 100), Math.floor((antes * (100 + VARIACAO_MAXIMA_DA_VERBA_PCT)) / 100));
@@ -265,17 +279,33 @@ export function verbaDoRitmo(baseMicros: number, pesos: readonly number[], tetoM
     antes = v;
     return v * CENTAVO;
   });
-  return problemasDaVerba(baseMicros, dias, tetoMicros).length ? { ok: false, motivo: 'fora_dos_limites' } : { ok: true, dias };
+  return problemasDaVerba(baseMicros, dias, tetoMicros, partidaMicros).length ? { ok: false, motivo: 'fora_dos_limites' } : { ok: true, dias };
+}
+
+/**
+ * A verba que o passo de um dia deixa: da verba que o Liame deixou (`deixadaMicros`) em direção à do dia (`alvoMicros`),
+ * no máximo 10% por mudança (a política), em centavos inteiros. Subindo, nunca passa do alvo nem do teto por campanha;
+ * descendo, chega o mais perto que os 10% deixam (quando um passo anterior não saiu, a descida leva mais de um dia).
+ * Devolve a própria `deixadaMicros` quando não há o que mudar.
+ */
+export function passoDoDia(deixadaMicros: number, alvoMicros: number, tetoMicros: number | null): number {
+  const deixada = Math.round(deixadaMicros / CENTAVO);
+  let alvo = Math.floor(alvoMicros / CENTAVO);
+  if (alvo > deixada && tetoMicros !== null) alvo = Math.max(deixada, Math.min(alvo, Math.floor(tetoMicros / CENTAVO)));
+  if (alvo === deixada) return deixadaMicros;
+  const valor = alvo > deixada ? Math.min(alvo, Math.floor((deixada * (100 + VARIACAO_MAXIMA_DA_VERBA_PCT)) / 100)) : Math.max(alvo, Math.ceil((deixada * (100 - VARIACAO_MAXIMA_DA_VERBA_PCT)) / 100));
+  return valor * CENTAVO;
 }
 
 /**
  * O que a verba de uma campanha no ritmo desrespeita (vazio: nada): a mudança de um dia para o outro acima dos 10% da
  * política, o dia fora da faixa, acima do teto por campanha, ou a semana acima de 7 dias da verba de hoje. É a mesma
- * conferência antes de propor e antes de executar cada passo.
+ * conferência antes de propor e antes de executar cada passo. `partidaMicros`: a verba da véspera da semana, quando a
+ * campanha continua de outro ritmo (o padrão é a verba de hoje).
  */
-export function problemasDaVerba(baseMicros: number, dias: readonly number[], tetoMicros: number | null): string[] {
+export function problemasDaVerba(baseMicros: number, dias: readonly number[], tetoMicros: number | null, partidaMicros: number = baseMicros): string[] {
   const problemas: string[] = [];
-  let antes = baseMicros;
+  let antes = partidaMicros;
   dias.forEach((v, i) => {
     if (!Number.isInteger(v) || v % CENTAVO !== 0) problemas.push(`dia ${i + 1}: fração de centavo`);
     // A conta em inteiros (micros × 100), para o limite exato não depender de ponto flutuante.

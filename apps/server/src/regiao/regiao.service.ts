@@ -6,6 +6,7 @@ import {
   type GoogleProfileAddressResponse,
   type RegionOverviewResponse,
   type RegionRhythmResponse,
+  type RegionRhythmStopResponse,
   type SaveStoreLocationRequest,
   type SaveStoreLocationResponse,
   type StoreAddress,
@@ -35,6 +36,7 @@ import { buscarCep, cepNormalizado, type EnderecoDoCep } from './cep.js';
 import { FONTE_CENSO_BAIRRO } from './censo.js';
 import { bairroDaArea, type Coordenada, nomeComparavel, procuraDeCoordenada } from './coordenada.js';
 import { MUNICIPIOS_DO_IPCA, RMS_DO_IPCA } from './ibge.js';
+import { controleDoRitmo } from '../campanhas/ritmo-passos.js';
 import { carregarPoliticas } from '../policy/policy.service.js';
 import { tetoDaVerba } from '../policy/teto-da-verba.js';
 import { diaNoFuso } from '../results/fora-do-normal.js';
@@ -115,8 +117,11 @@ function paraEndereco(cep: EnderecoDoCep, rua: string | null, numero: string | n
 /** O ritmo montado: a resposta da prévia e o que só o pedido do Gestor de tráfego usa. */
 export interface RitmoMontado {
   resposta: RegionRhythmResponse;
-  /** Por campanha da resposta (o id dela): o recurso no trilho de ações e a conta de anúncios. */
-  recursos: Record<string, { recurso: string; conta: string }>;
+  /**
+   * Por campanha da resposta (o id dela): o recurso no trilho de ações, a conta de anúncios e a verba em que a campanha
+   * estará na véspera da semana (a de hoje; ou a que o ritmo em curso deixa, quando a semana continua dele).
+   */
+  recursos: Record<string, { recurso: string; conta: string; partida: number }>;
   loja: { nome: string } | null;
   /** O teto por campanha da empresa na hora da montagem; nulo sem teto. */
   teto: number | null;
@@ -639,6 +644,40 @@ export class RegiaoService {
   }
 
   /**
+   * Parar o ritmo da semana (R7, parte 1b-2; D-RG-63): não pede o código do app. O ritmo aprovado passa a parado: o passo
+   * que estiver na fila não sai (o executor confere o portão do ritmo de novo), e a rotina dos passos devolve a verba de
+   * cada campanha à de antes, em até 10% por dia. O ritmo ainda pedido se recusa em Aprovações; o que já acabou, o
+   * cancelado e o já parado não se param.
+   */
+  async pararRitmo(auth: AuthContext, id: string): Promise<RegionRhythmStopResponse> {
+    const { tenantId, userId } = this.quem(auth);
+    const tx = currentTx();
+    const r = (
+      await tx.execute<{ status: string; week_start: string; week_end: string }>(sql`
+        select status, week_start::text as week_start, week_end::text as week_end from liame.budget_rhythm
+         where id = ${id} and tenant_id = ${tenantId} for update`)
+    ).rows[0];
+    if (!r) throw new AppProblem(404, 'nao-encontrado', 'Não encontramos', 'Ritmo da semana não encontrado nesta empresa.');
+    if (r.status !== 'aprovado') {
+      const porque: Record<string, string> = {
+        pedido: 'Este ritmo ainda espera a aprovação: recuse o pedido em Aprovações.',
+        parado: 'Este ritmo já foi parado.',
+        encerrado: 'A semana deste ritmo já acabou.',
+        cancelado: 'Este ritmo foi cancelado.',
+      };
+      throw new AppProblem(409, 'ritmo-nao-esta-rodando', 'Não há o que parar', porque[r.status] ?? 'Este ritmo não está rodando.');
+    }
+    const parado = (
+      await tx.execute<{ stopped_at: string }>(sql`
+        update liame.budget_rhythm set status = 'parado', stopped_by = ${userId}, stopped_at = now(), version = version + 1, updated_at = now()
+         where id = ${id} and tenant_id = ${tenantId} and status = 'aprovado'
+         returning to_char(stopped_at at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') as stopped_at`)
+    ).rows[0]!;
+    auditDetail({ resourceId: id, before: { status: 'aprovado' }, after: { status: 'parado', week_start: r.week_start, week_end: r.week_end } });
+    return { id, status: 'parado', week: { from: r.week_start, to: r.week_end }, stopped_at: parado.stopped_at };
+  }
+
+  /**
    * A montagem do ritmo da semana que vem (R7; D-RG-58 a D-RG-60 e D-RG-64), para a prévia e para o pedido do Gestor de
    * tráfego (a rotina do worker, na transação da empresa). O peso de cada dia vem dos pedidos da loja por dia da semana
    * (as 4 semanas de Sua região; sem pedidos que bastem, a referência do setor), da chuva prevista e das datas; entram
@@ -657,7 +696,11 @@ export class RegiaoService {
     if (!loja.ibge_city_code) return so('sem_endereco');
     if (!podeVerVendas) return so('sem_permissao');
 
-    const semana = semanaQueVem(diaNoFuso(agora, loja.timezone ?? 'America/Sao_Paulo'));
+    const hoje = diaNoFuso(agora, loja.timezone ?? 'America/Sao_Paulo');
+    const semana = semanaQueVem(hoje);
+    // O que o Liame já conduz na marca (o ritmo em curso): a verba lida da campanha hoje já é a do ritmo, e não a que a
+    // pessoa deixou. Para essas, a verba de hoje é a de antes do ritmo, e a semana parte de onde o ritmo as deixa.
+    const controle = await controleDoRitmo(tx, { tenantId, brandId, hoje, semanaDe: semana.de });
     const { demanda } = await this.demandaDaLoja(true, brandId, unitId, agora);
     const pedidos = demanda?.status === 'pronto' ? Array.from({ length: 7 }, (_, d) => demanda.by_weekday.find((x) => x.weekday === d)?.orders ?? 0) : null;
     const previsao = (
@@ -683,6 +726,8 @@ export class RegiaoService {
       pedidosPorDiaDaSemana: pedidos,
       previsao: previsao.map((p) => ({ day: p.day, condition: p.condition, description: p.condition_desc, min: p.min_c, max: p.max_c })),
       datas,
+      // A semana que continua de um ritmo aprovado parte do peso do último dia dele.
+      ...(controle.anterior ? { partida: controle.anterior.peso } : {}),
     });
 
     // As campanhas: a verba diária mora na campanha ou, quando ela não tem, no conjunto (nunca nas duas). O recurso é
@@ -714,14 +759,18 @@ export class RegiaoService {
     const out: RegionRhythmResponse['out'] = [];
     const recursos: RitmoMontado['recursos'] = {};
     for (const c of candidatas) {
-      const base = Number(c.verba);
-      const v = verbaDoRitmo(base, pesos, teto);
+      const conduzida = controle.objetos.get(c.recurso);
+      const base = conduzida ? conduzida.baseMicros : Number(c.verba);
+      // A véspera da semana: no ritmo que ainda roda, a verba do último dia dele; senão, a que o Liame deixou (ou a de hoje).
+      const noRitmoEmCurso = conduzida !== undefined && controle.anterior?.ritmo === conduzida.ritmo && hoje < controle.anterior.ate;
+      const partida = !conduzida ? base : noRitmoEmCurso ? conduzida.ultimoDiaMicros : conduzida.deixadaMicros;
+      const v = verbaDoRitmo(base, pesos, teto, partida);
       if (!v.ok) {
         out.push({ name: c.nome, reason: v.motivo });
         continue;
       }
       campaigns.push({ id: c.id, level: c.nivel, name: c.nome, base_micros: base, days_micros: v.dias, week_micros: v.dias.reduce((s, x) => s + x, 0) });
-      recursos[c.id] = { recurso: c.recurso, conta: c.conta };
+      recursos[c.id] = { recurso: c.recurso, conta: c.conta, partida };
     }
     const base = campaigns.reduce((s, c) => s + c.base_micros, 0);
     const horarios = horariosDaLoja(demanda);
