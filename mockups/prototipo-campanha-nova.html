@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Campanha nova · Liame</title>
 <!--
-@prototipo Liame · A4 · P42 · Campanha nova com a foto ou o vídeo da loja (APROVADO PELO DONO EM 11/11/2026, com as recomendações D-A4-42 a D-A4-46)
+@prototipo Liame · A4 · P42 · Campanha nova com a foto ou o vídeo da loja (APROVADO PELO DONO EM 11/11/2026, com as recomendações D-A4-42 a D-A4-46) · REVISÃO R6 de 13/11/2026 (plano da região: a campanha com raio, os objetivos de alcance e de seguidores, a estimativa de público no raio, o teto de 25% e a frequência; D-RG-48 a D-RG-52 como recomendadas), PARA O DONO APROVAR
 base: o P10 (prototipo-criativos.html, aprovado em 05/10/2026): Criativos, a peça aprovada, a gaveta "Campanha nova,
       pausada" e os pedidos em Aprovações ficam como estão lá, no seletor "Criativos"; o P42 entra por cima, no
       seletor "Campanha nova".
@@ -1549,6 +1549,8 @@ select.input { padding-right: var(--sp-2); }
 .p42-decisoes .rev-decisoes li > div > span b { color: var(--text); font-weight: 600; }
 .p42-decisoes .lite-frase { margin-top: var(--sp-3); }
 #p42-dec-t:focus { outline: none; }
+.p42-estimativa { display: flex; gap: var(--sp-2); align-items: flex-start; margin: var(--sp-2) 0 0; font-size: var(--text-sm); }
+.p42-estimativa .ic { flex: none; margin-top: 2px; }
 </style>
 </head>
 <body data-pagina="resultados">
@@ -7099,6 +7101,13 @@ const P42_ESTADOS = {
   'A partir de um Reels': {
     reels: 'Do seu Instagram: o Reels como está',
   },
+  'R6 · A campanha com raio (plano da região)': {
+    'r6-alcance': 'Objetivo: ser conhecido no raio (alcance), com a estimativa de público',
+    'r6-seguidores': 'Objetivo: seguidores no Instagram',
+    'r6-raio-pequeno': 'A estimativa: público pequeno demais no raio (não pede)',
+    'r6-teto': 'Alcance e seguidores passam de 25% da verba do mês (não pede)',
+    'r6-aprovacoes': 'Em Aprovações: a campanha de alcance',
+  },
   'Decisões': {
     decisoes: 'As decisões propostas (D-A4-42 a D-A4-46)',
   },
@@ -7150,6 +7159,41 @@ const P42_OBJ = {
   cardapio: { bt: 'Pedir agora', leva: `O cardápio online da ${P42_LOJA.nome}`, onde: OBJETIVOS_P10.cardapio.onde, rastreio: 'Vai junto, nos parâmetros de URL do anúncio', dominio: 'app.dmsregem.com' },
   whatsapp: { bt: 'Enviar mensagem', leva: `A conversa no WhatsApp da Página ${ASSINA_P10.pagina}`, onde: 'o número do WhatsApp ligado à Página', rastreio: 'Pela conversa que o anúncio abre', dominio: 'WhatsApp' },
 };
+
+/* ---------- R6 (plano da região): os objetivos de alcance e de seguidores, a estimativa e o teto ---------- */
+const OBJETIVOS_R6 = {
+  ...OBJETIVOS_P10,
+  alcance: { rot: 'Ser conhecido no raio', ic: 'i-megaphone', leva: 'O cardápio da Loja Centro', onde: 'app.dmsregem.com/c/mister-centro', rastreio: 'Pelo alcance e pela frequência, em Resultados' },
+  seguidores: { rot: 'Seguidores no Instagram', ic: 'i-user-plus', leva: 'O perfil da marca no Instagram', onde: 'o perfil ligado à Página', rastreio: 'Pelos seguidores, em Minha marca › Região' },
+};
+Object.assign(P42_OBJ, {
+  alcance: { bt: 'Pedir agora', leva: `O cardápio online da ${P42_LOJA.nome}`, onde: OBJETIVOS_P10.cardapio.onde, rastreio: 'Pelo alcance e pela frequência, em Resultados', dominio: 'app.dmsregem.com' },
+  seguidores: { bt: 'Ver perfil', leva: `O perfil ${ASSINA_P10.instagram} no Instagram`, onde: 'o perfil da marca, para a pessoa seguir', rastreio: 'Pelos seguidores, em Minha marca › Região (O público nas redes)', dominio: 'Instagram' },
+});
+const r6Ativa = () => !!p42?.r6;
+const r6Topo = (o) => o === 'alcance' || o === 'seguidores';
+/* A estimativa da Meta para o raio (18 anos ou mais), em mil pessoas: o mínimo e o máximo. */
+const R6_ESTIMATIVA = { 3: [64, 75], 4: [118, 139], 5: [182, 214], 8: [410, 482] };
+const R6_MINIMO = 1000;
+/* O que já está em alcance e seguidores neste mês (as outras campanhas ativas), para o teto de 25%. */
+const R6_JA_NO_MES = 180;
+function r6Estimativa(m) {
+  if (p42?.r6?.pequeno) return `<div class="pd-aviso pd-aviso--perigo" id="r6-pequeno" role="alert">${ic('i-alert-circle')}<div><b>Público pequeno demais no raio</b><span>A Meta estima de 640 a 760 pessoas de 18 anos ou mais num raio de ${p42KmTxt(m.raio)} em volta da ${P42_LOJA.nome}: com menos de ${numero(R6_MINIMO)} pessoas, ela não entrega bem. Aumente o raio.</span></div></div>`;
+  const [de, ate] = R6_ESTIMATIVA[p42Km(m.raio)] ?? R6_ESTIMATIVA[5];
+  return `<p class="p42-estimativa" id="r6-estimativa">${ic('i-user-plus')}<span><b>Cerca de ${numero(de)} mil a ${numero(ate)} mil pessoas</b> de 18 anos ou mais no raio de ${p42KmTxt(m.raio)}, pela estimativa da Meta (lida agora). O Liame não usa mais o mínimo de 100 mil pessoas: num raio de loja, quem decide é a estimativa.</span></p>`;
+}
+function r6Teto(m) {
+  const L = p9.limites;
+  if (!r6Topo(m.objetivo) || L.tetoMes == null) return '';
+  const r2 = (v) => Math.round(v * 100) / 100, verba = Number(String(m.verba).replace(/\./g, '').replace(',', '.')) || 0;
+  const teto = r2(L.tetoMes * 0.25), esta = r2(verba * MES.faltam), total = r2(R6_JA_NO_MES + esta);
+  const passa = !!p42?.r6?.teto || total > teto;
+  const linha = `Alcance e seguidores: até 25% da verba de ${MES.nome} (${moeda(teto)}). Já há ${moeda(R6_JA_NO_MES)} em campanhas assim; esta usa até ${moeda(esta)} até o fim do mês.`;
+  return passa
+    ? `<p class="campo-erro" id="r6-teto" role="alert">${ic('i-alert-circle')} Passa do teto de 25% para alcance e seguidores (${moeda(teto)} em ${MES.nome}). Diminua a verba diária ou deixe esta campanha para ${MES.proximo}.</p>`
+    : `<p class="campo-dica" id="r6-teto">${linha}</p>`;
+}
+const r6Bloqueia = (m) => !!p42?.r6?.pequeno || (r6Topo(m.objetivo) && !!p42?.r6?.teto);
 
 /* ---------- utilidades ---------- */
 const P42_DUR = (s) => `${Math.floor(s / 60)}:${String(Math.round(s) % 60).padStart(2, '0')}`;
@@ -7243,6 +7287,7 @@ function p42HtmlMontar() {
       `${fechar}<button class="btn btn--primary" type="button" data-p10-ver="${q.id}">Ver em Aprovações</button>`);
   }
   const L = p9.limites, conta = contaDoMes(), video = p42EhVideo(m), zap = m.objetivo === 'whatsapp', obj = P42_OBJ[m.objetivo];
+  const objetivos = r6Ativa() ? OBJETIVOS_R6 : OBJETIVOS_P10, topo = r6Topo(m.objetivo);
   const semEndereco = p42?.loja === 'bairro', semCardapio = !!p42?.semCardapio;
   const inv = (campo) => (m.erro && m.campo === campo ? ' aria-invalid="true"' : '');
   const aviso = semEndereco ? `<div class="pd-aviso pd-aviso--perigo" id="p42-falha" tabindex="-1" role="alert">${ic('i-alert-circle')}<div><b>Falta o endereço da loja</b><span id="p42-falha-txt">A campanha mostra o anúncio em volta da loja, e o ponto dela ainda não está no endereço. Ajuste o endereço da loja em Minha marca antes.</span><span>Hoje o ponto da ${P42_LOJA.nome} está no centro do bairro (${P42_LOJA.bairro}): o mapa não achou o número. Confira a rua e o número em Minha marca › Região.</span><a class="btn btn--primary btn--sm" href="prototipo-regiao.html" data-destino="prototipo-regiao.html">Ajustar o endereço em Minha marca</a></div></div>` : '';
@@ -7252,16 +7297,17 @@ function p42HtmlMontar() {
   const nome = `<div class="campo"><label for="mc-nome">Nome da campanha</label><input class="input" id="mc-nome" autocomplete="off" maxlength="80" value="${esc(m.nome)}" aria-describedby="mc-nome-dica"${inv('mc-nome')}><p class="campo-dica" id="mc-nome-dica">É o nome que aparece na Meta e em Resultados.</p></div>`;
   const objDica = semCardapio
     ? `<p class="p42-aviso" id="p42-obj-dica">${ic('i-info')}<span><b>Só o WhatsApp.</b> A loja recebe os pedidos online por outra plataforma: use o objetivo de conversas no WhatsApp.</span></p>`
-    : `<p class="campo-dica" id="p42-obj-dica">${zap ? `Abre uma conversa no WhatsApp da Página ${esc(ASSINA_P10.pagina)}. A Página precisa ter o número do WhatsApp ligado, e a Meta confere ao criar.` : `Leva ao cardápio online da ${P42_LOJA.nome}, onde a pessoa faz o pedido.`}</p>`;
-  const objetivo = `<fieldset class="campo"><legend>O que você quer do anúncio</legend><div class="pd-escolha">${Object.entries(OBJETIVOS_P10).map(([id, x]) => `<label class="pd-opcao"><input type="radio" name="mc-objetivo" value="${id}"${m.objetivo === id ? ' checked' : ''}${id === 'cardapio' && semCardapio ? ' disabled' : ''} aria-describedby="p42-obj-dica">${ic(x.ic)}${x.rot}</label>`).join('')}</div>${objDica}</fieldset>`;
-  const publico = `<fieldset class="campo"><legend>Quem vê</legend><div class="pd-escolha">${P42_RAIOS.map(([id, rot]) => `<label class="pd-opcao"><input type="radio" name="p42-raio" value="${id}"${m.raio === id ? ' checked' : ''}${semEndereco ? ' disabled' : ''} aria-describedby="p42-raio-dica">${rot}</label>`).join('')}</div><p class="campo-dica" id="p42-raio-dica">${p42RaioDica(m)}</p></fieldset>`;
-  const verba = `<div class="campo"><label for="mc-verba">Verba diária</label><div class="pd-valor"><span aria-hidden="true">R$</span><input id="mc-verba" inputmode="decimal" autocomplete="off" maxlength="10" value="${esc(m.verba)}" aria-describedby="mc-verba-dica${m.erro && m.campo === 'mc-verba' ? ' mc-erro' : ''}"${inv('mc-verba')}></div><p class="campo-dica" id="mc-verba-dica">${L.tetoCampanha == null ? 'A empresa ainda não definiu o teto por campanha.' : `Teto por campanha: ${moeda(L.tetoCampanha)} por dia.`} Enquanto estiver pausada, ela não gasta.</p></div>`;
+    : `<p class="campo-dica" id="p42-obj-dica">${m.objetivo === 'alcance' ? `Mostra o anúncio para o máximo de pessoas do raio, no máximo 2 vezes por pessoa a cada 7 dias; o botão leva ao cardápio. Conta no teto de 25% da verba do mês para alcance e seguidores.` : m.objetivo === 'seguidores' ? `Leva ao perfil ${esc(ASSINA_P10.instagram)} no Instagram, para a pessoa seguir; a Meta mostra para quem costuma visitar perfis. Conta no teto de 25%. ${p42Conferir('A combinação do objetivo com o perfil do Instagram')}: o Liame confere com a Meta antes de criar.` : zap ? `Abre uma conversa no WhatsApp da Página ${esc(ASSINA_P10.pagina)}. A Página precisa ter o número do WhatsApp ligado, e a Meta confere ao criar.` : `Leva ao cardápio online da ${P42_LOJA.nome}, onde a pessoa faz o pedido.`}</p>`;
+  const objetivo = `<fieldset class="campo"><legend>O que você quer do anúncio</legend><div class="pd-escolha">${Object.entries(objetivos).map(([id, x]) => `<label class="pd-opcao"><input type="radio" name="mc-objetivo" value="${id}"${m.objetivo === id ? ' checked' : ''}${id === 'cardapio' && semCardapio ? ' disabled' : ''} aria-describedby="p42-obj-dica">${ic(x.ic)}${x.rot}</label>`).join('')}</div>${objDica}</fieldset>`;
+  const publico = `<fieldset class="campo"><legend>Quem vê</legend><div class="pd-escolha">${P42_RAIOS.map(([id, rot]) => `<label class="pd-opcao"><input type="radio" name="p42-raio" value="${id}"${m.raio === id ? ' checked' : ''}${semEndereco ? ' disabled' : ''} aria-describedby="p42-raio-dica">${rot}</label>`).join('')}</div><p class="campo-dica" id="p42-raio-dica">${p42RaioDica(m)}</p>${r6Ativa() && !semEndereco ? r6Estimativa(m) : ''}</fieldset>`;
+  const verba = `<div class="campo"><label for="mc-verba">Verba diária</label><div class="pd-valor"><span aria-hidden="true">R$</span><input id="mc-verba" inputmode="decimal" autocomplete="off" maxlength="10" value="${esc(m.verba)}" aria-describedby="mc-verba-dica${m.erro && m.campo === 'mc-verba' ? ' mc-erro' : ''}"${inv('mc-verba')}></div><p class="campo-dica" id="mc-verba-dica">${L.tetoCampanha == null ? 'A empresa ainda não definiu o teto por campanha.' : `Teto por campanha: ${moeda(L.tetoCampanha)} por dia.`} Enquanto estiver pausada, ela não gasta.</p>${r6Ativa() ? r6Teto(m) : ''}</div>`;
   const fim = `<div class="campo"><label for="mc-fim">Termina em <span class="campo-dica">Opcional.</span></label><input class="input" type="date" id="mc-fim" min="2026-09-30" value="${esc(m.fim)}" aria-describedby="mc-fim-dica"${inv('mc-fim')}><p class="campo-dica" id="mc-fim-dica">Em branco, não tem data de fim. Ela começa quando você ativar.</p></div>`;
   const erro = m.erro && m.campo !== 'midia' ? `<p class="campo-erro" id="mc-erro" role="alert" tabindex="-1">${m.erro}${m.ver ? ` <button class="link-bt" type="button" data-p10-ver="${m.ver}">Ver o pedido</button>` : ''}</p>` : '';
   const assina = `<div class="pd-bloco"><p class="rotulo-marca">Quem assina o anúncio</p><dl class="pd-agora mc-destino"><dt>No Facebook</dt><dd>Página ${esc(ASSINA_P10.pagina)}<small>o nome e a foto dela aparecem no topo do anúncio</small></dd><dt>No Instagram</dt><dd>${esc(ASSINA_P10.instagram)}<small>${reels ? 'a conta ligada à Página, onde o Reels foi postado' : 'a conta ligada à Página'}</small></dd></dl></div>`;
   const destino = `<div class="pd-bloco"><p class="rotulo-marca">Para onde leva</p><dl class="pd-agora mc-destino">
       <dt>Destino</dt><dd>${obj.leva}<small>${obj.onde}</small></dd>
       <dt>Botão do anúncio</dt><dd>${obj.bt}<small>acompanha o que você quer do anúncio</small></dd>
+      ${m.objetivo === 'alcance' ? '<dt>Frequência</dt><dd>No máximo 2 vezes por pessoa a cada 7 dias<small>a Meta para de mostrar a quem já viu; num raio de loja, isso evita cansar o bairro</small></dd>' : ''}
       <dt>Rastreio do Liame</dt><dd>${obj.rastreio}<small>os pedidos deste anúncio aparecem em Resultados${zap ? '' : `<span class="so-pro">: <code>${esc(URL_TAGS_P10)}</code></span>`}</small></dd>
       <dt>Melhorias automáticas da Meta</dt><dd>Desligadas<small>${reels ? 'o anúncio vai como o Reels está' : 'o anúncio vai como a peça e a mídia que você escolheu'}</small></dd></dl>
     ${zap && video ? `<p class="pd-nota">${ic('i-info')}<span>${p42Conferir('O vídeo no anúncio que leva ao WhatsApp')}: a Meta confere ao criar.</span></p>` : ''}</div>`;
@@ -7271,8 +7317,8 @@ function p42HtmlMontar() {
   const partes = video ? 'a campanha, o conjunto, o vídeo, o criativo e o anúncio' : 'a campanha, o conjunto, o criativo e o anúncio';
   const nota = `<p class="pd-nota">${ic('i-shield')}<span>O pedido vai para Aprovações, com a prévia do anúncio. Depois da aprovação com o código do app, o Liame confere com a Meta e cria ${partes}, tudo pausado.${video ? ' A Meta prepara o vídeo antes (até 15 minutos).' : ''}${reels ? ' Antes, o Liame pergunta à Meta se este Reels pode virar anúncio: o Reels com música do Instagram ou com filtro interativo não pode.' : ''}</span></p>`;
   const corpo = `${aviso}${origem}<div class="p42-grade"><div class="p42-f1">${peca}${reels ? '' : p42CampoMidia(m)}</div>${lado}<div class="p42-f2">${nome}${objetivo}${publico}${verba}${fim}${erro}<p class="pd-efeito" id="mc-efeito" role="status">${efeitoDaCampanha(m)}</p>${assina}${destino}${limites}${nota}</div></div>`;
-  const acoes = semEndereco
-    ? `${fechar}<button class="btn btn--primary" type="button" data-p42-bloqueado aria-disabled="true" aria-describedby="p42-falha-txt">Pedir a criação</button>`
+  const acoes = semEndereco || r6Bloqueia(m)
+    ? `${fechar}<button class="btn btn--primary" type="button" data-p42-bloqueado aria-disabled="true" aria-describedby="${semEndereco ? 'p42-falha-txt' : p42?.r6?.pequeno ? 'r6-pequeno' : 'r6-teto'}">Pedir a criação</button>`
     : '<button class="btn" type="button" data-fechar>Cancelar</button><button class="btn btn--primary" type="submit">Pedir a criação</button>';
   return so(corpo, acoes);
 }
@@ -7455,7 +7501,8 @@ function p42Tabela(q, c) {
   const f = p42MidiaDe(c), { v } = p42Texto(c), obj = P42_OBJ[c.objetivo], video = p42EhVideo(c);
   return [
     ['Campanha', 'não existe', `“${esc(c.nome)}”, pausada`],
-    ['O que você quer', '—', OBJETIVOS_P10[c.objetivo].rot],
+    ['O que você quer', '—', OBJETIVOS_R6[c.objetivo].rot],
+    ...(c.objetivo === 'alcance' ? [['Frequência', '—', 'no máximo 2 vezes por pessoa a cada 7 dias'], ['Pessoas no raio', '—', 'de 182 mil a 214 mil, pela estimativa da Meta ao pedir']] : []),
     ['Quem vê', '—', `${p42KmTxt(c.raio)} em volta da ${P42_LOJA.nome} (${P42_LOJA.endereco}) · 18 anos ou mais · sem o público ampliado da Meta`],
     ['Quem assina', '—', `a Página ${esc(ASSINA_P10.pagina)} (no Instagram, ${esc(ASSINA_P10.instagram)})`],
     ['Verba diária', '—', `${moeda(c.verba)} (só gasta depois de ativada)`],
@@ -7469,7 +7516,7 @@ function p42Tabela(q, c) {
 function p42SecaoAnuncio(q, c) {
   const reels = c.origem === 'reels', video = p42EhVideo(c), f = p42MidiaDe(c), { v, p } = p42Texto(c), aba = reels ? 'instagram' : p42?.abaAp ?? 'instagram';
   const resumo = `<dl class="pd-agora p42-resumo"><dt>Quem assina</dt><dd>Página ${esc(ASSINA_P10.pagina)}<small>no Instagram, ${esc(ASSINA_P10.instagram)}</small></dd>
-    <dt>Quem vê</dt><dd>${p42KmTxt(c.raio)} em volta da ${P42_LOJA.nome}<small>${P42_LOJA.endereco} · 18 anos ou mais</small></dd>
+    <dt>Quem vê</dt><dd>${p42KmTxt(c.raio)} em volta da ${P42_LOJA.nome}<small>${P42_LOJA.endereco} · 18 anos ou mais</small></dd>${c.objetivo === 'alcance' ? '<dt>O que você quer</dt><dd>Ser conhecido no raio<small>no máximo 2 vezes por pessoa a cada 7 dias · de 182 mil a 214 mil pessoas no raio, pela estimativa da Meta ao pedir</small></dd>' : ''}
     <dt>Verba diária</dt><dd>${moeda(c.verba)}<small>${q.tipo === 'criar' ? 'só gasta depois de ativada' : 'no máximo, por dia'}</small></dd></dl>`;
   const linhas = [
     q.tipo === 'criar' && q.estado === 'pendente' ? linha('i-pause', '<b>Nasce pausada:</b> não aparece para ninguém e não gasta.') : '',
@@ -7664,9 +7711,18 @@ const P42_DECISOES = [
     rec: 'assim, como a parte 6 da X5, depois das telas.' },
 ];
 const P42_PERGUNTA = { txt: 'O Gestor de tráfego propõe campanhas novas sozinho?', rec: 'fica para depois, como no P10.' };
+/* A revisão R6 (plano da região, a campanha com raio), para o dono aprovar. */
+const P42_DECISOES_R6 = [
+  { id: 'D-RG-48', titulo: 'Os objetivos novos: alcance e seguidores', oque: 'Além de pedidos pelo cardápio e conversas no WhatsApp: "Ser conhecido no raio" (OUTCOME_AWARENESS, otimizado para alcance, REACH, com o botão que leva ao cardápio) e "Seguidores no Instagram" (OUTCOME_TRAFFIC com o destino no perfil do Instagram, VISIT_INSTAGRAM_PROFILE; a combinação conferida com a Meta antes de criar, pelo validate_only). Os dois nascem pausados e com aprovação, como as outras.', porque: 'D-RG-3: a loja de bairro precisa ser conhecida no raio antes de vender; o funil local começa no reconhecimento e nos seguidores.', rec: 'Assim. O de seguidores só aparece com o Instagram ligado à Página.' },
+  { id: 'D-RG-49', titulo: 'O teto de 25% para alcance e seguidores', oque: 'As campanhas de alcance e de seguidores usam, somadas, até 25% do teto do mês da empresa (a verba diária vezes os dias que faltam no mês, mais as que já estão ativas). Passou, o pedido não é criado, e a gaveta diz quanto cabe.', porque: 'D-RG-3: o grosso da verba fica com pedidos e conversas, que pagam a conta.', rec: 'Assim, conferido no servidor ao pedir e ao ativar.' },
+  { id: 'D-RG-50', titulo: 'A estimativa de público no raio', oque: 'Ao abrir a gaveta e ao trocar o raio, o Liame pergunta à Meta quantas pessoas de 18 anos ou mais há no raio (reachestimate, o mínimo e o máximo). Com menos de 1.000 pessoas, o pedido não é criado: a Meta não entrega bem. O mínimo de 100 mil pessoas da base deixa de valer para a campanha com raio.', porque: 'D-RG-4: o mínimo de 100 mil é de outro tipo de negócio; num raio de loja, a estimativa da Meta é a régua.', rec: 'Assim; a estimativa vai junto no pedido, para a aprovação ver o mesmo número.' },
+  { id: 'D-RG-51', titulo: 'A frequência no alcance', oque: 'Na campanha de alcance, no máximo 2 vezes por pessoa a cada 7 dias (frequency_control_specs da Meta, que só vale com REACH).', porque: 'D-RG-4: num raio pequeno, sem limite, a Meta mostra o mesmo anúncio muitas vezes às mesmas pessoas.', rec: 'Assim.' },
+  { id: 'D-RG-52', titulo: 'Como medir', oque: 'O alcance e a frequência aparecem em Resultados, na campanha (os números que o Liame já lê da Meta); os seguidores, em Minha marca › Região › O público nas redes (R4, parte 3). Nada de pedido atribuído a essas campanhas: elas são do topo do funil.', porque: 'Cada objetivo com a régua dele.', rec: 'Assim.' },
+];
 function p42DecisoesHtml() {
   const lista = P42_DECISOES.map((d) => `<li><div><b>${d.id} · ${esc(d.titulo)}</b><span><b>O que é:</b> ${esc(d.oque)}</span><span><b>Por quê:</b> ${esc(d.porque)}</span><span><b>Recomendação:</b> ${esc(d.rec)}</span></div><span class="st st--concluido">Aprovada</span></li>`).join('');
-  return `<section class="card p42-decisoes" id="p42-decisoes" aria-labelledby="p42-dec-t"><div class="card-cab"><div><h2 id="p42-dec-t" tabindex="-1">Decisões</h2><p class="card-sub">Pelo servidor da X5 (parte 1, pronta em 11/11/2026, com a função desligada) e pela documentação da Meta reconferida em 11/11/2026. Aprovadas por você em 11/11/2026, com as recomendações.</p></div></div><ul class="rev-decisoes">${lista}</ul><p class="lite-frase"><b>A pergunta aberta:</b> ${esc(P42_PERGUNTA.txt)} <b>Recomendação:</b> ${esc(P42_PERGUNTA.rec)}</p></section>`;
+  const r6 = P42_DECISOES_R6.map((d) => `<li><div><b>${d.id} · ${esc(d.titulo)}</b><span><b>O que é:</b> ${esc(d.oque)}</span><span><b>Por quê:</b> ${esc(d.porque)}</span><span><b>Recomendação:</b> ${esc(d.rec)}</span></div><span class="st st--espera">Para aprovar</span></li>`).join('');
+  return `<section class="card p42-decisoes" id="p42-decisoes-r6" aria-labelledby="p42-dec-r6-t"><div class="card-cab"><div><h2 id="p42-dec-r6-t">Revisão R6: a campanha com raio (D-RG-48 a D-RG-52)</h2><p class="card-sub">Do plano da região, para o dono aprovar. Estados do grupo "R6" no seletor.</p></div></div><ul class="rev-decisoes">${r6}</ul></section>` + `<section class="card p42-decisoes" id="p42-decisoes" aria-labelledby="p42-dec-t"><div class="card-cab"><div><h2 id="p42-dec-t" tabindex="-1">Decisões</h2><p class="card-sub">Pelo servidor da X5 (parte 1, pronta em 11/11/2026, com a função desligada) e pela documentação da Meta reconferida em 11/11/2026. Aprovadas por você em 11/11/2026, com as recomendações.</p></div></div><ul class="rev-decisoes">${lista}</ul><p class="lite-frase"><b>A pergunta aberta:</b> ${esc(P42_PERGUNTA.txt)} <b>Recomendação:</b> ${esc(P42_PERGUNTA.rec)}</p></section>`;
 }
 /* ---------- o seletor "Campanha nova" (faixa do protótipo) ---------- */
 const selP42 = $('#rev-p42');
@@ -7687,21 +7743,24 @@ definirP10 = function (v, opts) { p42Desligar(); definirP10P42(v, opts); };
 const P42_BASE = {
   'aprovacoes-criar': 'campanha-aprovar', 'aprovacoes-criando': 'campanha-criando', 'aprovacoes-criada': 'campanha-criada', 'aprovacoes-nao-criada': 'campanha-criada',
   'aprovacoes-ativar': 'ativar-aprovar', 'aprovacoes-ativada': 'ativada', reels: 'criativos-em-dia', decisoes: 'criativos-em-dia',
+  'r6-aprovacoes': 'campanha-aprovar',
 };
 function p42Estado(v, { focar = false } = {}) {
   if (!P42_TODOS[v]) v = 'gaveta-foto';
   $('#p42-decisoes')?.remove();
+  $('#p42-decisoes-r6')?.remove();
   if (p42) p42.ativo = false;
   definirP10P42(P42_BASE[v] ?? 'peca-aprovada');
-  p42 = { ativo: true, estado: v, loja: v === 'gaveta-sem-endereco' ? 'bairro' : 'endereco', semCardapio: v === 'gaveta-sem-cardapio', abaAp: 'instagram' };
+  const R6 = { 'r6-alcance': { obj: 'alcance' }, 'r6-seguidores': { obj: 'seguidores' }, 'r6-raio-pequeno': { obj: 'alcance', pequeno: true, raio: '3' }, 'r6-teto': { obj: 'alcance', teto: true, verba: 60 }, 'r6-aprovacoes': { obj: 'alcance' } };
+  p42 = { ativo: true, estado: v, loja: v === 'gaveta-sem-endereco' ? 'bairro' : 'endereco', semCardapio: v === 'gaveta-sem-cardapio', abaAp: 'instagram', r6: R6[v] ?? null };
   if (selP42.value !== v) selP42.value = v;
   selP10.selectedIndex = -1;
   // As peças ficam só com o texto: a imagem feita por IA (X7) segue adiada, e a mídia vem de Fotos.
   for (const p of Object.values(p10.pecas)) for (const x of p.versoes) x.arte = null;
 
-  if (P42_APROV.includes(v)) {
+  if (P42_APROV.includes(v) || v === 'r6-aprovacoes') {
     const c = p10.pedidos['cn-criar-1'];
-    Object.assign(c, { p42: true, origem: 'peca', foto: v === 'aprovacoes-criando' ? 'v2' : 'f2', raio: '5' });
+    Object.assign(c, { p42: true, origem: 'peca', foto: v === 'aprovacoes-criando' ? 'v2' : 'f2', raio: '5', ...(v === 'r6-aprovacoes' ? { objetivo: 'alcance' } : {}) });
     if (v === 'aprovacoes-criando') c.passo = p42Partes(c).findIndex((x) => x.video);
     if (v === 'aprovacoes-nao-criada') {
       Object.assign(c, { estado: 'nao_criada', sit: 'pausada', falhou: 1, motivoMeta: 'O público deste conjunto é pequeno demais.' });
@@ -7728,6 +7787,7 @@ function p42Estado(v, { focar = false } = {}) {
   desenharP8();
   const midia = { 'gaveta-video': { midia: 'video', foto: 'v2' }, 'gaveta-sem-capa': { midia: 'video', foto: 'v3' } }[v] ?? {};
   p42AbrirGaveta({ origem: 'peca', peca, gatilho: $(`[data-p10-usar="${peca}"]`), semEspera: true, ...midia });
+  if (p42.r6) { Object.assign(p10.montar, { objetivo: p42.r6.obj, ...(p42.r6.raio ? { raio: p42.r6.raio } : {}), ...(p42.r6.verba ? { verba: emTexto(p42.r6.verba) } : {}) }); desenharMontar(); }
   if (v === 'gaveta-pedido' || v === 'gaveta-sem-capa') enviarCampanha();
 }
 selP42.addEventListener('change', () => p42Estado(selP42.value, { focar: true }));
@@ -7911,6 +7971,8 @@ else p42Estado(P42_TODOS[params.get('p42')] ? params.get('p42') : 'gaveta-foto')
 .p45-no-google li span { min-width: 0; overflow-wrap: anywhere; }
 .p45-no-google small { display: block; color: var(--text-muted); font-size: var(--text-xs); }
 .p45-decisoes { margin-bottom: var(--sp-5); }
+.p42-estimativa { display: flex; gap: var(--sp-2); align-items: flex-start; margin: var(--sp-2) 0 0; font-size: var(--text-sm); }
+.p42-estimativa .ic { flex: none; margin-top: 2px; }
 </style>
 <script>
 /* =====================================================================================================================
