@@ -70,6 +70,7 @@ const arrumar = (t: string): string => t.replace(/\s+/g, ' ').trim();
  * texto, cabe no teto do Liame, não traz dado pessoal e não repete o texto de outra nem o da que a pessoa já viu (o
  * "Pedir outra"). Na pergunta, segue a primeira; na reclamação, uma para cada caminho, na ordem dos caminhos, pelo
  * enfoque (o enfoque de outro nome é descartado; o caminho sem sugestão fica sem). As que seguem saem conferidas.
+ * `caminhos`: os da reclamação; os do comentário por padrão, e os da conversa particular no Direct (`direct.ts`, Z12 4b).
  */
 export function sugestoesDoComentario(
   r: RespostaDoSocial,
@@ -77,6 +78,7 @@ export function sugestoesDoComentario(
   tipo: TipoComSugestao,
   conhecido = '',
   anteriores: readonly string[] = [],
+  caminhos: readonly string[] = ENFOQUES_DA_RECLAMACAO,
 ): { sugestoes: SugestaoConferida[]; descartes: DescarteDaSugestaoAoComentario[] } {
   const descartes: DescarteDaSugestaoAoComentario[] = [];
   const vistas = new Set<string>(anteriores.map((t) => normalizar(arrumar(t))));
@@ -100,7 +102,7 @@ export function sugestoesDoComentario(
   }
   const sugestoes: SugestaoConferida[] = [];
   const usadas = new Set<number>();
-  for (const caminho of ENFOQUES_DA_RECLAMACAO) {
+  for (const caminho of caminhos) {
     const i = validas.findIndex((s, j) => !usadas.has(j) && normalizar(s.enfoque) === normalizar(caminho));
     if (i < 0) continue;
     usadas.add(i);
@@ -108,7 +110,7 @@ export function sugestoesDoComentario(
   }
   validas.forEach((s, j) => {
     if (usadas.has(j)) return;
-    descartes.push(ENFOQUES_DA_RECLAMACAO.some((c) => normalizar(c) === normalizar(s.enfoque)) ? 'sobra' : 'fora_do_enfoque');
+    descartes.push(caminhos.some((c) => normalizar(c) === normalizar(s.enfoque)) ? 'sobra' : 'fora_do_enfoque');
   });
   return { sugestoes, descartes };
 }
