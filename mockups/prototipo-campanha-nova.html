@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Campanha nova · Liame</title>
 <!--
-@prototipo Liame · A4 · P42 · Campanha nova com a foto ou o vídeo da loja (APROVADO PELO DONO EM 11/11/2026, com as recomendações D-A4-42 a D-A4-46) · REVISÃO R6 de 13/11/2026 (plano da região: a campanha com raio, os objetivos de alcance e de seguidores, a estimativa de público no raio, o teto de 25% e a frequência; D-RG-48 a D-RG-52 como recomendadas), APROVADA PELO DONO em 13/11/2026 · REVISÃO R6-3 de 13/11/2026 (quem vê por bairros, além do raio: pedido do dono em 13/11/2026; D-RG-53 a D-RG-57 como recomendadas), APROVADA PELO DONO em 13/11/2026 · REVISÃO R7 de 13/11/2026 (plano da região: o ritmo da semana, do Gestor de tráfego, em Aprovações; seletor "Ritmo"; D-RG-58 a D-RG-65 como recomendadas), APROVADA PELO DONO em 13/11/2026
+@prototipo Liame · A4 · P42 · Campanha nova com a foto ou o vídeo da loja (APROVADO PELO DONO EM 11/11/2026, com as recomendações D-A4-42 a D-A4-46) · REVISÃO R6 de 13/11/2026 (plano da região: a campanha com raio, os objetivos de alcance e de seguidores, a estimativa de público no raio, o teto de 25% e a frequência; D-RG-48 a D-RG-52 como recomendadas), APROVADA PELO DONO em 13/11/2026 · REVISÃO R6-3 de 13/11/2026 (quem vê por bairros, além do raio: pedido do dono em 13/11/2026; D-RG-53 a D-RG-57 como recomendadas), APROVADA PELO DONO em 13/11/2026 · REVISÃO R7 de 13/11/2026 (plano da região: o ritmo da semana, do Gestor de tráfego, em Aprovações; seletor "Ritmo"; D-RG-58 a D-RG-65 como recomendadas), APROVADA PELO DONO em 13/11/2026 · REVISÃO R8 de 13/11/2026 (plano da região: os testes de criativo e de região, em Aprovações; seletor "Testes"; D-RG-76 a D-RG-84 como recomendadas), PROPOSTA: ESPERA A APROVAÇÃO DO DONO
 base: o P10 (prototipo-criativos.html, aprovado em 05/10/2026): Criativos, a peça aprovada, a gaveta "Campanha nova,
       pausada" e os pedidos em Aprovações ficam como estão lá, no seletor "Criativos"; o P42 entra por cima, no
       seletor "Campanha nova".
@@ -8998,5 +8998,442 @@ if (marcaR7) marcaR7.textContent += ' · R7 (o ritmo da semana), aprovado em 13/
 })();
 if (params.get('r7')) r7Estado(params.get('r7'));
 </script>
+<!-- R8:camada:inicio -->
+<style>
+/* ===================== Região · R8 · Os testes (PROPOSTO em 13/11/2026, espera a aprovação do dono) ===================== */
+.r8-envolve { container: r8 / inline-size; }
+.r8-tabela th, .r8-tabela td { vertical-align: top; }
+.r8-tabela td.n, .r8-tabela th.n { text-align: right; font-family: var(--font-mono); white-space: nowrap; }
+.r8-tabela td small, .r8-tabela th small { display: block; color: var(--text-muted); font-size: var(--text-xs); font-weight: 400; font-family: var(--font-sans); white-space: normal; }
+.r8-tabela tr.r8-frente th, .r8-tabela tr.r8-frente td, .r8-tabela th.r8-frente, .r8-tabela td.r8-frente { background: var(--success-soft); }
+/* os dois criativos lado a lado: 3 colunas de largura fixa, em qualquer largura (o texto quebra, a tabela não rola) */
+.r8-ab { table-layout: fixed; width: 100%; }
+.r8-ab th, .r8-ab td, .r8-ab td.n, .r8-ab th.n { white-space: normal; overflow-wrap: anywhere; }
+.r8-ab th:first-child { width: 40%; }
+.r8-pecas { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: var(--sp-3); margin: 0; padding: 0; list-style: none; }
+.r8-peca { display: grid; gap: 4px; padding: var(--sp-3) var(--sp-4); border: 1px solid var(--border); border-radius: var(--radius); min-width: 0; }
+.r8-peca b { overflow-wrap: anywhere; }
+.r8-peca span { color: var(--text-muted); font-size: var(--text-sm); overflow-wrap: anywhere; }
+.r8-letra { display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; border-radius: var(--radius-full); background: var(--primary-soft); color: var(--text); font-size: var(--text-xs); font-weight: 700; }
+.r8-veredito { display: grid; gap: 4px; padding: var(--sp-4); border-radius: var(--radius); background: var(--bg-subtle); }
+.r8-veredito b { font-size: var(--text-lg); }
+.r8-veredito span { color: var(--text-muted); font-size: var(--text-sm); }
+.r8-veredito--venceu { background: var(--success-soft); }
+.r8-faixa { display: grid; gap: 6px; }
+.r8-faixa-trilho { position: relative; height: 10px; border-radius: var(--radius-full); background: var(--bg-subtle); }
+.r8-faixa-parte { position: absolute; top: 0; bottom: 0; border-radius: var(--radius-full); background: var(--primary); opacity: 0.35; }
+.r8-faixa-ponto { position: absolute; top: -3px; width: 4px; height: 16px; border-radius: 2px; background: var(--text); }
+.r8-faixa-rot { display: flex; justify-content: space-between; gap: var(--sp-2); color: var(--text-muted); font-size: var(--text-xs); font-family: var(--font-mono); }
+.r8-acoes { display: flex; flex-wrap: wrap; gap: var(--sp-2); margin-top: var(--sp-3); }
+.r8-acoes .btn { white-space: normal; text-align: center; }
+.r8-decisoes { margin-bottom: var(--sp-5); }
+.r8-nao-da { display: grid; gap: var(--sp-3); }
+.r8-nao-da .nota { display: flex; gap: var(--sp-3); margin: 0; font-size: var(--text-sm); color: var(--text-muted); }
+.r8-nao-da .nota .ic { flex: none; margin-top: 2px; }
+@container r8 (max-width: 640px) {
+  .r8-bairros thead { display: none; }
+  .r8-bairros, .r8-bairros tbody, .r8-bairros tfoot, .r8-bairros tr, .r8-bairros th, .r8-bairros td { display: block; }
+  .r8-bairros tr { padding: var(--sp-3) var(--sp-4); border-bottom: 1px solid var(--border); }
+  .r8-bairros tbody tr:last-child { border-bottom: 0; }
+  .r8-bairros th, .r8-bairros td, .r8-bairros td.n { padding: 0; border: 0; white-space: normal; text-align: left; }
+  .r8-bairros td { margin-top: var(--sp-2); }
+  .r8-bairros td[data-col]::before { content: attr(data-col); display: block; color: var(--text-muted); font-size: var(--text-xs); font-family: var(--font-sans); font-weight: 400; }
+}
+</style>
+<script>
+/* =====================================================================================================================
+   Região · R8 · Os testes (plano da região, R8; D-RG-76 a D-RG-84, PROPOSTAS em 13/11/2026: esperam a aprovação do dono).
+   Uma camada por cima da tela Aprovações que já está no app, no mesmo molde do ritmo da semana (R7): dois tipos novos
+   de pedido, os dois por regra e sem IA, e a mesma tela acompanha o teste depois de aprovado.
+     - Teste de criativo: dois conjuntos iguais numa campanha, só o criativo muda (uma variável por vez), cada um com o
+       seu cupom e o seu link. Quem decide é o caixa: os pedidos confirmados de cada criativo, com a mesma verba. O Liame
+       não espia antes de 7 dias e só dá um vencedor quando a diferença é maior do que o acaso explicaria (base §7.5:
+       95% de confiança); até lá, diz "ainda não dá para dizer". O teste dura no máximo 28 dias.
+     - Teste de região: um bairro da área de entrega fica 14 dias sem anúncio, e os pedidos dele no caixa se comparam com
+       os dos outros bairros, antes e durante. É a resposta para "o anúncio traz pedido que não viria sozinho?" (base
+       §1.4: num teste publicado, só 17% das conversões que a plataforma se atribuía eram de verdade).
+   O Liame não mexe sozinho no fim de um teste: avisa e oferece o pedido de sempre. Os concorrentes no raio ficam com a
+   contagem pelo CNPJ da Receita que Sua região já mostra (D-RG-84). Dados de exemplo: Mister Burgers · Loja Centro.
+   ===================================================================================================================== */
+var r8 = null;
+const R8_ESTADOS = {
+  'R8 · Teste de criativo': {
+    'r8-criativo-pedido': 'Em Aprovações: o teste de dois criativos',
+    'r8-criativo-rodando': 'Rodando (dia 9): ainda não dá para dizer',
+    'r8-criativo-vencedor': 'Dia 23: um criativo venceu, e o pedido para pausar o outro',
+    'r8-criativo-empate': 'Dia 28: acabou sem vencedor',
+  },
+  'R8 · Teste de região': {
+    'r8-regiao-pedido': 'Em Aprovações: um bairro 14 dias sem anúncio',
+    'r8-regiao-nao-da': 'Não dá para testar este bairro: o motivo',
+    'r8-regiao-rodando': 'Rodando (dia 6): os pedidos por bairro',
+    'r8-regiao-resultado': 'O resultado: quanto o anúncio traz no bairro',
+  },
+  'Decisões': {
+    'r8-decisoes': 'As decisões propostas (D-RG-76 a D-RG-84)',
+  },
+};
+const R8_TODOS = Object.assign({}, ...Object.values(R8_ESTADOS));
+
+/* O teste de criativo do exemplo: a mesma oferta, a foto contra o vídeo. A verba é dividida ao meio. */
+const R8_TESTE = { nome: 'Smash em dobro: a foto ou o vídeo?', verba: 40, minimo: 7, maximo: 28, pediu: 'segunda, 05/10, 10:12', comeca: 'terça, 06/10', publico: 'raio de 3 km em volta da Loja Centro, 18 a 55 anos' };
+const R8_PECAS = [
+  { letra: 'A', nome: 'Smash em dobro · a foto', tipo: 'foto da loja', cupom: 'SMASHFOTO', link: 'liame.app/r/mb-a1' },
+  { letra: 'B', nome: 'Smash em dobro · o vídeo de 12 s', tipo: 'vídeo da loja', cupom: 'SMASHVIDEO', link: 'liame.app/r/mb-b1' },
+];
+/* Os números de cada momento: o gasto (igual nos dois), as visitas ao cardápio, os pedidos e a receita no caixa. */
+const R8_NUMEROS = {
+  'r8-criativo-rodando': { dia: 9, a: { gasto: 180, visitas: 212, pedidos: 11, receita: 462 }, b: { gasto: 180, visitas: 171, pedidos: 7, receita: 301 } },
+  'r8-criativo-vencedor': { dia: 23, a: { gasto: 460, visitas: 548, pedidos: 41, receita: 1722 }, b: { gasto: 460, visitas: 431, pedidos: 22, receita: 915 } },
+  'r8-criativo-empate': { dia: 28, a: { gasto: 560, visitas: 655, pedidos: 24, receita: 1010 }, b: { gasto: 560, visitas: 610, pedidos: 21, receita: 884 } },
+};
+/* A conta do acaso, como o servidor a faria (exata, sem aproximação): com a mesma verba, se os dois criativos fossem
+   iguais, cada pedido cairia em A ou em B com 50% de chance. `p` é a chance de uma diferença deste tamanho, ou maior,
+   aparecer por acaso (teste binomial dos dois lados). Vencedor: p abaixo de 5% (95% de confiança). */
+function r8Acaso(a, b) {
+  const n = a + b, k = Math.max(a, b);
+  let comb = 1, cauda = 0;
+  for (let i = 0; i <= n; i++) { if (i >= k) cauda += comb; comb = comb * (n - i) / (i + 1); }
+  return Math.min(1, 2 * cauda / Math.pow(2, n));
+}
+const r8Pct = (v) => (v * 100).toLocaleString('pt-BR', { maximumFractionDigits: v < 0.1 ? 1 : 0 }) + '%';
+const r8Hash = (algo) => curto(fnv(JSON.stringify(algo)));
+
+function r8Pecas() {
+  return `<ul class="r8-pecas">${R8_PECAS.map((p) => `<li class="r8-peca"><b><span class="r8-letra" aria-hidden="true">${p.letra}</span> ${esc(p.nome)}</b><span>${p.tipo}, aprovada em Criativos</span><span>cupom <b class="num">${p.cupom}</b> (10% na primeira compra) · link ${p.link}</span></li>`).join('')}</ul>`;
+}
+/* A tabela dos dois criativos: as medidas nas linhas, A e B nas colunas (cabe em qualquer largura e compara lado a
+   lado). `frente`: a letra de quem venceu. */
+function r8Tabela(n, frente) {
+  const cls = (p) => (frente === p.letra ? ' r8-frente' : '');
+  const [A, B] = R8_PECAS, x = { A: n.a, B: n.b };
+  const linhaDe = (rotulo, valor) => `<tr><th scope="row">${rotulo}</th>${[A, B].map((p) => `<td class="n${cls(p)}">${valor(x[p.letra])}</td>`).join('')}</tr>`;
+  return `<div class="r8-envolve"><table class="tabela r8-tabela r8-ab" id="r8-tabela"><caption class="sr-only">Os dois criativos do teste, lado a lado: o gasto, as visitas, os pedidos e a receita no caixa de cada um</caption>
+    <thead><tr><th scope="col">O que cada um trouxe</th>${[A, B].map((p) => `<th scope="col" class="n${cls(p)}"><span class="r8-letra" aria-hidden="true">${p.letra}</span> ${esc(p.nome.split(' · ')[1])}${frente === p.letra ? '<small>venceu</small>' : ''}</th>`).join('')}</tr></thead>
+    <tbody>${linhaDe('Gasto', (v) => moeda(v.gasto))}
+      ${linhaDe('Visitas ao cardápio<small>sinal, não prova</small>', (v) => `${v.visitas}<small>${moeda(d2(v.gasto / v.visitas))} por visita</small>`)}
+      ${linhaDe('Pedidos no caixa<small>pelo cupom e pelo link</small>', (v) => `<b>${v.pedidos}</b>`)}
+      ${linhaDe('Receita no caixa', (v) => moeda(v.receita))}
+      ${linhaDe('Custo por pedido', (v) => moeda(d2(v.gasto / v.pedidos)))}</tbody></table></div>`;
+}
+function r8HtmlItem(k, grupo) {
+  const pl = p8.planos[k], atual = p8.sel === k ? ' aria-current="true"' : '';
+  const titulo = k === 'teste' ? `Teste de criativo: ${R8_TESTE.nome}` : `Teste de região: ${R8_REGIAO.bairro} sem anúncio por 14 dias`;
+  const sit = pl?.estado === 'recusado' ? 'Recusado' : pl?.estado === 'parado' ? 'Encerrado por você' : r8?.estado?.endsWith('rodando') ? 'Rodando' : r8?.estado?.endsWith('aprovado') ? 'Aprovado' : 'Terminou';
+  const meta = grupo === 'pendente'
+    ? (k === 'teste' ? `<span class="dinheiro">${moeda(R8_TESTE.verba)} por dia</span><span class="risco risco--medio">Risco médio</span><span>expira em 3 dias</span>` : '<span class="dinheiro">sem verba nova</span><span class="risco risco--medio">Risco médio</span><span>expira em 3 dias</span>')
+    : `<span>Rodrigo</span><span>${sit}</span>`;
+  return `<li><button class="ap-item" type="button" data-p8-item="${k}"${atual}><span class="ap-av" aria-hidden="true">RO</span><span><span class="ap-titulo">${titulo}</span><span class="ap-meta">${meta}</span></span></button></li>`;
+}
+
+/* ---------- o teste de criativo ---------- */
+function r8HtmlCriativo() {
+  const pl = p8.planos.teste, u = p8.ui, pro = shell.modo === 'pro', detalhado = pro || u.detalhes;
+  const cab = `${VOLTAR()}<div class="det-cab"><span><b>Rodrigo</b> pediu</span><span>· ${R8_TESTE.pediu} · em Criativos, na peça aprovada: “Testar contra outra peça”</span></div><h2 class="det-titulo" id="ap-det-titulo" tabindex="-1">Teste de criativo: ${R8_TESTE.nome}</h2>`;
+  const idPlano = (vale) => `<p class="plano-id">Plano 1 · hash <b>${r8Hash([R8_TESTE, R8_PECAS])}</b>${vale ? ' · a aprovação vale só para este teste' : ''}</p>`;
+  const pecas = `<div class="secao"><p class="rotulo-marca">Os dois criativos</p>${r8Pecas()}${linha('i-info', 'Só o criativo muda. O público, a verba, o objetivo (pedidos pelo cardápio) e o desconto do cupom são iguais nos dois.')}</div>`;
+  if (pl.estado === 'recusado') {
+    return `${cab}${idPlano(false)}<div class="secao"><div class="politica">${ic('i-x')}<span><b>Recusado por Rodrigo.</b> Motivo: ${esc(pl.motivo)}. Nada foi criado na Meta.</span></div></div>${pecas}`;
+  }
+  if (pl.estado === 'parado') {
+    return `${cab}${idPlano(false)}<div class="secao"><div class="politica">${ic('i-pause')}<span><b>Você encerrou o teste.</b> O Liame parou de medir e pausou a campanha de teste. Os dois criativos continuam aprovados em Criativos, e os números até aqui ficam guardados em Resultados › Testes.</span></div></div>${pecas}`;
+  }
+  if (pl.estado === 'aprovado' && !R8_NUMEROS[r8?.estado]) {
+    // Logo depois da aprovação: a campanha de teste nasce pausada, e ativar é o pedido de sempre.
+    return `${cab}${idPlano(false)}<div class="secao"><div class="politica">${ic('i-check')}<span><b>Aprovado por Rodrigo agora.</b> O Liame cria a campanha de teste <b>pausada</b>, com os dois conjuntos, os dois cupons e os dois links. O teste começa quando a campanha for ativada: ativar é o pedido de sempre, com os limites e a verba do mês.</span></div>
+      ${linha('i-clock', 'Os 7 dias mínimos contam do dia em que os dois conjuntos estiverem no ar.')}</div>${pecas}`;
+  }
+  if (pl.estado === 'aprovado') {
+    const n = R8_NUMEROS[r8.estado], p = r8Acaso(n.a.pedidos, n.b.pedidos), venceu = p < 0.05 && n.dia >= R8_TESTE.minimo, acabou = n.dia >= R8_TESTE.maximo;
+    const frente = n.a.pedidos >= n.b.pedidos ? R8_PECAS[0] : R8_PECAS[1], atras = frente === R8_PECAS[0] ? R8_PECAS[1] : R8_PECAS[0];
+    let veredito, acoes = '', notas = '';
+    if (venceu) {
+      veredito = `<div class="r8-veredito r8-veredito--venceu" id="r8-veredito"><b>O criativo ${frente.letra} venceu</b><span>${esc(frente.nome)}: ${Math.max(n.a.pedidos, n.b.pedidos)} pedidos no caixa contra ${Math.min(n.a.pedidos, n.b.pedidos)}, com a mesma verba. A chance de uma diferença assim aparecer por acaso é de ${r8Pct(p)} (o Liame só dá um vencedor abaixo de 5%).</span></div>`;
+      acoes = `<div class="r8-acoes"><button class="btn btn--primary" type="button" data-r8-pausar>${ic('i-pause')}Pedir: pausar o criativo ${atras.letra} e deixar a verba no ${frente.letra}</button><button class="btn" type="button" data-r8-encerrar>Encerrar o teste sem mudar nada</button></div>`;
+      notas = linha('i-info', 'O Liame não pausa sozinho: o pedido vai para Aprovações, como toda mudança de campanha. O que este teste mostrou fica guardado em Resultados › Testes.');
+    } else if (acabou) {
+      veredito = `<div class="r8-veredito" id="r8-veredito"><b>O teste acabou sem vencedor</b><span>Em ${R8_TESTE.maximo} dias, ${n.a.pedidos} pedidos contra ${n.b.pedidos}: uma diferença assim aparece por acaso em ${r8Pct(p)} das vezes. Pelo caixa, os dois vendem parecido.</span></div>`;
+      acoes = `<div class="r8-acoes"><button class="btn" type="button" data-r8-encerrar>Encerrar o teste</button></div>`;
+      notas = linha('i-info', `Pelo sinal (não é prova): o criativo ${n.a.gasto / n.a.visitas <= n.b.gasto / n.b.visitas ? 'A' : 'B'} traz a visita mais barata. Você pode ficar com os dois ou testar outra variável (a oferta, o texto).`);
+    } else {
+      veredito = `<div class="r8-veredito" id="r8-veredito"><b>Ainda não dá para dizer</b><span>${n.a.pedidos} pedidos contra ${n.b.pedidos}: uma diferença assim aparece por acaso em ${r8Pct(p)} das vezes. O Liame só dá um vencedor quando essa chance fica abaixo de 5%.</span></div>`;
+      acoes = `<div class="r8-acoes"><button class="btn" type="button" data-r8-encerrar>${ic('i-pause')}Encerrar o teste</button></div>`;
+      notas = linha('i-clock', `Dia ${n.dia} de no máximo ${R8_TESTE.maximo}. O teste segue sozinho; a Atenção avisa quando houver vencedor ou quando ele acabar.`) + linha('i-info', 'Encerrar antes da hora não precisa do código: para de medir e pausa a campanha de teste.');
+    }
+    return `${cab}${idPlano(false)}<div class="secao"><div class="politica">${ic('i-check')}<span><b>Aprovado por Rodrigo na segunda, 05/10.</b> A campanha de teste foi ativada na terça, 06/10. Hoje é o dia ${n.dia}.</span></div>${veredito}${acoes}${notas}</div>
+      <div class="secao"><p class="rotulo-marca">O que cada criativo trouxe</p>${r8Tabela(n, venceu ? frente.letra : null)}
+      ${linha('i-info', 'Quem decide são os pedidos no caixa. Visitas e cliques são sinal, não prova: um criativo pode trazer mais visita e menos pedido.')}</div>${pecas}`;
+  }
+  const FRASE = `Dois criativos da mesma oferta rodam lado a lado, <b>com a mesma verba e o mesmo público</b>: só o criativo muda. Cada um tem o seu cupom e o seu link, e <b>quem decide é o caixa</b>: os pedidos confirmados de cada um. O teste custa <b>${moeda(R8_TESTE.verba)} por dia</b> (${moeda(R8_TESTE.verba / 2)} para cada criativo) e dura de ${R8_TESTE.minimo} a ${R8_TESTE.maximo} dias.`;
+  const lite = `<div class="secao secao--lite"><p class="lite-frase lite-frase--grande">${FRASE}</p>
+    <div class="lite-chips"><span class="risco risco--medio">Risco médio</span><span class="lite-chip">${moeda(R8_TESTE.verba)} por dia, dentro da verba do mês</span><span class="lite-chip">Nasce pausada</span><span class="lite-chip">Dá para encerrar a qualquer hora</span></div>${botaoDetalhes(u)}</div>`;
+  const cria = `<div class="secao"><p class="rotulo-marca">O que o Liame cria na Meta</p>
+    ${linha('i-megaphone', `Uma campanha, <b>“Teste · Smash em dobro”</b>, com dois conjuntos iguais: ${R8_TESTE.publico}, ${moeda(R8_TESTE.verba / 2)} por dia cada um.`)}
+    ${linha('i-link', 'Um anúncio em cada conjunto, com o criativo dele, o link de rastreio dele e o cupom dele (criado no Regem, com o mesmo desconto).')}
+    ${linha('i-pause', 'Tudo nasce pausado. Ativar é o pedido de sempre, com outra aprovação.')}</div>`;
+  const risco = `<div class="secao"><p class="rotulo-marca">Risco e limites</p><div class="politica">${ic('i-shield')}<span><b class="risco risco--medio">Risco médio.</b> É verba nova: ${moeda(R8_TESTE.verba)} por dia, até ${moeda(R8_TESTE.verba * R8_TESTE.maximo)} se o teste for até o fim. Passa pelo teto por campanha e pela verba do mês, como toda campanha nova.</span></div>
+    ${linha('i-clock', `O Liame não espia: antes de ${R8_TESTE.minimo} dias (uma semana inteira, para pegar todos os dias), não há vencedor.`)}
+    ${linha('i-chart', 'Vencedor só quando a diferença de pedidos é maior do que o acaso explicaria (95% de confiança). Com poucos pedidos, o normal é “ainda não dá para dizer”.')}
+    ${linha('i-shield', `Em ${R8_TESTE.maximo} dias o teste acaba, com ou sem vencedor. O Liame avisa e não muda nada sozinho.`)}
+    ${linha('i-sliders', 'Enquanto o teste roda, a campanha de teste fica fora do ritmo da semana: mexer na verba de um lado estragaria a comparação.')}
+    ${linha('i-undo', '“Encerrar o teste” para de medir e pausa a campanha de teste. Não precisa do código.')}</div>`;
+  return `${cab}${lite}${pecas}<div id="ap-detalhes"${detalhado ? '' : ' hidden'}>${idPlano(true)}${cria}${risco}</div>
+    ${htmlDecisao(MOTIVOS_PEDIDO, 'O código de 6 números que o app autenticador mostra agora. A aprovação cria a campanha de teste pausada.')}`;
+}
+
+/* ---------- o teste de região ---------- */
+const R8_REGIAO = { bairro: 'Vila Isabel', dias: 14, de: '13/10', ate: '26/10', pediu: 'segunda, 12/10, 09:40', campanhas: 3, minimo: 15 };
+/* Os pedidos por semana no caixa (os bairros dos pedidos, R3): as 4 semanas de antes e as semanas do teste. */
+const R8_BAIRROS = [
+  { nome: 'Vila Isabel', antes: 31, durante: 22, teste: true },
+  { nome: 'Tijuca', antes: 52, durante: 54 },
+  { nome: 'Maracanã', antes: 27, durante: 28 },
+  { nome: 'Andaraí', antes: 22, durante: 21 },
+  { nome: 'Grajaú', antes: 17, durante: 18 },
+];
+const r8Outros = () => R8_BAIRROS.filter((b) => !b.teste);
+const r8Soma = (lista, campo) => lista.reduce((t, b) => t + b[campo], 0);
+/* A conta: o que o bairro teria vendido se seguisse os outros (a mesma variação), menos o que vendeu. */
+function r8Efeito() {
+  const alvo = R8_BAIRROS.find((b) => b.teste), outros = r8Outros();
+  const variacao = r8Soma(outros, 'durante') / r8Soma(outros, 'antes');
+  const esperado = alvo.antes * variacao;
+  return { alvo, variacao, esperado, perdeu: esperado - alvo.durante, de: 4, ate: 16, daMeta: 19 };
+}
+function r8TabelaBairros(comDurante) {
+  const var_ = (b) => { const v = Math.round((b.durante / b.antes - 1) * 100); return v === 0 ? 'igual' : `${v > 0 ? '+' : '−'}${Math.abs(v)}%`; };
+  const linhas = R8_BAIRROS.map((b) => `<tr${b.teste ? ' class="r8-frente"' : ''}><th scope="row">${esc(b.nome)}<small>${b.teste ? (comDurante ? 'sem anúncio no teste' : 'o bairro do teste') : (comDurante ? 'com anúncio, como sempre' : 'segue com anúncio, para comparar')}</small></th>
+    <td class="n" data-col="Antes (por semana)">${b.antes}</td>${comDurante ? `<td class="n" data-col="No teste (por semana)">${b.durante}</td><td class="n" data-col="Mudou">${var_(b)}</td>` : ''}</tr>`).join('');
+  const outros = r8Outros();
+  const total = comDurante ? `<tfoot><tr><th scope="row">Os 4 bairros com anúncio</th><td class="n" data-col="Antes (por semana)">${r8Soma(outros, 'antes')}</td><td class="n" data-col="No teste (por semana)">${r8Soma(outros, 'durante')}</td><td class="n" data-col="Mudou">+${Math.round((r8Soma(outros, 'durante') / r8Soma(outros, 'antes') - 1) * 100)}%</td></tr></tfoot>` : '';
+  return `<div class="r8-envolve"><div class="table-wrap"><table class="tabela r8-tabela r8-bairros" id="r8-bairros"><caption class="sr-only">Os pedidos por semana no caixa, por bairro: antes do teste${comDurante ? ' e durante' : ''}</caption>
+    <thead><tr><th scope="col">Bairro</th><th scope="col" class="n">Antes (por semana)</th>${comDurante ? '<th scope="col" class="n">No teste (por semana)</th><th scope="col" class="n">Mudou</th>' : ''}</tr></thead><tbody>${linhas}</tbody>${total}</table></div></div>`;
+}
+function r8HtmlRegiao() {
+  const pl = p8.planos.regiao, u = p8.ui, pro = shell.modo === 'pro', detalhado = pro || u.detalhes, T = R8_REGIAO;
+  const cab = `${VOLTAR()}<div class="det-cab"><span><b>Rodrigo</b> pediu</span><span>· ${T.pediu} · em Minha marca › Região › Sua região: “Testar um bairro sem anúncio”</span></div><h2 class="det-titulo" id="ap-det-titulo" tabindex="-1">Teste de região: ${T.bairro} sem anúncio por ${T.dias} dias</h2>`;
+  const idPlano = (vale) => `<p class="plano-id">Plano 1 · hash <b>${r8Hash([R8_REGIAO, R8_BAIRROS.map((b) => b.nome)])}</b>${vale ? ' · a aprovação vale só para este teste' : ''}</p>`;
+  if (pl.estado === 'recusado') {
+    return `${cab}${idPlano(false)}<div class="secao"><div class="politica">${ic('i-x')}<span><b>Recusado por Rodrigo.</b> Motivo: ${esc(pl.motivo)}. Nada mudou nas campanhas.</span></div></div>`;
+  }
+  if (pl.estado === 'parado') {
+    return `${cab}${idPlano(false)}<div class="secao"><div class="politica">${ic('i-pause')}<span><b>Você encerrou o teste.</b> ${T.bairro} voltou a receber os anúncios das ${T.campanhas} campanhas. Com menos de ${T.dias} dias, o Liame não tira conclusão: os números ficam guardados em Resultados › Testes, marcados como incompletos.</span></div></div>
+      <div class="secao"><p class="rotulo-marca">Os pedidos por bairro</p>${r8TabelaBairros(false)}</div>`;
+  }
+  if (pl.estado === 'aprovado' && r8?.estado === 'r8-regiao-resultado') {
+    const e = r8Efeito(), parte = Math.round(e.perdeu / e.esperado * 100);
+    const largura = 24, pos = (v) => `${Math.min(100, Math.max(0, v / largura * 100))}%`;
+    return `${cab}${idPlano(false)}<div class="secao"><div class="politica">${ic('i-check')}<span><b>O teste terminou em ${T.ate}.</b> ${T.bairro} voltou a receber os anúncios das ${T.campanhas} campanhas no dia seguinte.</span></div>
+      <div class="r8-veredito r8-veredito--venceu" id="r8-veredito"><b>O anúncio traz perto de ${Math.round(e.perdeu)} pedidos por semana em ${T.bairro}</b><span>Sem anúncio, o bairro fez ${e.alvo.durante} pedidos por semana. Seguindo os outros bairros (que ficaram ${e.variacao >= 1 ? 'um pouco acima' : 'um pouco abaixo'}), teria feito perto de ${Math.round(e.esperado)}. A diferença é o que o anúncio traz: cerca de ${parte}% dos pedidos do bairro.</span></div>
+      <div class="r8-faixa" role="img" aria-label="A conta fica entre ${e.de} e ${e.ate} pedidos por semana; o ponto mais provável é ${Math.round(e.perdeu)}. A Meta se atribuía ${e.daMeta}.">
+        <div class="r8-faixa-trilho"><span class="r8-faixa-parte" style="left:${pos(e.de)};right:calc(100% - ${pos(e.ate)})"></span><span class="r8-faixa-ponto" style="left:${pos(e.perdeu)}"></span></div>
+        <div class="r8-faixa-rot"><span>0</span><span>entre ${e.de} e ${e.ate} por semana</span><span>${largura}</span></div></div>
+      ${linha('i-chart', `É uma faixa, não um número exato: com ${e.alvo.antes} pedidos por semana no bairro, a conta fica <b>entre ${e.de} e ${e.ate}</b> pedidos por semana. Quanto mais pedidos, mais estreita a faixa.`)}
+      ${linha('i-info', `No mesmo período, a Meta se atribuía ${e.daMeta} pedidos por semana em ${T.bairro}. Pelo caixa, com o bairro sem anúncio, a parte que não viria sozinha é menor.`)}
+      ${linha('i-clock', 'Vale para este bairro, nestas semanas. O resultado fica guardado em Resultados › Testes.')}</div>
+      <div class="secao"><p class="rotulo-marca">Os pedidos por bairro, antes e no teste</p>${r8TabelaBairros(true)}</div>`;
+  }
+  if (pl.estado === 'aprovado') {
+    return `${cab}${idPlano(false)}<div class="secao"><div class="politica">${ic('i-check')}<span><b>Aprovado por Rodrigo na segunda, 12/10.</b> Desde ${T.de}, ${T.bairro} está fora das ${T.campanhas} campanhas. Hoje é o dia 6 de ${T.dias}.</span></div>
+      <div class="r8-veredito" id="r8-veredito"><b>Ainda medindo</b><span>O Liame só faz a conta com os ${T.dias} dias completos: uma semana sozinha engana (um feriado, uma chuva). O resultado sai em 27/10.</span></div>
+      <div class="r8-acoes"><button class="btn" type="button" data-r8-encerrar>${ic('i-undo')}Encerrar o teste e voltar o anúncio ao bairro</button></div>
+      ${linha('i-info', 'Encerrar não precisa do código: devolve o bairro às campanhas. Com menos de 14 dias, o Liame não tira conclusão.')}</div>
+      <div class="secao"><p class="rotulo-marca">Os pedidos por bairro, nas 4 semanas de antes</p>${r8TabelaBairros(false)}
+      ${linha('i-clock', 'Os pedidos das semanas do teste aparecem aqui quando ele terminar: o Liame não espia no meio.')}</div>`;
+  }
+  const FRASE = `Por ${T.dias} dias, <b>${T.bairro} fica sem anúncio</b>. Depois, o Liame compara os pedidos do bairro no caixa com os dos outros bairros, antes e durante. É como se descobre <b>quantos pedidos o anúncio traz que não viriam sozinhos</b>. A verba não muda: ela vai para os outros bairros.`;
+  const lite = `<div class="secao secao--lite"><p class="lite-frase lite-frase--grande">${FRASE}</p>
+    <div class="lite-chips"><span class="risco risco--medio">Risco médio</span><span class="lite-chip">Sem verba nova</span><span class="lite-chip">O bairro pode vender menos no teste</span><span class="lite-chip">Dá para encerrar a qualquer hora</span></div>${botaoDetalhes(u)}</div>`;
+  const muda = `<div class="secao"><p class="rotulo-marca">O que o Liame muda na Meta</p>
+    ${linha('i-megaphone', `Nas ${T.campanhas} campanhas ativas que o Liame criou, ${T.bairro} sai de quem vê os anúncios, de ${T.de} a ${T.ate}. No dia seguinte, volta sozinho.`)}
+    ${linha('i-sliders', 'A verba de cada campanha fica como está: a Meta mostra os anúncios para os outros bairros.')}
+    ${linha('i-shield', 'O Liame não muda campanha criada fora dele. Se houver uma mostrando anúncio no bairro, o teste nem é pedido.')}</div>`;
+  const risco = `<div class="secao"><p class="rotulo-marca">Risco e limites</p><div class="politica">${ic('i-shield')}<span><b class="risco risco--medio">Risco médio.</b> Não gasta mais, mas o teste tem um custo: nos ${T.dias} dias, ${T.bairro} pode vender menos. É o preço de saber quanto o anúncio vale ali.</span></div>
+    ${linha('i-chart', `Só entra bairro com pelo menos ${T.minimo} pedidos por semana e com 3 ou mais bairros para comparar: abaixo disso a conta não diz nada.`)}
+    ${linha('i-clock', `O Liame não espia: a conta só sai com os ${T.dias} dias completos, e vem em faixa (“entre 4 e 16 pedidos por semana”), nunca num número seco.`)}
+    ${linha('i-shield', 'Um teste de região por vez, e nunca junto com um teste de criativo nas mesmas campanhas.')}
+    ${linha('i-undo', '“Encerrar o teste” devolve o bairro às campanhas na hora. Não precisa do código.')}</div>`;
+  return `${cab}${lite}<div class="secao"><p class="rotulo-marca">Os pedidos por bairro, nas últimas 4 semanas</p>${r8TabelaBairros(false)}${linha('i-info', 'Do caixa da loja (o Regem), por bairro de entrega. Bairro com poucos pedidos não aparece, para não identificar ninguém.')}</div>
+    <div id="ap-detalhes"${detalhado ? '' : ' hidden'}>${idPlano(true)}${muda}${risco}</div>
+    ${htmlDecisao(MOTIVOS_PEDIDO, `O código de 6 números que o app autenticador mostra agora. A aprovação vale para os ${T.dias} dias deste teste.`)}`;
+}
+
+/* O teste que não pode ser pedido: a tela de origem (Sua região) diz o motivo, e nada vai para Aprovações. */
+function r8NaoDaHtml() {
+  const T = R8_REGIAO;
+  return `<section class="card r8-decisoes r8-nao-da" id="r8-nao-da-card" aria-labelledby="r8-nao-da-t"><div class="card-cab"><div><h2 id="r8-nao-da-t" tabindex="-1">Testar um bairro sem anúncio</h2><p class="card-sub">Em Minha marca › Região › Sua região. O pedido não chega a Aprovações: a tela diz o motivo antes.</p></div></div>
+    <div class="pd-aviso pd-aviso--perigo" id="r8-nao-da" role="alert">${ic('i-alert-circle')}<div><b>Não dá para testar ${T.bairro} agora</b><span>A campanha “Promo da semana” foi criada direto na Meta e mostra anúncio no bairro. O Liame não muda campanha que não criou: com ela no ar, ${T.bairro} não ficaria sem anúncio e o teste não mediria nada.</span></div></div>
+    ${linha('i-info', 'Para testar: pause essa campanha na Meta durante o teste, ou escolha um bairro que ela não alcança.')}
+    ${linha('i-shield', `O teste também não é pedido com menos de ${T.minimo} pedidos por semana no bairro, com menos de 3 outros bairros para comparar, sem os pedidos por bairro do Regem, ou com outro teste rodando.`)}
+    <p class="rotulo-marca">Os pedidos por bairro, nas últimas 4 semanas</p>${r8TabelaBairros(false)}</section>`;
+}
+
+/* ---------- as decisões propostas ---------- */
+const R8_DECISOES = [
+  { id: 'D-RG-76', titulo: 'Um teste é um pedido em Aprovações, de uma pessoa', oque: 'O teste de criativo se pede em Criativos, na peça aprovada (“Testar contra outra peça”, a mesma gaveta da campanha nova com a segunda peça). O teste de região, em Minha marca › Região › Sua região (“Testar um bairro sem anúncio”). Os dois vão para Aprovações, com o código do app, e a mesma tela acompanha o teste depois.', porque: 'É o molde do ritmo da semana (R7), que você aprovou: um pedido, uma aprovação, e o acompanhamento no mesmo lugar.', rec: 'Assim. O Gestor de tráfego sugerir um teste fica para depois do piloto.' },
+  { id: 'D-RG-77', titulo: 'Teste de criativo: uma variável por vez', oque: 'Dois conjuntos iguais numa campanha (o mesmo público, a mesma verba, o mesmo objetivo); só o criativo muda. Cada criativo tem o seu cupom, com o mesmo desconto, e o seu link de rastreio.', porque: 'Com duas coisas mudando, não se sabe qual delas fez a diferença (base §7.5). O cupom e o link de cada um é o que deixa o caixa dizer de onde veio o pedido.', rec: 'Assim. Testar oferta ou texto vem depois, com a mesma regra.' },
+  { id: 'D-RG-78', titulo: 'A verba do teste', oque: 'A pessoa escolhe a verba diária da campanha de teste, dividida ao meio entre os dois criativos (no mínimo R$ 10,00 por dia para cada um). É verba nova: passa pelo teto por campanha e pela verba do mês. A campanha nasce pausada, e ativar é o pedido de sempre. Enquanto o teste roda, ela fica fora do ritmo da semana.', porque: 'São as regras que já valem para campanha nova (D-A4-31) e para o ritmo (D-RG-60).', rec: 'Assim.' },
+  { id: 'D-RG-79', titulo: 'Quem decide é o caixa, e o Liame não espia', oque: 'O teste dura no mínimo 7 dias (uma semana inteira) e no máximo 28. Vencedor só quando a diferença de pedidos no caixa é maior do que o acaso explicaria (95% de confiança). Antes disso, a tela diz “ainda não dá para dizer”. Visitas e cliques aparecem como sinal, não como prova.', porque: 'É a regra da base (§7.5: 95%, mínimo de 1 semana, não espiar). Em loja pequena, o resultado honesto muitas vezes é “não deu para provar”.', rec: 'Assim.' },
+  { id: 'D-RG-80', titulo: 'No fim, o Liame avisa e não mexe sozinho', oque: 'Com vencedor, a Atenção avisa e a tela oferece o pedido “Pausar o criativo que perdeu”, que vai para Aprovações. Sem vencedor em 28 dias, o teste acaba e os dois criativos ficam como estão. “Encerrar o teste” antes da hora não pede o código: para de medir e pausa a campanha de teste.', porque: 'Toda mudança de campanha passa por você; parar nunca gasta mais.', rec: 'Assim.' },
+  { id: 'D-RG-81', titulo: 'Teste de região: um bairro 14 dias sem anúncio', oque: 'Um bairro da área de entrega sai das campanhas que o Liame criou por 14 dias e volta sozinho no dia seguinte. O Liame compara os pedidos por semana do bairro no caixa com os dos outros bairros, antes (4 semanas) e durante, e mostra quanto o anúncio traz ali, em faixa (“entre 4 e 16 pedidos por semana”).', porque: 'É a jogada do plano (§4.3) para “o anúncio trouxe pedido que não viria sozinho?”. A plataforma se atribui mais do que traz (base §1.4).', rec: 'Assim. Um teste de região por vez, nunca junto com um teste de criativo nas mesmas campanhas.' },
+  { id: 'D-RG-82', titulo: 'Quando o teste de região não é pedido', oque: 'Bairro com menos de 15 pedidos por semana; menos de 3 outros bairros com pedidos para comparar; campanha ativa criada fora do Liame mostrando anúncio no bairro (o Liame não a muda); marca sem os pedidos por bairro do Regem; outro teste rodando. A tela diz o motivo e não deixa pedir.', porque: 'Abaixo disso a conta não diz nada, e um teste que não mede só custa pedidos.', rec: 'Assim; os números (15 pedidos, 3 bairros) são de partida e se ajustam pelo piloto.' },
+  { id: 'D-RG-83', titulo: 'O que funcionou fica guardado por empresa', oque: 'Resultados ganha “Testes”: a lista dos testes de cada marca, com o que foi testado, o resultado e a conta. Nada é comparado entre empresas.', porque: 'O plano pede (§4.3): o que funciona em cada região fica registrado por empresa; comparar entre empresas só agregado e com decisão própria.', rec: 'Assim.' },
+  { id: 'D-RG-84', titulo: 'Concorrentes no raio: fica o CNPJ da Receita', oque: 'Sua região já conta os lugares de comida pelo CNPJ da Receita no bairro, na área do CEP e na área de entrega, com o tipo e quem abriu e fechou. O servidor próprio do OpenStreetMap, que a D-RG-7 deixava para esta entrega, não entra agora.', porque: 'O OpenStreetMap é incompleto (no exemplo conferido, 33 pontos em 2 km) e pede um servidor a mais na infraestrutura. O CNPJ já responde “quanta concorrência há em volta”.', rec: 'Assim: muda a D-RG-7. Reabrir se o piloto pedir os pontos no mapa.' },
+];
+function r8DecisoesHtml() {
+  const lista = R8_DECISOES.map((d) => `<li><div><b>${d.id} · ${esc(d.titulo)}</b><span><b>O que é:</b> ${esc(d.oque)}</span><span><b>Por quê:</b> ${esc(d.porque)}</span><span><b>Recomendação:</b> ${esc(d.rec)}</span></div><span class="st st--espera">Proposta</span></li>`).join('');
+  return `<section class="card p42-decisoes r8-decisoes" id="r8-decisoes" aria-labelledby="r8-dec-t"><div class="card-cab"><div><h2 id="r8-dec-t" tabindex="-1">R8 · Os testes (D-RG-76 a D-RG-84)</h2><p class="card-sub">Do plano da região (R8: teste de criativo e de região; concorrentes no raio). Propostas em 13/11/2026: esperam a sua aprovação. Estados do seletor “Testes”.</p></div></div><ul class="rev-decisoes">${lista}</ul></section>`;
+}
+
+/* ---------- a camada: os dois pedidos entram na fila de Aprovações e abrem pelo mesmo caminho dos outros ---------- */
+DEF.teste = { nome: 'o teste de criativo', risco: () => 'medio' };
+DEF.regiao = { nome: 'o teste de região', risco: () => 'baixo' };
+const r8Chave = () => (r8?.estado?.startsWith('r8-criativo') ? 'teste' : 'regiao');
+const itensAprovR8 = itensAprov;
+itensAprov = function () {
+  const itens = itensAprovR8();
+  if (r8?.ativo) { const k = r8Chave(); if (p8.planos[k]) itens.unshift({ id: k, grupo: p8.planos[k].estado === 'pendente' ? 'pendente' : 'feito' }); }
+  return itens;
+};
+const htmlItemR8 = htmlItem;
+htmlItem = function (id, grupo) { return id === 'teste' || id === 'regiao' ? r8HtmlItem(id, grupo) : htmlItemR8(id, grupo); };
+const htmlPlanoR8 = htmlPlano;
+htmlPlano = function (k) { return k === 'teste' ? r8HtmlCriativo() : k === 'regiao' ? r8HtmlRegiao() : htmlPlanoR8(k); };
+document.addEventListener('submit', (e) => {
+  const f = e.target instanceof Element ? e.target : null;
+  if (!f || !r8?.ativo || (p8.sel !== 'teste' && p8.sel !== 'regiao') || !f.matches('[data-p8-aprovar]')) return;
+  e.preventDefault(); e.stopImmediatePropagation();
+  const cod = $('#ap-codigo').value.trim(), u = p8.ui;
+  if (!/^\d{6}$/.test(cod)) { u.erro = 'Digite os 6 números do app autenticador.'; desenharP8(); $('#ap-codigo').focus(); return; }
+  if (cod === '000000') { u.erro = 'Código incorreto ou já usado. Espere o próximo código do app e tente de novo.'; desenharP8(); $('#ap-codigo').focus(); return; }
+  const k = p8.sel;
+  p8.planos[k].estado = 'aprovado'; r8.estado = k === 'teste' ? 'r8-criativo-aprovado' : 'r8-regiao-rodando'; p8.ui = uiBase(); desenharP8();
+  $('#ap-det-titulo')?.focus({ preventScroll: true });
+  toast(k === 'teste' ? 'Aprovado. O Liame cria a campanha de teste pausada; ativar é o próximo pedido.' : `Aprovado. ${R8_REGIAO.bairro} fica sem anúncio de ${R8_REGIAO.de} a ${R8_REGIAO.ate}.`);
+}, true);
+document.addEventListener('click', (e) => {
+  const t = e.target instanceof Element ? e.target : null;
+  if (!t || !r8?.ativo || (p8.sel !== 'teste' && p8.sel !== 'regiao')) return;
+  const k = p8.sel, mot = t.closest('[data-p8-motivo]');
+  if (mot) {
+    e.stopImmediatePropagation();
+    Object.assign(p8.planos[k], { estado: 'recusado', motivo: mot.dataset.p8Motivo }); p8.ui = uiBase(); desenharP8();
+    $('#ap-det-titulo')?.focus({ preventScroll: true });
+    toast(k === 'teste' ? 'Recusado. Nada foi criado na Meta.' : 'Recusado. Nada mudou nas campanhas.');
+    return;
+  }
+  if (t.closest('[data-r8-encerrar]')) {
+    p8.planos[k].estado = 'parado'; desenharP8();
+    $('#ap-det-titulo')?.focus({ preventScroll: true });
+    toast(k === 'teste' ? 'Teste encerrado. A campanha de teste foi pausada.' : `Teste encerrado. ${R8_REGIAO.bairro} voltou às campanhas.`);
+    return;
+  }
+  if (t.closest('[data-r8-pausar]')) toast('Pedido criado: pausar o criativo B. Ele espera a sua aprovação em Aprovações.');
+}, true);
+
+/* ---------- o seletor "Testes" (faixa do protótipo) ---------- */
+$('#rev-r7')?.closest('label')?.insertAdjacentHTML('afterend', '<label>Testes <select id="rev-r8"></select></label>');
+const selR8 = $('#rev-r8');
+selR8.replaceChildren(...Object.entries(R8_ESTADOS).map(([grupo, itens]) => {
+  const g = document.createElement('optgroup'); g.label = grupo;
+  g.append(...Object.entries(itens).map(([id, rot]) => new Option(rot, id)));
+  return g;
+}));
+selR8.selectedIndex = -1;
+function r8Desligar() {
+  if (r8) r8.ativo = false;
+  $('#r8-decisoes')?.remove();
+  $('#r8-nao-da-card')?.remove();
+  selR8.selectedIndex = -1;
+}
+const p42EstadoR8 = p42Estado;
+p42Estado = function (v, opts) { r8Desligar(); p42EstadoR8(v, opts); };
+const p45EstadoR8 = p45Estado;
+p45Estado = function (v, opts) { r8Desligar(); p45EstadoR8(v, opts); };
+const definirP10R8 = definirP10;
+definirP10 = function (v, opts) { r8Desligar(); definirP10R8(v, opts); };
+const r7EstadoR8 = r7Estado;
+r7Estado = function (v, opts) { r8Desligar(); r7EstadoR8(v, opts); };
+function r8Estado(v, { focar = false } = {}) {
+  if (!R8_TODOS[v]) v = 'r8-criativo-pedido';
+  // A base é Aprovações como está no app, com os pedidos que já esperam na fila; o ritmo da semana sai de cena.
+  r7EstadoR8('r7-pedido');
+  r7Desligar();
+  delete p8.planos.ritmo;
+  $('#r8-decisoes')?.remove();
+  $('#r8-nao-da-card')?.remove();
+  // As decisões aparecem por cima do pedido do teste de criativo; o teste que não pode ser pedido não entra na fila.
+  r8 = { ativo: true, estado: v === 'r8-decisoes' ? 'r8-criativo-pedido' : v };
+  const k = r8Chave(), semPedido = v === 'r8-regiao-nao-da', pendente = r8.estado === 'r8-criativo-pedido' || r8.estado === 'r8-regiao-pedido';
+  delete p8.planos.teste; delete p8.planos.regiao;
+  if (!semPedido) p8.planos[k] = { versao: 1, estado: pendente ? 'pendente' : 'aprovado', motivo: '' };
+  Object.assign(p8, { sel: semPedido ? null : k, mostraDetalhe: v !== 'r8-decisoes' && !semPedido, ui: uiBase() });
+  if (selR8.value !== v) selR8.value = v;
+  desenharP8();
+  if (v === 'r8-decisoes') {
+    $('#aprovacoes')?.insertAdjacentHTML('afterbegin', r8DecisoesHtml());
+    if (focar) $('#r8-dec-t')?.focus({ preventScroll: true });
+    return;
+  }
+  if (semPedido) {
+    $('#aprovacoes')?.insertAdjacentHTML('afterbegin', r8NaoDaHtml());
+    if (focar) $('#r8-nao-da-t')?.focus({ preventScroll: true });
+    return;
+  }
+  if (focar) $('#ap-det-titulo')?.focus({ preventScroll: true });
+}
+selR8.addEventListener('change', () => r8Estado(selR8.value, { focar: true }));
+const marcaR8 = $('.revisao-marca b');
+if (marcaR8) marcaR8.textContent += ' · R8 (os testes), PROPOSTO em 13/11/2026';
+
+/* ---------- cenários da R8 para a conferência no navegador sem janela ---------- */
+(() => {
+  const exige = (cond, msg) => { if (!cond) throw new Error(msg); };
+  const texto = (sel) => ($(sel)?.textContent ?? '').replace(/\s+/g, ' ');
+  for (const id of Object.keys(R8_TODOS)) {
+    window.uiuxCenarios['r8-' + id.slice(3)] = { larguras: [1440, 375], executar: async () => {
+      definirModo('lite', { silencioso: true }); r8Estado(id); await esperar(300);
+      exige(selR8.value === id && selR7.selectedIndex === -1 && selP42.selectedIndex === -1, 'os seletores: ' + selR8.value);
+      exige(!$('#tela-aprovacoes').hidden, 'Aprovações não abriu');
+      if (id === 'r8-decisoes') { exige($$('#r8-decisoes .rev-decisoes > li').length === 9, 'as 9 decisões'); return; }
+      exige(!$('[data-p8-item="ritmo"]'), 'o ritmo da semana não devia estar na fila');
+      if (id === 'r8-regiao-nao-da') { exige(texto('#r8-nao-da').includes('Não dá para testar') && !$('[data-p8-item="regiao"]') && $$('#r8-nao-da-card #r8-bairros tbody tr').length === 5, 'o teste que não pode ser pedido'); return; }
+      if (id.startsWith('r8-criativo')) exige(texto('#ap-det-titulo').startsWith('Teste de criativo: Smash em dobro'), 'o título: ' + texto('#ap-det-titulo'));
+      else exige(texto('#ap-det-titulo') === 'Teste de região: Vila Isabel sem anúncio por 14 dias', 'o título: ' + texto('#ap-det-titulo'));
+      if (id === 'r8-criativo-pedido') exige(!!$('#ap-codigo') && $$('.r8-peca').length === 2 && texto('#aprovacoes').includes('quem decide é o caixa'), 'o pedido do teste de criativo');
+      if (id === 'r8-criativo-rodando') exige(texto('#r8-veredito').startsWith('Ainda não dá para dizer') && $$('#r8-tabela tbody tr').length === 5 && !$('#r8-tabela .r8-frente'), 'o teste rodando sem vencedor');
+      if (id === 'r8-criativo-vencedor') exige(texto('#r8-veredito').startsWith('O criativo A venceu') && !!$('[data-r8-pausar]') && $$('#r8-tabela th.r8-frente').length === 1 && $$('#r8-tabela td.r8-frente').length === 5, 'o vencedor');
+      if (id === 'r8-criativo-empate') exige(texto('#r8-veredito').startsWith('O teste acabou sem vencedor') && !$('[data-r8-pausar]'), 'o teste sem vencedor');
+      if (id === 'r8-regiao-pedido') exige(!!$('#ap-codigo') && $$('#r8-bairros tbody tr').length === 5 && texto('#aprovacoes').includes('fica sem anúncio'), 'o pedido do teste de região');
+      if (id === 'r8-regiao-rodando') exige(texto('#r8-veredito').startsWith('Ainda medindo') && !!$('[data-r8-encerrar]'), 'o teste de região rodando');
+      if (id === 'r8-regiao-resultado') exige(texto('#r8-veredito').includes('pedidos por semana em Vila Isabel') && $$('#r8-bairros tfoot tr').length === 1 && !!$('.r8-faixa'), 'o resultado do teste de região');
+    } };
+  }
+  window.uiuxCenarios['r8-conta-do-acaso'] = { larguras: [1440], executar: async () => {
+    // A conta exata: 11 contra 7 cabe no acaso; 41 contra 22 não; 24 contra 21 cabe.
+    const perto = (v, alvo) => Math.abs(v - alvo) < 0.005;
+    exige(perto(r8Acaso(11, 7), 0.4807), '11 x 7: ' + r8Acaso(11, 7));
+    exige(r8Acaso(41, 22) < 0.05 && perto(r8Acaso(41, 22), 0.0224), '41 x 22: ' + r8Acaso(41, 22));
+    exige(r8Acaso(24, 21) > 0.5, '24 x 21: ' + r8Acaso(24, 21));
+    exige(perto(r8Acaso(5, 5), 1), '5 x 5: ' + r8Acaso(5, 5));
+  } };
+  window.uiuxCenarios['r8-fluxo-aprovar-e-encerrar'] = { larguras: [1440, 375], executar: async () => {
+    definirModo('lite', { silencioso: true }); r8Estado('r8-criativo-pedido'); await esperar(200);
+    $('#ap-codigo').value = '000000'; $('[data-p8-aprovar]').requestSubmit(); await esperar(120);
+    exige(texto('#ap-erro').startsWith('Código incorreto'), 'o código recusado');
+    $('#ap-codigo').value = '482913'; $('[data-p8-aprovar]').requestSubmit(); await esperar(200);
+    exige(p8.planos.teste.estado === 'aprovado' && texto('#aprovacoes').includes('cria a campanha de teste pausada'), 'o teste não foi aprovado');
+    r8Estado('r8-regiao-pedido'); await esperar(200);
+    $('#ap-codigo').value = '482913'; $('[data-p8-aprovar]').requestSubmit(); await esperar(200);
+    exige(p8.planos.regiao.estado === 'aprovado' && !!$('[data-r8-encerrar]'), 'o teste de região não foi aprovado');
+    $('[data-r8-encerrar]').click(); await esperar(200);
+    exige(p8.planos.regiao.estado === 'parado' && texto('#aprovacoes').includes('Você encerrou o teste'), 'o teste não foi encerrado');
+    r7Estado('r7-pedido'); await esperar(200);
+    exige(!r8.ativo && !$('[data-p8-item="regiao"]') && !!p8.planos.ritmo && texto('#ap-det-titulo').startsWith('Ritmo da semana'), 'o ritmo da semana continua abrindo');
+  } };
+})();
+if (params.get('r8')) r8Estado(params.get('r8'));
+</script>
+<!-- R8:camada:fim -->
 </body>
 </html>
