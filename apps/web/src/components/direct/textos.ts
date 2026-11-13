@@ -1,6 +1,7 @@
 import {
   DIRECT_AUTO_REPLY_NOTICE,
   type DIRECT_AUTO_REPLY_KINDS,
+  type DirectAiSuggestionResponse,
   type DirectAutoReplyResponse,
   type DirectConversation,
   type DirectMessage,
@@ -361,4 +362,86 @@ export function appDaConversa(canal: string): { nome: 'Instagram' | 'Messenger';
   return canal === 'messenger'
     ? { nome: 'Messenger', endereco: 'https://business.facebook.com/latest/inbox' }
     : { nome: 'Instagram', endereco: 'https://www.instagram.com/direct/inbox/' };
+}
+
+// ---- A sugestão do Social media, a pedido (A6 · Z12, parte 4b-2b; P39; D-A6-110 e D-A6-145)
+
+/** A pessoa pode pedir a sugestão ao Social media: a conversa espera resposta e é pergunta ou reclamação (o servidor decide de novo). */
+export function podePedirAoSocial(c: Pick<DirectConversation, 'status' | 'kind'>): boolean {
+  return c.status === 'espera' && (c.kind === 'pergunta' || c.kind === 'reclamacao');
+}
+
+/** A última mensagem da pessoa: a sugestão vale para ela, e sai da tela quando chega outra. */
+export function ultimaDaPessoa(mensagens: Pick<DirectMessage, 'id' | 'direction'>[]): string {
+  for (let i = mensagens.length - 1; i >= 0; i -= 1) {
+    const m = mensagens[i]!;
+    if (m.direction === 'entrada') return m.id;
+  }
+  return '';
+}
+
+/** O que a pessoa lê antes de pedir: o que o Social media faz em cada tipo, e que nada sai sem ela. */
+export function dicaDoPedido(tipo: string | null): string {
+  return tipo === 'reclamacao'
+    ? 'Ele lê as últimas mensagens e escreve três jeitos de responder, conferidos. Nada sai sem você mandar.'
+    : 'Ele lê as últimas mensagens e responde com o que Minha marca diz, conferido. Nada sai sem você mandar.';
+}
+
+/** Por que o Social media não sugeriu (a pessoa escreve a resposta), e se vale pedir de novo. */
+export function semIaDoDirect(r: Pick<DirectAiSuggestionResponse, 'reason' | 'retry_at'>): { texto: string; deNovo: boolean } {
+  switch (r.reason) {
+    case 'sem-rota':
+      return { texto: 'O Social media ainda não sugere respostas nas conversas. Por enquanto, escreva você.', deNovo: false };
+    case 'ia_desligada':
+      return { texto: 'A IA está desligada para esta empresa. Escreva a resposta você.', deNovo: false };
+    case 'funcionario_desligado':
+      return { texto: 'O Social media está desligado em Sua equipe. Escreva a resposta você.', deNovo: false };
+    case 'teto':
+      return {
+        texto: r.retry_at
+          ? `A IA chegou ao limite de gasto. Ela volta em ${new Date(r.retry_at).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })}; até lá, escreva você.`
+          : 'A IA chegou ao limite de gasto. Escreva a resposta você.',
+        deNovo: false,
+      };
+    case 'limite-usuario':
+      return { texto: 'Você chegou ao limite de pedidos à IA desta hora. Escreva a resposta você, ou peça daqui a pouco.', deNovo: true };
+    case 'barrado':
+    case 'formato':
+      return { texto: 'A sugestão do Social media não passou na conferência do Compliance. Peça outra, ou escreva você.', deNovo: true };
+    case 'indisponivel':
+    case 'parada':
+    case 'travada':
+      return { texto: 'A IA não respondeu agora. Tente de novo em instantes, ou escreva você.', deNovo: true };
+    case 'entrada-grande':
+      return { texto: 'A conversa é longa demais para o Social media ler agora. Escreva a resposta você.', deNovo: false };
+    case 'tipo_sem_ia':
+      return { texto: 'O Social media só sugere resposta para pergunta e para reclamação. Escreva a resposta você.', deNovo: false };
+    default:
+      // Um motivo que esta versão da tela não conhece (V23): a frase geral, e a pessoa pode pedir de novo.
+      return { texto: 'O Social media não sugeriu agora. Peça de novo, ou escreva você.', deNovo: true };
+  }
+}
+
+/** O pedido que nem chegou ao Social media: a conversa deixou de esperar, saiu do Liame, ou a rede caiu. */
+export function erroDaSugestao(p: Problema): { texto: string; deNovo: boolean; reler: boolean } {
+  if (p.code === 'conversa-nao-espera') return { texto: 'Esta conversa não espera mais resposta.', deNovo: false, reler: true };
+  if (p.status === 404) return { texto: 'A conversa não está mais no Liame.', deNovo: false, reler: true };
+  return { texto: mensagemDe(p), deNovo: p.status === 0 || p.status >= 500 || p.status === 429, reler: false };
+}
+
+/**
+ * O "precisa de você" da pergunta (P39): o Social media não respondeu só com o que Minha marca diz. Com o que faltou
+ * (curto, já conferido no servidor) ou, sem ele, o aviso geral. Na reclamação e na pergunta respondida, nulo.
+ */
+export function faltaDaSugestao(r: Pick<DirectAiSuggestionResponse, 'kind' | 'answered' | 'missing'>): string | null {
+  if (r.kind !== 'pergunta' || r.answered) return null;
+  return r.missing
+    ? `Precisa de você: Minha marca não diz ${r.missing}. Confirme e complete antes de mandar.`
+    : 'Precisa de você: o Social media não achou tudo em Minha marca. Confira e complete antes de mandar.';
+}
+
+/** Na reclamação, quantos dos jeitos de responder ficaram de fora na conferência (nulo quando vieram todos). */
+export function ficaramDeFora(r: Pick<DirectAiSuggestionResponse, 'kind' | 'dropped'>): string | null {
+  if (r.kind !== 'reclamacao' || r.dropped <= 0) return null;
+  return r.dropped === 1 ? 'Uma sugestão ficou de fora na conferência.' : `${r.dropped.toLocaleString('pt-BR')} sugestões ficaram de fora na conferência.`;
 }

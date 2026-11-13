@@ -96,6 +96,31 @@
 .dir-sug-texto { font-size: var(--text-sm); overflow-wrap: anywhere; }
 .dir-passos { display: grid; gap: 6px; margin: 0; padding-left: 1.25em; list-style: decimal; font-size: var(--text-sm); overflow-wrap: anywhere; }
 
+/* a sugestão do Social media, a pedido (parte 4b-2b; P39): o pedido, a espera, as opções e o "precisa de você" */
+.dir-social { min-width: 0; }
+.dir-social-pedir { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-2) var(--sp-3); margin: 0 var(--sp-4) var(--sp-3); }
+.dir-social-pedir .campo-dica { flex: 1 1 220px; min-width: 0; overflow-wrap: anywhere; }
+.dir-social-espera, .dir-social-aviso { display: flex; align-items: flex-start; gap: var(--sp-2); margin: 0; font-size: var(--text-sm); color: var(--text-muted); overflow-wrap: anywhere; }
+.dir-social > .dir-social-espera, .dir-social > .dir-social-aviso { margin: 0 var(--sp-4) var(--sp-3); }
+.dir-social-espera .girando { flex: none; margin-top: 2px; color: var(--ai); }
+.dir-social-espera span:last-child, .dir-social-aviso span { min-width: 0; }
+.dir-social-aviso .ic { width: 16px; height: 16px; flex: none; margin-top: 2px; }
+.dir-sug-acoes { display: flex; flex-wrap: wrap; gap: var(--sp-2); }
+.dir-opcoes { display: grid; gap: var(--sp-2); }
+.dir-opcao { display: grid; gap: var(--sp-2); min-width: 0; padding: var(--sp-3); border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); }
+.dir-opcao-cab { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--sp-1) var(--sp-2); }
+.dir-opcao-cab b { min-width: 0; font-size: var(--text-sm); overflow-wrap: anywhere; }
+.dir-opcao p { font-size: var(--text-sm); overflow-wrap: anywhere; }
+.dir-conferido, .dir-confira { display: inline-flex; align-items: center; gap: 4px; font-size: var(--text-xs); font-weight: 600; }
+.dir-conferido, .dir-sug-cab .dir-conferido { color: var(--success); }
+.dir-confira { color: var(--text); }
+.dir-conferido .ic, .dir-sug-cab .dir-conferido .ic, .dir-confira .ic { width: 13px; height: 13px; flex: none; }
+.dir-conferido .ic, .dir-sug-cab .dir-conferido .ic { color: var(--success); }
+.dir-confira .ic { color: var(--warning); }
+.dir-falta { display: flex; gap: var(--sp-2); padding: var(--sp-2) var(--sp-3); border-radius: var(--radius); background: var(--warning-soft); font-size: var(--text-sm); overflow-wrap: anywhere; }
+.dir-falta .ic { width: 16px; height: 16px; flex: none; margin-top: 2px; color: var(--warning); }
+.dir-falta span { min-width: 0; }
+
 /* a resposta */
 .dir-resp { display: grid; gap: var(--sp-2); margin-top: auto; padding: var(--sp-3) var(--sp-4) var(--sp-4); border-top: 1px solid var(--border); background: var(--surface); }
 .dir-resp label { font-size: var(--text-sm); font-weight: 600; overflow-wrap: anywhere; }
