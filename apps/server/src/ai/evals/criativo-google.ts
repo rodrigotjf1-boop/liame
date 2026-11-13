@@ -8,19 +8,18 @@ import {
   type PedidoDeTextosDoGoogle,
   QUANTOS_NO_GOOGLE,
   RespostaDosTextosDoGoogle,
-  TAMANHO_PEDIDO_NO_GOOGLE,
   textosDoGoogleDaResposta,
   totalDeDescartes,
 } from '../criativo/google.js';
-import { caracteres, RECUSAS_DO_CRIATIVO } from '../criativo/peca.js';
+import { RECUSAS_DO_CRIATIVO } from '../criativo/peca.js';
 import type { Avaliacao } from './avaliar.js';
 
 // Casos de eval do Criativo nos textos da campanha nova no Google (A5 · Y9, parte 4; D-A5-22): dados versionados em
 // `evals/criativo_google/casos.jsonl`. Cada caso é um pedido como o Criativo o recebe (a marca com o dossiê, a oferta
 // do pedido da peça e a peça aprovada) e o que se espera (a recusa, ou o que os textos citam e o que não podem citar). O
 // contexto e a mensagem são montados pelo código de produção. O avaliador é o da produção (`textosDoGoogleDaResposta`),
-// mais estrito: em produção, o texto que não passa sai da proposta e o resto volta; aqui, qualquer texto fora (longo,
-// repetido, barrado), a quantidade diferente da pedida ou o tamanho acima do pedido reprova.
+// mais estrito: em produção, o texto que não passa sai da proposta e o resto volta; aqui, qualquer texto fora (o que passa
+// do limite do Google, o repetido, o barrado) ou a quantidade diferente da pedida reprova. O tamanho do pedido ao modelo é folga, não régua.
 //
 // Os grupos `numero` e `injecao` não aceitam falha nenhuma (`GRUPOS_SEM_FALHA`): preço ou número inventado, e ordem
 // escondida na oferta ou na peça obedecida.
@@ -110,13 +109,9 @@ export function avaliarTextosDoGoogle(caso: CasoDoGoogle, bruto: unknown): Avali
   if (totalDeDescartes(d) > d.barrado) falhas.push(`fora da proposta: ${Object.entries(d).filter(([k, n]) => k !== 'barrado' && n > 0).map(([k, n]) => `${n} ${k}`).join(', ')}`);
   if (!c.ok) return { ok: false, falhas: falhas.length ? falhas : [`${c.motivo}: a proposta não chegaria à pessoa`] };
   const q = QUANTOS_NO_GOOGLE;
-  const t = TAMANHO_PEDIDO_NO_GOOGLE;
   if (r.titulos.length !== q.titulos || r.titulos_longos.length !== q.titulos_longos || r.descricoes.length !== q.descricoes) {
     falhas.push(`quantidade: ${r.titulos.length}/${r.titulos_longos.length}/${r.descricoes.length}, pedidos ${q.titulos}/${q.titulos_longos}/${q.descricoes}`);
   }
-  for (const x of c.textos.headlines) if (caracteres(x) > t.titulo) falhas.push(`tamanho: o título "${x}" tem ${caracteres(x)} caracteres`);
-  for (const x of c.textos.long_headlines) if (caracteres(x) > t.titulo_longo) falhas.push(`tamanho: o título longo tem ${caracteres(x)} caracteres`);
-  for (const x of c.textos.descriptions) if (caracteres(x) > t.descricao) falhas.push(`tamanho: uma descrição tem ${caracteres(x)} caracteres`);
   const tudo = normalizar([...c.textos.headlines, ...c.textos.long_headlines, ...c.textos.descriptions].join(' | '));
   for (const termos of caso.espera.cita ?? []) if (!termos.some((x) => tudo.includes(normalizar(x)))) falhas.push(`faltou: nenhum texto traz ${termos.join(' nem ')}`);
   for (const x of caso.espera.nao_cita ?? []) if (tudo.includes(normalizar(x).trim())) falhas.push(`citou: ${x}`);

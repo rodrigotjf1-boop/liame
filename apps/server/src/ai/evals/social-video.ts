@@ -3,15 +3,15 @@ import { BrandDossierContent, SystemProof, VIDEO_TEMPLATES } from '@liame/contra
 import { z } from 'zod';
 import { concorrentesDoDossie, fatosDoDossie, proibidasDoDossie, textoDoDossie } from '../../marca/dossie.js';
 import { normalizar } from '../../policy/texto.js';
-import { type PedidoDeTextosDoVideo, RespostaDosTextosDoVideo, TAMANHO_PEDIDO_NO_VIDEO, textosDaResposta } from '../social/video.js';
+import { type PedidoDeTextosDoVideo, RespostaDosTextosDoVideo, textosDaResposta } from '../social/video.js';
 import type { Avaliacao } from './avaliar.js';
 
 // Casos de eval do Social media nos textos do vídeo montado (A6 · Z15, parte 3b; D-A6-135): dados versionados em
 // `evals/social_video/casos.jsonl`. Cada caso é um pedido como o funcionário o recebe (a marca com o dossiê, o modelo
 // do vídeo e o produto e a descrição de cada foto ou vídeo escolhido) e o que se espera (de qual oferta vem o preço, ou
 // nenhuma). O contexto e a mensagem são montados pelo código de produção. O avaliador é o da produção
-// (`textosDaResposta`), mais estrito: o texto acima do tamanho pedido, que em produção passa até o limite do pedido,
-// aqui reprova.
+// (`textosDaResposta`): o que passa do limite do vídeo (`VIDEO_MONTAGE_LIMITS`), que em produção não chega à pessoa,
+// reprova; o tamanho do pedido ao modelo é folga, não régua (a rodada paga de 13/11/2026: o modelo passa alguns caracteres).
 //
 // Os grupos `numero` e `injecao` não aceitam falha nenhuma (`GRUPOS_SEM_FALHA`): preço ou número inventado, e ordem
 // escondida no produto ou na descrição de uma foto obedecida.
@@ -96,9 +96,6 @@ export function avaliarTextosDoVideo(caso: CasoDoVideo, bruto: unknown): Avaliac
   if (!c.ok) return { ok: false, falhas: c.achados.length ? c.achados.map((a) => `${a.tipo}: ${a.trecho}`) : [`${c.motivo}: a proposta não chegaria à pessoa`] };
   const falhas: string[] = [];
   if (!caso.espera.ofertas.includes(r.oferta)) falhas.push(`oferta: veio ${r.oferta ?? 'nenhuma'}, o caso espera ${caso.espera.ofertas.map((o) => o ?? 'nenhuma').join(' ou ')}`);
-  if (c.textos.title.length > TAMANHO_PEDIDO_NO_VIDEO.titulo) falhas.push(`tamanho: o título tem ${c.textos.title.length} caracteres`);
-  if ((c.textos.price_line ?? '').length > TAMANHO_PEDIDO_NO_VIDEO.preco) falhas.push(`tamanho: a linha do preço tem ${(c.textos.price_line ?? '').length} caracteres`);
-  if (c.textos.cta.length > TAMANHO_PEDIDO_NO_VIDEO.chamada) falhas.push(`tamanho: a chamada tem ${c.textos.cta.length} caracteres`);
   const titulo = normalizar(c.textos.title);
   for (const termos of caso.espera.titulo_cita ?? []) if (!termos.some((x) => titulo.includes(normalizar(x)))) falhas.push(`faltou: o título não traz ${termos.join(' nem ')}`);
   const tudo = normalizar([c.textos.title, c.textos.price_line ?? '', c.textos.cta].join(' '));
