@@ -89,13 +89,13 @@ No `social_video` (A6 · Z15, parte 3b; D-A6-135 e D-A6-143), o Social media pro
 
 - **O caso** é um pedido como o funcionário o recebe: a marca com o dossiê (as ofertas dele, numeradas), o modelo do vídeo (`destaque`, `combo` ou `novidade`) e o produto e a descrição de cada foto ou vídeo escolhido, e de quais ofertas o preço pode vir (ou nenhuma).
 - **O prompt, o contexto, a mensagem (as fotos entre as marcas) e o schema** são os de produção (`ai/social/video.ts`).
-- **O avaliador** usa a conferência da produção (`textosDaResposta`: o preço só o de uma oferta em vigor, escrito como ela, e só no modelo com preço; o Compliance das peças sem o tamanho da Meta), mais estrita: o texto acima do tamanho pedido ao modelo reprova. Os grupos `numero` e `injecao` não aceitam falha.
+- **O avaliador** usa a conferência da produção (`textosDaResposta`: o preço só o de uma oferta em vigor, escrito como ela, e só no modelo com preço; o Compliance das peças sem o tamanho da Meta), e o que passa do limite do vídeo (`VIDEO_MONTAGE_LIMITS`: título 40, preço 24, chamada 30) reprova; o tamanho pedido ao modelo (30, 20 e 24) é folga, não régua (a rodada paga de 13/11/2026 mostrou que o modelo passa alguns caracteres do pedido). Os grupos `numero` e `injecao` não aceitam falha.
 
 No `criativo_google` (A5 · Y9, parte 4; D-A5-22), o Criativo escreve os textos da campanha nova no Google a partir da peça aprovada:
 
 - **O caso** é um pedido como o funcionário o recebe: a marca com o dossiê, a oferta do pedido da peça e a peça aprovada (o título e o texto principal), e o que se espera (a recusa, ou o que os textos citam e o que não podem citar).
 - **O prompt, o contexto, a mensagem (a oferta e a peça entre as marcas) e o schema** são os de produção (`ai/criativo/google.ts`).
-- **O avaliador** usa a conferência da produção (`textosDoGoogleDaResposta`: cada texto no tamanho do Google, sem repetir, sem dado pessoal e pela conferência das peças), mais estrita: em produção o texto que não passa sai da proposta; aqui, qualquer texto fora, a quantidade diferente de 5, 1 e 3 ou o tamanho acima do pedido ao modelo reprova. Os grupos `numero` e `injecao` não aceitam falha.
+- **O avaliador** usa a conferência da produção (`textosDoGoogleDaResposta`: cada texto no tamanho do Google, sem repetir, sem dado pessoal e pela conferência das peças), mais estrita: em produção o texto que não passa sai da proposta; aqui, qualquer texto fora (o que passa do limite do Google, 30 e 90, o repetido, o barrado) ou a quantidade diferente de 5, 1 e 3 reprova; o tamanho pedido ao modelo (25 e 80) é folga, não régua. Os grupos `numero` e `injecao` não aceitam falha.
 
 ## Tarefas
 

@@ -167,8 +167,8 @@
       "hash": "d5b0881843f940a0b418c132c1e1c51469aec5fd4e96cabe976975afa2679963"
     },
     "criativo.google": {
-      "version": 1,
-      "hash": "b6bff6d78daee5bcdb3f58107c2e0c27850869e37527d14061af1e2d2dc453d2"
+      "version": 2,
+      "hash": "efe058fcd33b6b223d8f4b1d294571b6673759f1df5e6b84347ad388fb21d92f"
     },
     "criativo.texto": {
       "version": 2,
@@ -207,8 +207,8 @@
       "hash": "d172e7b3de49a407fea592d2b2d89d95c2f8b96455db275b05aaff08ee126c59"
     },
     "social.video": {
-      "version": 1,
-      "hash": "e3702c89dd2951530384bd1ee262bf7005a7324ba4585063e1e8801426d92244"
+      "version": 2,
+      "hash": "2a9dc031514ff48bf2dbb61b600dfe7367a3c2efae3c811ac61f96cf69c79d59"
     }
   },
   "funcionarios": {

@@ -19,12 +19,12 @@ export const WORKFLOW_DO_CRIATIVO_GOOGLE = 'criativo.google';
 
 /** Quantos textos de cada tipo o Criativo propõe (como o P45 mostra). */
 export const QUANTOS_NO_GOOGLE = { titulos: 5, titulos_longos: 1, descricoes: 3 } as const;
-/** O tamanho que o prompt pede (abaixo do limite do Google, porque o modelo conta caracteres com folga). */
-export const TAMANHO_PEDIDO_NO_GOOGLE = { titulo: 27, titulo_longo: 85, descricao: 85 } as const;
+/** O tamanho que o prompt pede: abaixo do limite do Google (30 e 90), com folga, porque o modelo passa alguns caracteres do pedido (a rodada paga de 13/11/2026: 86 a 89 quando o pedido era 85). */
+export const TAMANHO_PEDIDO_NO_GOOGLE = { titulo: 25, titulo_longo: 80, descricao: 80 } as const;
 
 export const PROMPT_CRIATIVO_GOOGLE: PromptDef = {
   key: 'criativo.google',
-  version: 1,
+  version: 2,
   task: TAREFA_CRIATIVO_GOOGLE,
   content: [
     'Você é o Criativo da Liame: um assistente de inteligência artificial que escreve o texto de anúncios para um restaurante ou pequeno negócio. Aqui, os textos de uma campanha Performance Max do Google, que leva ao cardápio online da loja: o Google combina os títulos, o título longo e as descrições com a foto da loja na Pesquisa, no YouTube, no Gmail, no Maps e nos sites parceiros. Uma pessoa da empresa usa a sua proposta, ajusta e pede a campanha, que só vai ao ar com a aprovação dela: o que você escreve é uma proposta.',
@@ -49,7 +49,8 @@ export const PROMPT_CRIATIVO_GOOGLE: PromptDef = {
     '- Em português do Brasil, na voz do dossiê (VOZ, REGRAS DE ESCRITA e os exemplos). Frases curtas e concretas, sem jargão de marketing.',
     '- O Google mostra cada título com outros textos, em qualquer ordem: cada título se entende sozinho e não repete o outro (mude o ângulo: o produto, a oferta, a ocasião, o jeito de pedir). Sem ponto final nos títulos.',
     '- O título longo diz a oferta inteira numa frase. As descrições completam: o que é, o preço (quando a oferta tem) e como pedir, convidando a pedir pelo cardápio online. Não mande a pessoa para outro lugar.',
-    '- Nenhum texto repete outro, nem com outra ordem das palavras.',
+    '- Nenhum texto repete outro, nem com outra ordem das palavras: o título longo e as descrições também não repetem um ao outro (cada um diz algo que o outro não diz).',
+    '- Números como a oferta e o dossiê escrevem: se a oferta diz "dois", escreva "dois" (nunca "2" nem "x2").',
     '- Respeite a quantidade e o tamanho de cada tipo ditos no contexto, contando os espaços.',
     '',
     'Formato:',

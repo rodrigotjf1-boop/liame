@@ -3,6 +3,7 @@ import { resolve } from 'node:path';
 import { runMigrations } from '@liame/database';
 import { beforeAll, describe, expect, it } from 'vitest';
 import { TAREFA_CONVERSA } from '../../src/ai/conversa/prompt.js';
+import { TAREFA_CRIATIVO_GOOGLE } from '../../src/ai/criativo/google.js';
 import { TAREFA_CRIATIVO_TEXTO } from '../../src/ai/criativo/prompt.js';
 import { TAREFA_CRM_MENSAGEM } from '../../src/ai/crm/prompt.js';
 import { TAREFA_ESTRATEGISTA } from '../../src/ai/estrategista/prompt.js';
@@ -11,13 +12,15 @@ import { aceitaGeo } from '../../src/ai/modelos.js';
 import { TAREFA_PESQUISADOR } from '../../src/ai/pesquisador/prompt.js';
 import { TAREFA_REVISAO } from '../../src/ai/revisor/prompt.js';
 import { TAREFA_SOCIAL_COMENTARIO, TAREFA_SOCIAL_COMENTARIO_TIPO, TAREFA_SOCIAL_POST, TAREFA_SOCIAL_RESPOSTA } from '../../src/ai/social/prompt.js';
+import { TAREFA_SOCIAL_VIDEO } from '../../src/ai/social/video.js';
 import { ownerQuery } from '../helpers/api.js';
 import { hasDb, OWNER_URL } from './env.js';
 
 // As rotas de modelo que a distribuição publica (migration 0046, as cinco tarefas da A3; 0051, o Criativo de texto; 0061, o
 // funcionário de CRM e mensageria; 0084, o Social media nas respostas às avaliações; 0113, a versão 2 com o Haiku 5.5 como
 // modelo econômico do Compliance, do Pesquisador e do Criativo de texto; 0116, o Social media nos posts; 0126, o Social
-// media nas respostas aos comentários; 0127, o tipo do comentário, com o Haiku 5.5 como modelo da rota): uma
+// media nas respostas aos comentários; 0127, o tipo do comentário, com o Haiku 5.5 como modelo da rota; 0153, os textos
+// da campanha nova no Google e os do vídeo montado): uma
 // por tarefa de IA do código, com o modelo que passou no eval da tarefa. No banco de teste a linha da distribuição pode
 // estar em três situações: ativa (banco novo), aposentada (outro arquivo a tirou do caminho para usar o modelo simulado)
 // ou rascunho (a migration achou uma rota de teste ativa na tarefa e não a derrubou). Em produção não há rota de teste:
@@ -49,9 +52,12 @@ const COM_ECONOMICO = new Set([TAREFA_REVISAO, TAREFA_PESQUISADOR, TAREFA_CRIATI
 // O modelo de cada tarefa: o Sonnet 5.5, menos o tipo do comentário, que classifica e roda no Haiku 5.5 (D-A6-87; o mais
 // barato que passou nas duas rodadas de 10/11/2026, migration 0127), com a saída de uma palavra.
 const MODELO_DA_TAREFA = (task: string): string => (task === TAREFA_SOCIAL_COMENTARIO_TIPO ? 'claude-haiku-5-5' : 'claude-sonnet-5-5');
-const SAIDA_MINIMA = (task: string): number => (task === TAREFA_SOCIAL_COMENTARIO_TIPO ? 300 : 1500);
+// A saída da rodada do eval de cada tarefa (os `responder-*` de `ai/evals/`): 1.500 na maioria; 1.200 nos textos do Google;
+// 600 nos do vídeo (título, preço e chamada, curtos); 300 no tipo do comentário (uma palavra).
+const SAIDA_DA_RODADA: Record<string, number> = { [TAREFA_SOCIAL_COMENTARIO_TIPO]: 300, [TAREFA_SOCIAL_VIDEO]: 600, [TAREFA_CRIATIVO_GOOGLE]: 1200 };
+const SAIDA_MINIMA = (task: string): number => SAIDA_DA_RODADA[task] ?? 1500;
 
-describe.skipIf(!hasDb)('rotas de modelo da distribuição (A3, I3; A4, X6; A5, Y6; A6, Z6 e Z11; migrations 0046, 0051, 0061, 0084, 0113, 0116, 0126 e 0127) e o preço novo do Sonnet (0083)', () => {
+describe.skipIf(!hasDb)('rotas de modelo da distribuição (A3, I3; A4, X6; A5, Y6 e Y9; A6, Z6, Z11 e Z15; migrations 0046, 0051, 0061, 0084, 0113, 0116, 0126, 0127 e 0153) e o preço novo do Sonnet (0083)', () => {
   /** A versão mais nova da distribuição em cada tarefa (a 0113 aposenta a 1 e põe a 2 nas tarefas com o econômico). */
   const rotas = () =>
     ownerQuery<Rota>(
@@ -68,7 +74,21 @@ describe.skipIf(!hasDb)('rotas de modelo da distribuição (A3, I3; A4, X6; A5, 
     const r = await rotas();
     // As tarefas são as do código: tarefa nova sem rota, ou rota de tarefa que não existe, aparece aqui.
     expect(r.map((x) => x.task)).toEqual(
-      [TAREFA_REVISAO, TAREFA_CONVERSA, TAREFA_CRIATIVO_TEXTO, TAREFA_CRM_MENSAGEM, TAREFA_ESTRATEGISTA, TAREFA_EXPLICAR_RESULTADOS, TAREFA_PESQUISADOR, TAREFA_SOCIAL_COMENTARIO, TAREFA_SOCIAL_COMENTARIO_TIPO, TAREFA_SOCIAL_POST, TAREFA_SOCIAL_RESPOSTA].sort(),
+      [
+        TAREFA_REVISAO,
+        TAREFA_CONVERSA,
+        TAREFA_CRIATIVO_GOOGLE,
+        TAREFA_CRIATIVO_TEXTO,
+        TAREFA_CRM_MENSAGEM,
+        TAREFA_ESTRATEGISTA,
+        TAREFA_EXPLICAR_RESULTADOS,
+        TAREFA_PESQUISADOR,
+        TAREFA_SOCIAL_COMENTARIO,
+        TAREFA_SOCIAL_COMENTARIO_TIPO,
+        TAREFA_SOCIAL_POST,
+        TAREFA_SOCIAL_RESPOSTA,
+        TAREFA_SOCIAL_VIDEO,
+      ].sort(),
     );
     for (const x of r) {
       expect(x).toMatchObject({ task: x.task, provider: 'anthropic', model: MODELO_DA_TAREFA(x.task), effort: 'low', fallback: [], eval_threshold: 0.95 });
@@ -105,6 +125,10 @@ describe.skipIf(!hasDb)('rotas de modelo da distribuição (A3, I3; A4, X6; A5, 
       [TAREFA_SOCIAL_COMENTARIO]: 'texto',
       // O tipo do comentário classifica, não escreve (migration 0127).
       [TAREFA_SOCIAL_COMENTARIO_TIPO]: 'analise',
+      // Os textos da campanha nova no Google e os do vídeo montado também são texto criativo (migration 0153, sem modelo
+      // econômico: o Haiku 5.5 não foi medido nessas tarefas).
+      [TAREFA_CRIATIVO_GOOGLE]: 'texto',
+      [TAREFA_SOCIAL_VIDEO]: 'texto',
       [TAREFA_ESTRATEGISTA]: 'analise',
       [TAREFA_EXPLICAR_RESULTADOS]: 'analise',
       [TAREFA_PESQUISADOR]: 'analise',
@@ -121,14 +145,14 @@ describe.skipIf(!hasDb)('rotas de modelo da distribuição (A3, I3; A4, X6; A5, 
 
   it('a migration é idempotente: rodar de novo não duplica a rota nem reativa a que saiu do caminho', async () => {
     const antes = await ownerQuery<{ task: string; status: string }>(`select task, status from liame.ai_model_route where ${DA_DISTRIBUICAO} order by task`);
-    for (const arquivo of ['0046_rotas_de_modelo.sql', '0051_rota_do_criativo.sql', '0061_rota_do_crm.sql', '0084_rota_do_social.sql', '0113_haiku_economico.sql', '0116_rota_dos_posts.sql', '0126_rota_dos_comentarios.sql', '0127_rota_do_tipo_do_comentario.sql']) {
+    for (const arquivo of ['0046_rotas_de_modelo.sql', '0051_rota_do_criativo.sql', '0061_rota_do_crm.sql', '0084_rota_do_social.sql', '0113_haiku_economico.sql', '0116_rota_dos_posts.sql', '0126_rota_dos_comentarios.sql', '0127_rota_do_tipo_do_comentario.sql', '0153_rotas_dos_textos_do_google_e_do_video.sql']) {
       const sql = readFileSync(resolve(MIGRATIONS, arquivo), 'utf8');
       await ownerQuery(sql);
       await ownerQuery(sql);
     }
     const depois = await ownerQuery<{ task: string; status: string }>(`select task, status from liame.ai_model_route where ${DA_DISTRIBUICAO} order by task`);
     expect(depois.map((x) => x.task)).toEqual(antes.map((x) => x.task));
-    expect(new Set(depois.map((x) => x.task)).size).toBe(11);
+    expect(new Set(depois.map((x) => x.task)).size).toBe(13);
     // Nunca duas ativas na mesma tarefa (o índice único garante; aqui fica dito).
     const ativas = await ownerQuery<{ task: string; n: number }>(`select task, count(*)::int as n from liame.ai_model_route where status = 'ativa' group by task having count(*) > 1`);
     expect(ativas).toEqual([]);
