@@ -1,4 +1,13 @@
-import { CreateNewCampaignRequest, NewCampaignOptionsQuery, NewCampaignOptionsResponse, NewCampaignResponse, ProblemDetails, ResourceId } from '@liame/contracts';
+import {
+  CreateNewCampaignRequest,
+  NewCampaignAudienceQuery,
+  NewCampaignAudienceResponse,
+  NewCampaignOptionsQuery,
+  NewCampaignOptionsResponse,
+  NewCampaignResponse,
+  ProblemDetails,
+  ResourceId,
+} from '@liame/contracts';
 import { Body, Controller, Get, HttpCode, Param, Post, Query } from '@nestjs/common';
 import {
   ApiBadRequestResponse,
@@ -78,6 +87,21 @@ export class CampanhasNovasController {
   @ApiNotFoundResponse({ standardSchema: ProblemDetails })
   opcoes(@Auth() auth: AuthContext, @Query({ schema: NewCampaignOptionsQuery }) query: NewCampaignOptionsQuery): Promise<NewCampaignOptionsResponse> {
     return this.campanhas.opcoes(auth, query);
+  }
+
+  @Get('audience-estimate')
+  @Permissao('campanhas.ver')
+  @ApiOperation({
+    summary: 'A estimativa de público no raio da loja',
+    description:
+      'Para a gaveta da campanha nova (R6, D-RG-50): quantas pessoas de 18 anos ou mais há no raio em volta do ponto da loja, pela estimativa da Meta (`reachestimate`) lida agora com a conta de anúncios da marca: `pronta` (o mínimo e o máximo, e `enough`: o máximo a partir de `minimum`, 1.000 pessoas; abaixo disso, o pedido é recusado com `publico-pequeno`), `sem_estimativa` (a Meta não estimou, o que não quer dizer público vazio) ou `indisponivel` (sem uma conta de anúncios, sem o ponto da loja no endereço, ou a Meta não respondeu agora). Só leitura. Marca ou loja de outra empresa, 404.',
+  })
+  @ApiOkResponse({ standardSchema: NewCampaignAudienceResponse })
+  @ApiBadRequestResponse({ standardSchema: ProblemDetails })
+  @ApiForbiddenResponse({ standardSchema: ProblemDetails })
+  @ApiNotFoundResponse({ standardSchema: ProblemDetails })
+  estimarPublico(@Auth() auth: AuthContext, @Query({ schema: NewCampaignAudienceQuery }) query: NewCampaignAudienceQuery): Promise<NewCampaignAudienceResponse> {
+    return this.campanhas.estimarPublico(auth, query);
   }
 
   @Get(':id')

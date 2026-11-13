@@ -1,4 +1,4 @@
-import type { BrandPhoto, NewCampaignObjective, NewCampaignOptionsResponse, NewCampaignResponse, NewCampaignUnitOption } from '@liame/contracts';
+import type { BrandPhoto, NewCampaignAudienceResponse, NewCampaignObjective, NewCampaignOptionsResponse, NewCampaignResponse, NewCampaignUnitOption } from '@liame/contracts';
 import type { Problema } from '@/lib/api';
 import { reaisDeMicros } from '@/lib/formato';
 import { microsDeReais } from '@/components/links/cupons-textos';
@@ -47,6 +47,46 @@ export function dicaDoRaio(km: number, loja: NewCampaignUnitOption): string {
   if (!loja.has_address) return `O raio sai do ponto da ${loja.name}, que ainda não está no endereço: ajuste o endereço antes.`;
   const onde = loja.address ? `${loja.name} (${loja.address})` : loja.name;
   return `Pessoas de 18 anos ou mais, num raio de ${kmEscrito(km)} em volta da ${onde}. O público ampliado da Meta fica desligado: dentro do raio, a Meta escolhe para quem mostrar.`;
+}
+
+/** Pessoas escritas de forma curta, como no protótipo: "760", "1.500", "182 mil", "1,2 milhão". */
+export function pessoasEscritas(n: number): string {
+  if (n < 10_000) return n.toLocaleString('pt-BR');
+  const mil = Math.round(n / 1000);
+  if (mil < 1000) return `${mil.toLocaleString('pt-BR')} mil`;
+  const milhoes = Math.round(n / 100_000) / 10;
+  return `${milhoes.toLocaleString('pt-BR', { maximumFractionDigits: 1 })} ${milhoes < 2 ? 'milhão' : 'milhões'}`;
+}
+
+/**
+ * A linha da estimativa de público no raio, debaixo de "Quem vê" (R6, D-RG-50). `pequeno` impede o pedido, com a mesma
+ * frase da recusa do servidor (`publico-pequeno`); sem a estimativa agora, o pedido pode seguir sem ela.
+ */
+export function linhaDaEstimativa(
+  e: NewCampaignAudienceResponse | 'falhou',
+  km: number,
+  loja: string,
+): { tom: 'ok' | 'pequeno' | 'sem'; titulo: string | null; destaque: string | null; texto: string } {
+  if (e !== 'falhou' && e.status === 'pronta' && e.lower !== null && e.upper !== null) {
+    if (e.enough === false) {
+      return {
+        tom: 'pequeno',
+        titulo: 'Público pequeno demais no raio',
+        destaque: null,
+        texto: `A Meta estima de ${e.lower.toLocaleString('pt-BR')} a ${e.upper.toLocaleString('pt-BR')} pessoas de 18 anos ou mais num raio de ${kmEscrito(km)} em volta da ${loja}: com menos de ${e.minimum.toLocaleString('pt-BR')} pessoas, ela não entrega bem. Aumente o raio.`,
+      };
+    }
+    return {
+      tom: 'ok',
+      titulo: null,
+      destaque: `Cerca de ${pessoasEscritas(e.lower)} a ${pessoasEscritas(e.upper)} pessoas`,
+      texto: ` de 18 anos ou mais no raio de ${kmEscrito(km)}, pela estimativa da Meta (lida agora). O Liame não usa mais o mínimo de 100 mil pessoas: num raio de loja, quem decide é a estimativa.`,
+    };
+  }
+  if (e !== 'falhou' && e.status === 'sem_estimativa') {
+    return { tom: 'sem', titulo: null, destaque: null, texto: 'A Meta não deu a estimativa deste raio agora: o pedido pode seguir sem ela.' };
+  }
+  return { tom: 'sem', titulo: null, destaque: null, texto: 'Não deu para ler a estimativa da Meta agora: o pedido pode seguir sem ela.' };
 }
 
 /** Para onde o anúncio leva, com as palavras do P42. */

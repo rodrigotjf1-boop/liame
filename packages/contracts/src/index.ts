@@ -677,6 +677,8 @@ export {
   CreateNewCampaignRequest,
   NEW_CAMPAIGN_OBJECTIVES,
   NEW_CAMPAIGN_STATUSES,
+  NewCampaignAudienceQuery,
+  NewCampaignAudienceResponse,
   NewCampaignBlock,
   NewCampaignObjective,
   NewCampaignOptionsQuery,

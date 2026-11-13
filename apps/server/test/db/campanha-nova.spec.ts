@@ -1,10 +1,13 @@
 import { randomBytes, randomUUID } from 'node:crypto';
+import { createServer, type Server } from 'node:http';
+import type { AddressInfo } from 'node:net';
 import type { Database } from '@liame/database';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { BudgetService } from '../../src/actions/budget.service.js';
 import { campanhaNovaNaMetaConnector } from '../../src/actions/campanha-nova-na-meta.js';
 import { currentStep, totpCode } from '../../src/auth/totp.js';
 import { MELHORIAS_DO_CRIATIVO } from '../../src/campanhas/campanha-nova-plano.js';
+import { publicoNoRaio } from '../../src/campanhas/publico-no-raio.js';
 import { ClienteConector } from '../../src/connectors/cliente-http.js';
 import { versaoRegistrada } from '../../src/connectors/tipos.js';
 import { DATABASE } from '../../src/database/database.module.js';
@@ -31,11 +34,41 @@ import { hasDb } from './env.js';
 
 const CARDAPIO = 'https://cardapio.exemplo.com.br/mister-centro';
 
+/**
+ * A estimativa de público da Meta (R6, parte 2), numa Graph de mentira só deste arquivo: `GET /act_{id}/reachestimate`
+ * responde a faixa combinada (ou -1, ou a falha) e guarda o que recebeu. Fora do teste da estimativa, a faixa é grande.
+ */
+class EstimativaDeMentira {
+  private servidor: Server | null = null;
+  base = '';
+  faixa: [number, number] | 'falha' = [50_000, 60_000];
+  recebidas: { caminho: string; query: URLSearchParams; autorizacao: string | undefined }[] = [];
+
+  async ligar(): Promise<void> {
+    this.servidor = createServer((req, res) => {
+      const url = new URL(req.url ?? '/', 'http://localhost');
+      this.recebidas.push({ caminho: url.pathname, query: url.searchParams, autorizacao: req.headers.authorization });
+      const corpo =
+        this.faixa === 'falha'
+          ? { error: { message: 'Service temporarily unavailable', type: 'OAuthException', code: 2 } }
+          : { data: { users_lower_bound: this.faixa[0], users_upper_bound: this.faixa[1], estimate_ready: true } };
+      res.writeHead(this.faixa === 'falha' ? 503 : 200, { 'content-type': 'application/json' }).end(JSON.stringify(corpo));
+    });
+    await new Promise<void>((ok) => this.servidor!.listen(0, '127.0.0.1', ok));
+    this.base = `http://127.0.0.1:${(this.servidor.address() as AddressInfo).port}`;
+  }
+
+  async desligar(): Promise<void> {
+    await new Promise<void>((ok) => (this.servidor ? this.servidor.close(() => ok()) : ok()));
+  }
+}
+
 describe.skipIf(!hasDb)('a campanha nova na Meta (A4 · X5, parte 1)', () => {
   let api: TestApi;
   let executor: ActionExecutor;
   let armazem: ArmazemNaMemoria;
   const meta = new MetaDeMentira();
+  const estimativa = new EstimativaDeMentira();
 
   beforeAll(async () => {
     api = await startApi();
@@ -53,13 +86,23 @@ describe.skipIf(!hasDb)('a campanha nova na Meta (A4 · X5, parte 1)', () => {
       versao: (capacidade) => versaoRegistrada(database.db, 'meta_ads', capacidade),
       armazem,
     });
+    await estimativa.ligar();
+    publicoNoRaio.ligar({
+      lerSegredo: (tx, id) => vault.readSecret(tx, id),
+      cliente: () => new ClienteConector(database.db, { enderecos: { meta_ads: [`${estimativa.base}/graph`] }, tentativas: 1, balde: { capacidade: 10_000, porSegundo: 1_000 } }),
+      graphUrl: `${estimativa.base}/graph`,
+      appSecret: SEGREDO_DO_APP_DA_META,
+      versao: (capacidade) => versaoRegistrada(database.db, 'meta_ads', capacidade),
+    });
   }, 120_000);
   beforeEach(async () => {
     await resetIpRateLimits();
     meta.normalizar();
+    estimativa.faixa = [50_000, 60_000];
   });
   afterAll(async () => {
     await meta.desligar();
+    await estimativa.desligar();
     await api?.close();
   });
 
@@ -227,6 +270,65 @@ describe.skipIf(!hasDb)('a campanha nova na Meta (A4 · X5, parte 1)', () => {
     const o = await api.call('GET', `/v1/new-campaigns/options?brand_id=${e.brandId}`, { cookie: e.cookie });
     expect(o.status, JSON.stringify(o.body)).toBe(200);
     expect(o.body.top_of_funnel).toEqual({ cap_micros: 100_000_000 * dias, used_micros: 100_000_000 * dias, days_left: dias });
+  }, 120_000);
+
+  it('a estimativa de público no raio (R6, parte 2): a gaveta lê da Meta; com menos de 1.000 pessoas, o pedido não sai; a estimativa vai junto no pedido', async () => {
+    const e = await cenario('Brasa Estimativa no Raio');
+    const foto = await fotoGuardada(e, armazem, { largura: 1080, altura: 1350 });
+    const estimar = (raio: number, unidade = e.unitId) => api.call('GET', `/v1/new-campaigns/audience-estimate?brand_id=${e.brandId}&unit_id=${unidade}&radius_km=${raio}`, { cookie: e.cookie });
+
+    // Pequeno demais: a gaveta mostra a faixa e que não dá; a Meta recebe o raio em volta do ponto, com o token no
+    // cabeçalho e a prova do segredo do app.
+    estimativa.faixa = [640, 760];
+    estimativa.recebidas = [];
+    const pequeno = await estimar(3);
+    expect(pequeno.status, JSON.stringify(pequeno.body)).toBe(200);
+    expect(pequeno.body).toEqual({ status: 'pronta', lower: 640, upper: 760, minimum: 1000, enough: false });
+    const lida = estimativa.recebidas.at(-1)!;
+    expect(lida.caminho).toMatch(/^\/graph\/v[\d.]+\/act_\d+\/reachestimate$/);
+    expect(JSON.parse(lida.query.get('targeting_spec')!)).toEqual({
+      geo_locations: { custom_locations: [{ latitude: -22.906847, longitude: -43.172897, radius: 3, distance_unit: 'kilometer' }] },
+      age_min: 18,
+      targeting_automation: { advantage_audience: 0 },
+    });
+    expect(lida.query.get('appsecret_proof')).toMatch(/^[0-9a-f]{64}$/);
+    expect(lida.query.has('access_token')).toBe(false);
+    expect(lida.autorizacao).toMatch(/^Bearer .+/);
+    // O pedido com o mesmo raio é recusado com a mesma faixa e o que fazer.
+    const recusado = await pedir(e, { media_id: foto.id, objective: 'alcance', radius_km: 3 });
+    expect([recusado.status, recusado.body.code]).toEqual([422, 'publico-pequeno']);
+    expect(recusado.body.detail).toBe(
+      'A Meta estima de 640 a 760 pessoas de 18 anos ou mais num raio de 3 km em volta da Loja Centro: com menos de 1.000 pessoas, ela não entrega bem. Aumente o raio.',
+    );
+    expect(await ownerQuery(`select 1 from liame.ad_campaign_new where tenant_id = $1`, [e.tenantId])).toHaveLength(0);
+
+    // Com público: a campanha guarda a faixa e o pedido leva o mesmo número para a aprovação.
+    estimativa.faixa = [182_000, 214_000];
+    expect((await estimar(5)).body).toEqual({ status: 'pronta', lower: 182_000, upper: 214_000, minimum: 1000, enough: true });
+    const ok = await pedir(e, { media_id: foto.id, objective: 'alcance', radius_km: 5 });
+    expect(ok.status, JSON.stringify(ok.body)).toBe(201);
+    expect(ok.body.audience).toEqual({ lower: 182_000, upper: 214_000 });
+    expect((await pedidoDe(ok.body.action_id as string)).before_state).toMatchObject({ publico: { de: 182_000, ate: 214_000 } });
+    expect((await api.call('GET', `/v1/new-campaigns/${ok.body.id}`, { cookie: e.cookie })).body.audience).toEqual({ lower: 182_000, upper: 214_000 });
+
+    // A Meta que não estima (-1) não é público vazio; a que não responde fica indisponível, e o pedido segue sem a faixa.
+    estimativa.faixa = [-1, -1];
+    expect((await estimar(5)).body).toEqual({ status: 'sem_estimativa', lower: null, upper: null, minimum: 1000, enough: null });
+    estimativa.faixa = 'falha';
+    expect((await estimar(5)).body).toEqual({ status: 'indisponivel', lower: null, upper: null, minimum: 1000, enough: null });
+    await ownerQuery(`update liame.ad_campaign_new set status = 'cancelada' where tenant_id = $1`, [e.tenantId]);
+    const semFaixa = await pedir(e, { media_id: foto.id, objective: 'cardapio', radius_km: 5 });
+    expect(semFaixa.status, JSON.stringify(semFaixa.body)).toBe(201);
+    expect(semFaixa.body.audience).toBeNull();
+
+    // A loja sem o ponto no endereço não pergunta à Meta; o raio fora da régua e a loja de outra marca não passam.
+    estimativa.faixa = [182_000, 214_000];
+    estimativa.recebidas = [];
+    await ownerQuery(`update liame.unit set location_precision = 'bairro' where id = $1`, [e.unitId]);
+    expect((await estimar(5)).body.status).toBe('indisponivel');
+    expect(estimativa.recebidas).toHaveLength(0);
+    expect((await estimar(2.3)).status).toBe(400);
+    expect((await estimar(5, randomUUID())).status).toBe(404);
   }, 120_000);
 
   it('as opções da gaveta (parte 2): quem assina, as lojas com o endereço e o cardápio, o teto, o que impede e a campanha de cada peça', async () => {

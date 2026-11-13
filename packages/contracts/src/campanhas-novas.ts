@@ -89,6 +89,8 @@ export const NewCampaignResponse = z.strictObject({
   end_date: z.iso.date().nullable(),
   /** O cardápio da loja (o destino de "pedidos pelo cardápio" e de "ser conhecido no raio"); nulo no WhatsApp e em seguidores. */
   link: z.string().nullable(),
+  /** A estimativa de público da Meta no raio quando a pessoa pediu (R6, D-RG-50): o mínimo e o máximo; nula sem estimativa. */
+  audience: z.strictObject({ lower: z.int(), upper: z.int() }).nullable(),
   status: NewCampaignStatus,
   /** O pedido em Aprovações. */
   action_id: z.uuid().nullable(),
@@ -164,3 +166,32 @@ export const NewCampaignOptionsResponse = z.strictObject({
   ),
 });
 export type NewCampaignOptionsResponse = z.infer<typeof NewCampaignOptionsResponse>;
+
+// ---------------------------------------------------------------- a estimativa de público no raio (R6, parte 2; D-RG-50)
+
+export const NewCampaignAudienceQuery = z.strictObject({
+  brand_id: z.uuid(),
+  /** A loja do raio (o ponto dela no endereço). */
+  unit_id: z.uuid(),
+  /** O raio em volta da loja, de 1 a 15 km, em passos de 0,5 km. */
+  radius_km: z.coerce
+    .number()
+    .min(1)
+    .max(15)
+    .refine((v) => Number.isInteger(v * 2), 'o raio vai em passos de 0,5 km'),
+});
+export type NewCampaignAudienceQuery = z.infer<typeof NewCampaignAudienceQuery>;
+
+/**
+ * A estimativa da Meta para o raio (18 anos ou mais): `pronta` (com o mínimo e o máximo e se dá para a Meta entregar:
+ * `enough`, o máximo a partir de `minimum` pessoas), `sem_estimativa` (a Meta não estimou: não quer dizer público vazio)
+ * ou `indisponivel` (sem conta de anúncios, sem o ponto da loja, ou a Meta não respondeu agora).
+ */
+export const NewCampaignAudienceResponse = z.strictObject({
+  status: z.enum(['pronta', 'sem_estimativa', 'indisponivel']),
+  lower: z.int().nullable(),
+  upper: z.int().nullable(),
+  minimum: z.int(),
+  enough: z.boolean().nullable(),
+});
+export type NewCampaignAudienceResponse = z.infer<typeof NewCampaignAudienceResponse>;

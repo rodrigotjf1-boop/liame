@@ -1,9 +1,17 @@
-import type { CreateNewCampaignRequest, NewCampaignOptionsQuery, NewCampaignOptionsResponse, NewCampaignResponse } from '@liame/contracts';
+import type {
+  CreateNewCampaignRequest,
+  NewCampaignAudienceQuery,
+  NewCampaignAudienceResponse,
+  NewCampaignOptionsQuery,
+  NewCampaignOptionsResponse,
+  NewCampaignResponse,
+} from '@liame/contracts';
 import { uuidv7 } from '@liame/database';
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { sql } from 'drizzle-orm';
 import { ActionService } from '../actions/action.service.js';
 import { contaConectada } from '../connections/conectada.js';
+import { ErroConector } from '../connectors/cliente-http.js';
 import { emMenorUnidade } from '../connectors/meta/verba.js';
 import { type AuthContext, auditDetail, currentTx } from '../context/request-context.js';
 import { AppProblem } from '../errors/problems.js';
@@ -11,7 +19,8 @@ import { FlagService } from '../flags/flag.service.js';
 import { PolicyService } from '../policy/policy.service.js';
 import { tetoDaVerba } from '../policy/teto-da-verba.js';
 import { destinoDoPost } from '../posts/link-do-post.js';
-import { levaAoCardapio, OBJETIVOS_DO_TOPO, type ObjetivoDaCampanhaNova, PARTE_DO_TOPO_NO_MES, recursoDaCampanhaNova } from './campanha-nova-plano.js';
+import { levaAoCardapio, OBJETIVOS_DO_TOPO, type ObjetivoDaCampanhaNova, PARTE_DO_TOPO_NO_MES, PUBLICO_MINIMO_NO_RAIO, recursoDaCampanhaNova } from './campanha-nova-plano.js';
+import { type PublicoEstimado, publicoNoRaio, publicoSuficiente } from './publico-no-raio.js';
 
 // A campanha nova na Meta, criada pausada (A4, X5, parte 1; P10 aprovado em 05/10/2026; D-A4-31, D-A4-35, D-A4-40 e
 // D-A4-41). A rota confere tudo o que a ferramenta `campanha_criar` exige antes de pedir: a peça aprovada, a mídia
@@ -28,6 +37,9 @@ const EM_ABERTO = sql`('aguardando_aprovacao', 'aprovada', 'executando')`;
 
 type Quem = { tenantId: string; userId: string };
 
+/** A estimativa lida agora: pronta (com o público), sem estimativa (a Meta não estimou) ou indisponível (sem como ler). */
+type Estimativa = { status: 'pronta'; publico: PublicoEstimado } | { status: 'sem_estimativa' } | { status: 'indisponivel' };
+
 function recusa(code: string, title: string, detail: string, path?: string): AppProblem {
   return new AppProblem(422, code, title, detail, {}, path ? [{ path, message: detail }] : undefined);
 }
@@ -35,13 +47,14 @@ function conflito(code: string, title: string, detail: string): AppProblem {
   return new AppProblem(409, code, title, detail);
 }
 
-type Conta = { id: string; provider: string; name: string; currency: string | null; instagram_id: string | null };
+type Conta = { id: string; provider: string; name: string; currency: string | null; instagram_id: string | null; external_id: string; credential_secret_id: string | null };
 
 /** A conta de anúncios da Meta e a Página da marca, conectadas (D-A4-35). */
 async function contasDaMarca(tx: ReturnType<typeof currentTx>, tenantId: string, brandId: string): Promise<{ anuncios: Conta[]; paginas: Conta[] }> {
   const contas = (
     await tx.execute<Conta>(sql`
-      select a.id, a.provider, a.name, a.currency, a.provider_attributes->>'instagram_id' as instagram_id from liame.connected_account a
+      select a.id, a.provider, a.name, a.currency, a.provider_attributes->>'instagram_id' as instagram_id, a.external_id, a.credential_secret_id
+        from liame.connected_account a
        where a.tenant_id = ${tenantId} and a.brand_id = ${brandId} and a.provider in ('meta_ads', 'facebook_page') and ${contaConectada('a')}
        order by a.provider, a.id`)
   ).rows;
@@ -71,6 +84,16 @@ function motivoSemCardapio(destino: Awaited<ReturnType<typeof destinoDoPost>>, u
 
 /** Reais escritos ("R$ 1.234,50") a partir de micros. */
 const reais = (micros: number): string => `R$ ${(micros / 1_000_000).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+
+/** Pessoas escritas ("1.234"). */
+const pessoas = (n: number): string => n.toLocaleString('pt-BR');
+/** O raio escrito ("2,5 km"). */
+const raioEscrito = (km: number): string => `${String(km).replace('.', ',')} km`;
+
+/** O porquê do público pequeno demais no raio (R6, D-RG-50): a mesma frase no pedido recusado e na gaveta. */
+export function textoDoPublicoPequeno(p: PublicoEstimado, raioKm: number, loja: string): string {
+  return `A Meta estima de ${pessoas(p.de)} a ${pessoas(p.ate)} pessoas de 18 anos ou mais num raio de ${raioEscrito(raioKm)} em volta da ${loja}: com menos de ${pessoas(PUBLICO_MINIMO_NO_RAIO)} pessoas, ela não entrega bem. Aumente o raio.`;
+}
 
 /** Os dias que faltam no mês, contando hoje (`AAAA-MM-DD`). */
 export function diasQueFaltamNoMes(hoje: string): number {
@@ -114,6 +137,8 @@ type LinhaDaCampanhaNova = {
   daily_budget_micros: string;
   end_date: string | null;
   link: string | null;
+  audience_lower: string | null;
+  audience_upper: string | null;
   status: NewCampaignResponse['status'];
   action_id: string | null;
   error: string | null;
@@ -148,6 +173,7 @@ function resposta(l: LinhaDaCampanhaNova): NewCampaignResponse {
     daily_budget_micros: Number(l.daily_budget_micros),
     end_date: l.end_date,
     link: l.link,
+    audience: l.audience_lower !== null && l.audience_upper !== null ? { lower: Number(l.audience_lower), upper: Number(l.audience_upper) } : null,
     status: l.status,
     action_id: l.action_id,
     error: l.error,
@@ -161,6 +187,8 @@ function resposta(l: LinhaDaCampanhaNova): NewCampaignResponse {
 
 @Injectable()
 export class CampanhasNovasService {
+  private readonly logger = new Logger('campanha-nova');
+
   constructor(
     private readonly actions: ActionService,
     private readonly flags: FlagService,
@@ -250,8 +278,9 @@ export class CampanhasNovasService {
 
     // A loja e o ponto dela no endereço (D-A4-41; D-RG-14).
     const loja = (
-      await tx.execute<{ location_precision: string | null }>(sql`
-        select location_precision from liame.unit where id = ${body.unit_id} and tenant_id = ${quem.tenantId} and brand_id = ${body.brand_id}`)
+      await tx.execute<{ name: string; location_precision: string | null; latitude: string | null; longitude: string | null }>(sql`
+        select name, location_precision, latitude::text, longitude::text from liame.unit
+         where id = ${body.unit_id} and tenant_id = ${quem.tenantId} and brand_id = ${body.brand_id}`)
     ).rows[0];
     if (!loja) throw recusa('loja-nao-encontrada', 'Loja não encontrada', 'A loja não é desta marca.', 'unit_id');
     if (loja.location_precision !== 'endereco') {
@@ -305,6 +334,14 @@ export class CampanhasNovasService {
       }
     }
 
+    // O público no raio pela estimativa da Meta (R6, D-RG-50): com menos de 1.000 pessoas, ela não entrega bem e o pedido
+    // não é criado. Sem a estimativa agora (a Meta não estimou ou não respondeu), o pedido segue sem ela.
+    const estimativa = await this.estimativa(tx, contaDeAnuncios, loja, body.radius_km);
+    if (estimativa.status === 'pronta' && !publicoSuficiente(estimativa.publico)) {
+      throw recusa('publico-pequeno', 'Público pequeno demais no raio', textoDoPublicoPequeno(estimativa.publico, body.radius_km, loja.name), 'radius_km');
+    }
+    const publico = estimativa.status === 'pronta' ? estimativa.publico : null;
+
     // O pedido anterior com a mesma peça (ou o mesmo Reels) que já se encerrou em Aprovações (recusado, expirado, ou que
     // falhou no meio) sai do caminho: a campanha nova dele fica cancelada (ou não criada, se já tinha começado na Meta).
     const mesmaOrigem = reels === null ? sql`c.piece_id = ${body.piece_id!}` : sql`c.brand_id = ${body.brand_id} and c.instagram_media_id = ${reels}`;
@@ -322,9 +359,9 @@ export class CampanhasNovasService {
     const id = uuidv7();
     const nova = await tx.execute(sql`
       insert into liame.ad_campaign_new (id, tenant_id, brand_id, ad_account_id, page_account_id, piece_id, piece_version, media_id, instagram_media_id, unit_id,
-                                         name, objective, radius_km, daily_budget_micros, end_date, link, created_by)
+                                         name, objective, radius_km, daily_budget_micros, end_date, link, audience_lower, audience_upper, created_by)
       values (${id}, ${quem.tenantId}, ${body.brand_id}, ${contaDeAnuncios.id}, ${paginas[0]!.id}, ${body.piece_id ?? null}, ${versaoDaPeca}, ${body.media_id ?? null}, ${reels}, ${body.unit_id},
-              ${body.name}, ${body.objective}, ${body.radius_km}, ${body.daily_budget_micros}, ${body.end_date ?? null}, ${link}, ${quem.userId})
+              ${body.name}, ${body.objective}, ${body.radius_km}, ${body.daily_budget_micros}, ${body.end_date ?? null}, ${link}, ${publico?.de ?? null}, ${publico?.ate ?? null}, ${quem.userId})
       on conflict do nothing
       returning id`);
     if (!nova.rows[0]) {
@@ -355,6 +392,7 @@ export class CampanhasNovasService {
         radius_km: body.radius_km,
         daily_budget_micros: body.daily_budget_micros,
         end_date: body.end_date ?? null,
+        audience: publico ? { lower: publico.de, upper: publico.ate } : null,
         action_id: pedido,
       },
     });
@@ -486,6 +524,54 @@ export class CampanhasNovasService {
     return this.obter(auth, id);
   }
 
+  /**
+   * A estimativa de público no raio para a gaveta (R6, parte 2; D-RG-50): ao abrir e ao trocar o raio ou a loja. Pronta
+   * (o mínimo, o máximo e se dá para a Meta entregar), sem estimativa, ou indisponível (sem uma conta de anúncios, sem o
+   * ponto da loja no endereço, ou a Meta não respondeu agora). Só leitura; marca ou loja de fora, 404.
+   */
+  async estimarPublico(auth: AuthContext, query: NewCampaignAudienceQuery): Promise<NewCampaignAudienceResponse> {
+    const tx = currentTx();
+    const quem = this.quem(auth);
+    const marca = await tx.execute(sql`select 1 from liame.brand where id = ${query.brand_id} and tenant_id = ${quem.tenantId} and archived_at is null`);
+    if (!marca.rows[0]) throw new AppProblem(404, 'nao-encontrado', 'Não encontramos', 'Marca não encontrada nesta empresa.');
+    const loja = (
+      await tx.execute<{ location_precision: string | null; latitude: string | null; longitude: string | null }>(sql`
+        select location_precision, latitude::text, longitude::text from liame.unit
+         where id = ${query.unit_id} and tenant_id = ${quem.tenantId} and brand_id = ${query.brand_id}`)
+    ).rows[0];
+    if (!loja) throw new AppProblem(404, 'nao-encontrado', 'Não encontramos', 'A loja não é desta marca.');
+    const { anuncios } = await contasDaMarca(tx, quem.tenantId, query.brand_id);
+    const e = anuncios.length === 1 && loja.location_precision === 'endereco' ? await this.estimativa(tx, anuncios[0]!, loja, query.radius_km) : ({ status: 'indisponivel' } as const);
+    return e.status === 'pronta'
+      ? { status: 'pronta', lower: e.publico.de, upper: e.publico.ate, minimum: PUBLICO_MINIMO_NO_RAIO, enough: publicoSuficiente(e.publico) }
+      : { status: e.status, lower: null, upper: null, minimum: PUBLICO_MINIMO_NO_RAIO, enough: null };
+  }
+
+  /**
+   * A estimativa da Meta para o raio em volta do ponto da loja. A falha da Meta (fora do ar, sem permissão, demorou) vira
+   * `indisponivel` com o motivo no log: a estimativa informa, não decide sozinha quando não há número.
+   */
+  private async estimativa(
+    tx: ReturnType<typeof currentTx>,
+    conta: Conta,
+    loja: { latitude: string | null; longitude: string | null },
+    raioKm: number,
+  ): Promise<Estimativa> {
+    if (loja.latitude === null || loja.longitude === null) return { status: 'indisponivel' };
+    try {
+      const publico = await publicoNoRaio.estimar(
+        tx,
+        { externalId: conta.external_id, segredo: conta.credential_secret_id },
+        { latitude: Number(loja.latitude), longitude: Number(loja.longitude), raioKm },
+      );
+      return publico ? { status: 'pronta', publico } : { status: 'sem_estimativa' };
+    } catch (e) {
+      if (!(e instanceof ErroConector)) throw e;
+      this.logger.warn(`estimativa de público indisponível (conta ${conta.id}): ${e.tipo} ${e.status ?? ''} ${e.message}`.trim());
+      return { status: 'indisponivel' };
+    }
+  }
+
   /** O Instagram ligado à Página, conectado na marca (o destino de seguidores); nulo sem ele. */
   private async instagramDaPagina(tx: ReturnType<typeof currentTx>, tenantId: string, brandId: string, instagramId: string | null): Promise<{ name: string } | null> {
     if (!instagramId) return null;
@@ -530,7 +616,7 @@ export class CampanhasNovasService {
       select c.id, c.brand_id, c.piece_id, c.piece_version, c.media_id, c.instagram_media_id,
              im.caption as reels_caption, im.permalink as reels_permalink, im.thumbnail_url as reels_thumbnail_url, im.published_at as reels_published_at,
              c.unit_id, c.name, c.objective, c.radius_km::text, c.daily_budget_micros::text,
-             c.end_date::text as end_date, c.link,
+             c.end_date::text as end_date, c.link, c.audience_lower::text, c.audience_upper::text,
              case when c.status in ('pedida', 'criando') and r.status in ${ENCERRADOS}
                   then (case when c.status = 'criando' then 'nao_criada' else 'cancelada' end) else c.status end as status,
              c.action_id,
