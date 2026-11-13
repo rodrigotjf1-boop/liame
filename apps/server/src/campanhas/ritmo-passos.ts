@@ -66,8 +66,11 @@ export interface ControleDoRitmo {
   anterior: { ritmo: string; peso: number; ate: string } | null;
 }
 
-/** Quantos dias para trás um ritmo ainda pode estar devolvendo a verba (a volta leva até 3 dias depois do fim). */
-const DIAS_DA_VOLTA = 10;
+/**
+ * Por quantos dias depois do fim da semana o Liame ainda tenta devolver a verba de antes. A volta leva até 3 dias; a que
+ * o limite do mês segura (a verba ficou abaixo da de antes e subir não cabe) é tentada todo dia, até o mês virar.
+ */
+export const DIAS_DA_VOLTA = 35;
 
 /**
  * O que o Liame conduz numa marca em `hoje`: os objetos dos ritmos aprovados ou parados recentes que ainda não saíram do

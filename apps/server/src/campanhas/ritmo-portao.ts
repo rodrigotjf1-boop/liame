@@ -1,6 +1,8 @@
 import type { Tx } from '@liame/database';
 import { sql } from 'drizzle-orm';
 import type { FlagService } from '../flags/flag.service.js';
+import { carregarPoliticas } from '../policy/policy.service.js';
+import { tetoDaVerba } from '../policy/teto-da-verba.js';
 import { FLAG_DA_REGIAO } from '../regiao/regiao.js';
 import { EstadoDoRitmo, FLAG_DO_RITMO, type PassoDoRitmo } from './ritmo-plano.js';
 
@@ -12,7 +14,10 @@ import { EstadoDoRitmo, FLAG_DO_RITMO, type PassoDoRitmo } from './ritmo-plano.j
 //   - o dia do passo é hoje, no fuso da loja (o passo que ficou na fila de ontem não sai);
 //   - o valor é o do passo guardado;
 //   - a verba do dia: o ritmo aprovado e não parado; subindo, nunca acima do que a pessoa aprovou para o dia;
-//   - a volta: só com o ritmo parado ou depois do fim da semana, e nunca além da verba de antes.
+//   - a volta: com o ritmo aprovado ou parado (ela só devolve o que a pessoa tinha), e nunca além da verba de antes;
+//   - subindo, nunca acima do teto por campanha da empresa ou da marca, em qualquer forma em que a regra foi escrita
+//     (a regra antiga, só para `orcamento.aumentar`, não casa com a ação do passo no motor da política: quem a garante
+//     é este portão, e não só quem chama).
 // "A campanha como o Liame deixou" é conferida pelo plano da ferramenta (a verba lida na Meta tem de ser a esperada) e,
 // na execução, pela versão do estado. Devolve nulo quando o passo pode sair; senão, o porquê.
 
@@ -60,6 +65,10 @@ export async function oQueSeguraOPassoDoRitmo(
   const campanha = plano.success ? plano.data.campanhas.find((c) => c.recurso === alvo.resourceId) : undefined;
   if (!plano.success || !campanha) return 'campanha_fora_do_plano';
   const sobe = alvo.valorMicros > Number(linha.expected_micros);
+  if (sobe) {
+    const teto = tetoDaVerba((await carregarPoliticas(tx, alvo.tenantId, alvo.brandId)).policies, 'meta_ads');
+    if (teto !== null && alvo.valorMicros > teto) return 'acima_do_teto_por_campanha';
+  }
   if (linha.kind === 'ritmo') {
     if (linha.status !== 'aprovado') return linha.status === 'parado' ? 'ritmo_parado' : 'ritmo_nao_aprovado';
     const i = plano.data.dias.findIndex((d) => d.dia === linha.dia);
@@ -68,8 +77,9 @@ export async function oQueSeguraOPassoDoRitmo(
     if (sobe && alvo.valorMicros > campanha.dias_micros[i]!) return 'acima_do_aprovado';
     return null;
   }
-  // A volta à verba de antes: só com o ritmo parado ou depois do fim da semana, e nunca além dela.
-  if (linha.status !== 'parado' && !(linha.status === 'aprovado' && linha.hoje > linha.week_end)) return 'volta_fora_de_hora';
+  // A volta à verba de antes: com o ritmo parado, depois do fim da semana, ou no meio dela, para a campanha que os
+  // limites da empresa não deixaram subir. Ela só devolve o que a pessoa tinha, e nunca vai além disso.
+  if (linha.status !== 'parado' && linha.status !== 'aprovado') return 'volta_fora_de_hora';
   if (sobe ? alvo.valorMicros > campanha.base_micros : alvo.valorMicros < campanha.base_micros) return 'alem_da_verba_de_antes';
   return null;
 }

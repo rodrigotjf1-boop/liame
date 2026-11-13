@@ -14,6 +14,7 @@ import { diaDaSemana } from '../../src/regiao/ritmo-da-semana.js';
 import { diasDepois } from '../../src/regiao/semana.js';
 import { diaNoFuso } from '../../src/results/fora-do-normal.js';
 import { ActionExecutor } from '../../src/worker/action-executor.js';
+import { ConferenciaDoGasto } from '../../src/worker/conferencia-do-gasto.js';
 import { RitmoDaSemanaService } from '../../src/worker/ritmo-da-semana.service.js';
 import { ownerQuery, resetIpRateLimits, startApi, type TestApi } from '../helpers/api.js';
 import { campanhaComRecomendacao, type EmpresaComMeta, empresaComMeta, ligarConectorNaMetaDeMentira, ligarFlagDaEmpresa, MetaDeMentira, objetoLido } from '../helpers/meta-de-mentira.js';
@@ -29,7 +30,10 @@ import { hasDb } from './env.js';
 //   - parar o ritmo: sem o código do app; o passo na fila não sai, e a verba volta à de antes;
 //   - o fim da semana: a volta em até 10% por dia, e o ritmo se encerra quando todas voltaram;
 //   - a semana que continua de outra: a verba de hoje é a de antes do ritmo, e a segunda parte da verba de domingo;
-//   - o que o ritmo NÃO liga: o pedido de verba comum de um funcionário de IA segue como sempre.
+//   - o que o ritmo NÃO liga: o pedido de verba comum de um funcionário de IA segue como sempre;
+//   - o limite da empresa que não deixa a verba SUBIR tira a campanha do ritmo, e a volta é tentada todo dia até sair;
+//   - o pedido de ontem que ficou na fila não gasta a tentativa de hoje;
+//   - a conferência do gasto não trata o passo do ritmo como uma mudança só.
 
 const REAL = 1_000_000;
 const HOJE = diaNoFuso(new Date(), 'America/Sao_Paulo');
@@ -131,6 +135,14 @@ describe.skipIf(!hasDb)('o ritmo da semana: os passos do dia (R7, parte 1b-2)', 
     return id;
   }
   const todosOsDias = (reais: number) => Array<number>(7).fill(reais);
+  /** Um passo que o Liame já fez num dia (a história do ritmo): a verba que ele deixou. */
+  const passoFeito = (e: Empresa, ritmoId: string, dia: string, recurso: string, valor: number, esperado: number) =>
+    ownerQuery(
+      `insert into liame.budget_rhythm_step (id, tenant_id, rhythm_id, day, resource_id, kind, target_micros, expected_micros, status) values (gen_random_uuid(), $1, $2, $3::date, $4, 'ritmo', $5, $6, 'feito')`,
+      [e.tenantId, ritmoId, dia, recurso, Math.round(valor * REAL), Math.round(esperado * REAL)],
+    );
+  const politica = (e: Empresa, rules: unknown[]) => api.call('POST', '/v1/policies', { cookie: e.cookie, body: { brand_id: null, document: { rules } } });
+  const tetoDoMes = (e: Empresa, reais: number) => api.call('PUT', '/v1/budget/policies', { cookie: e.cookie, body: { limit_micros: reais * REAL } });
 
   const passos = (ritmoId: string) =>
     ownerQuery<Passo>(
@@ -192,6 +204,25 @@ describe.skipIf(!hasDb)('o ritmo da semana: os passos do dia (R7, parte 1b-2)', 
       body: { tool: 'orcamento_do_ritmo', provider: 'meta_ads', account_id: e.conta, resource_id: a.recurso, params: { daily_budget_micros: 70 * REAL, expected_micros: 66 * REAL } },
     });
     expect([direto.status, direto.body.code], JSON.stringify(direto.body)).toEqual([422, 'acao-so-pelo-automatico']);
+
+    // A conferência do gasto compara a semana com "a verba de antes e a de depois" de UMA mudança; o passo do ritmo muda
+    // a verba todo dia, então ele não é conferido por ali (senão avisaria de gasto acima sem ter havido). A leitura do
+    // dia seguinte chega: nada do ritmo é conferido.
+    await ownerQuery(`update liame.action_request set updated_at = now() - interval '1 day' where tenant_id = $1`, [e.tenantId]);
+    await ownerQuery(
+      `insert into liame.sync_state (connected_account_id, dataset, tenant_id, expected_every_minutes, last_success_at) values ($1, 'metricas', $2, 1440, now())
+       on conflict (connected_account_id, dataset) do update set last_success_at = excluded.last_success_at`,
+      [e.conta, e.tenantId],
+    );
+    await ownerQuery(`update liame.campaign set last_seen_at = now() where connected_account_id = $1`, [e.conta]);
+    const conferencia = new ConferenciaDoGasto(database);
+    expect(await conferencia.executarLote(100, { tenantIds: [e.tenantId] })).toEqual([]);
+    // A prova de que a conta e os objetos estavam prontos para a conferência: a mesma mudança, se fosse a de verba comum,
+    // seria conferida.
+    const deB = (await pedidosDe(e)).find((p) => p.resource_id === b.recurso)!;
+    await ownerQuery(`update liame.action_request set tool = 'orcamento_ajustar' where id = $1`, [deB.id]);
+    expect(await conferencia.executarLote(100, { tenantIds: [e.tenantId] })).toMatchObject([{ contaId: e.conta, conferidas: 1 }]);
+    expect(await ownerQuery(`select action_request_id from liame.action_spend_check where tenant_id = $1`, [e.tenantId])).toEqual([{ action_request_id: deB.id }]);
   }, 120_000);
 
   it('o portão: fora do aprovado, do dia ou da função, o passo não é pedido; o que o ritmo não liga segue como sempre', async () => {
@@ -224,9 +255,18 @@ describe.skipIf(!hasDb)('o ritmo da semana: os passos do dia (R7, parte 1b-2)', 
     await ownerQuery(`update liame.budget_rhythm set status = 'parado', stopped_at = now() where id = $1`, [id]);
     await expect(passo(HOJE, 63)).rejects.toMatchObject({ code: 'ritmo-segurado', detail: expect.stringContaining('ritmo_parado') });
     await ownerQuery(`update liame.budget_rhythm set status = 'aprovado', stopped_at = null where id = $1`, [id]);
-    // Dentro do aprovado, entra (e a política da empresa que pede aprovação para a verba do funcionário segura o passo).
+    // O teto por campanha escrito na forma antiga (só para `orcamento.aumentar`) não casa com a ação do passo no motor
+    // da política: quem segura é o portão.
+    expect((await politica(e, [{ type: 'max_value', action: 'orcamento.aumentar', max_micros: 62 * REAL }])).status).toBe(201);
+    await expect(passo(HOJE, 63)).rejects.toMatchObject({ code: 'ritmo-segurado', detail: expect.stringContaining('acima_do_teto_por_campanha') });
+    expect((await politica(e, [{ type: 'max_value', action: 'orcamento.*', max_micros: 150 * REAL }])).status).toBe(201);
+    // Dentro do aprovado, entra.
     expect(await passo(HOJE, 63)).toMatch(/^[0-9a-f-]{36}$/);
     expect(await pedidosDe(e)).toMatchObject([{ tool: 'orcamento_do_ritmo', status: 'aprovada', action: 'orcamento.ritmo_aumentar' }]);
+    // Mas este pedido não ficou ligado ao passo (o executor acha o passo pelo pedido; a rotina grava os dois juntos):
+    // o executor não o deixa sair. Fecha, não fura.
+    await executar(e);
+    expect(await pedidosDe(e)).toMatchObject([{ tool: 'orcamento_do_ritmo', status: 'falhou', status_reason: 'ritmo da semana: passo_desconhecido' }]);
     expect(verbasNaMeta(a.id)).toEqual([]);
 
     // O que o ritmo NÃO liga (D-A7-11): com a função do ritmo ligada, o pedido de verba comum do funcionário de IA segue
@@ -373,6 +413,109 @@ describe.skipIf(!hasDb)('o ritmo da semana: os passos do dia (R7, parte 1b-2)', 
     ]);
     expect((await ownerQuery(`select status, version from liame.budget_rhythm where id = $1`, [id]))[0]).toEqual({ status: 'encerrado', version: 2 });
     expect(await volta(depois)).toEqual([]);
+  }, 120_000);
+
+  it('parar com a verba mais de 10% longe da de antes: a volta leva dois dias', async () => {
+    const e = await cenario('Brasa Ritmo Parado Longe');
+    // O ritmo já levou a verba a R$ 48,00; a de antes é R$ 40,00 (20% acima).
+    const a = await objetoLido(meta, e, 'campanha', { name: 'Combo sexta', daily_budget: '4800' });
+    const id = await ritmo(e, [{ recurso: a.recurso, nome: 'Combo sexta', base: 40, dias: todosOsDias(48) }]);
+    await passoFeito(e, id, segundaDe(HOJE), a.recurso, 48, 44);
+    const rotina = novaRotina();
+    const volta = (agora = new Date()) => rotina.executarPassos(20, { tenantIds: [e.tenantId] }, agora);
+    expect((await api.call('POST', `/v1/region/rhythm/${id}/stop`, { cookie: e.cookie })).status).toBe(200);
+    // Hoje: R$ 48,00 → R$ 43,20 (os 10% da política valem para a volta).
+    expect(resumo(await volta())).toEqual([[a.recurso, 'pedido']]);
+    expect((await pedidosDe(e)).at(-1)).toMatchObject({ action: 'orcamento.ritmo_reduzir', status: 'aprovada', value: String(43.2 * REAL), atual: String(48 * REAL) });
+    await executar(e);
+    expect(verbasNaMeta(a.id)).toEqual(['4320']);
+    expect(await volta()).toEqual([]);
+    // Amanhã: R$ 43,20 → R$ 40,00, a de antes.
+    expect(resumo(await volta(meioDiaDe(diasDepois(HOJE, 1))))).toEqual([[a.recurso, 'pedido']]);
+    expect((await passos(id)).at(-1)).toMatchObject({ dia: diasDepois(HOJE, 1), kind: 'volta', status: 'pedido', target: String(40 * REAL), expected: String(43.2 * REAL) });
+  }, 120_000);
+
+  it('o limite da empresa que não deixa a verba subir tira a campanha do ritmo; a volta é tentada todo dia até sair', async () => {
+    const e = await cenario('Brasa Limite Do Mês');
+    // Uma na verba de antes, subindo; uma abaixo da de antes (R$ 54,00 de ontem; a de antes é R$ 60,00), subindo; e uma que desce.
+    const sobe = await objetoLido(meta, e, 'campanha', { name: 'Sobe', daily_budget: '6000' });
+    const abaixo = await objetoLido(meta, e, 'campanha', { name: 'Abaixo', daily_budget: '5400' });
+    const desce = await objetoLido(meta, e, 'campanha', { name: 'Desce', daily_budget: '4000' });
+    const id = await ritmo(e, [
+      { recurso: sobe.recurso, nome: 'Sobe', base: 60, dias: todosOsDias(66) },
+      { recurso: abaixo.recurso, nome: 'Abaixo', base: 60, dias: todosOsDias(57) },
+      { recurso: desce.recurso, nome: 'Desce', base: 40, dias: todosOsDias(36) },
+    ]);
+    await passoFeito(e, id, diasDepois(HOJE, -1), abaixo.recurso, 54, 60);
+    // O teto do mês apertado: nenhum aumento cabe.
+    expect((await tetoDoMes(e, 1)).status).toBe(204);
+    const rotina = novaRotina();
+    const volta = (agora = new Date()) => rotina.executarPassos(20, { tenantIds: [e.tenantId] }, agora);
+
+    // Hoje: as duas que subiriam saem do ritmo. A que está na verba de antes não tem o que devolver; a que está abaixo
+    // tenta voltar (subir), e a volta também não cabe. A que desce segue no ritmo.
+    expect(resumo(await volta())).toEqual([
+      [sobe.recurso, 'bloqueado'],
+      [sobe.recurso, 'igual'],
+      [abaixo.recurso, 'bloqueado'],
+      [abaixo.recurso, 'bloqueado'],
+      [desce.recurso, 'pedido'],
+    ]);
+    const deHoje = (await passos(id)).filter((p) => p.dia === HOJE);
+    expect(deHoje.filter((p) => p.resource_id === sobe.recurso)).toMatchObject([
+      { kind: 'ritmo', status: 'bloqueado', reason: expect.stringMatching(/^orcamento-insuficiente: /) },
+      { kind: 'volta', status: 'igual', reason: 'saiu do ritmo: a verba já é a de antes' },
+    ]);
+    expect(deHoje.filter((p) => p.resource_id === abaixo.recurso)).toMatchObject([
+      { kind: 'ritmo', status: 'bloqueado', target: String(57 * REAL), expected: String(54 * REAL) },
+      { kind: 'volta', status: 'bloqueado', target: String(59.4 * REAL), expected: String(54 * REAL), reason: expect.stringMatching(/^orcamento-insuficiente: /) },
+    ]);
+    await executar(e);
+    expect([verbasNaMeta(sobe.id), verbasNaMeta(abaixo.id), verbasNaMeta(desce.id)]).toEqual([[], [], ['3600']]);
+    expect(await volta()).toEqual([]);
+
+    // Amanhã: a que ficou abaixo tenta a volta de novo (e o mês ainda não deixa); a que saiu na verba de antes não volta
+    // ao ritmo; a que desce já está na verba do dia.
+    expect(resumo(await volta(meioDiaDe(diasDepois(HOJE, 1))))).toEqual([
+      [abaixo.recurso, 'bloqueado'],
+      [desce.recurso, 'igual'],
+    ]);
+    // Depois de amanhã, com o mês folgado: a volta sai (R$ 54,00 → R$ 59,40).
+    expect((await tetoDoMes(e, 1_000_000)).status).toBe(204);
+    expect(resumo(await volta(meioDiaDe(diasDepois(HOJE, 2))))).toEqual([
+      [abaixo.recurso, 'pedido'],
+      [desce.recurso, 'igual'],
+    ]);
+    expect((await passos(id)).filter((p) => p.resource_id === abaixo.recurso).at(-1)).toMatchObject({ kind: 'volta', status: 'pedido', target: String(59.4 * REAL), expected: String(54 * REAL) });
+  }, 120_000);
+
+  it('o pedido de ontem que ficou na fila não gasta a tentativa de hoje: o executor o encerra pelo dia, e o de hoje entra', async () => {
+    const e = await cenario('Brasa Pedido De Ontem');
+    // A semana passada terminou com a verba em R$ 72,00 (a de antes é R$ 60,00); o domingo dela pedia R$ 66,00.
+    const a = await objetoLido(meta, e, 'campanha', { name: 'Combo sexta', daily_budget: '7200' });
+    const passada = diasDepois(segundaDe(HOJE), -7);
+    const id = await ritmo(e, [{ recurso: a.recurso, nome: 'Combo sexta', base: 60, dias: [72, 72, 72, 72, 72, 72, 66] }], { inicio: passada });
+    await passoFeito(e, id, passada, a.recurso, 72, 66);
+    const rotina = novaRotina();
+    const volta = (agora = new Date()) => rotina.executarPassos(20, { tenantIds: [e.tenantId] }, agora);
+    // Ontem a rotina pediu o passo (a verba do domingo, ou a volta), e o executor não chegou a rodar.
+    expect(resumo(await volta(meioDiaDe(diasDepois(HOJE, -1))))).toEqual([[a.recurso, 'pedido']]);
+    // Hoje, o pedido de ontem ainda está na fila para o mesmo objeto: o de hoje não entra, e nada fica guardado.
+    expect(resumo(await volta())).toEqual([[a.recurso, 'nao_pediu']]);
+    expect((await passos(id)).filter((p) => p.dia === HOJE)).toEqual([]);
+    // O executor encerra o de ontem pelo dia (o portão), sem tocar a Meta.
+    await executar(e);
+    expect(verbasNaMeta(a.id)).toEqual([]);
+    expect(await pedidosDe(e)).toMatchObject([{ status: 'falhou', status_reason: 'ritmo da semana: fora_do_dia' }]);
+    // A volta seguinte fecha o de ontem como bloqueado e pede o de hoje: R$ 72,00 → R$ 64,80.
+    expect(resumo(await volta())).toEqual([[a.recurso, 'pedido']]);
+    await executar(e);
+    expect(verbasNaMeta(a.id)).toEqual(['6480']);
+    expect(await volta()).toEqual([]);
+    expect((await passos(id)).filter((p) => p.dia >= diasDepois(HOJE, -1))).toMatchObject([
+      { dia: diasDepois(HOJE, -1), status: 'bloqueado', reason: 'ritmo da semana: fora_do_dia' },
+      { dia: HOJE, kind: 'volta', status: 'feito', target: String(64.8 * REAL), expected: String(72 * REAL) },
+    ]);
   }, 120_000);
 
   it('a semana que continua de outra: a verba de hoje é a de antes do ritmo, e a segunda parte da verba de domingo', async () => {
