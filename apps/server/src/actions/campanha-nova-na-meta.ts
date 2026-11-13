@@ -11,6 +11,7 @@ import {
   parametrosDoAnuncio,
   parametrosDoConjunto,
   parametrosDoCriativo,
+  type ObjetivoDaCampanhaNova,
 } from '../campanhas/campanha-nova-plano.js';
 import { contaConectada } from '../connections/conectada.js';
 import type { CredencialGuardada } from '../connections/oauth.js';
@@ -101,7 +102,7 @@ export async function lerCampanhaNova(tx: Tx, ref: ResourceRef, travar = false):
     Linha & {
       brand_id: string;
       name: string;
-      objective: 'cardapio' | 'whatsapp';
+      objective: ObjetivoDaCampanhaNova;
       radius_km: string;
       daily_budget_micros: string;
       end_date: string | null;

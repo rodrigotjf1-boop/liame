@@ -12,6 +12,9 @@ import { disparar } from '@/lib/disparar';
 import { reaisDeMicros } from '@/lib/formato';
 import { BlocoDoReels, PreviaDoReels } from './campanha-do-reels';
 import {
+  linhaDoTopo,
+  FREQUENCIA_DO_ALCANCE,
+  DO_TOPO,
   type CamposDaCampanha,
   type CampoComErro,
   conferirCampanha,
@@ -434,7 +437,11 @@ export function GavetaCampanhaNova({ brandId, origem, opcoes, hoje, reserva, aoF
                           value={o}
                           data-campo={i === 0 ? 'objetivo' : undefined}
                           checked={campos.objetivo === o}
-                          disabled={enviando || (o === 'cardapio' && loja !== null && !loja.menu_available)}
+                          disabled={
+                            enviando ||
+                            ((o === 'cardapio' || o === 'alcance') && loja !== null && !loja.menu_available) ||
+                            (o === 'seguidores' && !opcoes.instagram)
+                          }
                           aria-describedby={descrito('objetivo', `${ids}-obj-d`)}
                           onChange={() => mudar({ objetivo: o }, 'objetivo')}
                         />
@@ -503,6 +510,7 @@ export function GavetaCampanhaNova({ brandId, origem, opcoes, hoje, reserva, aoF
                       ? 'A empresa ainda não definiu o teto por campanha.'
                       : `Teto por campanha: ${reaisDeMicros(BigInt(opcoes.campaign_cap_micros))} por dia.`}{' '}
                     Enquanto estiver pausada, ela não gasta.
+                    {DO_TOPO.includes(campos.objetivo) && opcoes.top_of_funnel && !erros.verba ? ` ${linhaDoTopo(opcoes.top_of_funnel, microsDeReais(campos.verba)).texto}` : ''}
                   </span>
                   {erroDe('verba')}
                 </div>
@@ -558,6 +566,15 @@ export function GavetaCampanhaNova({ brandId, origem, opcoes, hoje, reserva, aoF
                       {OBJETIVOS[campos.objetivo].botao}
                       <small>acompanha o que você quer do anúncio</small>
                     </dd>
+                    {campos.objetivo === 'alcance' && (
+                      <>
+                        <dt>Frequência</dt>
+                        <dd>
+                          {FREQUENCIA_DO_ALCANCE}
+                          <small>a Meta para de mostrar a quem já viu; num raio de loja, isso evita cansar o bairro</small>
+                        </dd>
+                      </>
+                    )}
                     <dt>Rastreio do Liame</dt>
                     <dd>
                       {OBJETIVOS[campos.objetivo].rastreio}

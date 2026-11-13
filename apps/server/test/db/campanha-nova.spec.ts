@@ -16,6 +16,7 @@ import { ActionExecutor } from '../../src/worker/action-executor.js';
 import { ownerQuery, resetIpRateLimits, startApi, type TestApi } from '../helpers/api.js';
 import { type EmpresaComMeta, empresaComMeta, ligarFlagDaEmpresa, MetaDeMentira, SEGREDO_DO_APP_DA_META } from '../helpers/meta-de-mentira.js';
 import { fotoGuardada, lojaComCardapio, videoGuardado } from '../helpers/posts-semeados.js';
+import { diasQueFaltamNoMes } from '../../src/campanhas/campanhas-novas.service.js';
 import { hasDb } from './env.js';
 
 // A4 · X5, parte 1: a campanha nova na Meta, criada pausada (P10; D-A4-31, D-A4-35, D-A4-40 e D-A4-41; migration 0138),
@@ -176,6 +177,56 @@ describe.skipIf(!hasDb)('a campanha nova na Meta (A4 · X5, parte 1)', () => {
     await ownerQuery(`update liame.action_request set status = 'cancelada' where id = $1`, [r.body.action_id]);
     expect((await api.call('GET', `/v1/new-campaigns/${r.body.id}`, { cookie: e.cookie })).body.status).toBe('cancelada');
     expect((await pedir(e, { media_id: foto.id })).status).toBe(201);
+  }, 120_000);
+
+  it('a campanha com raio (R6): alcance com o cardápio, seguidores com o Instagram da Página e o teto de 25% do mês para os dois', async () => {
+    const e = await cenario('Brasa Campanha com Raio');
+    const foto = await fotoGuardada(e, armazem, { largura: 1080, altura: 1350 });
+    // O teto do mês faz o topo (25%) caber R$ 100,00 por dia nos dias que faltam: o resultado não depende do dia do mês.
+    const hoje = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Sao_Paulo', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
+    const dias = diasQueFaltamNoMes(hoje);
+    await ownerQuery(`update liame.app_user set totp_last_step = null where id = $1`, [e.userId]);
+    const t = await api.call('PUT', '/v1/budget/limits', { cookie: e.cookie, body: { month_micros: 400_000_000 * dias, campaign_daily_micros: 200_000_000 } });
+    expect(t.status, JSON.stringify(t.body)).toBe(200);
+
+    // Alcance: leva ao cardápio, como o cardápio.
+    const a = await pedir(e, { media_id: foto.id, objective: 'alcance', daily_budget_micros: 30_000_000 });
+    expect(a.status, JSON.stringify(a.body)).toBe(201);
+    expect(a.body).toMatchObject({ objective: 'alcance', link: CARDAPIO });
+    expect((await pedidoDe(a.body.action_id as string)).before_state).toMatchObject({ objetivo: 'alcance', link: CARDAPIO });
+
+    // Seguidores: sem o Instagram ligado à Página, recusa; com ele, leva ao perfil (sem o link do cardápio).
+    const outra = await fotoGuardada(e, armazem, { largura: 1080, altura: 1350 });
+    await ownerQuery(`update liame.connected_account set provider_attributes = '{}'::jsonb where tenant_id = $1 and provider = 'facebook_page'`, [e.tenantId]);
+    const semIg = await pedir(e, { media_id: outra.id, objective: 'seguidores', daily_budget_micros: 70_000_000 });
+    expect([semIg.status, semIg.body.code]).toEqual([422, 'sem-instagram-na-pagina']);
+    await ownerQuery(`update liame.connected_account set provider_attributes = $2::jsonb where tenant_id = $1 and provider = 'facebook_page'`, [e.tenantId, JSON.stringify({ instagram_id: e.instagram })]);
+    // O teto do topo: R$ 30 + R$ 80 por dia passa de R$ 100; a recusa diz até quanto cabe.
+    await ownerQuery(`update liame.ad_campaign_new set status = 'cancelada' where tenant_id = $1 and objective = 'seguidores'`, [e.tenantId]);
+    const passa = await pedir(e, { media_id: outra.id, objective: 'seguidores', daily_budget_micros: 80_000_000 });
+    expect([passa.status, passa.body.code]).toEqual([422, 'acima-do-teto-do-topo']);
+    expect(passa.body.detail).toContain('Diminua a verba diária para até R$ 70,00');
+    // A outra peça (um pedido em aberto por peça).
+    const outraPeca = randomUUID();
+    await ownerQuery(
+      `insert into liame.ad_piece (id, tenant_id, brand_id, request_id, status, version, review_status, decided_by, decided_at)
+       select $1, tenant_id, brand_id, request_id, 'aprovada', 1, 'passou', decided_by, now() from liame.ad_piece where id = $2`,
+      [outraPeca, e.peca],
+    );
+    await ownerQuery(
+      `insert into liame.ad_piece_version (id, tenant_id, piece_id, version, title, body, button, review, review_status, rules_version, content_hash, author)
+       values ($1, $2, $3, 1, 'Siga a casa', 'As novidades da semana no Instagram.', 'pedir_agora', '{}'::jsonb, 'passou', '{}'::jsonb, $4, 'criativo')`,
+      [randomUUID(), e.tenantId, outraPeca, randomBytes(32).toString('hex')],
+    );
+    const s = await pedir(e, { piece_id: outraPeca, media_id: outra.id, objective: 'seguidores', daily_budget_micros: 70_000_000 });
+    expect(s.status, JSON.stringify(s.body)).toBe(201);
+    expect(s.body).toMatchObject({ objective: 'seguidores', link: null });
+    expect((await pedidoDe(s.body.action_id as string)).before_state).toMatchObject({ objetivo: 'seguidores', link: null, instagram: { id: e.instagram, nome: '@misterburgers' } });
+
+    // As opções da gaveta: o teto do topo, o reservado (R$ 30 + R$ 70 por dia) e os dias que faltam.
+    const o = await api.call('GET', `/v1/new-campaigns/options?brand_id=${e.brandId}`, { cookie: e.cookie });
+    expect(o.status, JSON.stringify(o.body)).toBe(200);
+    expect(o.body.top_of_funnel).toEqual({ cap_micros: 100_000_000 * dias, used_micros: 100_000_000 * dias, days_left: dias });
   }, 120_000);
 
   it('as opções da gaveta (parte 2): quem assina, as lojas com o endereço e o cardápio, o teto, o que impede e a campanha de cada peça', async () => {

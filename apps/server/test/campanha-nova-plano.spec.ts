@@ -8,6 +8,7 @@ import {
   parametrosDoAnuncio,
   parametrosDoConjunto,
   parametrosDoCriativo,
+  perfilDoInstagram,
   planoDaCampanhaNova,
   planoDeAtivar,
   planoDePausar,
@@ -159,5 +160,52 @@ describe('a campanha nova (A4 · X5, parte 1)', () => {
     expect(planoDaCampanhaNova({ ...reels, peca: estado().peca }).ok).toBe(false);
     expect(planoDaCampanhaNova(estado({ peca: null })).ok).toBe(false);
     expect(planoDaCampanhaNova({ ...reels, midia: { id: 'nao-e-numero', tipo: 'reels', legenda: '' } }).ok).toBe(false);
+  });
+});
+
+describe('a campanha com raio (R6 do plano da região; D-RG-48 a D-RG-51)', () => {
+  it('alcance: Reconhecimento otimizado para alcance, a frequência de 2 a cada 7 dias, a Página promovida e o botão para o cardápio com o rastreio', () => {
+    const e = estado({ objetivo: 'alcance' });
+    expect(planoDaCampanhaNova(e).ok).toBe(true);
+    expect(parametrosDaCampanha(e).objective).toBe('OUTCOME_AWARENESS');
+    const c = parametrosDoConjunto(e, 'C1');
+    expect(c.optimization_goal).toBe('REACH');
+    expect(JSON.parse(c.frequency_control_specs!)).toEqual([{ event: 'IMPRESSIONS', interval_days: 7, max_frequency: 2 }]);
+    expect(JSON.parse(c.promoted_object!)).toEqual({ page_id: '1234567890' });
+    expect(c.destination_type).toBeUndefined();
+    const cr = parametrosDoCriativo(e, { tipo: 'foto', imagem: 'https://arquivos.exemplo/foto.jpg' });
+    expect(JSON.parse(cr.object_story_spec!).link_data.call_to_action).toEqual({ type: 'ORDER_NOW', value: { link: 'https://cardapio.exemplo.com.br/mister-centro' } });
+    expect(cr.url_tags).toBe(rastreioDoAnuncio());
+    // O alcance leva ao cardápio: sem o link, o plano recusa.
+    expect(planoDaCampanhaNova(estado({ objetivo: 'alcance', link: null })).ok).toBe(false);
+  });
+
+  it('seguidores: Tráfego para o perfil do Instagram (VISIT_INSTAGRAM_PROFILE), o botão de ver o perfil, sem o link do cardápio e sem rastreio', () => {
+    const e = estado({ objetivo: 'seguidores', link: null });
+    expect(planoDaCampanhaNova(e).ok).toBe(true);
+    expect(parametrosDaCampanha(e).objective).toBe('OUTCOME_TRAFFIC');
+    const c = parametrosDoConjunto(e, 'C1');
+    expect(c).toMatchObject({ optimization_goal: 'VISIT_INSTAGRAM_PROFILE', destination_type: 'INSTAGRAM_PROFILE' });
+    expect(c.frequency_control_specs).toBeUndefined();
+    const cr = parametrosDoCriativo(e, { tipo: 'foto', imagem: 'https://arquivos.exemplo/foto.jpg' });
+    expect(JSON.parse(cr.object_story_spec!).link_data).toMatchObject({
+      link: 'https://www.instagram.com/misterburgers/',
+      call_to_action: { type: 'VIEW_INSTAGRAM_PROFILE', value: { link: 'https://www.instagram.com/misterburgers/' } },
+    });
+    expect(cr.url_tags).toBeUndefined();
+    // Sem o Instagram ligado à Página, ou com o link do cardápio, o plano recusa.
+    expect(planoDaCampanhaNova(estado({ objetivo: 'seguidores', link: null, instagram: null }))).toEqual({
+      ok: false,
+      motivo: 'Seguidores no Instagram pede o Instagram ligado à Página: conecte o Instagram da marca antes.',
+    });
+    expect(planoDaCampanhaNova(estado({ objetivo: 'seguidores' })).ok).toBe(false);
+  });
+
+  it('o perfil do Instagram pelo nome da conta, sem o @; o nome fora do formato não vira link', () => {
+    expect(perfilDoInstagram('@casa.brasa_rj')).toBe('https://www.instagram.com/casa.brasa_rj/');
+    expect(perfilDoInstagram('misterburgers')).toBe('https://www.instagram.com/misterburgers/');
+    expect(perfilDoInstagram('@')).toBeNull();
+    expect(perfilDoInstagram('nome com espaço')).toBeNull();
+    expect(perfilDoInstagram('a'.repeat(31))).toBeNull();
   });
 });

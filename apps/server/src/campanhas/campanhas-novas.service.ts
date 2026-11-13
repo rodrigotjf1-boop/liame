@@ -11,7 +11,7 @@ import { FlagService } from '../flags/flag.service.js';
 import { PolicyService } from '../policy/policy.service.js';
 import { tetoDaVerba } from '../policy/teto-da-verba.js';
 import { destinoDoPost } from '../posts/link-do-post.js';
-import { recursoDaCampanhaNova } from './campanha-nova-plano.js';
+import { levaAoCardapio, OBJETIVOS_DO_TOPO, type ObjetivoDaCampanhaNova, PARTE_DO_TOPO_NO_MES, recursoDaCampanhaNova } from './campanha-nova-plano.js';
 
 // A campanha nova na Meta, criada pausada (A4, X5, parte 1; P10 aprovado em 05/10/2026; D-A4-31, D-A4-35, D-A4-40 e
 // D-A4-41). A rota confere tudo o que a ferramenta `campanha_criar` exige antes de pedir: a peça aprovada, a mídia
@@ -69,6 +69,28 @@ function motivoSemCardapio(destino: Awaited<ReturnType<typeof destinoDoPost>>, u
   return 'A loja não tem o cardápio online ligado ao Liame: ligue o Regem em Contas conectadas, ou use o objetivo de conversas no WhatsApp.';
 }
 
+/** Reais escritos ("R$ 1.234,50") a partir de micros. */
+const reais = (micros: number): string => `R$ ${(micros / 1_000_000).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+
+/** Os dias que faltam no mês, contando hoje (`AAAA-MM-DD`). */
+export function diasQueFaltamNoMes(hoje: string): number {
+  const [a, m, d] = hoje.split('-').map(Number) as [number, number, number];
+  const ultimo = new Date(Date.UTC(a, m, 0)).getUTCDate();
+  return ultimo - d + 1;
+}
+
+/**
+ * O teto de alcance e seguidores (R6, D-RG-49): 25% do teto do mês da empresa. Cabe quando o que já está reservado
+ * (as campanhas assim pedidas ou ativas, a verba diária vezes os dias que faltam) mais a verba diária nova vezes os
+ * dias que faltam não passa dele. Função pura; dinheiro em micros.
+ */
+export function cabeNoTopo(t: { tetoDoMes: number; reservadoPorDia: number; dias: number }, verbaDiaria: number): { cabe: boolean; teto: number; usado: number; maximo: number } {
+  const teto = Math.floor(t.tetoDoMes * PARTE_DO_TOPO_NO_MES);
+  const usado = t.reservadoPorDia * t.dias;
+  const maximo = t.dias > 0 ? Math.max(0, Math.floor((teto - usado) / t.dias / 10_000) * 10_000) : 0;
+  return { cabe: usado + verbaDiaria * t.dias <= teto, teto, usado, maximo };
+}
+
 /** O dia de hoje no fuso da empresa (`AAAA-MM-DD`). */
 function hojeNoFuso(agora: Date, fuso: string): string {
   return new Intl.DateTimeFormat('en-CA', { timeZone: fuso, year: 'numeric', month: '2-digit', day: '2-digit' }).format(agora);
@@ -87,7 +109,7 @@ type LinhaDaCampanhaNova = {
   reels_published_at: Date | null;
   unit_id: string;
   name: string;
-  objective: 'cardapio' | 'whatsapp';
+  objective: ObjetivoDaCampanhaNova;
   radius_km: string;
   daily_budget_micros: string;
   end_date: string | null;
@@ -241,9 +263,19 @@ export class CampanhasNovasService {
       );
     }
 
-    // O destino: o cardápio da loja escolhida, ou o WhatsApp da Página.
+    // Seguidores no Instagram (R6): o destino é o perfil do Instagram ligado à Página, conectado.
+    if (body.objective === 'seguidores' && !(await this.instagramDaPagina(tx, quem.tenantId, body.brand_id, paginas[0]!.instagram_id))) {
+      throw recusa(
+        'sem-instagram-na-pagina',
+        'A Página não tem o Instagram ligado',
+        'Seguidores no Instagram leva ao perfil do Instagram ligado à Página da marca. Ligue o Instagram à Página na Meta e conecte de novo em Contas conectadas.',
+        'objective',
+      );
+    }
+
+    // O destino: o cardápio da loja escolhida (cardápio e alcance), o WhatsApp da Página ou o perfil do Instagram.
     let link: string | null = null;
-    if (body.objective === 'cardapio') {
+    if (levaAoCardapio(body.objective)) {
       const destino = await destinoDoPost(tx, quem.tenantId, body.brand_id);
       const motivo = motivoSemCardapio(destino, body.unit_id);
       if (motivo || !destino.ok) throw recusa('sem-cardapio', 'Sem o cardápio da loja', motivo ?? '', 'objective');
@@ -263,6 +295,15 @@ export class CampanhasNovasService {
     }
 
     if (body.end_date && body.end_date <= hojeNoFuso(agora, timezone)) throw recusa('fim-no-passado', 'Data de fim', 'A data de fim precisa ser depois de hoje.', 'end_date');
+
+    // Alcance e seguidores: até 25% do teto do mês, somadas as campanhas assim pedidas ou ativas (R6, D-RG-49).
+    if (OBJETIVOS_DO_TOPO.includes(body.objective)) {
+      const topo = await this.topoDoMes(quem.tenantId, timezone, agora, null);
+      if (topo) {
+        const c = cabeNoTopo(topo, body.daily_budget_micros);
+        if (!c.cabe) throw recusa('acima-do-teto-do-topo', 'Passa do teto de alcance e seguidores', this.textoDoTopo(c), 'daily_budget_micros');
+      }
+    }
 
     // O pedido anterior com a mesma peça (ou o mesmo Reels) que já se encerrou em Aprovações (recusado, expirado, ou que
     // falhou no meio) sai do caminho: a campanha nova dele fica cancelada (ou não criada, se já tinha começado na Meta).
@@ -362,7 +403,7 @@ export class CampanhasNovasService {
       return { id: u.id, name: u.name, address, has_address: u.precision === 'endereco', delivery_radius_km: u.radius === null ? null : Number(u.radius), menu_available: motivo === null, menu_block: motivo };
     });
 
-    const { policies } = await this.policies.load(tx, quem.tenantId, query.brand_id);
+    const { policies, timezone } = await this.policies.load(tx, quem.tenantId, query.brand_id);
     type Ultima = { campaign_id: string; status: NewCampaignResponse['status']; active: boolean; action_id: string | null };
     const by_piece = (
       await tx.execute<Ultima & { piece_id: string }>(sql`
@@ -387,6 +428,9 @@ export class CampanhasNovasService {
       instagram,
       units,
       campaign_cap_micros: tetoDaVerba(policies, 'meta_ads'),
+      top_of_funnel: await this.topoDoMes(quem.tenantId, timezone, new Date(), null).then((t) =>
+        t ? { cap_micros: Math.floor(t.tetoDoMes * PARTE_DO_TOPO_NO_MES), used_micros: t.reservadoPorDia * t.dias, days_left: t.dias } : null,
+      ),
       by_piece,
       by_reels,
     };
@@ -401,8 +445,8 @@ export class CampanhasNovasService {
     const tx = currentTx();
     const quem = this.quem(auth);
     const c = (
-      await tx.execute<{ brand_id: string; ad_account_id: string; status: string; active: boolean; daily_budget_micros: string }>(sql`
-        select brand_id, ad_account_id, status, active, daily_budget_micros::text from liame.ad_campaign_new
+      await tx.execute<{ brand_id: string; ad_account_id: string; status: string; active: boolean; daily_budget_micros: string; objective: ObjetivoDaCampanhaNova }>(sql`
+        select brand_id, ad_account_id, status, active, daily_budget_micros::text, objective from liame.ad_campaign_new
          where id = ${id} and tenant_id = ${quem.tenantId}
            for update`)
     ).rows[0];
@@ -422,6 +466,14 @@ export class CampanhasNovasService {
     if (teto !== null && Number(c.daily_budget_micros) > teto) {
       throw recusa('acima-do-teto', 'Acima do teto por campanha', `A verba diária passa do teto por campanha, que é de R$ ${(teto / 1_000_000).toFixed(2).replace('.', ',')} por dia. Quem muda o teto é o Dono ou o Administrador, em Verba do mês.`);
     }
+    if (OBJETIVOS_DO_TOPO.includes(c.objective)) {
+      const { timezone } = await this.policies.load(tx, quem.tenantId, c.brand_id);
+      const topo = await this.topoDoMes(quem.tenantId, timezone, new Date(), id);
+      if (topo) {
+        const cabe = cabeNoTopo(topo, Number(c.daily_budget_micros));
+        if (!cabe.cabe) throw recusa('acima-do-teto-do-topo', 'Passa do teto de alcance e seguidores', this.textoDoTopo(cabe));
+      }
+    }
     const pedido = await this.actions.pedirPelaRota(auth, {
       tool: 'campanha_nova_ativar',
       brand_id: c.brand_id,
@@ -432,6 +484,42 @@ export class CampanhasNovasService {
     });
     auditDetail({ resourceId: id, before: { active: false }, after: { brand_id: c.brand_id, action_id: pedido } });
     return this.obter(auth, id);
+  }
+
+  /** O Instagram ligado à Página, conectado na marca (o destino de seguidores); nulo sem ele. */
+  private async instagramDaPagina(tx: ReturnType<typeof currentTx>, tenantId: string, brandId: string, instagramId: string | null): Promise<{ name: string } | null> {
+    if (!instagramId) return null;
+    return (
+      (
+        await tx.execute<{ name: string }>(sql`
+          select a.name from liame.connected_account a
+           where a.tenant_id = ${tenantId} and a.brand_id = ${brandId} and a.provider = 'instagram' and a.external_id = ${instagramId} and ${contaConectada('a')}
+           limit 1`)
+      ).rows[0] ?? null
+    );
+  }
+
+  /**
+   * O teto do mês da empresa e o que já está reservado por dia para alcance e seguidores (as campanhas pedidas, criando
+   * ou ativas, menos `excluir`), com os dias que faltam no mês. Nulo sem o teto do mês.
+   */
+  private async topoDoMes(tenantId: string, fuso: string, agora: Date, excluir: string | null): Promise<{ tetoDoMes: number; reservadoPorDia: number; dias: number } | null> {
+    const tx = currentTx();
+    const teto = (await tx.execute<{ limit_micros: string }>(sql`select limit_micros::text from liame.budget_policy where tenant_id = ${tenantId} and brand_id is null`)).rows[0];
+    if (!teto) return null;
+    const reservado = (
+      await tx.execute<{ soma: string }>(sql`
+        select coalesce(sum(daily_budget_micros), 0)::text as soma from liame.ad_campaign_new
+         where tenant_id = ${tenantId} and objective in ('alcance', 'seguidores') and (status in ('pedida', 'criando') or (status = 'criada' and active))
+           ${excluir ? sql`and id <> ${excluir}` : sql``}`)
+    ).rows[0]!;
+    return { tetoDoMes: Number(teto.limit_micros), reservadoPorDia: Number(reservado.soma), dias: diasQueFaltamNoMes(hojeNoFuso(agora, fuso)) };
+  }
+
+  private textoDoTopo(c: { teto: number; usado: number; maximo: number }): string {
+    return `Alcance e seguidores usam até 25% do teto do mês, ${reais(c.teto)}. Já há ${reais(c.usado)} reservados em campanhas assim até o fim do mês. ${
+      c.maximo > 0 ? `Diminua a verba diária para até ${reais(c.maximo)}, ou deixe esta campanha para o mês que vem.` : 'Deixe esta campanha para o mês que vem.'
+    }`;
   }
 
   /** Uma campanha nova da empresa. */

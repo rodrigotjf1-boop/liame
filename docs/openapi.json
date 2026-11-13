@@ -128689,7 +128689,9 @@
                     "type": "string",
                     "enum": [
                       "cardapio",
-                      "whatsapp"
+                      "whatsapp",
+                      "alcance",
+                      "seguidores"
                     ]
                   },
                   "radius_km": {
@@ -128816,7 +128818,9 @@
                       "type": "string",
                       "enum": [
                         "cardapio",
-                        "whatsapp"
+                        "whatsapp",
+                        "alcance",
+                        "seguidores"
                       ]
                     },
                     "radius_km": {
@@ -129412,7 +129416,9 @@
                       "type": "string",
                       "enum": [
                         "cardapio",
-                        "whatsapp"
+                        "whatsapp",
+                        "alcance",
+                        "seguidores"
                       ]
                     },
                     "radius_km": {
@@ -130057,6 +130063,35 @@
                       "minimum": -9007199254740991,
                       "maximum": 9007199254740991
                     },
+                    "top_of_funnel": {
+                      "type": [
+                        "object",
+                        "null"
+                      ],
+                      "properties": {
+                        "cap_micros": {
+                          "type": "integer",
+                          "minimum": -9007199254740991,
+                          "maximum": 9007199254740991
+                        },
+                        "used_micros": {
+                          "type": "integer",
+                          "minimum": -9007199254740991,
+                          "maximum": 9007199254740991
+                        },
+                        "days_left": {
+                          "type": "integer",
+                          "minimum": -9007199254740991,
+                          "maximum": 9007199254740991
+                        }
+                      },
+                      "required": [
+                        "cap_micros",
+                        "used_micros",
+                        "days_left"
+                      ],
+                      "additionalProperties": false
+                    },
                     "by_piece": {
                       "type": "array",
                       "items": {
@@ -130158,6 +130193,7 @@
                     "instagram",
                     "units",
                     "campaign_cap_micros",
+                    "top_of_funnel",
                     "by_piece",
                     "by_reels"
                   ],
@@ -130481,7 +130517,9 @@
                       "type": "string",
                       "enum": [
                         "cardapio",
-                        "whatsapp"
+                        "whatsapp",
+                        "alcance",
+                        "seguidores"
                       ]
                     },
                     "radius_km": {

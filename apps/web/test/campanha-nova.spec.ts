@@ -8,6 +8,7 @@ import {
   erroDoPedido,
   falaDoLinkDaBio,
   idDaCampanhaNova,
+  linhaDoTopo,
   linkDoGerenciador,
   nomeDaCampanhaDoReels,
   notaDoLinkDaBio,
@@ -32,6 +33,7 @@ const opcoes = (o: Partial<NewCampaignOptionsResponse> = {}): NewCampaignOptions
     { id: OUTRA, name: 'Loja Tijuca', address: null, has_address: false, delivery_radius_km: null, menu_available: false, menu_block: 'A loja recebe os pedidos online por outra plataforma: use o objetivo de conversas no WhatsApp.' },
   ],
   campaign_cap_micros: 50_000_000,
+  top_of_funnel: null,
   by_piece: [],
   by_reels: [],
   ...o,
@@ -53,6 +55,26 @@ describe('campanha nova: a conferência da gaveta', () => {
     expect(conferirCampanha(campos({ verba: '60' }), opcoes(), [midia()], '2026-11-11').verba).toMatch(/^A verba diária passa do teto por campanha, que é de R\$\s50,00 por dia/);
     expect(conferirCampanha(campos({ fim: '2026-11-11' }), opcoes(), [midia()], '2026-11-11').fim).toBe('A data de fim precisa ser depois de hoje.');
     expect(conferirCampanha(campos({ nome: '  ' }), opcoes(), [midia()], '2026-11-11').nome).toBe('Dê um nome à campanha.');
+  });
+
+  it('a campanha com raio (R6): alcance pede o cardápio, seguidores pede o Instagram, e os dois cabem no teto de 25% do mês', () => {
+    expect(conferirCampanha(campos({ objetivo: 'alcance' }), opcoes(), [midia()], '2026-11-11')).toEqual({});
+    const semCardapio = opcoes({ units: [{ ...opcoes().units[1]!, has_address: true }] });
+    expect(conferirCampanha(campos({ loja: OUTRA, objetivo: 'alcance' }), semCardapio, [midia()], '2026-11-11').objetivo).toMatch(/^A loja recebe os pedidos online/);
+    expect(conferirCampanha(campos({ objetivo: 'seguidores' }), opcoes(), [midia()], '2026-11-11')).toEqual({});
+    expect(conferirCampanha(campos({ objetivo: 'seguidores' }), opcoes({ instagram: null }), [midia()], '2026-11-11').objetivo).toMatch(/^Seguidores no Instagram leva ao perfil/);
+    // O teto do topo: R$ 100 por dia nos 10 dias que faltam; R$ 60 já reservados por dia.
+    const topo = { cap_micros: 1_000_000_000, used_micros: 600_000_000, days_left: 10 };
+    expect(conferirCampanha(campos({ objetivo: 'alcance', verba: '40,00' }), opcoes({ top_of_funnel: topo }), [midia()], '2026-11-11')).toEqual({});
+    const passa = conferirCampanha(campos({ objetivo: 'alcance', verba: '45,00' }), opcoes({ top_of_funnel: topo }), [midia()], '2026-11-11').verba;
+    expect(passa).toMatch(/Esta passa do teto: diminua a verba diária para até R\$\s40,00\.$/);
+    // O cardápio não conta no topo.
+    expect(conferirCampanha(campos({ verba: '45,00' }), opcoes({ top_of_funnel: topo }), [midia()], '2026-11-11')).toEqual({});
+    const linha = linhaDoTopo(topo, 30_000_000);
+    expect(linha.passa).toBe(false);
+    expect(linha.texto.replace(/ /g, ' ')).toBe('Alcance e seguidores: até 25% do teto do mês (R$ 1.000,00). Já há R$ 600,00 reservados em campanhas assim; esta usa até R$ 300,00 até o fim do mês.');
+    expect(erroDoPedido({ status: 422, code: 'acima-do-teto-do-topo', title: 't', detail: 'd' } as never).campo).toBe('verba');
+    expect(erroDoPedido({ status: 422, code: 'sem-instagram-na-pagina', title: 't', detail: 'd' } as never).campo).toBe('objetivo');
   });
 
   it('o Reels (X5, parte 6): a mídia é o próprio post, não há o que escolher em Fotos; o resto confere igual', () => {

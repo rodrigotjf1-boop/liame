@@ -6,7 +6,17 @@ import { type RefObject, useCallback, useEffect, useId, useState } from 'react';
 import { Icone } from '@/components/ui/icone';
 import { PreviaDoReels } from '@/components/criativos/campanha-do-reels';
 import { PreviaDoAnuncio } from '@/components/criativos/gaveta-campanha-nova';
-import { diaDoReels, ehVideo, idDaCampanhaNova, kmEscrito, linkDoGerenciador, OBJETIVOS, passosDaCriacao, situacaoDaCampanha } from '@/components/criativos/campanha-nova-textos';
+import {
+  diaDoReels,
+  ehVideo,
+  FREQUENCIA_DO_ALCANCE,
+  idDaCampanhaNova,
+  kmEscrito,
+  linkDoGerenciador,
+  OBJETIVOS,
+  passosDaCriacao,
+  situacaoDaCampanha,
+} from '@/components/criativos/campanha-nova-textos';
 import { api, chamar, mensagemDe, type Problema } from '@/lib/api';
 import type { Prova } from '@/lib/chave-de-acesso';
 import { disparar } from '@/lib/disparar';
@@ -327,7 +337,9 @@ export function DetalheCampanhaNova({ acao, grupo, agora, podeDecidir, podeOpera
           <dt>Objetivo</dt>
           <dd>
             {OBJETIVOS[c.objective].rotulo}
-            <small>botão “{OBJETIVOS[c.objective].botao}”</small>
+            <small>
+              botão “{OBJETIVOS[c.objective].botao}”{c.objective === 'alcance' ? ` · ${FREQUENCIA_DO_ALCANCE.toLowerCase()}` : ''}
+            </small>
           </dd>
           <dt>Quem vê</dt>
           <dd>
