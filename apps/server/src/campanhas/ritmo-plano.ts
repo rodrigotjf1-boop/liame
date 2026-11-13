@@ -28,7 +28,7 @@ export function ritmoDoRecurso(resourceId: string): string | null {
 export const FLAG_DO_RITMO = 'ritmo_da_semana';
 /** As ferramentas do ritmo no trilho de ações: o pedido da semana e o passo de um dia. */
 export const FERRAMENTA_DO_RITMO = 'ritmo_da_semana';
-export const FERRAMENTA_DO_PASSO = 'orcamento_do_ritmo';
+export const FERRAMENTA_DA_VERBA_DO_DIA = 'orcamento_do_ritmo';
 
 /**
  * O motivo do passo que não sai porque a campanha não está como o Liame deixou (D-RG-63): alguém mudou a verba ou

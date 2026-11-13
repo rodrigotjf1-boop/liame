@@ -4,7 +4,7 @@ import { type SQL, sql } from 'drizzle-orm';
 import { conferir, DIAS_CONFERINDO, type EstadoConferido, type ResultadoDaConferencia, type SituacaoDoObjeto, situacaoDaLeitura, verbaDaLeitura } from '../actions/conferencia-do-gasto.js';
 import { CONNECTORS } from '../actions/connectors.js';
 import { objetoDoRecurso, type TipoDeObjeto } from '../actions/meta-anuncios.js';
-import { FERRAMENTA_DO_PASSO } from '../campanhas/ritmo-plano.js';
+import { FERRAMENTA_DA_VERBA_DO_DIA } from '../campanhas/ritmo-plano.js';
 import { DATABASE } from '../database/database.module.js';
 import { type JobScope, tenantFilter } from './outbox-publisher.js';
 
@@ -94,7 +94,7 @@ export class ConferenciaDoGasto {
            -- O passo do ritmo da semana (plano da região, R7) muda a verba todo dia: comparar a semana com "a verba de
            -- antes e a de depois" de um passo só daria gasto acima sem ter havido. Enquanto ele for a mudança que vale
            -- no objeto, o objeto não é conferido por aqui (e a mudança anterior não volta a ser).
-           and v.tool <> ${FERRAMENTA_DO_PASSO}
+           and v.tool <> ${FERRAMENTA_DA_VERBA_DO_DIA}
            and not exists (select 1 from liame.action_spend_check k where k.action_request_id = v.id and k.checked_on = ${hojeDa(sql`v.fuso`)})
          order by v.tenant_id, v.conta, v.id
          limit ${limite}`),

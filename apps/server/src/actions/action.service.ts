@@ -43,7 +43,7 @@ import type { AcaoSombra } from '../sombra/regras.js';
 import { advance, workflowOf } from '../workflow/workflow.js';
 import { SOCIAL } from '../ai/social/prompt.js';
 import { abrirSegundaRodada, maisSugestoes, oQueDesligaAsSugestoes, paramsDaResposta, type SituacaoDaSugestao } from '../avaliacoes/sugestoes.js';
-import { FERRAMENTA_DO_PASSO, FERRAMENTA_DO_RITMO, type PassoDoRitmo } from '../campanhas/ritmo-plano.js';
+import { FERRAMENTA_DA_VERBA_DO_DIA, FERRAMENTA_DO_RITMO, type PassoDoRitmo } from '../campanhas/ritmo-plano.js';
 import { oQueSeguraOPassoDoRitmo } from '../campanhas/ritmo-portao.js';
 import { oQueSeguraOAutomatico } from '../comentarios/automatico.js';
 import { oQueSeguraODirectAutomatico } from '../direct/automatico.js';
@@ -376,7 +376,7 @@ export class ActionService {
     agora = new Date(),
   ): Promise<string> {
     const valor = (input.params as { daily_budget_micros?: unknown }).daily_budget_micros;
-    if (input.tool !== FERRAMENTA_DO_PASSO || !input.brand_id || typeof valor !== 'number') {
+    if (input.tool !== FERRAMENTA_DA_VERBA_DO_DIA || !input.brand_id || typeof valor !== 'number') {
       throw new AppProblem(400, 'ferramenta-nao-e-o-ritmo', 'Não é o passo do ritmo', 'Por aqui o funcionário só pede o passo de um dia do ritmo da semana.');
     }
     const segura = await oQueSeguraOPassoDoRitmo(

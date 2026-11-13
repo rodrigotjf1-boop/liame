@@ -4,7 +4,7 @@ import { sql } from 'drizzle-orm';
 import { ActionService } from '../actions/action.service.js';
 import { naTransacaoDaEmpresa } from '../ai/na-empresa.js';
 import { controleDoRitmo, decidirPasso, DIAS_DA_VOLTA, type PassoDecidido } from '../campanhas/ritmo-passos.js';
-import { CAMPANHAS_NO_RITMO, EstadoDoRitmo, FERRAMENTA_DO_PASSO, FERRAMENTA_DO_RITMO, FLAG_DO_RITMO, FORA_DO_RITMO, recursoDoRitmo } from '../campanhas/ritmo-plano.js';
+import { CAMPANHAS_NO_RITMO, EstadoDoRitmo, FERRAMENTA_DA_VERBA_DO_DIA, FERRAMENTA_DO_RITMO, FLAG_DO_RITMO, FORA_DO_RITMO, recursoDoRitmo } from '../campanhas/ritmo-plano.js';
 import { contaConectada } from '../connections/conectada.js';
 import { currentTx } from '../context/request-context.js';
 import { DATABASE } from '../database/database.module.js';
@@ -409,7 +409,7 @@ export class RitmoDaSemanaService {
         const pedido = await this.actions.ajustarPeloRitmo(
           { tenantId: r.tenant_id, agentKey: GESTOR_DE_TRAFEGO, agentLabel: ROTULO_DO_GESTOR, emNomeDe },
           {
-            tool: FERRAMENTA_DO_PASSO,
+            tool: FERRAMENTA_DA_VERBA_DO_DIA,
             brand_id: r.brand_id,
             provider: 'meta_ads',
             account_id: r.conta,
