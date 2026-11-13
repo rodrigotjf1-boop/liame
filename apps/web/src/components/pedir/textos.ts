@@ -566,6 +566,9 @@ export function tituloDoPedido(action: string, alvo: Pick<AdObject, 'kind' | 'na
   const a = alvoEmFrase(alvo);
   if (action === 'orcamento.aumentar') return `Aumentar a verba ${a.do}`;
   if (action === 'orcamento.reduzir') return `Reduzir a verba ${a.do}`;
+  // O passo de um dia do ritmo da semana (plano da região, R7): a mesma mudança de verba, pelo ritmo aprovado.
+  if (action === 'orcamento.ritmo_aumentar') return `Aumentar a verba ${a.do}, pelo ritmo da semana`;
+  if (action === 'orcamento.ritmo_reduzir') return `Reduzir a verba ${a.do}, pelo ritmo da semana`;
   if (action.endsWith('.pausar')) return `Pausar ${a.o}`;
   if (action.endsWith('.retomar')) return `Retomar ${a.o}`;
   return `Mudança ${a.do}`;

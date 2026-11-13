@@ -531,7 +531,10 @@ function notaDaMudanca(m: BudgetMonthChange, v: Pick<Verba, 'today' | 'timezone'
   const o = artigoDo(m.target.kind);
   if (m.superseded_by) {
     const dia = dataNoFuso(new Date(m.superseded_by.executed_at), v.timezone);
-    return `O Liame mudou de novo ${dia === v.today ? 'hoje' : `em ${diaMes(dia)}`}: vale o pedido mais recente.`;
+    const quando = dia === v.today ? 'hoje' : `em ${diaMes(dia)}`;
+    // O passo do ritmo da semana (plano da região, R7) não está nesta lista: a nota diz que foi ele.
+    if (m.superseded_by.rhythm) return `O ritmo da semana mudou a verba depois, ${quando}: ele segue o que foi aprovado para a semana.`;
+    return `O Liame mudou de novo ${quando}: vale o pedido mais recente.`;
   }
   const c = m.check;
   if (!c) return situacao === 'espera' ? 'A conferência roda depois da leitura da manhã.' : null;
@@ -610,6 +613,21 @@ export function linhaDaMudanca(m: BudgetMonthChange, v: Pick<Verba, 'today' | 't
   };
 }
 
+/** Um ritmo da semana na Verba do mês: a semana, a situação e quantas mudanças de verba o Liame fez por ele. */
+export type RitmoDaVerba = { id: string; titulo: string; texto: string; href: string | null };
+
+const SITUACAO_DO_RITMO: Record<string, string> = { aprovado: 'aprovado', parado: 'parado', encerrado: 'encerrado' };
+
+/** Os ritmos da semana do mês (plano da região, R7): os passos diários ficam juntos aqui, fora da lista de mudanças. */
+export function ritmosDaVerba(v: Pick<Verba, 'rhythms'>): RitmoDaVerba[] {
+  return (v.rhythms ?? []).map((r) => ({
+    id: r.id,
+    titulo: `Ritmo da semana de ${diaMes(r.week.from)} a ${diaMes(r.week.to)}${SITUACAO_DO_RITMO[r.status] ? ` (${SITUACAO_DO_RITMO[r.status]})` : ''}`,
+    texto: `${plural(r.steps, 'mudança', 'mudanças')} de verba em ${plural(r.objects, 'campanha', 'campanhas')}, dentro do que foi aprovado para a semana.`,
+    href: r.action_id ? `/aprovacoes?pedido=${r.action_id}` : null,
+  }));
+}
+
 export type MudancasDaVerba = {
   titulo: string;
   sub: string;
@@ -619,6 +637,8 @@ export type MudancasDaVerba = {
   linhas: LinhaDaMudanca[];
   /** A lista traz mudança de antes do mês que continua valendo e sendo conferida. */
   deAntes: string | null;
+  /** Os ritmos da semana do mês, com os passos juntos. */
+  ritmos: RitmoDaVerba[];
   nota: string;
   vazio: { titulo: string; texto: string };
 };
@@ -636,11 +656,14 @@ export function mudancasDaVerba(v: Verba): MudancasDaVerba {
     colunaInforma: `${maiuscula(quem)} informa hoje`,
     linhas: v.changes.map((m) => linhaDaMudanca(m, v)),
     deAntes: v.changes.some((m) => m.executed_on < v.month_start) ? `A lista traz também as mudanças de antes de ${mes} que continuam valendo: o Liame confere cada uma por 35 dias.` : null,
+    ritmos: ritmosDaVerba(v),
     nota: `A verba diária é uma média: ${quem} pode gastar mais num dia e menos em outros. Por isso o Liame confere a semana inteira, contra 7 vezes a verba diária, e avisa quando ela passa.`,
-    vazio: {
-      titulo: `O Liame não mudou nada em ${mes}`,
-      texto: 'Quando um pedido de mudança de verba, de pausa ou de retomada for aprovado e executado, ele aparece aqui, conferido todo dia.',
-    },
+    vazio: v.rhythms?.length
+      ? { titulo: `Fora do ritmo da semana, o Liame não mudou nada em ${mes}`, texto: 'As mudanças de verba do ritmo da semana ficam juntas, logo abaixo.' }
+      : {
+          titulo: `O Liame não mudou nada em ${mes}`,
+          texto: 'Quando um pedido de mudança de verba, de pausa ou de retomada for aprovado e executado, ele aparece aqui, conferido todo dia.',
+        },
   };
 }
 

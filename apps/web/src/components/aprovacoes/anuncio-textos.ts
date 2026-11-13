@@ -222,6 +222,8 @@ export function anuncioApresentado(a: AcaoDeAnuncio, mes: MesDoPedido | null = n
 /** "· pela recomendação do Gestor de tráfego" ou "· é a volta de outro pedido", no cabeçalho do pedido. */
 export function origemDoAnuncio(a: Acao): string | null {
   if (a.undoes) return 'é a volta de outro pedido';
+  // O passo de um dia do ritmo da semana (plano da região, R7): sai sem outro pedido de aprovação, pelo ritmo aprovado.
+  if (a.tool === 'orcamento_do_ritmo') return 'pelo ritmo da semana que uma pessoa aprovou';
   return a.recommendation && !a.agent_key ? 'pela recomendação do Gestor de tráfego' : null;
 }
 
