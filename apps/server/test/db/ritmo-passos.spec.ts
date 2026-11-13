@@ -5,6 +5,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { ActionService } from '../../src/actions/action.service.js';
 import { BudgetService } from '../../src/actions/budget.service.js';
 import { naTransacaoDaEmpresa } from '../../src/ai/na-empresa.js';
+import { currentStep, totpCode } from '../../src/auth/totp.js';
 import { DATABASE } from '../../src/database/database.module.js';
 import { GESTOR_DE_TRAFEGO } from '../../src/equipe/membros.js';
 import { FlagService } from '../../src/flags/flag.service.js';
@@ -561,6 +562,49 @@ describe.skipIf(!hasDb)('o ritmo da semana: os passos do dia (R7, parte 1b-2)', 
       { dia: diasDepois(HOJE, -1), status: 'bloqueado', reason: 'ritmo da semana: fora_do_dia' },
       { dia: HOJE, kind: 'volta', status: 'feito', target: String(64.8 * REAL), expected: String(72 * REAL) },
     ]);
+  }, 120_000);
+
+  it('a Verba do mês e o relatório: a mudança de uma pessoa trocada por um passo do ritmo diz que foi o ritmo; o relatório conta semanas, não linhas', async () => {
+    const e = await cenario('Brasa Verba Com Ritmo');
+    const a = await objetoLido(meta, e, 'campanha', { name: 'Combo sexta', daily_budget: '6000' });
+    // Uma pessoa muda a verba de R$ 60,00 para R$ 63,00, com o código do app.
+    const p = await api.call('POST', '/v1/actions', { cookie: e.cookie, body: { tool: 'orcamento_ajustar', provider: 'meta_ads', account_id: e.conta, resource_id: a.recurso, params: { daily_budget_micros: 63 * REAL } } });
+    expect([p.status, p.body.status], JSON.stringify(p.body)).toEqual([201, 'aguardando_aprovacao']);
+    await ownerQuery(`update liame.app_user set totp_last_step = null where id = $1`, [e.userId]);
+    await ownerQuery(`delete from liame.rate_limit where key = $1`, [`segundo-fator:${e.userId}`]);
+    const aprovada = await api.call('POST', `/v1/actions/${p.body.id}/approve`, { cookie: e.cookie, body: { plan_hash: p.body.plan_hash, code: totpCode(e.secret, currentStep()) } });
+    expect(aprovada.status, JSON.stringify(aprovada.body)).toBe(200);
+    await executar(e);
+    expect(verbasNaMeta(a.id)).toEqual(['6300']);
+    // Depois, o ritmo (a verba de antes é a que a pessoa deixou) sobe para R$ 66,00.
+    const id = await ritmo(e, [{ recurso: a.recurso, nome: 'Combo sexta', base: 63, dias: todosOsDias(66) }]);
+    const rotina = novaRotina();
+    const volta = () => rotina.executarPassos(20, { tenantIds: [e.tenantId] }, new Date());
+    expect(resumo(await volta())).toEqual([[a.recurso, 'pedido']]);
+    await executar(e);
+    expect(await volta()).toEqual([]);
+    expect(verbasNaMeta(a.id)).toEqual(['6300', '6600']);
+    const doPasso = (await pedidosDe(e)).find((x) => x.tool === 'orcamento_do_ritmo')!;
+    // Outro ritmo da mesma semana, parado, com um passo feito: duas linhas de ritmo, uma semana só.
+    const b = await objetoLido(meta, e, 'campanha', { name: 'Smash em dobro', daily_budget: '4400' });
+    const parado = await ritmo(e, [{ recurso: b.recurso, nome: 'Smash em dobro', base: 40, dias: todosOsDias(44) }], { status: 'parado' });
+    await passoFeito(e, parado, HOJE, b.recurso, 44, 40);
+
+    const doMes = BudgetMonthResponse.parse((await api.call('GET', '/v1/budget/month', { cookie: e.cookie })).body);
+    // A lista traz só a mudança da pessoa, e diz que quem mudou depois foi o ritmo (o passo não está na lista).
+    expect(doMes.changes.map((m) => [m.tool, m.action, m.superseded_by])).toEqual([['orcamento_ajustar', 'orcamento.aumentar', { action_id: doPasso.id, executed_at: expect.any(String), rhythm: true }]]);
+    expect(doMes.rhythms?.map((r) => [r.id, r.status, r.steps, r.objects]).sort()).toEqual(
+      [
+        [id, 'aprovado', 1, 1],
+        [parado, 'parado', 1, 1],
+      ].sort(),
+    );
+    // O relatório do mês fechado: uma semana (as duas linhas são da mesma) e dois passos; a contagem de mudanças é só a da pessoa.
+    const [ano, mes] = [Number(HOJE.slice(0, 4)), Number(HOJE.slice(5, 7))];
+    const fim = new Date(Date.UTC(ano, mes, 0)).toISOString().slice(0, 10);
+    const fechado = await naTransacaoDaEmpresa(database, { tenantId: e.tenantId, userId: null }, () => api.app.get(BudgetService).doMesFechado(e.tenantId, { from: `${HOJE.slice(0, 7)}-01`, to: fim }));
+    expect(fechado.rhythm).toEqual({ weeks: 1, steps: 2 });
+    expect(fechado.changes.map((m) => m.action)).toEqual(['orcamento.aumentar']);
   }, 120_000);
 
   it('a semana que continua de outra: a verba de hoje é a de antes do ritmo, e a segunda parte da verba de domingo', async () => {

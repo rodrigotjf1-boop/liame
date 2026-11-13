@@ -648,7 +648,14 @@ export const BudgetMonthChange = z.strictObject({
   /** Nula enquanto a primeira conferência não roda: a mudança de hoje só tem gasto para conferir amanhã. */
   check: BudgetChangeCheck.nullable(),
   /** Outro pedido do Liame mudou o mesmo objeto depois: esta mudança deixou de valer e não é mais conferida. */
-  superseded_by: z.strictObject({ action_id: z.uuid(), executed_at: z.iso.datetime() }).nullable(),
+  superseded_by: z
+    .strictObject({
+      action_id: z.uuid(),
+      executed_at: z.iso.datetime(),
+      /** A mudança de depois foi um passo do ritmo da semana (plano da região, R7): ele não aparece nesta lista, e sim em `rhythms`. */
+      rhythm: z.boolean().optional(),
+    })
+    .nullable(),
 });
 export type BudgetMonthChange = z.infer<typeof BudgetMonthChange>;
 
