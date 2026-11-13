@@ -109,8 +109,8 @@ describe('política da plataforma para a criação de cupom', () => {
 
   it('`cupom.criar` pede aprovação mesmo sem regra da empresa; o resto continua em sombra', () => {
     // A regra do cupom entrou na versão 2 e segue na 3 (A4, X2), sem depender de quem pede.
-    expect(PLATFORM_POLICY.version).toBe(14);
-    expect(evaluatePolicy([PLATFORM_POLICY], proposta('cupom.criar'), em)).toMatchObject({ allowed: true, mode: 'APPROVAL', versions: ['plataforma@14'] });
+    expect(PLATFORM_POLICY.version).toBe(15);
+    expect(evaluatePolicy([PLATFORM_POLICY], proposta('cupom.criar'), em)).toMatchObject({ allowed: true, mode: 'APPROVAL', versions: ['plataforma@15'] });
     expect(evaluatePolicy([PLATFORM_POLICY], { ...proposta('cupom.criar'), actor: 'human' }, em)).toMatchObject({ mode: 'APPROVAL' });
     expect(evaluatePolicy([PLATFORM_POLICY], proposta('anuncio.pausar'), em)).toMatchObject({ mode: 'SHADOW' });
   });

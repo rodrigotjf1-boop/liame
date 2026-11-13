@@ -155,6 +155,10 @@
     "resultados_ciclo_fechado": {
       "version": 1,
       "hash": "b6f5e0f98b3bf73b03314bc04e7f43c02ef46d90d0aede9b0dff3cf31c2b1a48"
+    },
+    "ritmo_da_semana": {
+      "version": 1,
+      "hash": "96669e6f3a2111a86aa304d5e62de33e2ca865f513d7b8a36e96821b424eb839"
     }
   },
   "prompts": {

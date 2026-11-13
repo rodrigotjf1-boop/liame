@@ -52,6 +52,8 @@ describe('ferramentas de anúncio (A4 · X2)', () => {
       // Ativar a campanha nova volta a gastar; a volta é pausar (A4, X5, parte 3).
       campanha_nova_ativar: ['R2', 'meta_ads', 'pausar_se_inalterado'],
       campanha_nova_pausar: ['R1', 'meta_ads', 'reativar_se_inalterado'],
+      // O ritmo da semana (plano da região, R7, parte 1b): aprovar não muda nada na Meta; quem para é a pessoa, sem código.
+      ritmo_da_semana: ['R2', 'meta_ads', 'parar_o_ritmo'],
     });
     for (const t of Object.values(TOOLS)) expect(t.params.safeParse({ qualquer: 1 }).success, t.name).toBe(false);
   });
@@ -188,7 +190,9 @@ describe('ferramentas de anúncio (A4 · X2)', () => {
     const comVolta = ['mensagem_disparar', 'mensagem_pedir_ao_destino', 'avaliacao_responder', 'comentario_responder', 'comentario_responder_auto', 'comentario_ocultar', 'campanha_google_ativar', 'campanha_google_pausar'];
     // A campanha nova (A4, X5; D-A4-31) é a exceção na Meta: a compensação é ela ficar pausada (não aparece e não gasta),
     // e apagar sempre escala para uma pessoa; o teste de banco (`campanha-nova.spec.ts`) prova que fica pausada.
-    const semVoltaNaMeta = ['campanha_criar'];
+    // O ritmo da semana (R7, parte 1b; D-RG-62) também: aprovar só marca o ritmo como aprovado, sem tocar a Meta, então
+    // não há objeto a devolver; a compensação é "Parar o ritmo", que qualquer pessoa com a permissão faz sem o código.
+    const semVoltaNaMeta = ['campanha_criar', 'ritmo_da_semana'];
     for (const t of Object.values(TOOLS)) expect(Boolean(t.undo), t.name).toBe((t.providers.includes('meta_ads') && !semVoltaNaMeta.includes(t.name)) || comVolta.includes(t.name));
   });
 });

@@ -74,20 +74,98 @@ export interface EntradaDoRitmo {
 
 const limitar = (v: number, de: number, ate: number): number => Math.min(Math.max(v, de), ate);
 
-/** Os pesos pedidos menos `c`, dentro da faixa e sem passar do passo de um dia para o outro (a partir da verba de hoje). */
-function ajustados(pedidos: readonly number[], c: number): number[] {
-  let antes = 1;
-  return pedidos.map((r) => {
-    const naFaixa = limitar(r - c, FAIXA_DO_RITMO.minimo, FAIXA_DO_RITMO.maximo);
-    antes = limitar(naFaixa, antes * (1 - PASSO_DO_PESO), antes * (1 + PASSO_DO_PESO));
-    return antes;
+// Os pesos em inteiros (décimos de milésimo), para a soma da semana e o passo de um dia para o outro não dependerem de
+// ponto flutuante. A procura do caminho anda numa grade da faixa inteira, de 0,0005 em 0,0005 (o peso 1 está nela).
+const ESCALA = 10_000;
+const GRADE = 5;
+const PESO_MINIMO = Math.round(FAIXA_DO_RITMO.minimo * ESCALA);
+const PESOS_NA_GRADE = (Math.round(FAIXA_DO_RITMO.maximo * ESCALA) - PESO_MINIMO) / GRADE + 1;
+/** O passo em milésimos: o dia vale de 90,5% a 109,5% do dia anterior. */
+const SOBE = Math.round((1 + PASSO_DO_PESO) * 1000);
+const DESCE = Math.round((1 - PASSO_DO_PESO) * 1000);
+/** Para cada peso da grade, de quais pesos o dia anterior pode ter vindo (os dois crescem com o peso). */
+const VEM_DE = new Int16Array(PESOS_NA_GRADE);
+const VEM_ATE = new Int16Array(PESOS_NA_GRADE);
+for (let k = 0; k < PESOS_NA_GRADE; k++) {
+  const peso = PESO_MINIMO + k * GRADE;
+  VEM_DE[k] = Math.max(0, Math.ceil((Math.ceil((peso * 1000) / SOBE) - PESO_MINIMO) / GRADE));
+  VEM_ATE[k] = Math.min(PESOS_NA_GRADE - 1, Math.floor((Math.floor((peso * 1000) / DESCE) - PESO_MINIMO) / GRADE));
+}
+
+interface Memoria {
+  custo: Float64Array;
+  novo: Float64Array;
+  veio: Int16Array[];
+  fila: Int32Array;
+}
+const novaMemoria = (dias: number): Memoria => ({
+  custo: new Float64Array(PESOS_NA_GRADE),
+  novo: new Float64Array(PESOS_NA_GRADE),
+  veio: Array.from({ length: dias }, () => new Int16Array(PESOS_NA_GRADE)),
+  fila: new Int32Array(PESOS_NA_GRADE),
+});
+
+/**
+ * Entre todos os caminhos que respeitam a faixa e o passo (o primeiro dia a partir da verba de hoje), o MAIS PERTO dos
+ * alvos: a menor soma dos quadrados das diferenças. A conta é exata na grade: dia a dia, o menor desvio acumulado para
+ * terminar o dia em cada peso (o mínimo do dia anterior numa janela que só anda para a frente), e a volta pelo caminho.
+ * Olhar a semana inteira é o que faz a verba começar a subir ANTES do dia forte: aplicar o passo só de frente para
+ * trás deixava a sexta forte, depois da quinta fraca, abaixo da terça. Devolve os pesos em décimos de milésimo.
+ */
+function caminho(alvos: readonly number[], m: Memoria): number[] {
+  let { custo, novo } = m;
+  alvos.forEach((alvo, i) => {
+    const a = alvo * ESCALA;
+    const veio = m.veio[i]!;
+    let frente = 0;
+    let fim = 0;
+    let proximo = 0;
+    for (let k = 0; k < PESOS_NA_GRADE; k++) {
+      const peso = PESO_MINIMO + k * GRADE;
+      let antes = Infinity;
+      let origem = -1;
+      if (i === 0) {
+        // O primeiro dia parte da verba de hoje (peso 1).
+        if (peso * 1000 <= ESCALA * SOBE && peso * 1000 >= ESCALA * DESCE) antes = 0;
+      } else {
+        // Entram na fila os pesos de ontem que passaram a caber; saem do fim os mais caros que o novo (nunca seriam o
+        // mínimo) e da frente os que ficaram longe demais. O da frente é o mais barato de onde este peso pode vir.
+        for (; proximo <= VEM_ATE[k]!; proximo++) {
+          if (custo[proximo]! === Infinity) continue;
+          while (fim > frente && custo[m.fila[fim - 1]!]! > custo[proximo]!) fim--;
+          m.fila[fim++] = proximo;
+        }
+        while (fim > frente && m.fila[frente]! < VEM_DE[k]!) frente++;
+        if (fim > frente) {
+          origem = m.fila[frente]!;
+          antes = custo[origem]!;
+        }
+      }
+      novo[k] = antes === Infinity ? Infinity : antes + (peso - a) * (peso - a);
+      veio[k] = origem;
+    }
+    [custo, novo] = [novo, custo];
   });
+  let k = 0;
+  for (let j = 1; j < PESOS_NA_GRADE; j++) if (custo[j]! < custo[k]!) k = j;
+  const pesos = new Array<number>(alvos.length);
+  for (let i = alvos.length - 1; i >= 0; i--) {
+    pesos[i] = PESO_MINIMO + k * GRADE;
+    k = m.veio[i]![k]!;
+  }
+  return pesos;
+}
+
+/** O caminho mais perto dos alvos dentro da faixa e do passo, sem olhar a soma da semana (os pesos, 1 = a verba de hoje). */
+export function caminhoMaisPerto(alvos: readonly number[]): number[] {
+  return caminho(alvos, novaMemoria(alvos.length)).map((v) => v / ESCALA);
 }
 
 /**
  * O peso de cada dia da semana. O pedido de cada dia é a parte dos pedidos daquele dia da semana sobre a média (ou a
  * referência do setor), mais o acréscimo da chuva prevista e o da data. Depois os limites: a faixa, o passo e a soma.
- * Todos os dias sobem ou descem juntos (a mesma constante) até a semana somar 7: o que sobe num dia desce em outro.
+ * Os pesos são o caminho mais perto dos pedidos entre os que cabem na faixa e no passo; todos os pedidos sobem ou
+ * descem juntos (a mesma constante) até a semana somar 7: o que sobe num dia desce em outro.
  */
 export function pesosDaSemana(e: EntradaDoRitmo): DiaDoRitmo[] {
   const total = e.pedidosPorDiaDaSemana ? e.pedidosPorDiaDaSemana.reduce((s, n) => s + n, 0) : 0;
@@ -121,20 +199,49 @@ export function pesosDaSemana(e: EntradaDoRitmo): DiaDoRitmo[] {
     return { day, weekday, pedido, reasons };
   });
   const pedidos = dias.map((d) => d.pedido);
-  // A soma cai quando `c` sobe (cada limite preserva a ordem): procura o menor `c` com a semana em até 7. No maior `c`
-  // todos os dias pedem o mínimo da faixa, e a semana fica abaixo de 7 (dias fortes alternados seguram a verba alta
-  // pelo passo; por isso a procura vai até o maior pedido). No menor `c` todos pedem o máximo da faixa, e a semana
-  // passa de 7 (quando quase todos os pedidos caem num dia só, os outros dias sobem até a semana usar a verba inteira).
+  const semana = pedidos.length * ESCALA;
+  // A soma cai quando `c` sobe (o caminho mais perto de alvos menores soma menos). No menor `c` todos os dias pedem o
+  // máximo da faixa, e a semana passa de 7; no maior, todos pedem menos que o mínimo, e a semana fica abaixo de 7
+  // (quando quase todos os pedidos caem num dia só, os outros dias sobem até a semana usar a verba inteira). A procura
+  // aperta os dois lados: o último caminho que passa de 7 (`acima`) e o primeiro que cabe (`cabe`).
+  const memoria = novaMemoria(pedidos.length);
+  const com = (c: number): { pesos: number[]; soma: number } => {
+    const pesos = caminho(
+      pedidos.map((r) => r - c),
+      memoria,
+    );
+    return { pesos, soma: pesos.reduce((t, v) => t + v, 0) };
+  };
   let de = Math.min(-0.6, Math.min(...pedidos) - FAIXA_DO_RITMO.maximo);
   let ate = Math.max(0.6, ...pedidos);
-  for (let i = 0; i < 40; i++) {
+  let acima = com(de);
+  let cabe = com(ate);
+  for (let i = 0; i < 30; i++) {
     const meio = (de + ate) / 2;
-    if (ajustados(pedidos, meio).reduce((s, v) => s + v, 0) <= 7) ate = meio;
-    else de = meio;
+    const tentativa = com(meio);
+    if (tentativa.soma <= semana) {
+      ate = meio;
+      cabe = tentativa;
+    } else {
+      de = meio;
+      acima = tentativa;
+    }
   }
-  const pesos = ajustados(pedidos, ate);
-  // Quatro casas, sempre para baixo: arredondado para cima, a soma dos 7 pesos passaria de 7 por um centavo da verba.
-  return dias.map((d, i) => ({ day: d.day, weekday: d.weekday, weight: Math.floor(pesos[i]! * 10_000 + 1e-9) / 10_000, reasons: d.reasons }));
+  // A grade não fecha a semana em 7 exatos, e a verba inteira é para ser usada. Os limites são retas: a mistura dos dois
+  // caminhos, na proporção que soma 7, também cabe na faixa e no passo. Ela é arredondada para baixo e o passo é
+  // conferido de novo em inteiros (a partir da verba de hoje). Esse acerto pode subir um dia em um décimo de milésimo:
+  // se a semana passar de 7, a mistura mira um pouco abaixo (com um décimo de milésimo de folga por dia, sempre cabe).
+  const mistura = (folga: number): number[] => {
+    const parte = acima.soma > semana ? Math.max(0, (semana - folga - cabe.soma) / (acima.soma - cabe.soma)) : 0;
+    let antes = ESCALA;
+    return cabe.pesos.map((v, i) => {
+      const peso = limitar(Math.floor(v + parte * (acima.pesos[i]! - v) + 1e-9), Math.ceil((antes * DESCE) / 1000), Math.floor((antes * SOBE) / 1000));
+      antes = peso;
+      return peso;
+    });
+  };
+  const pesos = [0, 2, 4, pedidos.length].map(mistura).find((m) => m.reduce((t, v) => t + v, 0) <= semana) ?? cabe.pesos;
+  return dias.map((d, i) => ({ day: d.day, weekday: d.weekday, weight: pesos[i]! / ESCALA, reasons: d.reasons }));
 }
 
 export type VerbaDoRitmo = { ok: true; dias: number[] } | { ok: false; motivo: 'verba_pequena' | 'fracao_de_centavo' | 'acima_do_teto' | 'fora_dos_limites' };

@@ -23,7 +23,7 @@ export const VARIACAO_MAXIMA_DA_VERBA_PCT = 10;
  */
 export const PLATFORM_POLICY: LoadedPolicy = {
   source: 'platform',
-  version: 14,
+  version: 15,
   document: {
     rules: [
       // Conteúdo político bloqueado por padrão (ADR-007; TSE 23.755/2026, base §6.1).
@@ -103,6 +103,18 @@ export const PLATFORM_POLICY: LoadedPolicy = {
       // conversa de agora com o tipo marcado, sem pedir uma pessoa e sem duas automáticas seguidas) é conferido no pedido e
       // de novo na execução; a ferramenta só se pede por ele.
       { type: 'autonomy', action: 'direct.responder_automatico', actor: 'agent', mode: 'AUTO' },
+      // v15 (plano da região, R7; protótipo do ritmo aprovado em 13/11/2026, D-RG-62): o ritmo da semana só vale com a
+      // aprovação de uma pessoa, com o código do app, peça quem pedir (quem pede é o Gestor de tráfego); a ferramenta tem
+      // também a trava `alwaysApproval`. Sem esta regra, a ação nova ficaria em sombra.
+      { type: 'autonomy', action: 'ritmo.*', mode: 'APPROVAL' },
+      // O passo de um dia do ritmo aprovado (a verba de uma campanha) sai sem outro pedido de aprovação, só quando quem
+      // pede é o funcionário de IA, pelo ritmo que a pessoa aprovou. As ações são próprias (`orcamento.ritmo_*`): a regra
+      // não alcança o pedido de verba comum de um agente (`orcamento.aumentar` e `orcamento.reduzir`, D-A7-11), e os
+      // limites de `orcamento.*` (10% por mudança e as mudanças por hora) valem para elas. O portão do ritmo (a função, o
+      // ritmo aprovado e não parado, o passo de hoje, o valor dentro do aprovado e a campanha como o Liame deixou) é
+      // conferido no pedido e de novo na execução; a ferramenta chega na parte seguinte da R7.
+      { type: 'autonomy', action: 'orcamento.ritmo_aumentar', actor: 'agent', mode: 'AUTO' },
+      { type: 'autonomy', action: 'orcamento.ritmo_reduzir', actor: 'agent', mode: 'AUTO' },
     ],
   },
 };

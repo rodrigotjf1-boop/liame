@@ -38,6 +38,7 @@ import { RegiaoCnpjService } from './regiao-cnpj.service.js';
 import { RegiaoFontesService } from './regiao-fontes.service.js';
 import { RegiaoMidiaLoop } from './regiao-midia.service.js';
 import { RegiaoPublicoLoop } from './regiao-publico.service.js';
+import { RitmoDaSemanaService } from './ritmo-da-semana.service.js';
 import { RotinaDoCrmLoop } from './rotina-do-crm-loop.js';
 import { SincronizacaoLoop } from './sincronizacao-loop.js';
 import { SombraLoop } from './sombra-loop.js';
@@ -95,6 +96,7 @@ export class EventsLoopService implements OnApplicationBootstrap, OnApplicationS
     private readonly regiaoCnpj: RegiaoCnpjService,
     private readonly regiaoMidia: RegiaoMidiaLoop,
     private readonly regiaoPublico: RegiaoPublicoLoop,
+    private readonly ritmoDaSemana: RitmoDaSemanaService,
     private readonly comparacao: ComparacaoDmsIdLoop,
     private readonly fotos: FotosLoop,
     private readonly numerosDosPosts: PostsNumerosLoop,
@@ -184,6 +186,10 @@ export class EventsLoopService implements OnApplicationBootstrap, OnApplicationS
       // O público nas redes (R4, parte 3): os seguidores, os toques no perfil e as visitas do Instagram e da Página, uma vez
       // por dia, e a cidade dos seguidores, uma vez por semana, só com a função `regiao` ligada; a fila é olhada de 5 em 5 minutos.
       this.loop('regiao-publico', 3, 300_000, async (n) => (await this.regiaoPublico.executarLote(n)).length),
+      // O ritmo da semana (R7, parte 1b): no domingo, a partir das 16h na loja, o Gestor de tráfego monta o ritmo da semana
+      // que vem e pede em Aprovações, só com as funções `regiao` e `ritmo_da_semana` ligadas; a fila é olhada de 10 em 10 minutos.
+      // Só os pedidos feitos contam: com o lote cheio a volta seguinte continua na hora; senão, espera os 10 minutos.
+      this.loop('ritmo-da-semana', 3, 600_000, async (n) => (await this.ritmoDaSemana.executarLote(n)).filter((r) => r.situacao === 'pedido').length),
       // Hub DMS (F2, A3): as leituras do RegemCast pelas duas credenciais, comparadas; cada conta uma vez por hora, só
       // com a função `comparacao_dms_id` ligada e o aplicativo do Liame no DMS ID configurado; a fila é olhada de 5 em 5 minutos.
       this.loop('comparacao-dms-id', 2, 300_000, async (n) => (await this.comparacao.executarLote(n)).length),

@@ -2,6 +2,7 @@ import type { Tx } from '@liame/database';
 import { sql } from 'drizzle-orm';
 import { campanhaGoogleDoRecurso } from '../campanhas/campanha-google-plano.js';
 import { campanhaNovaDoRecurso } from '../campanhas/campanha-nova-plano.js';
+import { ritmoDoRecurso } from '../campanhas/ritmo-plano.js';
 import { campanhaGoogleConnector } from './campanha-google-no-google.js';
 import { campanhaNovaNaMetaConnector } from './campanha-nova-na-meta.js';
 import { comentarioDoRecurso, comentarioNaPaginaConnector, comentarioNoInstagramConnector } from './comentario-na-rede.js';
@@ -13,6 +14,7 @@ import { perfilAvaliacaoConnector } from './perfil-avaliacao.js';
 import { postNaPaginaConnector, postNoInstagramConnector } from './post-publicacao.js';
 import { regemCupomConnector } from './regem-cupom.js';
 import { regemcastMensagemConnector } from './regemcast-mensagem.js';
+import { ritmoDaSemanaConnector } from './ritmo-da-semana.js';
 import type { ResourceState } from './tools.js';
 
 // Connectors (arquitetura §6): um por provedor, com a mesma interface. Na A1 só existia o sandbox
@@ -178,6 +180,8 @@ export class ConectorDaMeta implements Connector {
   constructor(
     private readonly dosObjetos: Connector,
     private readonly daCampanhaNova: Connector,
+    /** O ritmo da semana do Liame (`ritmo:<id>`; plano da região, R7): o pedido semanal, que não escreve na plataforma. */
+    private readonly doRitmo: Connector | null = null,
   ) {
     this.provider = dosObjetos.provider;
     this.writeFlag = dosObjetos.writeFlag;
@@ -186,6 +190,7 @@ export class ConectorDaMeta implements Connector {
   }
 
   de(resourceId: string): Connector {
+    if (this.doRitmo && ritmoDoRecurso(resourceId) !== null) return this.doRitmo;
     return this.ehDaCampanhaNova(resourceId) ? this.daCampanhaNova : this.dosObjetos;
   }
 
@@ -231,7 +236,8 @@ export const CONNECTORS: Record<string, Connector> = {
   sandbox: new SandboxConnector(),
   regem: regemCupomConnector,
   // A4, X5: a campanha nova (`campanha_nova:<id>`) pelo mesmo provedor; os objetos que já existem, como sempre.
-  meta_ads: new ConectorDaMeta(metaAnunciosConnector, campanhaNovaNaMetaConnector),
+  // Plano da região, R7: o ritmo da semana (`ritmo:<id>`) entra pelo mesmo provedor, com a trava e a flag de escrita dele.
+  meta_ads: new ConectorDaMeta(metaAnunciosConnector, campanhaNovaNaMetaConnector, ritmoDaSemanaConnector),
   // A5, Y9: a campanha nova no Google (`campanha_google:<id>`) pelo mesmo provedor; os objetos que já existem, como sempre.
   google_ads: new ConectorDoGoogle(googleAnunciosConnector, campanhaGoogleConnector),
   // A5, Y5: o pedido de mensagem de WhatsApp. Só com a flag de escrita `whatsapp_campaign` ligada para a empresa.

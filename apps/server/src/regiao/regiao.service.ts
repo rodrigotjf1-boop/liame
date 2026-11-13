@@ -112,6 +112,19 @@ function paraEndereco(cep: EnderecoDoCep, rua: string | null, numero: string | n
   return { postal_code: cep.cep, street: rua, number: numero, complement: null, district: bairro, city: cep.cidade, state: cep.uf, ibge_city_code: cep.codigoIbge };
 }
 
+/** O ritmo montado: a resposta da prévia e o que só o pedido do Gestor de tráfego usa. */
+export interface RitmoMontado {
+  resposta: RegionRhythmResponse;
+  /** Por campanha da resposta (o id dela): o recurso no trilho de ações e a conta de anúncios. */
+  recursos: Record<string, { recurso: string; conta: string }>;
+  loja: { nome: string } | null;
+  /** O teto por campanha da empresa na hora da montagem; nulo sem teto. */
+  teto: number | null;
+}
+
+/** A prévia do ritmo sem semana (a função desligada, a loja fora do mapa, sem permissão). */
+const ritmoVazio = (agora: Date) => ({ week: null, source: null, days: [], campaigns: [], out: [], base_micros: 0, base_week_micros: 0, week_micros: 0, hours: null, generated_at: agora.toISOString() });
+
 @Injectable()
 export class RegiaoService {
   private readonly logger = new Logger('regiao');
@@ -617,23 +630,32 @@ export class RegiaoService {
    */
   /**
    * O ritmo da semana que vem, em prévia (R7, parte 1; D-RG-58 a D-RG-60): o que o Gestor de tráfego montaria com o que
-   * o Liame já lê. Só leitura: nada é pedido nem executado. O peso de cada dia vem dos pedidos da loja por dia da semana
-   * (as 4 semanas de Sua região; sem pedidos que bastem, a referência do setor), da chuva prevista e das datas; entram
-   * as campanhas ativas da Meta com verba diária própria (na campanha, ou no conjunto quando a campanha não tem), fora
-   * as de alcance e de seguidores criadas pelo Liame (o teto de 25% já cuida delas, D-RG-64).
+   * o Liame já lê. Só leitura: nada é pedido nem executado.
    */
   async ritmoDaSemana(auth: AuthContext, brandId: string, unitId: string, agora = new Date()): Promise<RegionRhythmResponse> {
-    const tx = currentTx();
     await this.marca(brandId);
-    const vazio = { week: null, source: null, days: [], campaigns: [], out: [], base_micros: 0, base_week_micros: 0, week_micros: 0, hours: null, generated_at: agora.toISOString() };
-    if (!(await this.ligada(auth, brandId))) return { status: 'desligado', ...vazio };
+    if (!(await this.ligada(auth, brandId))) return { status: 'desligado', ...ritmoVazio(agora) };
+    return (await this.montarRitmo(this.quem(auth).tenantId, brandId, unitId, agora, auth.permissions.has('vendas.ver'))).resposta;
+  }
+
+  /**
+   * A montagem do ritmo da semana que vem (R7; D-RG-58 a D-RG-60 e D-RG-64), para a prévia e para o pedido do Gestor de
+   * tráfego (a rotina do worker, na transação da empresa). O peso de cada dia vem dos pedidos da loja por dia da semana
+   * (as 4 semanas de Sua região; sem pedidos que bastem, a referência do setor), da chuva prevista e das datas; entram
+   * as campanhas ativas da Meta com verba diária própria (na campanha, ou no conjunto quando a campanha não tem), fora
+   * as de alcance e de seguidores criadas pelo Liame (o teto de 25% já cuida delas). Junto da resposta vão o que só o
+   * pedido usa: o recurso de cada campanha no trilho de ações, a conta de anúncios, a loja e o teto por campanha.
+   */
+  async montarRitmo(tenantId: string, brandId: string, unitId: string, agora: Date, podeVerVendas: boolean): Promise<RitmoMontado> {
+    const tx = currentTx();
+    const so = (status: string): RitmoMontado => ({ resposta: { status, ...ritmoVazio(agora) }, recursos: {}, loja: null, teto: null });
     const loja = (
-      await tx.execute<{ ibge_city_code: string | null; timezone: string | null }>(sql`
-        select ibge_city_code, timezone from liame.unit where id = ${unitId} and brand_id = ${brandId}`)
+      await tx.execute<{ name: string; ibge_city_code: string | null; timezone: string | null }>(sql`
+        select name, ibge_city_code, timezone from liame.unit where id = ${unitId} and brand_id = ${brandId}`)
     ).rows[0];
     if (!loja) throw new AppProblem(404, 'loja-nao-encontrada', 'Não encontramos', 'Loja não encontrada nesta marca.');
-    if (!loja.ibge_city_code) return { status: 'sem_endereco', ...vazio };
-    if (!auth.permissions.has('vendas.ver')) return { status: 'sem_permissao', ...vazio };
+    if (!loja.ibge_city_code) return so('sem_endereco');
+    if (!podeVerVendas) return so('sem_permissao');
 
     const semana = semanaQueVem(diaNoFuso(agora, loja.timezone ?? 'America/Sao_Paulo'));
     const { demanda } = await this.demandaDaLoja(true, brandId, unitId, agora);
@@ -663,10 +685,11 @@ export class RegiaoService {
       datas,
     });
 
-    // As campanhas: a verba diária mora na campanha ou, quando ela não tem, no conjunto (nunca nas duas).
+    // As campanhas: a verba diária mora na campanha ou, quando ela não tem, no conjunto (nunca nas duas). O recurso é
+    // o nome do objeto no trilho de ações (`campanha:<id na Meta>` ou `conjunto:<id na Meta>`).
     const candidatas = (
-      await tx.execute<{ id: string; nivel: string; nome: string; verba: string }>(sql`
-        select c.id, 'campanha' as nivel, c.name as nome, c.daily_budget_micros::text as verba
+      await tx.execute<{ id: string; nivel: string; nome: string; verba: string; recurso: string; conta: string }>(sql`
+        select c.id, 'campanha' as nivel, c.name as nome, c.daily_budget_micros::text as verba, 'campanha:' || c.external_id as recurso, a.id as conta
           from liame.campaign c
           join liame.connected_account a on a.id = c.connected_account_id and a.tenant_id = c.tenant_id
          where a.brand_id = ${brandId} and a.provider = 'meta_ads' and ${contaConectada('a')}
@@ -674,7 +697,7 @@ export class RegiaoService {
            and not exists (select 1 from liame.ad_campaign_new n
                             where n.tenant_id = c.tenant_id and n.meta_campaign_id = c.external_id and n.objective in ('alcance', 'seguidores'))
         union all
-        select g.id, 'conjunto' as nivel, c.name || ' · ' || g.name as nome, g.daily_budget_micros::text as verba
+        select g.id, 'conjunto' as nivel, c.name || ' · ' || g.name as nome, g.daily_budget_micros::text as verba, 'conjunto:' || g.external_id as recurso, a.id as conta
           from liame.ad_group g
           join liame.campaign c on c.id = g.campaign_id
           join liame.connected_account a on a.id = c.connected_account_id and a.tenant_id = c.tenant_id
@@ -684,20 +707,25 @@ export class RegiaoService {
                             where n.tenant_id = c.tenant_id and n.meta_campaign_id = c.external_id and n.objective in ('alcance', 'seguidores'))
          order by nome, id`)
     ).rows;
-    const { policies } = await carregarPoliticas(tx, this.quem(auth).tenantId, brandId);
+    const { policies } = await carregarPoliticas(tx, tenantId, brandId);
     const teto = tetoDaVerba(policies, 'meta_ads');
     const pesos = dias.map((d) => d.weight);
     const campaigns: RegionRhythmResponse['campaigns'] = [];
     const out: RegionRhythmResponse['out'] = [];
+    const recursos: RitmoMontado['recursos'] = {};
     for (const c of candidatas) {
       const base = Number(c.verba);
       const v = verbaDoRitmo(base, pesos, teto);
-      if (!v.ok) out.push({ name: c.nome, reason: v.motivo });
-      else campaigns.push({ id: c.id, level: c.nivel, name: c.nome, base_micros: base, days_micros: v.dias, week_micros: v.dias.reduce((s, x) => s + x, 0) });
+      if (!v.ok) {
+        out.push({ name: c.nome, reason: v.motivo });
+        continue;
+      }
+      campaigns.push({ id: c.id, level: c.nivel, name: c.nome, base_micros: base, days_micros: v.dias, week_micros: v.dias.reduce((s, x) => s + x, 0) });
+      recursos[c.id] = { recurso: c.recurso, conta: c.conta };
     }
     const base = campaigns.reduce((s, c) => s + c.base_micros, 0);
     const horarios = horariosDaLoja(demanda);
-    return {
+    const resposta: RegionRhythmResponse = {
       status: campaigns.length ? 'pronto' : 'sem_campanhas',
       week: { from: semana.de, to: semana.ate },
       source: pedidos ? 'loja' : 'setor',
@@ -723,6 +751,7 @@ export class RegiaoService {
       hours: { source: horarios.source, from: horarios.from, to: horarios.to, ads_from: horarios.ads_from },
       generated_at: agora.toISOString(),
     };
+    return { resposta, recursos, loja: { nome: loja.name }, teto };
   }
 
   private async demandaDaLoja(podeVerVendas: boolean, brandId: string, unitId: string, agora: Date): Promise<{ status: string; demanda: DemandaDaLoja | null }> {
