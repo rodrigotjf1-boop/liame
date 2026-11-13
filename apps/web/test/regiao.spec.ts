@@ -5,7 +5,8 @@ import { describe, expect, it } from 'vitest';
 import { LinhaDaRegiaoVista } from '@/components/regiao/linha-da-regiao';
 import { BairrosDosPedidos } from '@/components/regiao/bairros-dos-pedidos';
 import { LojaNoMapa } from '@/components/regiao/loja-no-mapa';
-import { MidiaNaRegiao } from '@/components/regiao/midia-na-regiao';
+import { PorBairro } from '@/components/regiao/cliques-do-google';
+import { foraEmFrase, MidiaNaRegiao } from '@/components/regiao/midia-na-regiao';
 import { PublicoNasRedes } from '@/components/regiao/publico-nas-redes';
 import {
   cepComHifen,
@@ -373,6 +374,19 @@ describe('Sua região (R2, parte 2)', () => {
       orders_block: { from_hour: 19, to_hour: 23, clicks_pct: 34 },
       cities_status: 'disponivel',
       cities: [{ id: '1001773', name: 'Rio de Janeiro', full_name: 'Rio de Janeiro,State of Rio de Janeiro,Brazil', clicks: 412, impressions: 9000, clicks_pct: 78 }],
+      districts: {
+        city: 'Rio de Janeiro',
+        city_clicks: 412,
+        located: 84,
+        few: false,
+        items: [
+          { name: 'Tijuca', kind: 'bairro', clicks: 21, in_delivery_area: true, role: 'manter' },
+          { name: 'Cordovil', kind: 'bairro', clicks: 17, in_delivery_area: false, role: null },
+          { name: 'Vila Isabel', kind: 'bairro', clicks: 14, in_delivery_area: true, role: 'atacar' },
+          { name: 'CEP 20550', kind: 'cep', clicks: 9, in_delivery_area: null, role: null },
+        ],
+      },
+      outside_area: { clicks: 141, pct: 27, other_cities: 116, outside_districts: 25, outside_names: ['Cordovil', 'Maré'], has_area: true },
     };
     const html = renderToStaticMarkup(createElement(MidiaNaRegiao, { r: { ...retrato, paid_media_status: 'disponivel', paid_media: midia }, ids: 'x', mostraPro: false })).replace(/ /g, ' ');
     expect(html).toContain('os anúncios da marca (Meta e Google), 4 semanas até ontem (11/11)');
@@ -380,12 +394,53 @@ describe('Sua região (R2, parte 2)', () => {
     expect(html).toContain('dos cliques caem das 19h às 23h, o bloco mais forte dos pedidos da loja');
     expect(html).toContain('Rio de Janeiro</b>');
     expect(html).toContain('78% dos cliques do Google');
+    // R4, os bairros: o número dos cliques de fora da área e a escolha, com o município como padrão.
+    expect(html).toContain('27%');
+    expect(html).toContain('dos cliques do Google vieram de fora da área de entrega: 116 de outros municípios e 25 de bairros do Rio de Janeiro fora da área (Cordovil e Maré)');
+    expect(html).toContain('aria-pressed="true">Município</button>');
+    expect(html).toContain('aria-pressed="false">Bairro</button>');
     expect(html).not.toContain('R$');
     // Só a Meta: sem a cidade, com o porquê; sem conta: o caminho para conectar; sem a permissão: o aviso.
     const soMeta = renderToStaticMarkup(createElement(MidiaNaRegiao, { r: { ...retrato, paid_media_status: 'disponivel', paid_media: { ...midia, accounts: [midia.accounts[0]!], cities_status: 'sem_google', cities: [] } }, ids: 'x', mostraPro: false }));
     expect(soMeta).toContain('a Meta só informa o estado');
     expect(renderToStaticMarkup(createElement(MidiaNaRegiao, { r: { ...retrato, paid_media_status: 'sem_conta', paid_media: null }, ids: 'x', mostraPro: false }))).toContain('href="/contas"');
     expect(renderToStaticMarkup(createElement(MidiaNaRegiao, { r: { ...retrato, paid_media_status: 'sem_permissao', paid_media: null }, ids: 'x', mostraPro: false }))).toContain('quem vê Resultados');
+  });
+
+  it('os cliques por bairro (R4, os bairros; D-RG-44 a D-RG-47): o que o Google localizou, dentro e fora da área, o papel e o CEP', () => {
+    const d: NonNullable<NonNullable<RegionOverviewResponse['paid_media']>['districts']> = {
+      city: 'Rio de Janeiro',
+      city_clicks: 412,
+      located: 84,
+      few: false,
+      items: [
+        { name: 'Tijuca', kind: 'bairro', clicks: 21, in_delivery_area: true, role: 'manter' },
+        { name: 'Cordovil', kind: 'bairro', clicks: 17, in_delivery_area: false, role: null },
+        { name: 'Vila Isabel', kind: 'bairro', clicks: 14, in_delivery_area: true, role: 'atacar' },
+        { name: 'CEP 20550', kind: 'cep', clicks: 9, in_delivery_area: null, role: null },
+      ],
+    };
+    const fora = { clicks: 141, pct: 27, other_cities: 116, outside_districts: 25, outside_names: ['Cordovil', 'Maré'], has_area: true };
+    const desenhar = (dd: typeof d, ff: typeof fora) => renderToStaticMarkup(createElement(PorBairro, { d: dd, fora: ff })).replace(/\u00a0/g, ' ');
+    const html = desenhar(d, fora);
+    expect(html).toContain('O Google localizou o bairro de 84 dos 412 cliques no Rio de Janeiro (20%). Nos outros, ele só sabe a cidade.');
+    expect(html).toContain('<b>Cordovil</b><small>fora da área de entrega</small>');
+    expect(html).toContain('<b>Tijuca</b><small>na área de entrega</small>');
+    expect(html).toContain('>Atacar</span>');
+    expect(html).toContain('<b>CEP 20550</b><small>o Google deu só o CEP</small>');
+    expect(html).toContain('Cordovil, fora da área de entrega, recebeu 17 cliques; Vila Isabel, um bairro para atacar, 14.');
+    // Poucos localizados: a frase diz, e o destaque não sai.
+    const poucos = desenhar({ ...d, located: 3, few: true, items: d.items.slice(0, 1) }, fora);
+    expect(poucos).toContain('é pouco para tirar conclusão');
+    expect(poucos).not.toContain('recebeu');
+    // Sem a área de entrega: o aviso.
+    expect(desenhar({ ...d, items: d.items.map((i) => ({ ...i, in_delivery_area: null })) }, { ...fora, has_area: false })).toContain('Sem a área de entrega cadastrada na loja');
+    // A frase dos cliques de fora em cada caso.
+    expect(foraEmFrase({ ...fora, has_area: false, outside_districts: 0, outside_names: [] }, 'Rio de Janeiro')).toBe(
+      'dos cliques do Google vieram de outros municípios (116); com a área de entrega cadastrada na loja, os bairros de fora entram na conta',
+    );
+    expect(foraEmFrase({ ...fora, outside_districts: 0, outside_names: [] }, 'Rio de Janeiro')).toBe('dos cliques do Google vieram de fora da área de entrega: 116 de outros municípios');
+    expect(foraEmFrase({ ...fora, other_cities: 0 }, 'Rio de Janeiro')).toBe('dos cliques do Google vieram de fora da área de entrega: 25 de bairros do Rio de Janeiro fora da área (Cordovil e Maré)');
   });
 
   it('os bairros para atacar e para defender (R3, parte 2): o papel, os pedidos por mil moradores, o resto somado e os estados', () => {

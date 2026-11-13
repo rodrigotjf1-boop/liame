@@ -6,7 +6,7 @@ import { diaEMes, inteiro, umaCasa } from './textos-da-regiao';
 // noite de 12/11/2026, D-RG-36 a D-RG-39): os pedidos de entrega que o Regem manda somados por bairro, com a gente do
 // Censo. Atacar: muita gente e poucos pedidos; defender: já compra muito (plano da região §4.2). Só para quem vê Resultados.
 
-const PAPEL: Record<string, { rotulo: string; classe: string }> = {
+export const PAPEL: Record<string, { rotulo: string; classe: string }> = {
   defender: { rotulo: 'Defender', classe: 'st st--concluido' },
   atacar: { rotulo: 'Atacar', classe: 'st st--perigo' },
   manter: { rotulo: 'Manter', classe: 'st st--neutro' },

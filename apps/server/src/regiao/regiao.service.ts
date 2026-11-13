@@ -38,6 +38,7 @@ import { diaNoFuso } from '../results/fora-do-normal.js';
 import { BAIRROS_NA_SECAO, type BairroParaComparar, compararBairros } from './bairros.js';
 import { type DemandaDaLoja, demandaDaLoja, janelas, type LinhaDaDemanda } from './demanda.js';
 import { blocoMaisForte, CIDADES_NA_SECAO, DATASET_DA_MIDIA, janelaDaMidia, porcentoDe, somaDoBloco } from './midia-paga.js';
+import { type CliquesPorBairro, cliquesPorBairro, type PapelDoBairro, TIPO_DO_CEP, TIPOS_DE_BAIRRO } from './cliques-por-bairro.js';
 import { type LinhaDoPublico, retratoDoPublico } from './publico-nas-redes.js';
 import { type DataGuardada, datasDaSemana, diaEmBrasilia, REFERENCIAS_DO_SETOR } from './semana.js';
 import { DIAS_DA_PREVISAO } from './tempo.js';
@@ -519,10 +520,13 @@ export class RegiaoService {
 
     // A demanda da loja (R3, parte 1): os pedidos do Regem, só para quem vê Resultados.
     const demanda = await this.demandaDaLoja(auth.permissions.has('vendas.ver'), brandId, unitId, agora);
-    // A mídia na região (R4): os anúncios da marca por hora e, do Google, por cidade; a mesma régua da demanda.
-    const midia = await this.midiaNaRegiao(auth, brandId, unitId, agora, demanda.demanda);
     // Os pedidos por bairro (R3, parte 2): o que o Regem manda somado, com a gente do Censo; a mesma régua da demanda.
     const bairrosDosPedidos = await this.bairrosDosPedidos(auth.permissions.has('vendas.ver'), brandId, unitId, cidade, loja.address_city, areas);
+    // A mídia na região (R4): os anúncios da marca por hora e, do Google, por cidade e por bairro (com o papel de cada
+    // bairro nos pedidos e a área de entrega); a mesma régua da demanda.
+    const papeis = new Map<string, PapelDoBairro>();
+    for (const b of bairrosDosPedidos.bairros?.districts ?? []) if (b.role === 'atacar' || b.role === 'defender' || b.role === 'manter') papeis.set(nomeComparavel(b.name), b.role);
+    const midia = await this.midiaNaRegiao(auth, brandId, unitId, agora, demanda.demanda, { cidade, municipio: loja.address_city ?? '', areas, papeis });
     // O público nas redes (R4, parte 3): os números da conta do Instagram e da Página; não são de venda (D-RG-42).
     const publico = await this.publicoNasRedes(brandId, loja.address_city);
 
@@ -697,6 +701,7 @@ export class RegiaoService {
     unitId: string,
     agora: Date,
     demanda: DemandaDaLoja | null,
+    loja: { cidade: string; municipio: string; areas: readonly string[]; papeis: ReadonlyMap<string, PapelDoBairro> },
   ): Promise<{ status: string; midia: RegionOverviewResponse['paid_media'] }> {
     if (!auth.permissions.has('vendas.ver')) return { status: 'sem_permissao', midia: null };
     const tx = currentTx();
@@ -750,10 +755,15 @@ export class RegiaoService {
             )
             select geo_target_id::text as id, name, full_name, clicks::text as clicks, impressions::text as impressions, sum(clicks) over ()::text as total
               from por_cidade
-             order by clicks desc, geo_target_id
-             limit ${CIDADES_NA_SECAO}`)
+             order by clicks desc, geo_target_id`)
         ).rows
       : [];
+    // Os cliques por bairro e de fora da área (R4, os bairros; D-RG-44 a D-RG-47): todas as cidades contam para achar
+    // o município da loja e os outros; a lista da tela mostra as 8 maiores.
+    const totalDoGoogle = cidades.length ? Number(cidades[0]!.total) : 0;
+    const chaveDoMunicipio = nomeComparavel(loja.municipio);
+    const doMunicipio = cidades.filter((c) => c.name !== null && nomeComparavel(c.name) === chaveDoMunicipio).reduce((t, c) => t + Number(c.clicks), 0);
+    const porBairro = google.length ? await this.cliquesPorBairroDaLoja(brandId, google.map((c) => c.id), j, loja, totalDoGoogle, doMunicipio) : null;
     const quando = (v: Date | string | null) => (v === null ? null : (v instanceof Date ? v : new Date(v)).toISOString());
     return {
       status: 'disponivel',
@@ -767,7 +777,7 @@ export class RegiaoService {
         ad_block: bloco ? { from_hour: bloco.de, to_hour: bloco.ate, clicks_pct: porcentoDe(bloco.soma, total) } : null,
         orders_block: pedidos && total > 0 ? { from_hour: pedidos.de, to_hour: pedidos.ate, clicks_pct: porcentoDe(somaDoBloco(cliques, pedidos.de, pedidos.ate), total) } : null,
         cities_status: !google.length ? 'sem_google' : google.every((c) => c.read_at === null) ? 'lendo' : 'disponivel',
-        cities: cidades.map((c) => ({
+        cities: cidades.slice(0, CIDADES_NA_SECAO).map((c) => ({
           id: c.id,
           name: c.name ?? `Lugar ${c.id}`,
           full_name: c.full_name ?? c.name ?? `Lugar ${c.id}`,
@@ -775,8 +785,61 @@ export class RegiaoService {
           impressions: Number(c.impressions),
           clicks_pct: porcentoDe(Number(c.clicks), Number(c.total)),
         })),
+        districts: porBairro?.districts ?? null,
+        outside_area: porBairro?.outside_area ?? null,
       },
     };
+  }
+
+  /**
+   * O local mais específico dos cliques do Google (`ad_local_daily`) com o tipo do lugar, os bairros do Censo do
+   * município da loja que casam pelo nome, os CEPs do município (pelas contagens da Receita, que são por CEP) e a conta
+   * de `cliques-por-bairro.ts`.
+   */
+  private async cliquesPorBairroDaLoja(
+    brandId: string,
+    contasDoGoogle: readonly string[],
+    j: { inicio: string; fim: string },
+    loja: { cidade: string; municipio: string; areas: readonly string[]; papeis: ReadonlyMap<string, PapelDoBairro> },
+    cliquesDoGoogle: number,
+    cliquesDoMunicipio: number,
+  ): Promise<CliquesPorBairro> {
+    const tx = currentTx();
+    const locais = (
+      await tx.execute<{ tipo: string | null; nome: string | null; cliques: string }>(sql`
+        select g.target_type as tipo, g.name as nome, sum(l.clicks)::text as cliques
+          from liame.ad_local_daily l
+          left join liame.region_geo_target g on g.id = l.geo_target_id
+         where l.brand_id = ${brandId} and l.connected_account_id in ${contasDoGoogle} and l.day between ${j.inicio}::date and ${j.fim}::date
+         group by l.geo_target_id, g.target_type, g.name`)
+    ).rows.map((l) => ({ tipo: l.tipo, nome: l.nome, cliques: Number(l.cliques) }));
+    const chaves = [...new Set(locais.filter((l) => l.tipo && l.nome && TIPOS_DE_BAIRRO.has(l.tipo)).map((l) => nomeComparavel(l.nome!)))];
+    const ceps = [...new Set(locais.filter((l) => l.tipo === TIPO_DO_CEP && l.nome).map((l) => l.nome!.trim()))];
+    const bairros = chaves.length
+      ? (
+          await tx.execute<{ name_key: string; name: string }>(sql`
+            select distinct on (name_key) name_key, name from liame.region_district
+             where city_code = ${loja.cidade} and name_key = any(array(select jsonb_array_elements_text(${JSON.stringify(chaves)}::jsonb)))
+             order by name_key, population desc nulls last, district_code`)
+        ).rows
+      : [];
+    const cepsDoMunicipio = ceps.length
+      ? (
+          await tx.execute<{ area_key: string }>(sql`
+            select area_key from liame.region_food_count
+             where geo_code = ${loja.cidade} and area_kind = 'cep' and area_key = any(array(select jsonb_array_elements_text(${JSON.stringify(ceps)}::jsonb)))`)
+        ).rows.map((r) => r.area_key)
+      : [];
+    return cliquesPorBairro({
+      locais,
+      bairrosDoMunicipio: new Map(bairros.map((b) => [b.name_key, b.name])),
+      cepsDoMunicipio: new Set(cepsDoMunicipio),
+      areas: loja.areas,
+      papeis: loja.papeis,
+      cliquesDoGoogle,
+      cliquesDoMunicipio,
+      municipio: loja.municipio,
+    });
   }
 
   /**
