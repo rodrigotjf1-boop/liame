@@ -282,7 +282,7 @@ export class TestesDeCriativoRotina {
   /** O teste que não vai adiante: `interrompido`, com o motivo. A campanha de teste continua pausada na Meta. */
   private async interromper(t: { id: string; tenant_id: string }, motivo: string): Promise<ResultadoDoTeste> {
     await currentTx().execute(sql`
-      update liame.campaign_test set status = 'interrompido', reason = ${motivo.slice(0, 500)}, version = version + 1, updated_at = now()
+      update liame.campaign_test set status = 'interrompido', reason = ${motivo.slice(0, 500)}, interrupted_at = now(), version = version + 1, updated_at = now()
        where id = ${t.id} and tenant_id = ${t.tenant_id}`);
     this.logger.warn(`teste de criativo ${t.id}: interrompido (${motivo.slice(0, 200)})`);
     return { tenantId: t.tenant_id, teste: t.id, situacao: 'interrompido', motivo };

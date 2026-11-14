@@ -30,6 +30,8 @@ import { orcamentoEmMicros, SEM_DECIMAIS } from './verba.js';
 // dias; janela longa (carga inicial) = relatório assíncrono em fatias de 30 dias.
 
 type Pagina<T> = { data?: T[]; paging?: { next?: string } };
+/** Um conjunto ativo da conta com o público dele, como a Meta devolve (o teste de região, R8). */
+export type ConjuntoComPublico = { id: string; name: string; campaignId: string | null; targeting: unknown };
 
 const CAMPOS_INSIGHTS = ['ad_id', 'adset_id', 'campaign_id', 'date_start', 'spend', 'impressions', 'reach', 'clicks', 'inline_link_clicks', 'actions', 'action_values'];
 const JANELAS = ['7d_click', '1d_view'];
@@ -188,17 +190,44 @@ export class ConectorMeta implements ConectorLeitura {
     });
   }
 
-  /** Segue o `paging.next` (dentro dos endereços liberados, conferido pelo cliente) até o fim. */
+  /** Segue o `paging.next` (dentro dos endereços liberados, conferido pelo cliente) até o fim; mais de 200 páginas é erro. */
   private async paginas<T>(credencial: Credencial, conta: string, caminho: string, params: Record<string, string>, endpoint: string): Promise<T[]> {
+    const { itens, completo } = await this.paginasAte<T>(credencial, conta, caminho, params, endpoint, MAX_PAGINAS);
+    if (!completo) throw new ErroConector('definitivo', this.provider, `${endpoint}: mais de ${MAX_PAGINAS} páginas`);
+    return itens;
+  }
+
+  /**
+   * A regra única de paginação do conector: segue o `paging.next` (dentro dos endereços liberados, conferido pelo
+   * cliente) até o fim ou até `maxPaginas` páginas; `completo` diz se chegou ao fim.
+   */
+  private async paginasAte<T>(credencial: Credencial, conta: string, caminho: string, params: Record<string, string>, endpoint: string, maxPaginas: number): Promise<{ itens: T[]; completo: boolean }> {
     let url: string | undefined = this.endereco(credencial, caminho, params);
     const itens: T[] = [];
     for (let i = 0; url; i++) {
-      if (i === MAX_PAGINAS) throw new ErroConector('definitivo', this.provider, `${endpoint}: mais de ${MAX_PAGINAS} páginas`);
+      if (i === maxPaginas) return { itens, completo: false };
       const r: { corpo: Pagina<T> } = await this.chamar<Pagina<T>>(credencial, conta, url, endpoint);
       itens.push(...(r.corpo.data ?? []));
       url = r.corpo.paging?.next;
     }
-    return itens;
+    return { itens, completo: true };
+  }
+
+  /**
+   * Os conjuntos ATIVOS da conta com o público (`targeting`), para o teste de região (plano da região, R8): uma leitura
+   * paginada, no máximo `maxPaginas` páginas de 200. Passou do teto, `completo` é falso, e quem chama trata o que não
+   * leu como "mostra anúncio no bairro". A falha sobe como `ErroConector`, para quem chama dizer pela frase de sempre
+   * (`problemaDaLeitura`). Só lê.
+   */
+  async lerPublicoDosConjuntosAtivos(conta: Pick<ContextoConta, 'externalId' | 'credencial'>, maxPaginas = 5): Promise<{ conjuntos: ConjuntoComPublico[]; completo: boolean }> {
+    contaValida(conta.externalId);
+    type Linha = { id?: string; name?: string; campaign_id?: string; effective_status?: string; targeting?: unknown };
+    const params = { fields: 'id,name,campaign_id,effective_status,targeting', effective_status: JSON.stringify(['ACTIVE']), limit: '200' };
+    const { itens, completo } = await this.paginasAte<Linha>(conta.credencial, conta.externalId, `${conta.externalId}/adsets`, params, 'adsets', maxPaginas);
+    const conjuntos = itens.flatMap((l): ConjuntoComPublico[] =>
+      typeof l.id === 'string' ? [{ id: l.id, name: typeof l.name === 'string' ? l.name : l.id, campaignId: typeof l.campaign_id === 'string' ? l.campaign_id : null, targeting: l.targeting ?? null }] : [],
+    );
+    return { conjuntos, completo };
   }
 
   async descobrirContas(credencial: Credencial): Promise<ContaDescoberta[]> {
