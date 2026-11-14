@@ -66,6 +66,33 @@ export type EnderecoDoPerfil = {
   areas: string[];
 };
 
+/**
+ * A categoria principal da loja (plano da região, R9; D-RG-85): o id estável do Google (`categories/gcid:...`, que não
+ * depende de idioma) e o nome como veio. A referência diz que o `displayName` é "Output only" e "set when reading the
+ * location", sem dizer o idioma; o nome em português sai pelo `categories:batchGet` (`nomeDaCategoria`).
+ */
+export type CategoriaDoPerfil = { id: string; nome: string | null };
+
+const GCID = /^categories\/gcid:[A-Za-z0-9_]{1,120}$/;
+
+/** A categoria principal do `locations.get` com `readMask=categories`; nula quando não vem no formato esperado. */
+export function categoriaDoPerfil(corpo: unknown): CategoriaDoPerfil | null {
+  const p = (corpo as { categories?: { primaryCategory?: { name?: unknown; displayName?: unknown } } } | null)?.categories?.primaryCategory;
+  const id = typeof p?.name === 'string' ? p.name : '';
+  if (!GCID.test(id)) return null;
+  const nome = typeof p?.displayName === 'string' ? p.displayName.replace(/\s+/g, ' ').trim().slice(0, 120) : '';
+  return { id, nome: nome || null };
+}
+
+/** O nome da categoria pedida na resposta do `categories:batchGet` (a ordem não é garantida); nulo quando não vem. */
+export function nomeDaCategoria(corpo: unknown, id: string): string | null {
+  const lista = (corpo as { categories?: unknown } | null)?.categories;
+  if (!Array.isArray(lista)) return null;
+  const achada = (lista as Array<{ name?: unknown; displayName?: unknown } | null>).find((c) => c?.name === id);
+  const nome = typeof achada?.displayName === 'string' ? achada.displayName.replace(/\s+/g, ' ').trim().slice(0, 120) : '';
+  return nome || null;
+}
+
 /** Lê a resposta do `locations.get` sem confiar em nada: o que não tem o formato esperado fica de fora. */
 export function enderecoDoPerfil(corpo: unknown): EnderecoDoPerfil {
   const o = (corpo && typeof corpo === 'object' ? corpo : {}) as {
@@ -379,6 +406,38 @@ export class ConectorPerfilGoogle {
       ...(opcoes.tempoLimiteMs ? { tempoLimiteMs: opcoes.tempoLimiteMs } : {}),
     });
     return enderecoDoPerfil(r.corpo);
+  }
+
+  /** A categoria principal da loja, lida agora (R9; `locations.get` com `readMask=categories`). Só leitura. */
+  async lerCategoriaDaLoja(credencial: Credencial, alvo: { loja: string }): Promise<CategoriaDoPerfil | null> {
+    const loja = recurso('locations', alvo.loja);
+    const r = await this.cliente.requisitar<unknown>({
+      provider: PROVIDER,
+      conta: this.chaveDaCota,
+      url: `${this.bases.lojas}/${this.versoes.lojas}/${loja}?${new URLSearchParams({ readMask: 'categories' }).toString()}`,
+      endpoint: 'locations.get',
+      apiVersion: this.versoes.lojas,
+      cabecalhos: { authorization: `Bearer ${credencial.accessToken}` },
+    });
+    return categoriaDoPerfil(r.corpo);
+  }
+
+  /**
+   * O nome de uma categoria no idioma pedido (R9; `categories:batchGet`: "the language that the category names should be
+   * returned in"). Só leitura; a lista de categorias é do Google, não da loja.
+   */
+  async lerNomeDaCategoria(credencial: Credencial, id: string, idioma = 'pt-BR', pais = 'BR'): Promise<string | null> {
+    if (!GCID.test(id)) throw new ErroConector('definitivo', PROVIDER, 'categoria do perfil fora do formato');
+    const q = new URLSearchParams({ names: id, languageCode: idioma, regionCode: pais, view: 'BASIC' });
+    const r = await this.cliente.requisitar<unknown>({
+      provider: PROVIDER,
+      conta: this.chaveDaCota,
+      url: `${this.bases.lojas}/${this.versoes.lojas}/categories:batchGet?${q.toString()}`,
+      endpoint: 'categories.batchGet',
+      apiVersion: this.versoes.lojas,
+      cabecalhos: { authorization: `Bearer ${credencial.accessToken}` },
+    });
+    return nomeDaCategoria(r.corpo, id);
   }
 
   /** Os números do perfil por dia, na janela [inicio, fim] (AAAA-MM-DD). O dia que o Google ainda não fechou não vem. */
