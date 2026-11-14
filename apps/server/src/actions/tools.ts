@@ -513,7 +513,9 @@ export const TOOLS: Record<string, ToolDefinition> = {
     },
     undo: () => ({ tool: 'campanha_nova_pausar', params: {} }),
   },
-  // A volta de ativar: a campanha nova para de rodar e de gastar (a campanha em pausa; os filhos herdam).
+  // A volta de ativar: a campanha nova para de rodar e de gastar (a campanha em pausa; os filhos herdam). Sem a `flag` da
+  // função (D-A4-48; ERR-238): pausar só diminui o gasto, então vale mesmo com a função desligada depois de a campanha
+  // estar no ar; fica só a escrita na Meta (`meta_write`), o interruptor geral.
   campanha_nova_pausar: {
     name: 'campanha_nova_pausar',
     version: 1,
@@ -523,7 +525,6 @@ export const TOOLS: Record<string, ToolDefinition> = {
     providers: ['meta_ads'],
     compensation: 'reativar_se_inalterado',
     onlyAsUndo: true,
-    flag: 'campanha_nova',
     params: NoParams,
     plan(before) {
       const plano = planoDePausar(before);
@@ -722,7 +723,8 @@ export const TOOLS: Record<string, ToolDefinition> = {
     },
     undo: () => ({ tool: 'campanha_google_pausar', params: {} }),
   },
-  // A volta de ativar: a campanha nova no Google para de rodar e de gastar.
+  // A volta de ativar: a campanha nova no Google para de rodar e de gastar. Sem a `flag` da função (D-A4-48; ERR-238):
+  // pausar só diminui o gasto, então vale mesmo com a função desligada; fica só a escrita no Google (`google_write`).
   campanha_google_pausar: {
     name: 'campanha_google_pausar',
     version: 1,
@@ -732,7 +734,6 @@ export const TOOLS: Record<string, ToolDefinition> = {
     providers: ['google_ads'],
     compensation: 'reativar_se_inalterado',
     onlyAsUndo: true,
-    flag: 'campanha_google',
     params: NoParams,
     plan(before) {
       const plano = planoDePausarNoGoogle(before);

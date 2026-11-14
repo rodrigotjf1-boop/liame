@@ -366,7 +366,9 @@ describe.skipIf(!hasDb)('a campanha nova no Google: o pedido e a criação (A5 �
     expect(await lida(e, id)).toMatchObject({ active: true, activated_at: expect.any(String), pending_action_id: null });
     expect((await ativar(id)).body.code).toBe('ja-ativa');
 
-    // A volta: pausar, com o código do app.
+    // A volta: pausar, com o código do app, e mesmo com a função desligada depois de a campanha estar no ar: pausar só
+    // diminui o gasto (D-A4-48; ERR-238). Antes, o trilho recusava o pedido e o executor o segurava.
+    await ligarFlagDaEmpresa(api, 'campanha_google', e.tenantId, false);
     const volta = await api.call('POST', `/v1/actions/${ativacao}/undo`, { cookie: e.cookie });
     expect(volta.status, JSON.stringify(volta.body)).toBe(201);
     expect(volta.body).toMatchObject({ tool: 'campanha_google_pausar', status: 'aguardando_aprovacao' });
@@ -374,6 +376,7 @@ describe.skipIf(!hasDb)('a campanha nova no Google: o pedido e a criação (A5 �
     expect((await pedidoDe(volta.body.id as string)).status).toBe('executada');
     expect(campanha.status).toBe('PAUSED');
     expect((await lida(e, id)).active).toBe(false);
+    await ligarFlagDaEmpresa(api, 'campanha_google', e.tenantId, true);
 
     // Removida no Google Ads depois: ativar de novo não a traz de volta.
     campanha.status = 'REMOVED';
