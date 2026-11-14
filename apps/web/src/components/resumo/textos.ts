@@ -1,5 +1,5 @@
 import type { AttentionItem, SourceFreshness, SummaryResponse, TeamResponse } from '@liame/contracts';
-import { acaoDoAviso, destinoDasVendasAoGoogle, destinoDoAviso, destinoDoRitmo, destinoPedeVendas, gravidadeDe } from '@/components/atencao/textos';
+import { acaoDoAviso, destinoDasVendasAoGoogle, destinoDoAviso, destinoDoRitmo, destinoDoTeste, destinoPedeVendas, gravidadeDe } from '@/components/atencao/textos';
 import { inteiro } from '@/lib/formato';
 import { diaMes, nomesDe, porcentagem, type Trecho } from '@/components/resultados/textos';
 
@@ -172,6 +172,9 @@ function destinoDe(item: AttentionItem, podeVerVendas: boolean, podeVerContas: b
   // O aviso do ritmo da semana abre o ritmo em Aprovações (plano da região, R7).
   const doRitmo = destinoDoRitmo(item);
   if (doRitmo) return { rotulo: doRitmo.curto, href: doRitmo.href };
+  // O aviso do teste de criativo abre o teste em Aprovações (plano da região, R8).
+  const doTeste = destinoDoTeste(item);
+  if (doTeste) return { rotulo: doTeste.curto, href: doTeste.href };
   const acao = acaoDoAviso(item.kind);
   if ((acao === 'abrir-contas' || acao === 'reconectar') && podeVerContas) return { rotulo: acao === 'reconectar' ? 'Reconectar' : 'Ver', href: '/contas' };
   const destino = acao && (podeVerVendas || !destinoPedeVendas(acao)) ? destinoDoAviso(acao) : null;

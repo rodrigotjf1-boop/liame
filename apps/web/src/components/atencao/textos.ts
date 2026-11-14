@@ -109,6 +109,16 @@ export function destinoDoRitmo(item: { kind: string; rhythm?: { action_id: strin
   return { href: `/aprovacoes?pedido=${item.rhythm.action_id}`, rotulo: 'Ver o ritmo em Aprovações', curto: 'Ver o ritmo' };
 }
 
+/**
+ * Os avisos do teste de criativo (plano da região, R8) abrem o teste em Aprovações: é lá que se vê o que cada criativo
+ * trouxe, se pede a pausa do que perdeu e se encerra o teste. Só para quem vê os pedidos (o servidor manda o pedido do
+ * teste só a eles). `curto`: o do Resumo.
+ */
+export function destinoDoTeste(item: { kind: string; test?: { action_id: string | null } | undefined }): { href: string; rotulo: string; curto: string } | null {
+  if (!item.kind.startsWith('teste_') || !item.test?.action_id) return null;
+  return { href: `/aprovacoes?pedido=${item.test.action_id}`, rotulo: 'Ver o teste em Aprovações', curto: 'Ver o teste' };
+}
+
 /** Para onde leva o botão de tela (os de Contas e de reconectar têm o próprio tratamento). */
 export function destinoDoAviso(acao: AcaoDoAviso): { href: string; rotulo: string } | null {
   if (acao === 'abrir-links') return { href: '/links', rotulo: 'Abrir Links e cupons' };

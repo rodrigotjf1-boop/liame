@@ -1,6 +1,7 @@
 import { randomBytes, randomUUID } from 'node:crypto';
 import { createServer, type Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
+import { ClosedLoopAttentionResponse } from '@liame/contracts';
 import { type Database, withTenant } from '@liame/database';
 import { sql } from 'drizzle-orm';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
@@ -36,7 +37,9 @@ import { hasDb } from './env.js';
 //   - encerrar: sem o código, a campanha de teste pausa e o teste fica encerrado;
 //   - a medida (D-RG-79 e D-RG-91): a olhada só ao fim de cada semana inteira e só com a leitura do caixa em dia; os
 //     pedidos de cada criativo pelo cupom e pelo anúncio, uma vez cada; o vencedor termina o teste; mexido por fora,
-//     o teste é interrompido.
+//     o teste é interrompido;
+//   - a Atenção (D-RG-80): o aviso do criativo que venceu, com o caminho para o teste em Aprovações, que sai quando o
+//     conjunto do que perdeu aparece pausado e quando o prazo passa; e o aviso do teste interrompido, com o motivo.
 
 const CARDAPIO = 'https://cardapio.exemplo.com.br/mister-centro';
 const OFERTA = 'Combo sexta: smash, batata e refri por R$ 34,90';
@@ -492,6 +495,43 @@ describe.skipIf(!hasDb)('o teste de criativo na Meta (plano da região, R8)', ()
     const lista = await api.call('GET', `/v1/creative-tests?brand_id=${e.brandId}`, { cookie: e.cookie });
     expect(lista.status, JSON.stringify(lista.body)).toBe(200);
     expect((lista.body.items as Array<{ id: string; status: string }>).map((t) => [t.id, t.status])).toEqual([[id, 'terminado']]);
+
+    // A Atenção avisa (D-RG-80): o criativo A venceu, e a campanha de teste continua no ar com os dois. O aviso leva ao
+    // pedido do teste em Aprovações; o Liame não mexe sozinho.
+    const avisos = async () => {
+      const lido = await api.call('GET', `/v1/results/attention?brand_id=${e.brandId}`, { cookie: e.cookie });
+      expect(lido.status, JSON.stringify(lido.body)).toBe(200);
+      return ClosedLoopAttentionResponse.parse(lido.body).items.filter((i) => i.kind.startsWith('teste_'));
+    };
+    expect(await avisos()).toEqual([
+      {
+        kind: 'teste_com_vencedor',
+        severity: 'atencao',
+        title: `O criativo A venceu o teste "${fim.name as string}"`,
+        detail: expect.stringContaining('Em 14 dias, o criativo A trouxe 45 pedidos no caixa e o criativo B, 9 pedidos, com a mesma verba.'),
+        action: 'Veja o teste em Aprovações: de lá você pede para pausar o criativo B, ou encerra o teste.',
+        connected_account_id: e.conta,
+        campaign_id: campanhaNaLista,
+        provider: 'meta_ads',
+        brand_id: e.brandId,
+        test: { id, action_id: r.body.action_id },
+      },
+    ]);
+    // O conjunto do criativo que perdeu aparece pausado na leitura da Meta: não há mais o que decidir, e o aviso sai.
+    const conjuntoDoB = (status: string) =>
+      ownerQuery(
+        `insert into liame.ad_group (id, tenant_id, connected_account_id, provider, external_id, name, status, daily_budget_micros, last_seen_at)
+         values ($1, $2, $3, 'meta_ads', $4, 'Conjunto B', $5, 20000000, now())
+         on conflict (connected_account_id, external_id) do update set status = excluded.status`,
+        [randomUUID(), e.tenantId, e.conta, bracoB.meta_adset_id, status],
+      );
+    await conjuntoDoB('pausada');
+    expect(await avisos()).toEqual([]);
+    await conjuntoDoB('ativa');
+    expect((await avisos()).map((i) => i.kind)).toEqual(['teste_com_vencedor']);
+    // Passado o prazo do aviso (14 dias depois do último dia do teste), o teste fica só na lista.
+    await ownerQuery(`update liame.campaign_test set started_on = started_on - 20, ended_on = ended_on - 20 where id = $1`, [id]);
+    expect(await avisos()).toEqual([]);
   }, 180_000);
 
   it('o teste mexido por fora: um conjunto pausado na Meta, lido depois do começo, interrompe o teste com o motivo', async () => {
@@ -528,5 +568,11 @@ describe.skipIf(!hasDb)('o teste de criativo na Meta (plano da região, R8)', ()
     expect(t.status).toBe('interrompido');
     expect(t.reason).toContain('A verba do conjunto do criativo B foi mudada fora do Liame.');
     expect(await volta()).toEqual([]);
+    // A Atenção avisa que o teste foi interrompido, com o motivo. A campanha de teste segue no ar: o Liame não mexe sozinho.
+    const lido = await api.call('GET', `/v1/results/attention?brand_id=${e.brandId}`, { cookie: e.cookie });
+    expect(lido.status, JSON.stringify(lido.body)).toBe(200);
+    const avisos = ClosedLoopAttentionResponse.parse(lido.body).items.filter((i) => i.kind.startsWith('teste_'));
+    expect(avisos).toMatchObject([{ kind: 'teste_interrompido', severity: 'atencao', connected_account_id: e.conta, campaign_id: null, test: { id, action_id: r.body.action_id } }]);
+    expect(avisos[0]!.detail).toBe(`${t.reason} A campanha de teste continua no ar na Meta, e o Liame não mexe nela sozinho.`);
   }, 180_000);
 });
