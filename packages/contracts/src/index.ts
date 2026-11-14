@@ -707,6 +707,18 @@ export {
   NewCampaignUnitOption,
 } from './campanhas-novas.js';
 export {
+  CREATIVE_TEST_COUPON_STATUSES,
+  CREATIVE_TEST_DAYS,
+  CREATIVE_TEST_MIN_DAILY_BUDGET_MICROS,
+  CREATIVE_TEST_STATUSES,
+  CreateCreativeTestRequest,
+  CreativeTestCouponCode,
+  CreativeTestCouponStatus,
+  CreativeTestDiscount,
+  CreativeTestResponse,
+  CreativeTestStatus,
+} from './testes-de-criativo.js';
+export {
   CreateGoogleCampaignRequest,
   GOOGLE_TEXTS_NO_AI_REASONS,
   GoogleCampaignOptionsQuery,

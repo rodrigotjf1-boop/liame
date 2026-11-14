@@ -56,19 +56,19 @@ const EM_ABERTO = sql`('aguardando_aprovacao', 'aprovada', 'executando')`;
 type Quem = { tenantId: string; userId: string };
 
 /** A estimativa lida agora: pronta (com o público), sem estimativa (a Meta não estimou) ou indisponível (sem como ler). */
-type Estimativa = { status: 'pronta'; publico: PublicoEstimado } | { status: 'sem_estimativa' } | { status: 'indisponivel' };
+export type Estimativa = { status: 'pronta'; publico: PublicoEstimado } | { status: 'sem_estimativa' } | { status: 'indisponivel' };
 
-function recusa(code: string, title: string, detail: string, path?: string): AppProblem {
+export function recusa(code: string, title: string, detail: string, path?: string): AppProblem {
   return new AppProblem(422, code, title, detail, {}, path ? [{ path, message: detail }] : undefined);
 }
-function conflito(code: string, title: string, detail: string): AppProblem {
+export function conflito(code: string, title: string, detail: string): AppProblem {
   return new AppProblem(409, code, title, detail);
 }
 
-type Conta = { id: string; provider: string; name: string; currency: string | null; instagram_id: string | null; external_id: string; credential_secret_id: string | null };
+export type Conta = { id: string; provider: string; name: string; currency: string | null; instagram_id: string | null; external_id: string; credential_secret_id: string | null };
 
 /** A conta de anúncios da Meta e a Página da marca, conectadas (D-A4-35). */
-async function contasDaMarca(tx: ReturnType<typeof currentTx>, tenantId: string, brandId: string): Promise<{ anuncios: Conta[]; paginas: Conta[] }> {
+export async function contasDaMarca(tx: ReturnType<typeof currentTx>, tenantId: string, brandId: string): Promise<{ anuncios: Conta[]; paginas: Conta[] }> {
   const contas = (
     await tx.execute<Conta>(sql`
       select a.id, a.provider, a.name, a.currency, a.provider_attributes->>'instagram_id' as instagram_id, a.external_id, a.credential_secret_id
@@ -80,7 +80,7 @@ async function contasDaMarca(tx: ReturnType<typeof currentTx>, tenantId: string,
 }
 
 /** O que impede pela conta de anúncios e pela Página: uma de cada. A mesma regra no pedido e nas opções da gaveta. */
-function bloqueioDasContas(anuncios: Conta[], paginas: Conta[]): AppProblem | null {
+export function bloqueioDasContas(anuncios: Conta[], paginas: Conta[]): AppProblem | null {
   if (anuncios.length === 0) return conflito('sem-conta-de-anuncios', 'Sem conta de anúncios', 'Conecte a conta de anúncios da Meta da marca em Contas conectadas.');
   if (anuncios.length > 1) return conflito('varias-contas-de-anuncios', 'Mais de uma conta de anúncios', 'A marca tem mais de uma conta de anúncios da Meta: deixe uma só em Contas conectadas.');
   if (paginas.length === 0) {
@@ -91,7 +91,7 @@ function bloqueioDasContas(anuncios: Conta[], paginas: Conta[]): AppProblem | nu
 }
 
 /** Por que "pedidos pelo cardápio" não vale para a loja; `null` quando vale. A mesma regra no pedido e nas opções. */
-function motivoSemCardapio(destino: Awaited<ReturnType<typeof destinoDoPost>>, unitId: string): string | null {
+export function motivoSemCardapio(destino: Awaited<ReturnType<typeof destinoDoPost>>, unitId: string): string | null {
   if (destino.ok && destino.unitId === unitId) return null;
   if (destino.ok || destino.motivo === 'varias_lojas') {
     return 'O cardápio online ligado à marca é o de outra loja: escolha a loja do cardápio, ou o objetivo de conversas no WhatsApp.';
@@ -611,7 +611,7 @@ export class CampanhasNovasService {
    * A estimativa da Meta para o raio em volta do ponto da loja. A falha da Meta (fora do ar, sem permissão, demorou) vira
    * `indisponivel` com o motivo no log: a estimativa informa, não decide sozinha quando não há número.
    */
-  private async estimativa(tx: ReturnType<typeof currentTx>, conta: Conta, lugares: Record<string, unknown>): Promise<Estimativa> {
+  async estimativa(tx: ReturnType<typeof currentTx>, conta: Conta, lugares: Record<string, unknown>): Promise<Estimativa> {
     try {
       const publico = await publicoNoRaio.estimar(tx, { externalId: conta.external_id, segredo: conta.credential_secret_id }, lugares);
       return publico ? { status: 'pronta', publico } : { status: 'sem_estimativa' };
@@ -806,7 +806,7 @@ export class CampanhasNovasService {
    * Os bairros do pedido (e da estimativa), como vão para a Meta: do município da loja, cada um com o centro achado. O
    * bairro de outra cidade e o sem centro são recusados com o nome.
    */
-  private async bairrosDoPedido(tx: ReturnType<typeof currentTx>, cidade: string | null, codigos: readonly string[]): Promise<BairroDaCampanha[]> {
+  async bairrosDoPedido(tx: ReturnType<typeof currentTx>, cidade: string | null, codigos: readonly string[]): Promise<BairroDaCampanha[]> {
     const linhas = cidade
       ? (
           await tx.execute<{ district_code: string; name: string; area_km2: string | null; located: string | null; latitude: string | null; longitude: string | null; meta_location: string | null }>(sql`

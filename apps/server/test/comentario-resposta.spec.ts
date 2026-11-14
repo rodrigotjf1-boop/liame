@@ -162,9 +162,9 @@ describe('as ferramentas, a política e o conector da conta', () => {
     expect(Object.values(TOOLS).filter((t) => t.decisaoJaTomada === 'atendimento_automatico').map((t) => t.name)).toEqual(['comentario_responder_auto', 'direct_responder_auto']);
     for (const t of doComentario) expect(t.providers, t.name).toEqual(['instagram', 'facebook_page']);
     // Só elas, a resposta no Direct (A6, Z12, parte 2), a campanha nova na Meta (A4, X5), o ritmo da semana e o passo dele (plano da
-    // região, R7, parte 1b) e o envio pedido ao RegemCast (Hub DMS F5, parte D) têm flag própria.
+    // região, R7, parte 1b), o teste de criativo (R8) e o envio pedido ao RegemCast (Hub DMS F5, parte D) têm flag própria.
     expect(Object.values(TOOLS).filter((t) => t.flag).map((t) => t.name).sort()).toEqual(
-      [...doComentario.map((t) => t.name), 'direct_responder', 'direct_responder_auto', 'campanha_criar', 'campanha_nova_ativar', 'campanha_nova_pausar', 'ritmo_da_semana', 'orcamento_do_ritmo', 'campanha_google_criar', 'campanha_google_ativar', 'campanha_google_pausar', 'mensagem_pedir_ao_destino'].sort(),
+      [...doComentario.map((t) => t.name), 'direct_responder', 'direct_responder_auto', 'campanha_criar', 'campanha_nova_ativar', 'campanha_nova_pausar', 'ritmo_da_semana', 'orcamento_do_ritmo', 'teste_de_criativo_criar', 'teste_de_criativo_ativar', 'teste_de_criativo_pausar', 'campanha_google_criar', 'campanha_google_ativar', 'campanha_google_pausar', 'mensagem_pedir_ao_destino'].sort(),
     );
     // A sugestão do Social media só o funcionário preenche.
     expect(TOOLS.comentario_responder!.agentParams).toEqual(['sugestoes']);
@@ -183,15 +183,15 @@ describe('as ferramentas, a política e o conector da conta', () => {
         current_value_micros: null,
         actor,
       });
-    expect(PLATFORM_POLICY.version).toBe(15);
+    expect(PLATFORM_POLICY.version).toBe(16);
     for (const acao of [ACAO_DE_RESPONDER, ACAO_DE_OCULTAR, ACAO_DE_MOSTRAR]) {
-      for (const actor of ['human', 'agent'] as const) expect(chooseMode([PLATFORM_POLICY], proposta(acao, actor)), `${acao} ${actor}`).toEqual({ mode: 'APPROVAL', source: 'platform', version: 15 });
+      for (const actor of ['human', 'agent'] as const) expect(chooseMode([PLATFORM_POLICY], proposta(acao, actor)), `${acao} ${actor}`).toEqual({ mode: 'APPROVAL', source: 'platform', version: 16 });
     }
-    expect(chooseMode([PLATFORM_POLICY], proposta(ACAO_DE_APAGAR_A_RESPOSTA))).toEqual({ mode: 'AUTO', source: 'platform', version: 15 });
-    expect(chooseMode([PLATFORM_POLICY], proposta(ACAO_DE_APAGAR_A_RESPOSTA, 'agent'))).toEqual({ mode: 'APPROVAL', source: 'platform', version: 15 });
+    expect(chooseMode([PLATFORM_POLICY], proposta(ACAO_DE_APAGAR_A_RESPOSTA))).toEqual({ mode: 'AUTO', source: 'platform', version: 16 });
+    expect(chooseMode([PLATFORM_POLICY], proposta(ACAO_DE_APAGAR_A_RESPOSTA, 'agent'))).toEqual({ mode: 'APPROVAL', source: 'platform', version: 16 });
     // v12 (parte 2e-1): a resposta automática sai sozinha só para o funcionário de IA; uma pessoa cai na Aprovação.
-    expect(chooseMode([PLATFORM_POLICY], proposta(ACAO_DE_RESPONDER_SOZINHO, 'agent'))).toEqual({ mode: 'AUTO', source: 'platform', version: 15 });
-    expect(chooseMode([PLATFORM_POLICY], proposta(ACAO_DE_RESPONDER_SOZINHO, 'human'))).toEqual({ mode: 'APPROVAL', source: 'platform', version: 15 });
+    expect(chooseMode([PLATFORM_POLICY], proposta(ACAO_DE_RESPONDER_SOZINHO, 'agent'))).toEqual({ mode: 'AUTO', source: 'platform', version: 16 });
+    expect(chooseMode([PLATFORM_POLICY], proposta(ACAO_DE_RESPONDER_SOZINHO, 'human'))).toEqual({ mode: 'APPROVAL', source: 'platform', version: 16 });
   });
 
   it('o recurso do comentário, e o conector da conta escolhe pelo recurso, com a flag e a trava do conector do post', () => {

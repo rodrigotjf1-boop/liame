@@ -56,6 +56,11 @@ describe('ferramentas de anúncio (A4 · X2)', () => {
       ritmo_da_semana: ['R2', 'meta_ads', 'parar_o_ritmo'],
       // O passo de um dia do ritmo aprovado (R7, parte 1b-2): a mesma mudança de verba, dentro do que a pessoa aprovou.
       orcamento_do_ritmo: ['R2', 'meta_ads', 'restaurar_orcamento_anterior_se_inalterado'],
+      // O teste de criativo (plano da região, R8): a campanha de teste nasce pausada; ativar é verba nova, e a volta é
+      // encerrar o teste pela tela dele; encerrar pausa a campanha, e para rodar de novo é outro pedido de ativar.
+      teste_de_criativo_criar: ['R2', 'meta_ads', 'fica_pausada_na_meta'],
+      teste_de_criativo_ativar: ['R2', 'meta_ads', 'encerrar_o_teste'],
+      teste_de_criativo_pausar: ['R1', 'meta_ads', 'ativar_de_novo_com_aprovacao'],
     });
     for (const t of Object.values(TOOLS)) expect(t.params.safeParse({ qualquer: 1 }).success, t.name).toBe(false);
   });
@@ -194,7 +199,11 @@ describe('ferramentas de anúncio (A4 · X2)', () => {
     // e apagar sempre escala para uma pessoa; o teste de banco (`campanha-nova.spec.ts`) prova que fica pausada.
     // O ritmo da semana (R7, parte 1b; D-RG-62) também: aprovar só marca o ritmo como aprovado, sem tocar a Meta, então
     // não há objeto a devolver; a compensação é "Parar o ritmo", que qualquer pessoa com a permissão faz sem o código.
-    const semVoltaNaMeta = ['campanha_criar', 'ritmo_da_semana'];
+    // O teste de criativo (R8; D-RG-78 e D-RG-80): criar deixa tudo pausado, como a campanha nova. Ativar e pausar só se
+    // pedem pela rota do teste (`onlyByRoute`), e a volta de uma ferramenta assim não passa pelo "desfazer" de
+    // Aprovações: a volta de ativar é "Encerrar o teste" (que pausa, sem o código), e a de encerrar é pedir para ativar de
+    // novo, com a aprovação. O teste de banco (`teste-de-criativo.spec.ts`) prova os dois caminhos.
+    const semVoltaNaMeta = ['campanha_criar', 'ritmo_da_semana', 'teste_de_criativo_criar', 'teste_de_criativo_ativar', 'teste_de_criativo_pausar'];
     for (const t of Object.values(TOOLS)) expect(Boolean(t.undo), t.name).toBe((t.providers.includes('meta_ads') && !semVoltaNaMeta.includes(t.name)) || comVolta.includes(t.name));
   });
 });
