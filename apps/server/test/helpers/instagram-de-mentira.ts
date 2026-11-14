@@ -1,6 +1,7 @@
 import { createHmac, randomBytes } from 'node:crypto';
 import { createServer, type IncomingMessage, type Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
+import { idNumericoDeMentira } from './id-de-mentira.js';
 
 // O Instagram de mentira para os testes do post (A6 · Z5b, parte 2). Segue as páginas oficiais lidas em 29/10/2026 (base
 // §2.2: `developers.facebook.com/docs/instagram-platform/content-publishing` e a referência do
@@ -150,8 +151,8 @@ export type ComentarioNaPagina = {
   parent: string | null;
 };
 
-/** Um id numérico como os da Meta, único a cada execução (V156). */
-const idDaMeta = (): string => `${Date.now()}${Number.parseInt(randomBytes(3).toString('hex'), 16)}`.slice(0, 17).padEnd(17, '3');
+/** Um id numérico como os da Meta, único a cada execução (V156) e nunca repetido no mesmo milissegundo (ERR-236). */
+const idDaMeta = (): string => idNumericoDeMentira(17);
 
 /** A data no formato do Instagram: `2026-10-29T19:00:00+0000`. */
 const dataDoInstagram = (d: Date): string => `${d.toISOString().slice(0, 19)}+0000`;

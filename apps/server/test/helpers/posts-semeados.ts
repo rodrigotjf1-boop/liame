@@ -5,6 +5,7 @@ import { DATABASE } from '../../src/database/database.module.js';
 import { chaveDaMiniatura, chaveDoVideo } from '../../src/fotos/conferencia.js';
 import { VaultService } from '../../src/vault/vault.service.js';
 import { enableMfa, ownerQuery, signupAndLogin, type TestApi } from './api.js';
+import { idNumericoDeMentira } from './id-de-mentira.js';
 import { ligarFlagDaEmpresa } from './meta-de-mentira.js';
 
 // Os posts da marca (A6, Z5b): a empresa com a Página e o Instagram ligados à marca e uma foto pronta, como o produto os
@@ -14,10 +15,7 @@ import { ligarFlagDaEmpresa } from './meta-de-mentira.js';
 // cópia). Os ids da rede são números, como os da Meta, e únicos a cada execução (V156).
 
 /** Um id numérico da Meta, único a cada execução (a Página tem 15 dígitos; o Instagram, 17). */
-const idDaMeta = (digitos: number): string => {
-  const base = `${Date.now()}${Number.parseInt(randomBytes(4).toString('hex'), 16)}`;
-  return base.padEnd(digitos, '7').slice(0, digitos);
-};
+const idDaMeta = (digitos: number): string => idNumericoDeMentira(digitos);
 
 export type EmpresaComCanais = {
   cookie: string;
