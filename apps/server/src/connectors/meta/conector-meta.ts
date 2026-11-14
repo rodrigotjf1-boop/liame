@@ -30,6 +30,8 @@ import { orcamentoEmMicros, SEM_DECIMAIS } from './verba.js';
 // dias; janela longa (carga inicial) = relatório assíncrono em fatias de 30 dias.
 
 type Pagina<T> = { data?: T[]; paging?: { next?: string } };
+/** Um conjunto ativo da conta com o público dele, como a Meta devolve (o teste de região, R8). */
+export type ConjuntoComPublico = { id: string; name: string; campaignId: string | null; targeting: unknown };
 
 const CAMPOS_INSIGHTS = ['ad_id', 'adset_id', 'campaign_id', 'date_start', 'spend', 'impressions', 'reach', 'clicks', 'inline_link_clicks', 'actions', 'action_values'];
 const JANELAS = ['7d_click', '1d_view'];
@@ -199,6 +201,33 @@ export class ConectorMeta implements ConectorLeitura {
       url = r.corpo.paging?.next;
     }
     return itens;
+  }
+
+  /**
+   * Os conjuntos ATIVOS da conta com o público (`targeting`), para o teste de região (plano da região, R8): uma leitura
+   * paginada, no máximo `maxPaginas` páginas de 200. Passou do teto, `completo` é falso, e quem chama trata o que não
+   * leu como "mostra anúncio no bairro". A falha sobe como `ErroConector`, para quem chama dizer pela frase de sempre
+   * (`problemaDaLeitura`). Só lê.
+   */
+  async lerPublicoDosConjuntosAtivos(conta: Pick<ContextoConta, 'externalId' | 'credencial'>, maxPaginas = 5): Promise<{ conjuntos: ConjuntoComPublico[]; completo: boolean }> {
+    contaValida(conta.externalId);
+    type Linha = { id?: string; name?: string; campaign_id?: string; effective_status?: string; targeting?: unknown };
+    let url: string | undefined = this.endereco(conta.credencial, `${conta.externalId}/adsets`, {
+      fields: 'id,name,campaign_id,effective_status,targeting',
+      effective_status: JSON.stringify(['ACTIVE']),
+      limit: '200',
+    });
+    const conjuntos: ConjuntoComPublico[] = [];
+    for (let i = 0; url; i++) {
+      if (i === maxPaginas) return { conjuntos, completo: false };
+      const r: { corpo: Pagina<Linha> } = await this.chamar<Pagina<Linha>>(conta.credencial, conta.externalId, url, 'adsets');
+      for (const l of r.corpo.data ?? []) {
+        if (typeof l.id !== 'string') continue;
+        conjuntos.push({ id: l.id, name: typeof l.name === 'string' ? l.name : l.id, campaignId: typeof l.campaign_id === 'string' ? l.campaign_id : null, targeting: l.targeting ?? null });
+      }
+      url = r.corpo.paging?.next;
+    }
+    return { conjuntos, completo: true };
   }
 
   async descobrirContas(credencial: Credencial): Promise<ContaDescoberta[]> {

@@ -105,6 +105,27 @@ describe.skipIf(!hasDb)('conector da Meta (leitura, v26.0)', () => {
         return { status: 200, corpo: alcanceDe(JSON.parse(url.searchParams.get('time_ranges')!), url.searchParams.get('level')) };
       }
       if (aresta === 'insights') return { status: 200, corpo: insightsDe(JSON.parse(url.searchParams.get('time_range')!)) };
+      // O público dos conjuntos ativos (o teste de região, R8): duas páginas; na conta grande, páginas sem fim.
+      if (aresta === 'adsets' && campos.includes('targeting')) {
+        const proxima = (depois: string) => ({ next: `${base}/v26.0/${no}/adsets?after=${depois}&fields=targeting` });
+        if (no === 'act_9990000006') {
+          const n = Number(url.searchParams.get('after') ?? '0');
+          return { status: 200, corpo: { data: [{ id: `12021000000001${String(n).padStart(4, '0')}`, name: `Conjunto ${n}`, campaign_id: '120210000000000001', targeting: {} }], paging: proxima(String(n + 1)) } };
+        }
+        if (url.searchParams.get('after') === 'p2') {
+          return { status: 200, corpo: { data: [{ id: '120210000000000103', name: 'Bairros', campaign_id: '120210000000000003', effective_status: 'ACTIVE', targeting: { geo_locations: { neighborhoods: [{ key: '2523742' }] } } }] } };
+        }
+        return {
+          status: 200,
+          corpo: {
+            data: [
+              { id: '120210000000000101', name: 'Raio de 3 km', campaign_id: '120210000000000001', effective_status: 'ACTIVE', targeting: { geo_locations: { custom_locations: [{ latitude: -22.9, longitude: -43.17, radius: 3, distance_unit: 'kilometer' }] } } },
+              { name: 'sem id' },
+            ],
+            paging: proxima('p2'),
+          },
+        };
+      }
       if (['adsets', 'ads', 'adcreatives'].includes(aresta)) return { status: 200, corpo: fixture(aresta) };
     }
     const relatorio = relatorios.get(no);
@@ -357,6 +378,23 @@ describe.skipIf(!hasDb)('conector da Meta (leitura, v26.0)', () => {
       tipo: 'transitorio',
       message: expect.stringContaining('em andamento'),
     });
+  });
+
+  it('o público dos conjuntos ativos (o teste de região, R8): só os ativos, a paginação seguida e o teto de páginas', async () => {
+    const lido = await conector().lerPublicoDosConjuntosAtivos(conta());
+    expect(lido.completo).toBe(true);
+    expect(lido.conjuntos.map((c) => [c.id, c.name, c.campaignId])).toEqual([
+      ['120210000000000101', 'Raio de 3 km', '120210000000000001'],
+      ['120210000000000103', 'Bairros', '120210000000000003'],
+    ]);
+    expect(lido.conjuntos[1]!.targeting).toEqual({ geo_locations: { neighborhoods: [{ key: '2523742' }] } });
+    const primeiro = pedidos.find((p) => p.caminho === `/v26.0/${CONTA}/adsets` && (p.query.get('fields') ?? '').includes('targeting') && !p.query.get('after'))!;
+    expect([primeiro.query.get('effective_status'), primeiro.query.get('limit')]).toEqual(['["ACTIVE"]', '200']);
+    // Passou do teto de páginas: o que não foi lido conta como "alcança" para quem chama.
+    const grande = await conector().lerPublicoDosConjuntosAtivos(conta('act_9990000006'), 3);
+    expect([grande.completo, grande.conjuntos.length]).toEqual([false, 3]);
+    // A conta fora do formato nem vira chamada.
+    await expect(conector().lerPublicoDosConjuntosAtivos(conta('9990000006'))).rejects.toThrow();
   });
 
   it('id de conta ou data fora do formato nem vira chamada', async () => {

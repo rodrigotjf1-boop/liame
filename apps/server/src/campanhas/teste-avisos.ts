@@ -135,8 +135,8 @@ export interface AvisoDoTesteDaMarca {
  * dentro do prazo, com a campanha de teste e o conjunto do criativo que perdeu como a leitura da Meta os mostra. Uma
  * consulta só, pelo índice da marca.
  *
- * O prazo conta de `updated_at`: é a hora em que o Liame parou de medir, porque depois de interrompido só "Encerrar o
- * teste" grava na linha, e o teste encerrado já não avisa.
+ * O prazo conta da hora em que o Liame parou de medir (`interrupted_at`, da 0159); no teste interrompido antes dela,
+ * de `updated_at`, que é a mesma hora: depois de interrompido, só "Encerrar o teste" grava na linha.
  */
 export async function avisosDoTesteDasMarcas(tx: Tx, marcas: readonly string[], instante: string): Promise<AvisoDoTesteDaMarca[]> {
   if (!marcas.length) return [];
@@ -160,7 +160,7 @@ export async function avisosDoTesteDasMarcas(tx: Tx, marcas: readonly string[], 
       select t.id, t.brand_id, t.ad_account_id as conta, t.action_id, t.name, t.status, t.active, (t.started_on is not null) as comecou, x.no_prazo, t.result, t.reason,
              c.id as campanha, c.status as campanha_lida, p.status as perdedor_lido
         from liame.campaign_test t
-        cross join lateral (select t.updated_at >= ${instante}::timestamptz - make_interval(days => ${DIAS_DO_AVISO_DO_TESTE}::int) as no_prazo) x
+        cross join lateral (select coalesce(t.interrupted_at, t.updated_at) >= ${instante}::timestamptz - make_interval(days => ${DIAS_DO_AVISO_DO_TESTE}::int) as no_prazo) x
         left join liame.campaign c on c.tenant_id = t.tenant_id and c.connected_account_id = t.ad_account_id and c.external_id = t.meta_campaign_id
         left join lateral (
           select g.status
