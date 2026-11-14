@@ -4,6 +4,7 @@ import { Injectable } from '@nestjs/common';
 import { sql } from 'drizzle-orm';
 import { nomeDaPlataforma, textoDoGastoAcima, verbaDaLeitura } from '../actions/conferencia-do-gasto.js';
 import { avisosDoRitmoDasMarcas, textoDoAvisoDoRitmo } from '../campanhas/ritmo-avisos.js';
+import { avisosDoTesteDasMarcas, textoDoAvisoDoTeste } from '../campanhas/teste-avisos.js';
 import { CONNECTORS } from '../actions/connectors.js';
 import { MODELO_PADRAO } from '../attribution/motor.js';
 import { ESCOPO_DATA_MANAGER } from '../connectors/google-ads/data-manager.js';
@@ -375,6 +376,10 @@ export class AtencaoCicloService {
     // lido; sem ritmo nenhum nas marcas, é uma consulta só.
     const doRitmo = await avisosDoRitmoDasMarcas(tx, marcas, instante);
 
+    // O teste de criativo (plano da região, R8; D-RG-80): o teste que terminou, com ou sem vencedor, e o que foi
+    // interrompido. Calculado agora, do teste guardado e da leitura da Meta; sem teste nenhum nas marcas, é uma consulta só.
+    const doTeste = await avisosDoTesteDasMarcas(tx, marcas, instante);
+
     const politicasDaMarca = new Map<string, LoadedPolicy[]>();
     for (const m of linhasDasMarcas) {
       if (sugestoes.rows.some((s) => s.brand_id === m.id)) politicasDaMarca.set(m.id, (await carregarPoliticas(tx, m.tenant_id, m.id)).policies);
@@ -388,6 +393,8 @@ export class AtencaoCicloService {
     const recomendacaoDoAviso = new Map<ItemCiclo, AttentionRecommendation>();
     // O ritmo de que o aviso fala e o pedido dele em Aprovações, só na leitura da tela (R7).
     const ritmoDoAviso = new Map<ItemCiclo, { id: string; action_id: string | null }>();
+    // O teste de que o aviso fala e o pedido dele em Aprovações, só na leitura da tela (R8).
+    const testeDoAviso = new Map<ItemCiclo, { id: string; action_id: string | null }>();
     const empresaDaMarca = new Map(linhasDasMarcas.map((m) => [m.id, m.tenant_id]));
     /** A escrita na plataforma está ligada para esta conta? (A flag do conector, como no pedido.) Uma conta por vez na memória. */
     const escritaLigada = new Map<string, boolean>();
@@ -487,6 +494,14 @@ export class AtencaoCicloService {
           const item: ItemCiclo = { ...textoDoAvisoDoRitmo(r.aviso, reais), connected_account_id: r.conta, campaign_id: r.campanha, provider: 'meta_ads' };
           itens.push(item);
           if (leitor) ritmoDoAviso.set(item, { id: r.aviso.ritmo, action_id: leitor.vePedidos ? r.aviso.acao : null });
+        }
+
+        // O teste de criativo (R8): um aviso por teste, com o caminho para o teste em Aprovações (para quem vê os pedidos).
+        for (const t of doTeste) {
+          if (t.marca !== marca) continue;
+          const item: ItemCiclo = { ...textoDoAvisoDoTeste(t.aviso), connected_account_id: t.conta, campaign_id: t.campanha, provider: 'meta_ads' };
+          itens.push(item);
+          if (leitor) testeDoAviso.set(item, { id: t.aviso.teste, action_id: leitor.vePedidos ? t.aviso.acao : null });
         }
 
         // O envio das vendas ao Google parou sem ninguém mandar parar: falta a permissão, ou o Google está recusando.
@@ -617,7 +632,14 @@ export class AtencaoCicloService {
       items: ordenarCiclo(itens).map((i) => {
         const recomendacao = recomendacaoDoAviso.get(i);
         const ritmo = ritmoDoAviso.get(i);
-        return { ...i, brand_id: marcaDoAviso.get(i) ?? null, ...(recomendacao ? { recommendation: recomendacao } : {}), ...(ritmo ? { rhythm: ritmo } : {}) };
+        const teste = testeDoAviso.get(i);
+        return {
+          ...i,
+          brand_id: marcaDoAviso.get(i) ?? null,
+          ...(recomendacao ? { recommendation: recomendacao } : {}),
+          ...(ritmo ? { rhythm: ritmo } : {}),
+          ...(teste ? { test: teste } : {}),
+        };
       }),
       generated_at: agora.toISOString(),
     };

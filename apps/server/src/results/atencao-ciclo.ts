@@ -28,6 +28,10 @@ export type TipoCiclo =
   | 'ritmo_gasto_acima'
   | 'ritmo_sem_volta'
   | 'ritmo_campanha_saiu'
+  // O teste de criativo (plano da região, R8): as contas e as frases estão em `campanhas/teste-avisos.ts`.
+  | 'teste_interrompido'
+  | 'teste_com_vencedor'
+  | 'teste_sem_vencedor'
   // As vendas informadas ao Google que pararam sem ninguém mandar parar (A5, Y1; protótipo P14, parte B).
   | 'vendas_google_sem_permissao'
   | 'vendas_google_recusadas'
@@ -384,6 +388,9 @@ const PRIORIDADE: TipoCiclo[] = [
   'ritmo_gasto_acima',
   'ritmo_sem_volta',
   'ritmo_campanha_saiu',
+  'teste_interrompido',
+  'teste_com_vencedor',
+  'teste_sem_vencedor',
   'gasto_da_campanha_fora_do_normal',
   'custo_por_pedido_fora_do_normal',
   'sugestao_pausar_campanha',
