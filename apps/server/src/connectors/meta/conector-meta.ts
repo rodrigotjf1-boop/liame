@@ -190,17 +190,27 @@ export class ConectorMeta implements ConectorLeitura {
     });
   }
 
-  /** Segue o `paging.next` (dentro dos endereços liberados, conferido pelo cliente) até o fim. */
+  /** Segue o `paging.next` (dentro dos endereços liberados, conferido pelo cliente) até o fim; mais de 200 páginas é erro. */
   private async paginas<T>(credencial: Credencial, conta: string, caminho: string, params: Record<string, string>, endpoint: string): Promise<T[]> {
+    const { itens, completo } = await this.paginasAte<T>(credencial, conta, caminho, params, endpoint, MAX_PAGINAS);
+    if (!completo) throw new ErroConector('definitivo', this.provider, `${endpoint}: mais de ${MAX_PAGINAS} páginas`);
+    return itens;
+  }
+
+  /**
+   * A regra única de paginação do conector: segue o `paging.next` (dentro dos endereços liberados, conferido pelo
+   * cliente) até o fim ou até `maxPaginas` páginas; `completo` diz se chegou ao fim.
+   */
+  private async paginasAte<T>(credencial: Credencial, conta: string, caminho: string, params: Record<string, string>, endpoint: string, maxPaginas: number): Promise<{ itens: T[]; completo: boolean }> {
     let url: string | undefined = this.endereco(credencial, caminho, params);
     const itens: T[] = [];
     for (let i = 0; url; i++) {
-      if (i === MAX_PAGINAS) throw new ErroConector('definitivo', this.provider, `${endpoint}: mais de ${MAX_PAGINAS} páginas`);
+      if (i === maxPaginas) return { itens, completo: false };
       const r: { corpo: Pagina<T> } = await this.chamar<Pagina<T>>(credencial, conta, url, endpoint);
       itens.push(...(r.corpo.data ?? []));
       url = r.corpo.paging?.next;
     }
-    return itens;
+    return { itens, completo: true };
   }
 
   /**
@@ -212,22 +222,12 @@ export class ConectorMeta implements ConectorLeitura {
   async lerPublicoDosConjuntosAtivos(conta: Pick<ContextoConta, 'externalId' | 'credencial'>, maxPaginas = 5): Promise<{ conjuntos: ConjuntoComPublico[]; completo: boolean }> {
     contaValida(conta.externalId);
     type Linha = { id?: string; name?: string; campaign_id?: string; effective_status?: string; targeting?: unknown };
-    let url: string | undefined = this.endereco(conta.credencial, `${conta.externalId}/adsets`, {
-      fields: 'id,name,campaign_id,effective_status,targeting',
-      effective_status: JSON.stringify(['ACTIVE']),
-      limit: '200',
-    });
-    const conjuntos: ConjuntoComPublico[] = [];
-    for (let i = 0; url; i++) {
-      if (i === maxPaginas) return { conjuntos, completo: false };
-      const r: { corpo: Pagina<Linha> } = await this.chamar<Pagina<Linha>>(conta.credencial, conta.externalId, url, 'adsets');
-      for (const l of r.corpo.data ?? []) {
-        if (typeof l.id !== 'string') continue;
-        conjuntos.push({ id: l.id, name: typeof l.name === 'string' ? l.name : l.id, campaignId: typeof l.campaign_id === 'string' ? l.campaign_id : null, targeting: l.targeting ?? null });
-      }
-      url = r.corpo.paging?.next;
-    }
-    return { conjuntos, completo: true };
+    const params = { fields: 'id,name,campaign_id,effective_status,targeting', effective_status: JSON.stringify(['ACTIVE']), limit: '200' };
+    const { itens, completo } = await this.paginasAte<Linha>(conta.credencial, conta.externalId, `${conta.externalId}/adsets`, params, 'adsets', maxPaginas);
+    const conjuntos = itens.flatMap((l): ConjuntoComPublico[] =>
+      typeof l.id === 'string' ? [{ id: l.id, name: typeof l.name === 'string' ? l.name : l.id, campaignId: typeof l.campaign_id === 'string' ? l.campaign_id : null, targeting: l.targeting ?? null }] : [],
+    );
+    return { conjuntos, completo };
   }
 
   async descobrirContas(credencial: Credencial): Promise<ContaDescoberta[]> {
