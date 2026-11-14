@@ -4,8 +4,9 @@ import { sql } from 'drizzle-orm';
 import { ActionService } from '../actions/action.service.js';
 import { FERRAMENTA_DO_CUPOM_DO_TESTE } from '../actions/regem-cupom.js';
 import { naTransacaoDaEmpresa } from '../ai/na-empresa.js';
-import type { LetraDoTeste } from '../campanhas/teste-contas.js';
-import { type DescontoDoTeste, EstadoDoTesteDeCriativo, FLAG_DO_TESTE_DE_CRIATIVO } from '../campanhas/teste-de-criativo-plano.js';
+import { diaDaUltimaOlhada, type LetraDoTeste, vereditoDoTeste } from '../campanhas/teste-contas.js';
+import { leituraDosPedidosCobre, medidaDoTeste, oQueMexeramNoTeste } from '../campanhas/teste-medida.js';
+import { type DescontoDoTeste, EstadoDoTesteDeCriativo, FLAG_DO_TESTE_DE_CRIATIVO, ResultadoDoTesteDeCriativo } from '../campanhas/teste-de-criativo-plano.js';
 import { parametrosDoCupomDoTeste } from '../campanhas/teste-portao.js';
 import { contaConectada } from '../connections/conectada.js';
 import { currentTx } from '../context/request-context.js';
@@ -24,18 +25,28 @@ import { type JobScope, tenantFilter } from './outbox-publisher.js';
 //      o teste fica `interrompido`, com o motivo, e a campanha de teste continua pausada;
 //   3. com os dois cupons criados, o teste fica `pronto`: aí a pessoa pode pedir para ativar;
 //   4. liga cada cupom à campanha de teste quando ela aparece na lista do Liame (a leitura seguinte da Meta), para os
-//      pedidos com o cupom contarem para a campanha em Resultados.
+//      pedidos com o cupom contarem para a campanha em Resultados;
+//   5. com o teste rodando, olha ao fim de cada semana inteira (os dias 7, 14, 21 e 28; D-RG-79 e D-RG-91): soma os
+//      pedidos de cada criativo até aquele dia, guarda a olhada e o veredito, e termina o teste quando há vencedor ou
+//      no último dia. A olhada só sai depois de a leitura do caixa cobrir o dia inteiro, e não é refeita: entre uma
+//      olhada e outra o Liame não espia. Se mexeram no teste por fora (a campanha ou um conjunto pausado, a verba de
+//      um lado mudada), o teste fica `interrompido`: com um lado diferente do outro, a comparação não vale.
 // Só com a função `teste_de_criativo` ligada. Uma empresa que falha não para as outras.
 
 const ROTULO_DO_GESTOR = 'Gestor de tráfego';
 /** As situações de um pedido de cupom que não vão mais criar nada. */
 const SEM_SAIDA = ['falhou', 'cancelada', 'expirada'];
 
-export type ResultadoDoTeste = { tenantId: string; teste: string; situacao: 'cupom_pedido' | 'pronto' | 'interrompido' | 'esperando' | 'ligado' | 'nao_pediu'; motivo: string | null };
+export type ResultadoDoTeste = { tenantId: string; teste: string; situacao: 'cupom_pedido' | 'pronto' | 'interrompido' | 'esperando' | 'ligado' | 'olhado' | 'terminado' | 'nao_pediu'; motivo: string | null };
 
 type TesteEmCriacao = { id: string; tenant_id: string; brand_id: string; unit_id: string; created_by: string | null };
 type Braco = { letter: LetraDoTeste; coupon_code: string; coupon_status: string; pedido_status: string | null; pedido_motivo: string | null };
 type CupomSemLigacao = { tenant_id: string; teste: string; cupom: string; campanha: string };
+type TesteRodando = { id: string; tenant_id: string; brand_id: string };
+
+/** O dia `dias` depois de `dia` (`AAAA-MM-DD`), e quantos dias vão de `de` a `ate`. */
+const diaMais = (dia: string, dias: number): string => new Date(Date.parse(`${dia}T12:00:00Z`) + dias * 86_400_000).toISOString().slice(0, 10);
+const diasEntre = (de: string, ate: string): number => Math.round((Date.parse(`${ate}T12:00:00Z`) - Date.parse(`${de}T12:00:00Z`)) / 86_400_000);
 
 @Injectable()
 export class TestesDeCriativoRotina {
@@ -48,7 +59,7 @@ export class TestesDeCriativoRotina {
   ) {}
 
   /** Uma volta: os cupons dos testes em criação e as ligações que faltam. `limite`: quantos testes a volta olha. */
-  async executarLote(limite = 10, scope: JobScope = {}): Promise<ResultadoDoTeste[]> {
+  async executarLote(limite = 10, scope: JobScope = {}, agora: Date = new Date()): Promise<ResultadoDoTeste[]> {
     const database = this.database;
     if (!database) return [];
     const resultados: ResultadoDoTeste[] = [];
@@ -101,7 +112,80 @@ export class TestesDeCriativoRotina {
         resultados.push({ tenantId: l.tenant_id, teste: l.teste, situacao: 'nao_pediu', motivo: motivo.slice(0, 300) });
       }
     }
+    // Os testes rodando: a olhada de cada semana inteira.
+    const rodando = await withSystem(database.db, async (tx) =>
+      (
+        await tx.execute<TesteRodando>(sql`
+          select t.id, t.tenant_id, t.brand_id
+            from liame.campaign_test t
+           where t.kind = 'criativo' and t.status = 'rodando' and t.started_on is not null
+             ${tenantFilter(scope, sql`t.tenant_id`)}
+           order by t.updated_at, t.id
+           limit ${limite}`)
+      ).rows,
+    );
+    for (const t of rodando) {
+      try {
+        resultados.push(await this.olhar(database, t, agora));
+      } catch (err) {
+        const motivo = err instanceof AppProblem ? `${err.code}: ${err.detail}` : err instanceof Error ? err.message : String(err);
+        this.logger.warn(`a olhada do teste ${t.id} não andou: ${motivo}`);
+        resultados.push({ tenantId: t.tenant_id, teste: t.id, situacao: 'nao_pediu', motivo: motivo.slice(0, 300) });
+      }
+    }
     return resultados;
+  }
+
+  /**
+   * A olhada de um teste rodando, na transação da empresa. O dia 1 é o primeiro dia inteiro do teste (`started_on`); a
+   * olhada do dia N soma os pedidos do dia 1 ao dia N, e só sai depois de a leitura do caixa cobrir o dia N. Cada olhada
+   * é guardada uma vez (`result.olhadas`) e não é refeita.
+   */
+  private async olhar(database: Database, t: TesteRodando, agora: Date): Promise<ResultadoDoTeste> {
+    const base = { tenantId: t.tenant_id, teste: t.id };
+    if (!(await this.flags.isEnabled(FLAG_DO_TESTE_DE_CRIATIVO, this.flags.context({ tenantId: t.tenant_id, brandId: t.brand_id })))) {
+      return { ...base, situacao: 'esperando', motivo: 'funcao_desligada' };
+    }
+    return naTransacaoDaEmpresa(database, { tenantId: t.tenant_id, userId: null }, async () => {
+      const tx = currentTx();
+      const l = (
+        await tx.execute<{ status: string; result: unknown; started_on: string | null; min_days: number; max_days: number; fuso: string; hoje: string }>(sql`
+          select status, result, started_on::text as started_on, min_days, max_days, coalesce(plan->>'fuso', 'America/Sao_Paulo') as fuso,
+                 ((${agora.toISOString()}::timestamptz at time zone coalesce(plan->>'fuso', 'America/Sao_Paulo'))::date)::text as hoje
+            from liame.campaign_test where id = ${t.id} and tenant_id = ${t.tenant_id} for update`)
+      ).rows[0];
+      if (!l || l.status !== 'rodando' || !l.started_on) return { ...base, situacao: 'esperando' as const, motivo: 'fora_do_teste' };
+      const mexeram = await oQueMexeramNoTeste(tx, { teste: t.id, tenantId: t.tenant_id, desde: l.started_on, fuso: l.fuso });
+      if (mexeram) return this.interromper(t, `${mexeram} O Liame parou de medir: com um lado diferente do outro, a comparação não vale.`);
+      const dias = { minimo: l.min_days, maximo: l.max_days };
+      // Os dias inteiros que o teste já rodou: no começo do dia 8, sete.
+      const dia = diaDaUltimaOlhada(diasEntre(l.started_on, l.hoje), dias);
+      if (dia === null) return { ...base, situacao: 'esperando' as const, motivo: 'antes_da_primeira_olhada' };
+      const guardado = ResultadoDoTesteDeCriativo.safeParse(l.result);
+      const olhadas = guardado.success ? guardado.data.olhadas : [];
+      if (olhadas.some((o) => o.dia === dia)) return { ...base, situacao: 'esperando' as const, motivo: 'olhada_feita' };
+      const ate = diaMais(l.started_on, dia - 1);
+      if (!(await leituraDosPedidosCobre(tx, { teste: t.id, tenantId: t.tenant_id, dia: ate, fuso: l.fuso }))) {
+        return { ...base, situacao: 'esperando' as const, motivo: 'leitura_dos_pedidos_atrasada' };
+      }
+      const m = await medidaDoTeste(tx, { teste: t.id, tenantId: t.tenant_id, de: l.started_on, ate, fuso: l.fuso });
+      const v = vereditoDoTeste(dia, m.A.pedidos, m.B.pedidos, dias);
+      const acabou = v.situacao === 'venceu' || v.situacao === 'sem_vencedor';
+      const numeros = (letra: LetraDoTeste) => ({ pedidos: m[letra].pedidos, receita_micros: m[letra].receitaMicros, gasto_micros: m[letra].gastoMicros, visitas: m[letra].visitas });
+      const resultado: ResultadoDoTesteDeCriativo = {
+        olhadas: [...olhadas, { dia, a: m.A.pedidos, b: m.B.pedidos, acaso: v.acaso ?? 1 }],
+        veredito: v.situacao === 'cedo' ? 'ainda_nao' : v.situacao,
+        vencedor: v.vencedor,
+        criativos: { A: numeros('A'), B: numeros('B') },
+      };
+      await tx.execute(sql`
+        update liame.campaign_test
+           set result = ${JSON.stringify(resultado)}::jsonb, status = ${acabou ? 'terminado' : 'rodando'},
+               ended_on = case when ${acabou} then ${ate}::date else ended_on end,
+               version = version + ${acabou ? 1 : 0}, updated_at = now()
+         where id = ${t.id} and tenant_id = ${t.tenant_id}`);
+      return { ...base, situacao: acabou ? ('terminado' as const) : ('olhado' as const), motivo: null };
+    });
   }
 
   /** Os cupons de um teste em criação, na transação da empresa: lê os pedidos que terminaram, pede os que faltam e, com os dois criados, deixa o teste pronto. */
@@ -196,7 +280,7 @@ export class TestesDeCriativoRotina {
   }
 
   /** O teste que não vai adiante: `interrompido`, com o motivo. A campanha de teste continua pausada na Meta. */
-  private async interromper(t: TesteEmCriacao, motivo: string): Promise<ResultadoDoTeste> {
+  private async interromper(t: { id: string; tenant_id: string }, motivo: string): Promise<ResultadoDoTeste> {
     await currentTx().execute(sql`
       update liame.campaign_test set status = 'interrompido', reason = ${motivo.slice(0, 500)}, version = version + 1, updated_at = now()
        where id = ${t.id} and tenant_id = ${t.tenant_id}`);

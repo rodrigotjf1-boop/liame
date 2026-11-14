@@ -99,6 +99,30 @@ const CreativeTestArm = z.strictObject({
   meta: z.strictObject({ adset_id: z.string().nullable(), ad_id: z.string().nullable() }),
 });
 
+const CreativeTestArmNumbers = z.strictObject({
+  letter: z.enum(['A', 'B']),
+  /** Os pedidos confirmados no caixa, pelo cupom ou pelo link do criativo, do primeiro dia até a última olhada. */
+  orders: z.int(),
+  revenue_micros: z.int(),
+  /** O gasto e os cliques no link do anúncio no mesmo período; nulos enquanto a leitura da Meta não trouxe o anúncio. */
+  spend_micros: z.int().nullable(),
+  link_clicks: z.int().nullable(),
+});
+
+/**
+ * O que o teste mostrou até a última olhada. O Liame olha só ao fim de cada semana inteira (os dias 7, 14, 21 e 28) e
+ * não espia no meio (D-RG-79 e D-RG-91): entre uma olhada e outra, os números ficam os da última.
+ */
+export const CreativeTestResult = z.strictObject({
+  /** Cada olhada: o dia, os pedidos de cada criativo até ele e a chance de a diferença ser acaso (de 0 a 1). */
+  looks: z.array(z.strictObject({ day: z.int(), orders_a: z.int(), orders_b: z.int(), chance: z.number() })),
+  /** `ainda_nao` (a diferença cabe no acaso), `venceu` ou `sem_vencedor` (chegou ao último dia sem vencedor). */
+  verdict: z.enum(['ainda_nao', 'venceu', 'sem_vencedor']),
+  winner: z.enum(['A', 'B']).nullable(),
+  arms: z.array(CreativeTestArmNumbers).length(2),
+});
+export type CreativeTestResult = z.infer<typeof CreativeTestResult>;
+
 export const CreativeTestResponse = z.strictObject({
   id: z.uuid(),
   brand_id: z.uuid(),
@@ -133,7 +157,18 @@ export const CreativeTestResponse = z.strictObject({
   ended_on: z.iso.date().nullable(),
   /** Por que a campanha de teste não foi criada, quando não foi. */
   error: z.string().nullable(),
+  /** Por que o teste foi interrompido (mexeram por fora, um cupom não foi criado), quando foi. */
+  reason: z.string().nullable(),
+  /** O que o teste mostrou até a última olhada; nulo antes da primeira (o dia 7). */
+  result: CreativeTestResult.nullable(),
   meta: z.strictObject({ account_id: z.string().nullable(), campaign_id: z.string().nullable() }),
   created_at: z.iso.datetime(),
 });
 export type CreativeTestResponse = z.infer<typeof CreativeTestResponse>;
+
+export const CreativeTestListQuery = z.strictObject({ brand_id: z.uuid() });
+export type CreativeTestListQuery = z.infer<typeof CreativeTestListQuery>;
+
+/** Os testes da marca, do mais novo para o mais antigo (até 50): o que foi testado e o que cada um mostrou (D-RG-83). */
+export const CreativeTestListResponse = z.strictObject({ items: z.array(CreativeTestResponse) });
+export type CreativeTestListResponse = z.infer<typeof CreativeTestListResponse>;

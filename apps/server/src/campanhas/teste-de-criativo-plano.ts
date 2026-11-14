@@ -97,6 +97,23 @@ export const EstadoDoTesteDeCriativo = z.object({
 });
 export type EstadoDoTesteDeCriativo = z.infer<typeof EstadoDoTesteDeCriativo>;
 
+// ------------------------------------------------------------ o resultado guardado
+
+const NumerosGuardados = z.object({ pedidos: z.number().int().nonnegative(), receita_micros: z.number().nonnegative(), gasto_micros: z.number().nonnegative().nullable(), visitas: z.number().int().nonnegative().nullable() });
+
+/**
+ * O que a rotina guarda do teste rodando (`campaign_test.result`): cada olhada (o dia, os pedidos de cada criativo até
+ * ele e a chance de acaso), o veredito da última, quem venceu e os números de cada criativo até a última olhada. São
+ * somas: nunca um pedido nem um cliente. A olhada guardada não é refeita (D-RG-91).
+ */
+export const ResultadoDoTesteDeCriativo = z.object({
+  olhadas: z.array(z.object({ dia: z.number().int().min(1), a: z.number().int().nonnegative(), b: z.number().int().nonnegative(), acaso: z.number().min(0).max(1) })).max(10),
+  veredito: z.enum(['ainda_nao', 'venceu', 'sem_vencedor']),
+  vencedor: z.enum(['A', 'B']).nullable(),
+  criativos: z.object({ A: NumerosGuardados, B: NumerosGuardados }),
+});
+export type ResultadoDoTesteDeCriativo = z.infer<typeof ResultadoDoTesteDeCriativo>;
+
 // ------------------------------------------------------------ o texto com o cupom
 
 const reais = (centavos: number): string => `R$ ${(centavos / 100).toFixed(2).replace('.', ',')}`;
