@@ -60,7 +60,7 @@ import { avaliacaoDoRecurso } from './perfil-avaliacao.js';
 import type { RegraDoCupom } from './regem-cupom.js';
 import { mensagemDoRecurso } from './regemcast-mensagem.js';
 import { respostaDaPlataforma } from './resposta-da-plataforma.js';
-import { PlanoRecusado, type ResourceState, saiPorDecisaoJaTomada, TOOLS, type ToolDefinition, type ToolPlan } from './tools.js';
+import { type DecisaoJaTomada, PlanoRecusado, type ResourceState, saiPorDecisaoJaTomada, TOOLS, type ToolDefinition, type ToolPlan } from './tools.js';
 
 /** Pedido que ninguém aprova expira (e devolve a reserva). */
 export const ACTION_TTL_HOURS = 72;
@@ -309,6 +309,28 @@ const brl = (m: number) => (m / 1_000_000).toLocaleString('pt-BR', { style: 'cur
  * Action Service, lado do pedido (ADR-007): ferramenta → trava → estado no provedor → política →
  * orçamento (reserva) → aprovação amarrada ao hash do plano. A execução fica no worker (E6d).
  */
+/**
+ * As frases de cada decisão já tomada (`decisaoJaTomada`): o 422 de quem pede a ferramenta fora da rotina, o 409 de
+ * quando a política da empresa ou da marca pede outra coisa, e o motivo que fica no pedido (aprovado pela decisão, ou
+ * esperando porque não veio pela rotina).
+ */
+const FRASES_DA_DECISAO: Record<DecisaoJaTomada, { soPelaRotina: string; seguradoTitulo: string; seguradoPelaPolitica: (modo: string) => string; aprovada: string; soPelaDecisao: string }> = {
+  atendimento_automatico: {
+    soPelaRotina: 'A resposta automática só sai pelo atendimento automático da marca: para responder, peça a resposta ao comentário.',
+    seguradoTitulo: 'O atendimento automático não responde este',
+    seguradoPelaPolitica: (modo) => `A política desta conta pede ${modo} para a resposta automática: o comentário vai para uma pessoa.`,
+    aprovada: 'atendimento automático: a marca ligou, com o código do app',
+    soPelaDecisao: 'a resposta automática só sai pelo atendimento automático',
+  },
+  ritmo_da_semana: {
+    soPelaRotina: 'O passo do ritmo só sai pelo ritmo da semana que uma pessoa aprovou: para mudar a verba, peça o ajuste da verba.',
+    seguradoTitulo: 'O ritmo da semana não muda esta verba',
+    seguradoPelaPolitica: (modo) => `A política desta conta pede ${modo} para o passo do ritmo da semana: a verba fica como está.`,
+    aprovada: 'ritmo da semana: uma pessoa aprovou a semana, com o código do app',
+    soPelaDecisao: 'o passo do ritmo só sai pelo ritmo da semana aprovado',
+  },
+};
+
 @Injectable()
 export class ActionService {
   constructor(
@@ -608,7 +630,7 @@ export class ActionService {
   async responderSozinhoPeloFuncionario(alvo: { tenantId: string; agentKey: string; agentLabel: string; emNomeDe: string }, input: CreateActionRequest): Promise<string> {
     const tool = TOOLS[input.tool];
     const commentId = comentarioDoPedido({ provider: input.provider, resource_id: input.resource_id });
-    if (!tool?.atendimentoAutomatico || !commentId || !input.brand_id) {
+    if (tool?.decisaoJaTomada !== 'atendimento_automatico' || !commentId || !input.brand_id) {
       throw new AppProblem(400, 'ferramenta-nao-e-automatica', 'Não é a resposta automática', 'Por aqui o funcionário só pede a resposta automática a um comentário.');
     }
     const segura = await oQueSeguraOAutomatico(currentTx(), this.flags, { tenantId: alvo.tenantId, brandId: input.brand_id, connectedAccountId: input.account_id, commentId });
@@ -769,14 +791,7 @@ export class ActionService {
     // A resposta automática (A6, Z11, parte 2e-1) só se pede pelo atendimento automático, que conferiu o portão antes.
     // E o passo do ritmo da semana (plano da região, R7) só pela rotina do ritmo: o mesmo predicado, a mesma regra.
     if (saiPorDecisaoJaTomada(tool) && (!automatico || quem.ator !== 'agent')) {
-      throw new AppProblem(
-        422,
-        'acao-so-pelo-automatico',
-        'Esta ação não se pede direto',
-        tool.ritmoDaSemana
-          ? 'O passo do ritmo só sai pelo ritmo da semana que uma pessoa aprovou: para mudar a verba, peça o ajuste da verba.'
-          : 'A resposta automática só sai pelo atendimento automático da marca: para responder, peça a resposta ao comentário.',
-      );
+      throw new AppProblem(422, 'acao-so-pelo-automatico', 'Esta ação não se pede direto', FRASES_DA_DECISAO[tool.decisaoJaTomada].soPelaRotina);
     }
     // A ferramenta que só existe como a volta de outra ação não se pede direto (A6, Z2: apagar a resposta a uma avaliação).
     if (tool.onlyAsUndo && !volta) {
@@ -819,9 +834,8 @@ export class ActionService {
     // dela; se a política da empresa ou da marca pedir outra coisa, ela não sai, e o comentário vai para uma pessoa.
     // O passo do ritmo da semana, igual: se a política da empresa ou da marca pedir outra coisa, o passo não sai.
     if (saiPorDecisaoJaTomada(tool) && decision.mode !== 'AUTO') {
-      throw tool.ritmoDaSemana
-        ? new AppProblem(409, 'automatico-segurado', 'O ritmo da semana não muda esta verba', `A política desta conta pede ${decision.mode} para o passo do ritmo da semana: a verba fica como está.`)
-        : new AppProblem(409, 'automatico-segurado', 'O atendimento automático não responde este', `A política desta conta pede ${decision.mode} para a resposta automática: o comentário vai para uma pessoa.`);
+      const frases = FRASES_DA_DECISAO[tool.decisaoJaTomada];
+      throw new AppProblem(409, 'automatico-segurado', frases.seguradoTitulo, frases.seguradoPelaPolitica(decision.mode));
     }
     if (quem.ator === 'agent' && decision.mode !== 'APPROVAL' && !soDoDono && !saiPorDecisaoJaTomada(tool)) {
       throw new AppProblem(409, 'modo-nao-e-aprovacao', 'O modo não é Aprovação', `Nesta conta, esta ação está em ${decision.mode} para o funcionário de IA: ele não faz o pedido.`);
@@ -1568,7 +1582,7 @@ export class ActionService {
     mode: AutonomyMode,
     quem: Pick<Solicitante, 'tenantId' | 'userId' | 'ator'>,
     brandId: string | null,
-    tool?: Pick<ToolDefinition, 'alwaysApproval' | 'directByPerson' | 'atendimentoAutomatico' | 'ritmoDaSemana' | 'aprovacaoNoDestino'>,
+    tool?: Pick<ToolDefinition, 'alwaysApproval' | 'directByPerson' | 'decisaoJaTomada' | 'aprovacaoNoDestino'>,
     automatico = false,
   ): Promise<{ mode: AutonomyMode; status: ActionStatus; reason: string | null }> {
     if (mode === 'SHADOW') return { mode, status: 'sombra', reason: 'modo sombra: registra, não executa' };
@@ -1582,11 +1596,9 @@ export class ActionService {
       // mesma transação (e de novo pelo executor), e não o `autopilot`.
       // O passo do ritmo da semana (R7), igual: o portão é o do ritmo que a pessoa aprovou.
       if (saiPorDecisaoJaTomada(tool)) {
-        const doRitmo = tool?.ritmoDaSemana === true;
-        if (automatico && quem.ator === 'agent') {
-          return { mode, status: 'aprovada', reason: doRitmo ? 'ritmo da semana: uma pessoa aprovou a semana, com o código do app' : 'atendimento automático: a marca ligou, com o código do app' };
-        }
-        return { mode: 'APPROVAL', status: 'aguardando_aprovacao', reason: doRitmo ? 'o passo do ritmo só sai pelo ritmo da semana aprovado' : 'a resposta automática só sai pelo atendimento automático' };
+        const frases = FRASES_DA_DECISAO[tool.decisaoJaTomada];
+        if (automatico && quem.ator === 'agent') return { mode, status: 'aprovada', reason: frases.aprovada };
+        return { mode: 'APPROVAL', status: 'aguardando_aprovacao', reason: frases.soPelaDecisao };
       }
       const autopilot = await this.flags.isEnabled('autopilot', this.flags.context({ tenantId: quem.tenantId, userId: quem.userId, brandId }));
       if (autopilot) return { mode, status: 'aprovada', reason: 'aprovada pela política (autonomia)' };

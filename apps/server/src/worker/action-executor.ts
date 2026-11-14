@@ -5,7 +5,7 @@ import type { ActionRow } from '../actions/action.service.js';
 import { BudgetService } from '../actions/budget.service.js';
 import { recursoDoComentario } from '../actions/comentario-na-rede.js';
 import { type ApplyResult, CONNECTORS } from '../actions/connectors.js';
-import { saiPorDecisaoJaTomada, TOOLS } from '../actions/tools.js';
+import { type DecisaoJaTomada, saiPorDecisaoJaTomada, TOOLS } from '../actions/tools.js';
 import { writeAudit } from '../audit/audit.js';
 import { conversaDoRecurso, FERRAMENTA_DO_DIRECT_AUTOMATICO } from '../actions/direct-plano.js';
 import { oQueSeguraOPassoDoRitmo } from '../campanhas/ritmo-portao.js';
@@ -224,16 +224,14 @@ export class ActionExecutor {
     const tambem = TOOLS[row.tool]?.travaTambem;
     const stop = (await this.switches.check(tx, alvo)) ?? (tambem ? await this.switches.check(tx, { ...alvo, tool: tambem }) : null);
     if (stop) return { status: 'bloqueada', reason: `trava ativa (${stop.level}): ${stop.reason}` };
-    // A resposta automática (A6, Z11, parte 2e-1): o portão do atendimento de novo, agora; desligar ou tirar o tipo segura.
-    if (TOOLS[row.tool]?.atendimentoAutomatico) {
-      const segura = await this.portaoDoAutomatico(tx, row);
-      if (segura) return { status: 'bloqueada', reason: `atendimento automático: ${segura}` };
-    }
-    // O passo do ritmo da semana (plano da região, R7): o portão do ritmo de novo, agora; parar o ritmo ou desligar a
-    // função segura na hora o que está na fila.
-    if (TOOLS[row.tool]?.ritmoDaSemana) {
-      const segura = await this.portaoDoRitmo(tx, row);
-      if (segura) return { status: 'bloqueada', reason: `ritmo da semana: ${segura}` };
+    // A decisão já tomada (a resposta automática, A6, Z11, parte 2e-1; o passo do ritmo da semana, plano da região, R7):
+    // o portão dela de novo, agora. Desligar o atendimento, tirar o tipo, parar o ritmo ou desligar a função segura na
+    // hora o que está na fila.
+    const ferramenta = TOOLS[row.tool];
+    if (saiPorDecisaoJaTomada(ferramenta)) {
+      const portao = this.portaoDaDecisao[ferramenta.decisaoJaTomada];
+      const segura = await portao.segura(tx, row);
+      if (segura) return { status: 'bloqueada', reason: `${portao.rotulo}: ${segura}` };
     }
     if (!approvalId && !(await this.autoApproved(row))) return { status: 'bloqueada', reason: 'sem aprovação válida para o plano atual' };
     const connector = CONNECTORS[row.provider];
@@ -344,6 +342,16 @@ export class ActionExecutor {
    * Aprovada pela política (autonomia) e o autopilot continua ligado agora; ou a ação que uma pessoa pediu e que a
    * ferramenta deixa direta (`directByPerson`: pausar um envio de mensagem), que não depende do autopilot.
    */
+  /**
+   * O portão de cada decisão já tomada (`decisaoJaTomada`), conferido de novo logo antes de executar, e o começo do
+   * motivo que fica no pedido quando ele segura. O `Record` obriga o portão de cada decisão: a decisão nova sem portão
+   * não compila, e o pedido da rotina nunca executa só pelo `autoApproved`, sem portão nenhum.
+   */
+  private readonly portaoDaDecisao: Record<DecisaoJaTomada, { rotulo: string; segura: (tx: Tx, row: ActionRow) => Promise<string | null> }> = {
+    atendimento_automatico: { rotulo: 'atendimento automático', segura: (tx, row) => this.portaoDoAutomatico(tx, row) },
+    ritmo_da_semana: { rotulo: 'ritmo da semana', segura: (tx, row) => this.portaoDoRitmo(tx, row) },
+  };
+
   /**
    * O portão do atendimento automático na hora de publicar (A6, Z11, parte 2e-1): o mesmo da criação do pedido. Nulo
    * quando vale; senão, o porquê. Só o pedido do funcionário de IA, de um comentário de uma marca, passa.

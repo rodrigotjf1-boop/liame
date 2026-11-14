@@ -113,7 +113,7 @@ describe('o passo do ritmo da semana (R7, parte 1b-2)', () => {
 
   it('a ferramenta do passo: só pelo ritmo, com a ação própria; a campanha que não está como o Liame deixou não tem plano', () => {
     const t = TOOLS.orcamento_do_ritmo!;
-    expect([t.risk, t.providers, t.ritmoDaSemana, t.flag, t.alwaysApproval ?? false, t.compensation]).toEqual(['R2', ['meta_ads'], true, 'ritmo_da_semana', false, 'restaurar_orcamento_anterior_se_inalterado']);
+    expect([t.risk, t.providers, t.decisaoJaTomada, t.flag, t.alwaysApproval ?? false, t.compensation]).toEqual(['R2', ['meta_ads'], 'ritmo_da_semana', 'ritmo_da_semana', false, 'restaurar_orcamento_anterior_se_inalterado']);
     // As que saem sem outra aprovação porque uma pessoa já decidiu: as duas do atendimento automático e o passo do ritmo.
     expect(Object.values(TOOLS).filter(saiPorDecisaoJaTomada).map((x) => x.name)).toEqual(['orcamento_do_ritmo', 'comentario_responder_auto', 'direct_responder_auto']);
     expect(saiPorDecisaoJaTomada(TOOLS.orcamento_ajustar)).toBe(false);
