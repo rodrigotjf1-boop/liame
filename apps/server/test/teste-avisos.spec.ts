@@ -1,9 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import { avisoDoTeste, DIAS_DO_AVISO_DO_TESTE, type TesteLido, textoDoAvisoDoTeste } from '../src/campanhas/teste-avisos.js';
 
-// R8 (D-RG-80 e D-RG-93), sem rede e sem banco: os três avisos do teste de criativo na Atenção. O teste que terminou com
-// vencedor avisa enquanto a campanha de teste segue no ar e o criativo que perdeu não foi pausado; o que acabou sem
-// vencedor só informa; o interrompido avisa até alguém encerrar o teste (ou pelo prazo, se nem começou). E as frases.
+// R8 (D-RG-80, D-RG-93 e D-RG-94), sem rede e sem banco: os três avisos do teste de criativo na Atenção. O teste que
+// terminou com vencedor avisa enquanto a campanha de teste segue no ar e o criativo que perdeu não foi pausado, sem
+// prazo; o que acabou sem vencedor só informa, pelo prazo; o interrompido avisa até alguém encerrar o teste (ou pelo
+// prazo, se a campanha de teste não está no ar). O prazo nunca cala o aviso de um dinheiro que ainda está sendo gasto.
+// E as frases.
 
 const ID = '0190d2b0-0000-7000-8000-0000000000a1';
 const ACAO = '0190d2b0-0000-7000-8000-0000000000b2';
@@ -21,6 +23,7 @@ const teste = (o: Partial<TesteLido> = {}): TesteLido => ({
   situacao: 'terminado',
   ativa: true,
   comecou: true,
+  noPrazo: true,
   campanhaLida: 'ativa',
   perdedorLido: 'ativa',
   resultado: resultado('venceu', 'B', 9, 45, 14),
@@ -29,8 +32,20 @@ const teste = (o: Partial<TesteLido> = {}): TesteLido => ({
 });
 
 describe('os avisos do teste de criativo (R8)', () => {
-  it('o prazo do aviso é de duas semanas', () => {
+  it('o prazo é de duas semanas, e nunca cala o aviso do que ainda está gastando', () => {
     expect(DIAS_DO_AVISO_DO_TESTE).toBe(14);
+    const fora = { noPrazo: false };
+    // No dia 20 depois do fim: o criativo que perdeu segue no ar, e o aviso fica até alguém pausá-lo ou encerrar o teste.
+    expect(avisoDoTeste(teste(fora))).toMatchObject({ tipo: 'venceu' });
+    expect(avisoDoTeste(teste({ ...fora, perdedorLido: 'pausada' }))).toBeNull();
+    expect(avisoDoTeste(teste({ ...fora, ativa: false }))).toBeNull();
+    // O interrompido com a campanha de teste no ar: fica até alguém encerrar o teste.
+    expect(avisoDoTeste(teste({ ...fora, situacao: 'interrompido', resultado: null, motivo: 'Mexeram.' }))).toMatchObject({ tipo: 'interrompido', noAr: true });
+    // O que não gasta mais sai no prazo: o interrompido que nem começou e o que teve a campanha pausada por fora.
+    expect(avisoDoTeste(teste({ ...fora, situacao: 'interrompido', ativa: false, comecou: false, resultado: null }))).toBeNull();
+    expect(avisoDoTeste(teste({ ...fora, situacao: 'interrompido', campanhaLida: 'pausada', resultado: null }))).toBeNull();
+    // O teste sem vencedor é informação (os dois ficam como estão, de propósito): sai no prazo.
+    expect(avisoDoTeste(teste({ ...fora, resultado: resultado('sem_vencedor', null, 31, 27, 28) }))).toBeNull();
   });
 
   it('com vencedor: avisa enquanto a campanha de teste segue no ar e o criativo que perdeu não foi pausado', () => {

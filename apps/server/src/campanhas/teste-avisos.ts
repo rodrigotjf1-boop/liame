@@ -3,18 +3,22 @@ import { sql } from 'drizzle-orm';
 import type { LetraDoTeste } from './teste-contas.js';
 import { ResultadoDoTesteDeCriativo } from './teste-de-criativo-plano.js';
 
-// Os avisos do teste de criativo (plano da região, R8; D-RG-80 e D-RG-93). No fim do teste o Liame avisa e não mexe
-// sozinho: a campanha de teste continua como está, e quem decide o que fazer é a pessoa. A conta é pura; a leitura do
-// banco fica no fim (`avisosDoTesteDasMarcas`), e quem mostra é a Atenção. Nada é gravado: os avisos saem, a cada
+// Os avisos do teste de criativo (plano da região, R8; D-RG-80, D-RG-93 e D-RG-94). No fim do teste o Liame avisa e não
+// mexe sozinho: a campanha de teste continua como está, e quem decide o que fazer é a pessoa. A conta é pura; a leitura
+// do banco fica no fim (`avisosDoTesteDasMarcas`), e quem mostra é a Atenção. Nada é gravado: os avisos saem, a cada
 // leitura, do teste guardado e do que a leitura da Meta mostra da campanha de teste. Três avisos, um por teste:
 //   - um criativo venceu: a campanha de teste continua no ar com os dois, e o que perdeu segue gastando até alguém
-//     pedir para pausá-lo. O aviso sai quando o teste é encerrado, ou quando o conjunto do que perdeu aparece pausado;
-//   - o teste acabou sem vencedor: os dois criativos ficam como estão. É só informação, e sai quando o teste é encerrado;
-//   - o teste foi interrompido: mexeram nele por fora, ou os cupons não saíram. O Liame parou de medir. Com a campanha
-//     de teste ativada pelo Liame, o aviso fica até alguém encerrar o teste; no teste que nem começou, pelo prazo.
-// Todo aviso tem prazo (`DIAS_DO_AVISO_DO_TESTE`): depois dele, o teste fica só na lista de Resultados.
+//     pedir para pausá-lo. O aviso não tem prazo: sai quando o teste é encerrado, ou quando o conjunto do que perdeu
+//     aparece pausado;
+//   - o teste foi interrompido: mexeram nele por fora, ou os cupons não saíram, e o Liame parou de medir. Com a campanha
+//     de teste no ar, o aviso não tem prazo: fica até alguém encerrar o teste. Sem ela no ar (o teste que nem começou,
+//     ou a campanha pausada por fora), vale o prazo;
+//   - o teste acabou sem vencedor: os dois criativos ficam como estão, de propósito (D-RG-80). É só informação: sai
+//     quando o teste é encerrado, ou no prazo.
+// A regra do prazo: ele nunca cala o aviso de um dinheiro que ainda está sendo gasto sem ninguém ter decidido. Vale só
+// para o que não gasta mais, ou para o que a pessoa já sabe que fica como está.
 
-/** Por quantos dias depois do fim do teste (ou de ele ser interrompido) o aviso ainda aparece. */
+/** Por quantos dias o aviso do que não gasta mais (e o do teste sem vencedor) ainda aparece. */
 export const DIAS_DO_AVISO_DO_TESTE = 14;
 
 /** O teste como o Liame o guardou e como a leitura da Meta mostra a campanha dele. */
@@ -28,6 +32,8 @@ export interface TesteLido {
   ativa: boolean;
   /** O teste chegou a rodar (tem o primeiro dia). */
   comecou: boolean;
+  /** Dentro do prazo do aviso: pelo último dia do teste, no terminado; pela hora em que o Liame parou, no interrompido. */
+  noPrazo: boolean;
   /** A situação da campanha de teste e a do conjunto do criativo que perdeu, pela leitura da Meta; nulas sem leitura. */
   campanhaLida: string | null;
   perdedorLido: string | null;
@@ -51,6 +57,8 @@ export function avisoDoTeste(t: TesteLido): AvisoDoTeste | null {
   if (t.situacao === 'interrompido') {
     // O teste que rodou e já foi encerrado (a campanha de teste pausada pelo Liame): a pessoa já viu e já agiu.
     if (t.comecou && !t.ativa) return null;
+    // No ar, a campanha de teste segue gastando: o aviso fica até alguém encerrar o teste. Sem ela no ar, vale o prazo.
+    if (!noAr && !t.noPrazo) return null;
     return { ...base, tipo: 'interrompido', motivo: t.motivo, noAr };
   }
   // Terminado: o aviso é de quem ainda tem a campanha de teste no ar.
@@ -61,11 +69,12 @@ export function avisoDoTeste(t: TesteLido): AvisoDoTeste | null {
   const { veredito, vencedor, criativos } = guardado.data;
   const pedidos = { A: criativos.A.pedidos, B: criativos.B.pedidos };
   if (veredito === 'venceu' && vencedor) {
-    // O conjunto do criativo que perdeu já pausado (pelo pedido da tela ou na Meta): não há mais o que decidir.
+    // O conjunto do criativo que perdeu já pausado (pelo pedido da tela ou na Meta): não há mais o que decidir. Enquanto
+    // ele segue no ar, o aviso fica, sem prazo.
     if (!lidaNoAr(t.perdedorLido)) return null;
     return { ...base, tipo: 'venceu', vencedor, pedidos, dias: ultima.dia };
   }
-  if (veredito === 'sem_vencedor') return { ...base, tipo: 'sem_vencedor', pedidos, dias: ultima.dia };
+  if (veredito === 'sem_vencedor' && t.noPrazo) return { ...base, tipo: 'sem_vencedor', pedidos, dias: ultima.dia };
   return null;
 }
 
@@ -122,9 +131,13 @@ export interface AvisoDoTesteDaMarca {
 }
 
 /**
- * Os avisos dos testes de criativo das marcas dadas, em `instante`. Lê os testes terminados (pelo último dia do teste,
- * no fuso da loja) e os interrompidos (pela hora em que o Liame parou) dentro do prazo do aviso, com a campanha de teste
- * e o conjunto do criativo que perdeu como a leitura da Meta os mostra. Uma consulta só, pelo índice da marca.
+ * Os avisos dos testes de criativo das marcas dadas, em `instante`. Lê os testes terminados e interrompidos que ainda
+ * têm a campanha de teste ativada pelo Liame (sem prazo: ela segue gastando) e os interrompidos que nem começaram,
+ * dentro do prazo, com a campanha de teste e o conjunto do criativo que perdeu como a leitura da Meta os mostra. Uma
+ * consulta só, pelo índice da marca.
+ *
+ * O prazo do terminado conta do último dia do teste, no fuso da loja. O do interrompido conta de `updated_at`: é a hora
+ * em que o Liame parou, porque depois disso só "Encerrar o teste" grava na linha, e o teste encerrado já não avisa.
  */
 export async function avisosDoTesteDasMarcas(tx: Tx, marcas: readonly string[], instante: string): Promise<AvisoDoTesteDaMarca[]> {
   if (!marcas.length) return [];
@@ -138,16 +151,22 @@ export async function avisosDoTesteDasMarcas(tx: Tx, marcas: readonly string[], 
       status: 'terminado' | 'interrompido';
       active: boolean;
       comecou: boolean;
+      no_prazo: boolean;
       result: unknown;
       reason: string | null;
       campanha: string | null;
       campanha_lida: string | null;
       perdedor_lido: string | null;
     }>(sql`
-      select t.id, t.brand_id, t.ad_account_id as conta, t.action_id, t.name, t.status, t.active, (t.started_on is not null) as comecou, t.result, t.reason,
+      select t.id, t.brand_id, t.ad_account_id as conta, t.action_id, t.name, t.status, t.active, (t.started_on is not null) as comecou, x.no_prazo, t.result, t.reason,
              c.id as campanha, c.status as campanha_lida, p.status as perdedor_lido
         from liame.campaign_test t
-        cross join lateral (select (${instante}::timestamptz at time zone coalesce(t.plan->>'fuso', ${FUSO_PADRAO}))::date as hoje) x
+        cross join lateral (
+          select case when t.status = 'terminado'
+                      then t.ended_on >= (${instante}::timestamptz at time zone coalesce(t.plan->>'fuso', ${FUSO_PADRAO}))::date - ${DIAS_DO_AVISO_DO_TESTE}::int
+                      else t.updated_at >= ${instante}::timestamptz - make_interval(days => ${DIAS_DO_AVISO_DO_TESTE}::int)
+                 end as no_prazo
+        ) x
         left join liame.campaign c on c.tenant_id = t.tenant_id and c.connected_account_id = t.ad_account_id and c.external_id = t.meta_campaign_id
         left join lateral (
           select g.status
@@ -156,9 +175,8 @@ export async function avisosDoTesteDasMarcas(tx: Tx, marcas: readonly string[], 
            where b.test_id = t.id and b.tenant_id = t.tenant_id and b.letter <> (t.result->>'vencedor')
            limit 1
         ) p on true
-       where t.brand_id in ${marcas} and t.kind = 'criativo'
-         and ((t.status = 'terminado' and t.ended_on >= x.hoje - ${DIAS_DO_AVISO_DO_TESTE}::int)
-           or (t.status = 'interrompido' and t.updated_at >= ${instante}::timestamptz - make_interval(days => ${DIAS_DO_AVISO_DO_TESTE}::int)))
+       where t.brand_id in ${marcas} and t.kind = 'criativo' and t.status in ('terminado', 'interrompido')
+         and (t.active or (t.status = 'interrompido' and t.started_on is null and x.no_prazo))
        order by t.created_at, t.id`)
   ).rows;
   const resultado: AvisoDoTesteDaMarca[] = [];
@@ -170,6 +188,7 @@ export async function avisosDoTesteDasMarcas(tx: Tx, marcas: readonly string[], 
       situacao: l.status,
       ativa: l.active,
       comecou: l.comecou,
+      noPrazo: l.no_prazo,
       campanhaLida: l.campanha_lida,
       perdedorLido: l.perdedor_lido,
       resultado: l.result,

@@ -38,8 +38,9 @@ import { hasDb } from './env.js';
 //   - a medida (D-RG-79 e D-RG-91): a olhada só ao fim de cada semana inteira e só com a leitura do caixa em dia; os
 //     pedidos de cada criativo pelo cupom e pelo anúncio, uma vez cada; o vencedor termina o teste; mexido por fora,
 //     o teste é interrompido;
-//   - a Atenção (D-RG-80): o aviso do criativo que venceu, com o caminho para o teste em Aprovações, que sai quando o
-//     conjunto do que perdeu aparece pausado e quando o prazo passa; e o aviso do teste interrompido, com o motivo.
+//   - a Atenção (D-RG-80 e D-RG-94): o aviso do criativo que venceu, com o caminho para o teste em Aprovações, que sai
+//     quando o conjunto do que perdeu aparece pausado e quando o teste é encerrado, e NÃO sai pelo prazo (a campanha de
+//     teste segue gastando); e o aviso do teste interrompido, com o motivo, que também fica enquanto ela está no ar.
 
 const CARDAPIO = 'https://cardapio.exemplo.com.br/mister-centro';
 const OFERTA = 'Combo sexta: smash, batata e refri por R$ 34,90';
@@ -529,8 +530,14 @@ describe.skipIf(!hasDb)('o teste de criativo na Meta (plano da região, R8)', ()
     expect(await avisos()).toEqual([]);
     await conjuntoDoB('ativa');
     expect((await avisos()).map((i) => i.kind)).toEqual(['teste_com_vencedor']);
-    // Passado o prazo do aviso (14 dias depois do último dia do teste), o teste fica só na lista.
+    // Vinte dias depois do fim, o aviso continua: o prazo de 14 dias não cala o aviso de uma campanha que segue gastando.
     await ownerQuery(`update liame.campaign_test set started_on = started_on - 20, ended_on = ended_on - 20 where id = $1`, [id]);
+    expect((await avisos()).map((i) => i.kind)).toEqual(['teste_com_vencedor']);
+    // Quem tira o aviso é a pessoa: "Encerrar o teste" pausa a campanha de teste (sem o código do app), e o aviso sai.
+    const encerrar = await api.call('POST', `/v1/creative-tests/${id}/stop`, { cookie: e.cookie });
+    expect(encerrar.status, JSON.stringify(encerrar.body)).toBe(201);
+    await executar(e);
+    expect(await testeDe(id)).toMatchObject({ status: 'terminado', active: false });
     expect(await avisos()).toEqual([]);
   }, 180_000);
 
@@ -574,5 +581,9 @@ describe.skipIf(!hasDb)('o teste de criativo na Meta (plano da região, R8)', ()
     const avisos = ClosedLoopAttentionResponse.parse(lido.body).items.filter((i) => i.kind.startsWith('teste_'));
     expect(avisos).toMatchObject([{ kind: 'teste_interrompido', severity: 'atencao', connected_account_id: e.conta, campaign_id: null, test: { id, action_id: r.body.action_id } }]);
     expect(avisos[0]!.detail).toBe(`${t.reason} A campanha de teste continua no ar na Meta, e o Liame não mexe nela sozinho.`);
+    // Vinte dias depois de interrompido, com a campanha de teste ainda no ar, o aviso continua: ela segue gastando.
+    await ownerQuery(`update liame.campaign_test set updated_at = now() - interval '20 days' where id = $1`, [id]);
+    const depois = await api.call('GET', `/v1/results/attention?brand_id=${e.brandId}`, { cookie: e.cookie });
+    expect(ClosedLoopAttentionResponse.parse(depois.body).items.filter((i) => i.kind.startsWith('teste_')).map((i) => i.kind)).toEqual(['teste_interrompido']);
   }, 180_000);
 });
