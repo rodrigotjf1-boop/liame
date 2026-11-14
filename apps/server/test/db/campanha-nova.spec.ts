@@ -668,7 +668,9 @@ describe.skipIf(!hasDb)('a campanha nova na Meta (A4 · X5, parte 1)', () => {
     expect((await api.call('GET', `/v1/new-campaigns/${id}`, { cookie: e.cookie })).body).toMatchObject({ active: true, activated_at: expect.any(String), pending_action_id: null });
     expect((await api.call('POST', `/v1/new-campaigns/${id}/activate`, { cookie: e.cookie })).body.code).toBe('ja-ativa');
 
-    // A volta: pausar a campanha (os filhos herdam), com o código do app.
+    // A volta: pausar a campanha (os filhos herdam), com o código do app, e mesmo com a função desligada depois de a
+    // campanha estar no ar: pausar só diminui o gasto (D-A4-48; ERR-238). Antes, o trilho recusava e o executor segurava.
+    await ligarFlagDaEmpresa(api, 'campanha_nova', e.tenantId, false);
     const volta = await api.call('POST', `/v1/actions/${ativacao}/undo`, { cookie: e.cookie });
     expect(volta.status, JSON.stringify(volta.body)).toBe(201);
     expect(volta.body).toMatchObject({ tool: 'campanha_nova_pausar', status: 'aguardando_aprovacao' });
@@ -677,6 +679,7 @@ describe.skipIf(!hasDb)('a campanha nova na Meta (A4 · X5, parte 1)', () => {
     expect((await pedidoDe(volta.body.id as string)).status).toBe('executada');
     expect(meta.objetos.get(linha.meta_campaign_id!)?.status).toBe('PAUSED');
     expect((await api.call('GET', `/v1/new-campaigns/${id}`, { cookie: e.cookie })).body.active).toBe(false);
+    await ligarFlagDaEmpresa(api, 'campanha_nova', e.tenantId, true);
 
     // Apagada no Gerenciador de Anúncios depois: ativar de novo não a traz de volta.
     meta.objetos.get(linha.meta_campaign_id!)!.status = 'DELETED';
