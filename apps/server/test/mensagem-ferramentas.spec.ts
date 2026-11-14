@@ -72,6 +72,7 @@ describe('pedido de mensagem: as ferramentas e o plano (A5 · Y5)', () => {
       'ritmo_da_semana',
       'teste_de_criativo_criar',
       'teste_de_criativo_ativar',
+      'teste_de_regiao',
       'campanha_google_criar',
       'campanha_google_ativar',
       'mensagem_disparar',

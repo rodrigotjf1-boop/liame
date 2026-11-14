@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { conjuntoAlcancaOBairro, distanciaKm, efeitoDoBairro, oQueImpedeOBairro, PEDIDOS_POR_SEMANA_MINIMOS } from '../src/campanhas/teste-regiao-contas.js';
+import { anunciaSoNoBairro, conjuntoAlcancaOBairro, distanciaKm, efeitoDoBairro, oQueImpedeOBairro, PEDIDOS_POR_SEMANA_MINIMOS } from '../src/campanhas/teste-regiao-contas.js';
 
 // R8, o teste de região (D-RG-81 e D-RG-82), sem rede e sem banco: quando o bairro pode ser testado; se um conjunto da
 // Meta mostra anúncio no bairro pelo público dele (na dúvida, alcança); e o que o anúncio traz no bairro, em faixa.
@@ -63,6 +63,16 @@ describe('o conjunto mostra anúncio no bairro? (na dúvida, alcança)', () => {
     expect(conjuntoAlcancaOBairro({ geo_locations: emVolta, excluded_geo_locations: { custom_locations: [circulo(LAPA.latitude, LAPA.longitude, 2)] } }, LAPA).alcanca).toBe(false);
     // O círculo de fora que só encosta não tira o bairro inteiro.
     expect(conjuntoAlcancaOBairro({ geo_locations: emVolta, excluded_geo_locations: { custom_locations: [circulo(LAPA.latitude, LAPA.longitude, 1)] } }, LAPA).alcanca).toBe(true);
+  });
+
+  it('a campanha que anuncia só no bairro (tirar o bairro a deixaria sem lugar)', () => {
+    expect(anunciaSoNoBairro({ geo_locations: { neighborhoods: [{ key: '2523742' }] } }, LAPA)).toBe(true);
+    expect(anunciaSoNoBairro({ geo_locations: { custom_locations: [circulo(LAPA.latitude, LAPA.longitude, 1.5)] } }, LAPA)).toBe(true);
+    expect(anunciaSoNoBairro({ geo_locations: { neighborhoods: [{ key: '2523742' }, { key: '999' }] } }, LAPA)).toBe(false);
+    expect(anunciaSoNoBairro({ geo_locations: { custom_locations: [circulo(LOJA.latitude, LOJA.longitude, 3)] } }, LAPA)).toBe(false);
+    expect(anunciaSoNoBairro({ geo_locations: { neighborhoods: [{ key: '2523742' }], cities: [{ key: '1' }] } }, LAPA)).toBe(false);
+    expect(anunciaSoNoBairro({ geo_locations: { neighborhoods: [{ key: '2523742' }] } }, { ...LAPA, meta: null })).toBe(false);
+    expect(anunciaSoNoBairro({}, LAPA)).toBe(false);
   });
 
   it('o que não pode ser lido conta como alcança', () => {

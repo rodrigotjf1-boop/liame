@@ -179,6 +179,10 @@
     "teste_de_criativo_pausar": {
       "version": 1,
       "hash": "c216b4c5a8b347e2947f414477b8cc6e64fdd352d18196f2f3a96c38767929cf"
+    },
+    "teste_de_regiao": {
+      "version": 1,
+      "hash": "bccb6ef0d84729694b530481e330945a1092994cc9df49f83e92d0f05297f1a4"
     }
   },
   "prompts": {
