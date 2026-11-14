@@ -45,6 +45,7 @@ import { SOCIAL } from '../ai/social/prompt.js';
 import { abrirSegundaRodada, maisSugestoes, oQueDesligaAsSugestoes, paramsDaResposta, type SituacaoDaSugestao } from '../avaliacoes/sugestoes.js';
 import { FERRAMENTA_DA_VERBA_DO_DIA, FERRAMENTA_DO_RITMO, type PassoDoRitmo } from '../campanhas/ritmo-plano.js';
 import { oQueSeguraOPassoDoRitmo } from '../campanhas/ritmo-portao.js';
+import { oQueSeguraOCupomDoTeste } from '../campanhas/teste-portao.js';
 import { oQueSeguraOAutomatico } from '../comentarios/automatico.js';
 import { oQueSeguraODirectAutomatico } from '../direct/automatico.js';
 import { conversaDoRecurso, FERRAMENTA_DO_DIRECT_AUTOMATICO } from './direct-plano.js';
@@ -60,7 +61,7 @@ import { avaliacaoDoRecurso } from './perfil-avaliacao.js';
 import type { RegraDoCupom } from './regem-cupom.js';
 import { mensagemDoRecurso } from './regemcast-mensagem.js';
 import { respostaDaPlataforma } from './resposta-da-plataforma.js';
-import { type DecisaoJaTomada, PlanoRecusado, type ResourceState, saiPorDecisaoJaTomada, TOOLS, type ToolDefinition, type ToolPlan } from './tools.js';
+import { type DecisaoJaTomada, PlanoRecusado, type ResourceState, regraDoCupomDosParametros, saiPorDecisaoJaTomada, TOOLS, type ToolDefinition, type ToolPlan } from './tools.js';
 
 /** Pedido que ninguém aprova expira (e devolve a reserva). */
 export const ACTION_TTL_HOURS = 72;
@@ -328,6 +329,13 @@ const FRASES_DA_DECISAO: Record<DecisaoJaTomada, { soPelaRotina: string; segurad
     seguradoPelaPolitica: (modo) => `A política desta conta pede ${modo} para o passo do ritmo da semana: a verba fica como está.`,
     aprovada: 'ritmo da semana: uma pessoa aprovou a semana, com o código do app',
     soPelaDecisao: 'o passo do ritmo só sai pelo ritmo da semana aprovado',
+  },
+  teste: {
+    soPelaRotina: 'O cupom do teste só sai pelo teste de criativo que uma pessoa aprovou: para um cupom avulso, peça o cupom de campanha.',
+    seguradoTitulo: 'O cupom do teste não é criado',
+    seguradoPelaPolitica: (modo) => `A política desta conta pede ${modo} para o cupom do teste de criativo: o cupom não é criado, e o teste não fica pronto.`,
+    aprovada: 'teste de criativo: uma pessoa aprovou o teste, com o código do app',
+    soPelaDecisao: 'o cupom do teste só sai pelo teste de criativo aprovado',
   },
 };
 
@@ -658,6 +666,25 @@ export class ActionService {
   }
 
   /** O pedido do funcionário de IA pelo trilho, com a auditoria em nome dele. `extra` vai para a auditoria. */
+  /**
+   * O cupom de um criativo do teste de criativo (plano da região, R8; D-RG-77). Quem chama é a rotina dos testes, na
+   * transação da empresa, depois de a campanha de teste existir na Meta. O portão (a função, o teste aprovado e em
+   * criação, o código e a regra exatamente como aprovados, a loja do teste) é conferido aqui, na mesma transação do
+   * pedido, e de novo pelo executor antes de criar. Fechado o portão, ou a política da empresa pedindo outra coisa, 409
+   * (`teste-segurado` ou `automatico-segurado`): o cupom não sai. O pedido nasce aprovado (a pessoa aprovou o teste com o
+   * código do app). `emNomeDe` é quem pediu o teste.
+   */
+  async criarCupomDoTeste(alvo: { tenantId: string; agentKey: string; agentLabel: string; emNomeDe: string }, input: CreateActionRequest): Promise<string> {
+    const p = input.params as { teste?: unknown; letra?: unknown; codigo?: unknown };
+    const regra = regraDoCupomDosParametros(input.params);
+    if (input.tool !== 'cupom_do_teste' || !input.brand_id || typeof p.teste !== 'string' || (p.letra !== 'A' && p.letra !== 'B') || typeof p.codigo !== 'string' || !regra) {
+      throw new AppProblem(400, 'ferramenta-nao-e-o-cupom-do-teste', 'Não é o cupom do teste', 'Por aqui o funcionário só pede o cupom de um criativo do teste de criativo.');
+    }
+    const segura = await oQueSeguraOCupomDoTeste(currentTx(), this.flags, { tenantId: alvo.tenantId, brandId: input.brand_id, accountId: input.account_id, codigo: p.codigo, regra, teste: p.teste, letra: p.letra });
+    if (segura) throw new AppProblem(409, 'teste-segurado', 'O cupom do teste não é criado', `O cupom do teste não é criado agora (${segura}).`);
+    return this.pedirEmNomeDoFuncionario(alvo, input, { test: p.teste, letter: p.letra }, true);
+  }
+
   private async pedirEmNomeDoFuncionario(
     alvo: { tenantId: string; agentKey: string; agentLabel: string; emNomeDe: string },
     input: CreateActionRequest,

@@ -4,7 +4,9 @@ import type { AddressInfo } from 'node:net';
 import { resolve } from 'node:path';
 import { type Database, runMigrations, withTenant } from '@liame/database';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { ActionService } from '../../src/actions/action.service.js';
 import { BudgetService } from '../../src/actions/budget.service.js';
+import { naTransacaoDaEmpresa } from '../../src/ai/na-empresa.js';
 import { regemCupomConnector } from '../../src/actions/regem-cupom.js';
 import { currentStep, totpCode } from '../../src/auth/totp.js';
 import { loadConfig } from '../../src/config.js';
@@ -17,7 +19,9 @@ import { KillSwitchService } from '../../src/kill-switch/kill-switch.service.js'
 import { gravarCupons } from '../../src/orders/regem-leitura.js';
 import { VaultService } from '../../src/vault/vault.service.js';
 import { ActionExecutor } from '../../src/worker/action-executor.js';
+import { TestesDeCriativoRotina } from '../../src/worker/testes-de-criativo.service.js';
 import { enableMfa, ownerQuery, PASSWORD, resetIpRateLimits, signupAndLogin, startApi, type TestApi, TERMOS, tokenFrom, uniqueEmail } from '../helpers/api.js';
+import { fotoPronta } from '../helpers/posts-semeados.js';
 import { hasDb, OWNER_URL } from './env.js';
 
 // A2.5 · F6 parte 2: criar cupom de campanha no Regem pelo Action Service (ADR-019 item 6), contra um "Regem"
@@ -623,5 +627,227 @@ describe.skipIf(!hasDb)('criar cupom no Regem com aprovação (A2.5 · F6 parte 
     // Reconectada (o status volta a `ativa`), a loja volta a poder criar.
     const depois = await listar();
     expect((depois.body.stores as { unit: { name: string }; can_create: boolean }[]).find((l) => l.unit.name === 'Loja Centro')?.can_create).toBe(true);
+  });
+  it('o cupom do teste de criativo (plano da região, R8): a rotina pede os dois pelo teste aprovado, o Regem cria sem campanha, o teste fica pronto e o cupom é ligado quando a campanha aparece', async () => {
+    await ligarFlag(true);
+    await ownerQuery(
+      `insert into liame.feature_flag_rule (id, flag_key, scope_type, scope_id, value, rollout_percent, created_by) values (gen_random_uuid(), 'teste_de_criativo', 'tenant', $1, 'true'::jsonb, null, 'testes')`,
+      [e.tenantId],
+    );
+    flags.invalidate();
+    // O teste já aprovado, com a campanha de teste inteira na Meta (o que a criação pelo trilho deixa), em criação.
+    const contaDeAnuncios = (await ownerQuery<{ id: string }>(`select id from liame.connected_account where tenant_id = $1 and provider = 'meta_ads' limit 1`, [e.tenantId]))[0]!.id;
+    const pagina = randomUUID();
+    await ownerQuery(`insert into liame.connected_account (id, tenant_id, brand_id, provider, external_id, name) values ($1, $2, $3, 'facebook_page', $4, 'Mister Burgers')`, [pagina, e.tenantId, e.brandId, randomUUID()]);
+    const teste = randomUUID();
+    const desconto = { tipo: 'percentual', percentual: 10, pedido_minimo_centavos: 0, valido_de: hoje, valido_ate: somarDias(hoje, 45) };
+    const bracos: Array<{ letra: 'A' | 'B'; codigo: string; peca: string; foto: string }> = [];
+    for (const [letra, codigo] of [['A', 'TESTEA10'], ['B', 'TESTEB10']] as const) {
+      const [pedidoDePeca, peca] = [randomUUID(), randomUUID()];
+      await ownerQuery(`insert into liame.ad_piece_request (id, tenant_id, brand_id, offer, dossier_version, destination, variations, status) values ($1, $2, $3, 'Smash em dobro', 1, 'cardapio', 1, 'concluido')`, [pedidoDePeca, e.tenantId, e.brandId]);
+      await ownerQuery(`insert into liame.ad_piece (id, tenant_id, brand_id, request_id, status, version, review_status, decided_by, decided_at) values ($1, $2, $3, $4, 'aprovada', 1, 'passou', $5, now())`, [peca, e.tenantId, e.brandId, pedidoDePeca, e.userId]);
+      bracos.push({ letra, codigo, peca, foto: (await fotoPronta(e)).id });
+    }
+    const texto = (codigo: string) => `Peça o smash pelo cardápio.\n\nCupom ${codigo}: 10% de desconto.`;
+    const plano = {
+      teste,
+      marca: e.brandId,
+      nome: 'Smash em dobro',
+      objetivo: 'cardapio',
+      criativos: bracos.map((b) => ({
+        letra: b.letra,
+        peca: { id: b.peca, versao: 1, titulo: `Smash ${b.letra}`, texto: 'Peça o smash pelo cardápio.', botao: 'pedir_agora' },
+        texto_do_anuncio: texto(b.codigo),
+        midia: { id: b.foto, tipo: 'foto', arquivo: `arquivo-${b.letra}` },
+        cupom: { codigo: b.codigo, situacao: 'a_criar' },
+      })),
+      desconto,
+      pagina: { id: '1001', nome: 'Mister Burgers' },
+      instagram: null,
+      publico: null,
+      loja: { id: e.centro, nome: 'Loja Centro', latitude: -22.9, longitude: -43.17 },
+      raio_km: 3,
+      bairros: null,
+      verba_diaria_micros: 40_000_000,
+      moeda: 'BRL',
+      fuso: FUSO,
+      link: 'https://cardapio.exemplo.com.br/loja',
+      dias: { minimo: 7, maximo: 28 },
+    };
+    await ownerQuery(
+      `insert into liame.campaign_test (id, tenant_id, brand_id, unit_id, ad_account_id, page_account_id, kind, status, name, daily_budget_micros, min_days, max_days, plan, meta_campaign_id, created_by)
+       values ($1, $2, $3, $4, $5, $6, 'criativo', 'criando', 'Smash em dobro', 40000000, 7, 28, $7::jsonb, '120990001', $8)`,
+      [teste, e.tenantId, e.brandId, e.centro, contaDeAnuncios, pagina, JSON.stringify(plano), e.userId],
+    );
+    for (const [i, b] of bracos.entries()) {
+      await ownerQuery(
+        `insert into liame.campaign_test_arm (id, tenant_id, test_id, letter, piece_id, piece_version, media_id, coupon_code, meta_adset_id, meta_creative_id, meta_ad_id)
+         values ($1, $2, $3, $4, $5, 1, $6, $7, $8, $9, $10)`,
+        [randomUUID(), e.tenantId, teste, b.letra, b.peca, b.foto, b.codigo, `12099010${i}`, `12099020${i}`, `12099030${i}`],
+      );
+    }
+    const rotina = new TestesDeCriativoRotina(database, api.app.get(ActionService), flags);
+    const volta = async () => (await rotina.executarLote(10, { tenantIds: [e.tenantId] })).map((r) => r.situacao).sort();
+    const doTeste = () =>
+      ownerQuery<{ status: string; reason: string | null }>(`select status, reason from liame.campaign_test where id = $1`, [teste]).then((r) => r[0]!);
+    const cuponsDoTeste = () => ownerQuery<{ letter: string; coupon_status: string }>(`select letter, coupon_status from liame.campaign_test_arm where test_id = $1 order by letter`, [teste]);
+    const pedidos = () =>
+      ownerQuery<{ id: string; resource_id: string; status: string; actor_type: string; requested_by: string; mode: string }>(
+        `select id, resource_id, status, actor_type, requested_by, mode from liame.action_request where tenant_id = $1 and tool = 'cupom_do_teste' order by resource_id`,
+        [e.tenantId],
+      );
+
+    // Uma pessoa não pede o cupom do teste direto: ele só sai pela rotina, pelo teste aprovado.
+    const direto = await api.call('POST', '/v1/actions', {
+      cookie: e.cookie,
+      body: { tool: 'cupom_do_teste', brand_id: e.brandId, provider: 'regem', account_id: e.contaCentro, resource_id: 'cupom:TESTEA10', params: { teste, letra: 'A', codigo: 'TESTEA10', nome: 'Teste', tipo: 'percentual', percentual: 10, valido_de: hoje, valido_ate: somarDias(hoje, 45) } },
+    });
+    expect([direto.status, direto.body.code]).toEqual([422, 'acao-so-pelo-automatico']);
+
+    // A rotina pede os dois cupons: nascem aprovados (a pessoa aprovou o teste), em nome de quem pediu o teste.
+    expect(await volta()).toEqual(['cupom_pedido']);
+    expect((await pedidos()).map((p) => [p.resource_id, p.status, p.actor_type, p.requested_by])).toEqual([
+      ['cupom:TESTEA10', 'aprovada', 'agent', e.userId],
+      ['cupom:TESTEB10', 'aprovada', 'agent', e.userId],
+    ]);
+    expect((await cuponsDoTeste()).map((c) => c.coupon_status)).toEqual(['pedido', 'pedido']);
+    expect(chamadasDe('TESTEA10')).toEqual([]);
+    // Enquanto os pedidos não executam, a rotina espera.
+    expect(await volta()).toEqual(['esperando']);
+
+    // O worker cria os dois no Regem, com a regra do teste aprovado e uma chave de idempotência para cada um.
+    await ciclo();
+    expect((await pedidos()).map((p) => p.status)).toEqual(['executada', 'executada']);
+    expect(chamadasDe('TESTEA10').map((c) => c.corpo)).toEqual([{ codigo: 'TESTEA10', nome: 'Teste · Smash em dobro · A', tipo: 'percentual', percentual: '10.00', valido_de: hoje, valido_ate: somarDias(hoje, 45) }]);
+    expect(chamadasDe('TESTEB10').map((c) => c.corpo.nome)).toEqual(['Teste · Smash em dobro · B']);
+    expect(chamadasDe('TESTEA10')[0]!.chave).not.toBe(chamadasDe('TESTEB10')[0]!.chave);
+    // Os cupons entram na lista do Liame, criados por ele, ainda sem campanha.
+    const naLista = () =>
+      ownerQuery<{ code: string; campanha: string | null; exclusivo: boolean | null }>(
+        `select cp.code, l.campaign_id as campanha, l.exclusive as exclusivo from liame.coupon cp
+           left join liame.campaign_coupon l on l.coupon_id = cp.id and l.unlinked_at is null
+          where cp.connected_account_id = $1 and cp.code in ('TESTEA10', 'TESTEB10') order by cp.code`,
+        [e.contaCentro],
+      );
+    expect(await naLista()).toEqual([
+      { code: 'TESTEA10', campanha: null, exclusivo: null },
+      { code: 'TESTEB10', campanha: null, exclusivo: null },
+    ]);
+
+    // Com os dois criados, o teste fica pronto para ativar.
+    expect(await volta()).toEqual(['pronto']);
+    expect((await cuponsDoTeste()).map((c) => c.coupon_status)).toEqual(['criado', 'criado']);
+    expect((await doTeste()).status).toBe('pronto');
+
+    // A campanha de teste aparece na lista do Liame (a leitura seguinte da Meta): a rotina liga os dois cupons a ela.
+    const campanhaDeTeste = await campanha(contaDeAnuncios, '120990001', 'Teste · Smash em dobro', 'pausada');
+    expect(await volta()).toEqual(['ligado', 'ligado']);
+    expect(await naLista()).toEqual([
+      { code: 'TESTEA10', campanha: campanhaDeTeste, exclusivo: true },
+      { code: 'TESTEB10', campanha: campanhaDeTeste, exclusivo: true },
+    ]);
+    // Ligados, não há mais o que fazer.
+    expect(await volta()).toEqual([]);
+  });
+
+  it('o cupom do teste que o Regem recusa: o teste fica interrompido, com o motivo; e o portão segura o cupom que não é o do teste aprovado', async () => {
+    await ligarFlag(true);
+    const contaDeAnuncios = (await ownerQuery<{ id: string }>(`select id from liame.connected_account where tenant_id = $1 and provider = 'meta_ads' limit 1`, [e.tenantId]))[0]!.id;
+    const pagina = (await ownerQuery<{ id: string }>(`select id from liame.connected_account where tenant_id = $1 and provider = 'facebook_page' limit 1`, [e.tenantId]))[0]!.id;
+    // O teste anterior sai do caminho (um teste vivo por marca).
+    await ownerQuery(`update liame.campaign_test set status = 'encerrado', stopped_at = now() where tenant_id = $1 and status in ('pedido', 'criando', 'pronto', 'rodando')`, [e.tenantId]);
+    const teste = randomUUID();
+    const desconto = { tipo: 'valor', valor_centavos: 500, pedido_minimo_centavos: 3000, valido_de: hoje, valido_ate: somarDias(hoje, 45) };
+    const bracos: Array<{ letra: 'A' | 'B'; codigo: string; peca: string; foto: string }> = [];
+    // O código `JAEXISTE` já existe no Regem (criado lá, fora do Liame): o Regem recusa com 409.
+    for (const [letra, codigo] of [['A', 'TESTEC05'], ['B', 'JAEXISTE']] as const) {
+      const [pedidoDePeca, peca] = [randomUUID(), randomUUID()];
+      await ownerQuery(`insert into liame.ad_piece_request (id, tenant_id, brand_id, offer, dossier_version, destination, variations, status) values ($1, $2, $3, 'Smash em dobro', 1, 'cardapio', 1, 'concluido')`, [pedidoDePeca, e.tenantId, e.brandId]);
+      await ownerQuery(`insert into liame.ad_piece (id, tenant_id, brand_id, request_id, status, version, review_status, decided_by, decided_at) values ($1, $2, $3, $4, 'aprovada', 1, 'passou', $5, now())`, [peca, e.tenantId, e.brandId, pedidoDePeca, e.userId]);
+      bracos.push({ letra, codigo, peca, foto: (await fotoPronta(e)).id });
+    }
+    const linha = (codigo: string) => `Peça o smash pelo cardápio.\n\nCupom ${codigo}: R$ 5,00 de desconto em pedidos a partir de R$ 30,00.`;
+    const plano = {
+      teste,
+      marca: e.brandId,
+      nome: 'Smash com cinco',
+      objetivo: 'cardapio',
+      criativos: bracos.map((b) => ({
+        letra: b.letra,
+        peca: { id: b.peca, versao: 1, titulo: `Smash ${b.letra}`, texto: 'Peça o smash pelo cardápio.', botao: 'pedir_agora' },
+        texto_do_anuncio: linha(b.codigo),
+        midia: { id: b.foto, tipo: 'foto', arquivo: `arquivo-${b.letra}` },
+        cupom: { codigo: b.codigo, situacao: 'a_criar' },
+      })),
+      desconto,
+      pagina: { id: '1001', nome: 'Mister Burgers' },
+      instagram: null,
+      publico: null,
+      loja: { id: e.centro, nome: 'Loja Centro', latitude: -22.9, longitude: -43.17 },
+      raio_km: 3,
+      bairros: null,
+      verba_diaria_micros: 40_000_000,
+      moeda: 'BRL',
+      fuso: FUSO,
+      link: 'https://cardapio.exemplo.com.br/loja',
+      dias: { minimo: 7, maximo: 28 },
+    };
+    await ownerQuery(
+      `insert into liame.campaign_test (id, tenant_id, brand_id, unit_id, ad_account_id, page_account_id, kind, status, name, daily_budget_micros, min_days, max_days, plan, meta_campaign_id, created_by)
+       values ($1, $2, $3, $4, $5, $6, 'criativo', 'criando', 'Smash com cinco', 40000000, 7, 28, $7::jsonb, '120990002', $8)`,
+      [teste, e.tenantId, e.brandId, e.centro, contaDeAnuncios, pagina, JSON.stringify(plano), e.userId],
+    );
+    for (const [i, b] of bracos.entries()) {
+      await ownerQuery(
+        `insert into liame.campaign_test_arm (id, tenant_id, test_id, letter, piece_id, piece_version, media_id, coupon_code, meta_adset_id, meta_creative_id, meta_ad_id)
+         values ($1, $2, $3, $4, $5, 1, $6, $7, $8, $9, $10)`,
+        [randomUUID(), e.tenantId, teste, b.letra, b.peca, b.foto, b.codigo, `12099011${i}`, `12099021${i}`, `12099031${i}`],
+      );
+    }
+    const actions = api.app.get(ActionService);
+    const rotina = new TestesDeCriativoRotina(database, actions, flags);
+    const volta = async () => (await rotina.executarLote(10, { tenantIds: [e.tenantId] })).map((r) => r.situacao).sort();
+
+    // O portão: o cupom com outro desconto (15% em vez dos R$ 5,00 aprovados) não é o do teste, e não é pedido.
+    const pedirOutro = naTransacaoDaEmpresa(database, { tenantId: e.tenantId, userId: null }, () =>
+      actions.criarCupomDoTeste(
+        { tenantId: e.tenantId, agentKey: 'gestor_de_trafego', agentLabel: 'Gestor de tráfego', emNomeDe: e.userId },
+        { tool: 'cupom_do_teste', brand_id: e.brandId, provider: 'regem', account_id: e.contaCentro, resource_id: 'cupom:TESTEC05', params: { teste, letra: 'A', codigo: 'TESTEC05', nome: 'Teste · Smash com cinco · A', tipo: 'percentual', percentual: 15, valido_de: hoje, valido_ate: somarDias(hoje, 45) } },
+      ),
+    );
+    await expect(pedirOutro).rejects.toMatchObject({ code: 'teste-segurado' });
+
+    expect(await volta()).toEqual(['cupom_pedido']);
+    await ciclo();
+    // O valor fixo vai em centavos, com o pedido mínimo; o código que já existe no Regem falha com o motivo.
+    expect(chamadasDe('TESTEC05').map((c) => c.corpo)).toEqual([
+      { codigo: 'TESTEC05', nome: 'Teste · Smash com cinco · A', tipo: 'valor', valor_centavos: 500, pedido_minimo_centavos: 3000, valido_de: hoje, valido_ate: somarDias(hoje, 45) },
+    ]);
+    expect(await volta()).toEqual(['interrompido']);
+    const t = (await ownerQuery<{ status: string; reason: string | null }>(`select status, reason from liame.campaign_test where id = $1`, [teste]))[0]!;
+    expect(t.status).toBe('interrompido');
+    expect(t.reason).toContain('O cupom JAEXISTE, do criativo B, não foi criado no Regem');
+    expect((await ownerQuery<{ coupon_status: string }>(`select coupon_status from liame.campaign_test_arm where test_id = $1 order by letter`, [teste])).map((c) => c.coupon_status)).toEqual(['criado', 'falhou']);
+    // Interrompido, a rotina não olha mais este teste.
+    expect(await volta()).toEqual([]);
+  });
+
+  it('a porta do cupom sem campanha abre só para a ferramenta do cupom do teste: o estado montado à mão em outro pedido é recusado, sem ir ao Regem', async () => {
+    await ligarFlag(true);
+    const regra = { codigo: 'PORTA10', nome: 'Cupom PORTA10', tipo: 'percentual', percentual: '10.00', valido_de: hoje, valido_ate: fim };
+    const ref = { tenantId: e.tenantId, accountId: e.contaCentro, resourceId: 'cupom:PORTA10' };
+    const aplicar = (desejado: Record<string, unknown>, tool: string) => withTenant(database.db, e.tenantId, (tx) => regemCupomConnector.apply(tx, ref, desejado, 0, { tool, requestedBy: e.userId, actorType: 'human' }));
+    const doTeste = { id: randomUUID(), letra: 'A' };
+    // O pedido de cupom de campanha com o estado adulterado (sem a campanha, com um teste): recusado.
+    expect(await aplicar({ codigo: 'PORTA10', existe: true, regra, campanha: null, teste: doTeste }, 'regem_cupom_criar')).toMatchObject({ ok: false, reason: 'recusado' });
+    // O pedido de cupom de campanha sem a campanha e sem nada: recusado.
+    expect(await aplicar({ codigo: 'PORTA10', existe: true, regra }, 'regem_cupom_criar')).toMatchObject({ ok: false, reason: 'recusado' });
+    // O pedido do cupom do teste que trouxesse uma campanha, ou que não dissesse de qual teste é: recusado também.
+    expect(await aplicar({ codigo: 'PORTA10', existe: true, regra, campanha: { id: e.C1, exclusivo: true }, teste: doTeste }, 'cupom_do_teste')).toMatchObject({ ok: false, reason: 'recusado' });
+    expect(await aplicar({ codigo: 'PORTA10', existe: true, regra, campanha: null }, 'cupom_do_teste')).toMatchObject({ ok: false, reason: 'recusado' });
+    // Sem a ferramenta (quem chama não disse qual é): vale a regra do cupom de campanha.
+    expect(await withTenant(database.db, e.tenantId, (tx) => regemCupomConnector.apply(tx, ref, { codigo: 'PORTA10', existe: true, regra, campanha: null, teste: doTeste }, 0))).toMatchObject({ ok: false, reason: 'recusado' });
+    // Nenhuma dessas chegou ao Regem.
+    expect(chamadasDe('PORTA10')).toEqual([]);
   });
 });
