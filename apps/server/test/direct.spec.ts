@@ -1,7 +1,9 @@
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { DIRECT_AUTO_REPLY_NOTICE } from '@liame/contracts';
 import { RESPOSTAS_PRONTAS } from '../src/ai/social/comentario.js';
-import { automaticasSeguidas, comAvisoDoDirect, ehAutomatica, pedeUmaPessoa, tipoDoAutomatico } from '../src/direct/automatico.js';
+import { automaticasSeguidas, comAvisoDoDirect, ehAutomatica, falaDeCompensacaoOuSaude, pedeUmaPessoa, tipoDoAutomatico } from '../src/direct/automatico.js';
 import { conversasDoDirect, mensagensDaConversa, regemAtende, situacaoDaConversa, tipoDaMensagem } from '../src/direct/direct.js';
 import { PASSOS_DA_RECLAMACAO, RESPOSTAS_DA_MENCAO, sugestaoNoDirect, tipoNoDirect } from '../src/direct/tipo-no-direct.js';
 
@@ -174,10 +176,26 @@ describe('o atendimento automático do Direct (parte 5a)', () => {
     expect(ehAutomatica('Obrigado pelo carinho!')).toBe(false);
   });
 
-  it('só a resposta pronta (o elogio e a menção) é dele nesta parte; a pergunta, a reclamação e o golpe esperam uma pessoa', () => {
+  it('a resposta pronta (o elogio e a menção) e a pergunta (parte 5c) são dele; a reclamação e o golpe esperam uma pessoa', () => {
     expect(tipoDoAutomatico('elogio')).toBe('pronta');
     expect(tipoDoAutomatico('mencao')).toBe('pronta');
-    for (const t of ['pergunta', 'reclamacao', 'golpe', 'ofensivo', null] as const) expect(tipoDoAutomatico(t), String(t)).toBeNull();
+    expect(tipoDoAutomatico('pergunta')).toBe('pergunta');
+    for (const t of ['reclamacao', 'golpe', 'ofensivo', null] as const) expect(tipoDoAutomatico(t), String(t)).toBeNull();
+  });
+
+  it('parte 5c: a pergunta que fala de compensação ou de saúde vai para uma pessoa (o caso do brinde do eval, D-A6-147 e D-A6-148)', () => {
+    // O caso `compensacao-pede-brinde` do eval `social_direct`, que a rodada paga marcou "respondida".
+    const doEval = readFileSync(resolve(process.cwd(), '../../evals/social_direct/casos.jsonl'), 'utf8')
+      .split('\n')
+      .filter((l) => l.startsWith('{'))
+      .map((l) => JSON.parse(l) as { id: string; mensagens: { de: string; texto: string }[] })
+      .find((c) => c.id === 'compensacao-pede-brinde');
+    expect(doEval).toBeDefined();
+    expect(falaDeCompensacaoOuSaude(doEval!.mensagens.filter((m) => m.de === 'pessoa').map((m) => m.texto).join(' '))).toBe(true);
+    for (const t of ['Vocês mandam uma batata de BRINDE?', 'Tem cortesia pra aniversariante?', 'é grátis a entrega?', 'sai de graça?', 'Quero o reembolso', 'Tem opção sem glúten?', 'Sou alérgica a amendoim, pode?', 'tem lactose no molho?', 'Meu filho passou mal']) {
+      expect(falaDeCompensacaoOuSaude(t), t).toBe(true);
+    }
+    for (const t of ['Vocês entregam na Penha?', 'Quanto tá o combo de sexta?', 'Que horas abre no domingo?', 'Aceita Pix?']) expect(falaDeCompensacaoOuSaude(t), t).toBe(false);
   });
 
   it('quem pede uma pessoa vai para a equipe (sem acento e sem diferença de maiúscula)', () => {

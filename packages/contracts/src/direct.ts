@@ -311,10 +311,10 @@ export type DirectAiSuggestionResponse = z.infer<typeof DirectAiSuggestionRespon
 
 /**
  * Os tipos que o atendimento automático do Direct responde sozinho: `pronta` (o elogio, a resposta ao story e a menção
- * no story, com a resposta pronta, sem IA). A pergunta que ele sabe responder com certeza entra com o Social media (parte
- * 4b); a tabela já a aceita.
+ * no story, com a resposta pronta, sem IA) e `pergunta` (a pergunta que o Social media sabe responder com certeza, só com
+ * o que Minha marca diz; parte 5c, D-A6-148).
  */
-export const DIRECT_AUTO_REPLY_KINDS = ['pronta'] as const;
+export const DIRECT_AUTO_REPLY_KINDS = ['pronta', 'pergunta'] as const;
 /** No máximo tantas respostas sozinho por hora, por marca (P39); o que passar fica para uma pessoa. */
 export const DIRECT_AUTO_REPLY_HOURLY_LIMIT = 30;
 /** No máximo tantas respostas automáticas seguidas na mesma conversa; a seguinte vai para uma pessoa (P39). */
@@ -331,7 +331,7 @@ export const DirectAutoReplyResponse = z.strictObject({
   available: z.boolean(),
   /** Ligado na marca (nasce desligado). */
   enabled: z.boolean(),
-  /** Os tipos marcados: `pronta` hoje. A lista pode crescer (V23). */
+  /** Os tipos marcados: `pronta` e `pergunta`. A lista pode crescer (V23). */
   kinds: z.array(Codigo),
   /** Quem vê pode ligar e somar um tipo: o Dono ou um Administrador, com o código do app. */
   can_enable: z.boolean(),

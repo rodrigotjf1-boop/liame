@@ -229,6 +229,13 @@ describe('a tela Direct (A6 · Z12, parte 3)', () => {
     });
     expect(resumoDoAutomaticoDoDirect(auto())).toContain('Desligado: nenhuma resposta sai sem uma pessoa da equipe.');
     expect(resumoDoAutomaticoDoDirect(auto({ enabled: true, kinds: ['pronta'], last_hour: 4 }))).toBe('4 respostas sozinho nesta hora (no máximo 30). Perguntas, reclamações e quem pede alguém esperam você.');
+    // Com a pergunta marcada (parte 5c), o que espera é a pergunta sem certeza (P39 versão 2).
+    expect(resumoDoAutomaticoDoDirect(auto({ enabled: true, kinds: ['pronta', 'pergunta'], last_hour: 4 }))).toBe(
+      '4 respostas sozinho nesta hora (no máximo 30). Reclamações, perguntas sem certeza e quem pede alguém esperam você.',
+    );
+    expect(resumoDoAutomaticoDoDirect(auto())).toContain('as menções e as perguntas que sabe responder com certeza.');
+    expect(pedeConfirmacaoDoDirect({ enabled: true, kinds: ['pronta'] }, { enabled: true, kinds: ['pronta', 'pergunta'] })).toBe(true);
+    expect(pedeConfirmacaoDoDirect({ enabled: true, kinds: ['pronta', 'pergunta'] }, { enabled: true, kinds: ['pronta'] })).toBe(false);
     expect(resumoDoAutomaticoDoDirect(auto({ enabled: true, kinds: ['pronta'], last_hour: 1 }))).toMatch(/^1 resposta sozinho/);
     expect(resumoDoAutomaticoDoDirect(auto({ enabled: true, kinds: ['pronta'], last_hour: 30 }))).toBe('Chegou a 30 respostas sozinho nesta hora, o teto: o resto fica com você.');
     expect(botaoDoAutomaticoDoDirect(auto())).toBe('Ver e ligar');
@@ -239,7 +246,7 @@ describe('a tela Direct (A6 · Z12, parte 3)', () => {
     expect(pedeConfirmacaoDoDirect({ enabled: true, kinds: ['pronta'] }, { enabled: false, kinds: ['pronta'] })).toBe(false);
     expect(pedeConfirmacaoDoDirect({ enabled: true, kinds: ['pronta'] }, { enabled: true, kinds: ['pronta'] })).toBe(false);
     expect(erroDoAutomaticoDoDirect({ status: 409, code: 'direct-desligado', title: 'x' })).toBe('O Direct está desligado nesta marca: ligue o Direct antes do atendimento automático.');
-    expect(TIPOS_DO_AUTOMATICO_DO_DIRECT.map((t) => t.id)).toEqual(['pronta']);
+    expect(TIPOS_DO_AUTOMATICO_DO_DIRECT.map((t) => t.id)).toEqual(['pronta', 'pergunta']);
     const html = renderToStaticMarkup(createElement(LinhaDoAutomaticoDoDirect, { r: auto({ enabled: true, kinds: ['pronta'], last_hour: 2 }), aoAbrir: () => {} }));
     expect(html).toContain('Atendimento automático');
     expect(html).toContain('Ligado');

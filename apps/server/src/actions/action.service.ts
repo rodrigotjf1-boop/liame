@@ -47,7 +47,7 @@ import { FERRAMENTA_DA_VERBA_DO_DIA, FERRAMENTA_DO_RITMO, type PassoDoRitmo } fr
 import { oQueSeguraOPassoDoRitmo } from '../campanhas/ritmo-portao.js';
 import { oQueSeguraOCupomDoTeste } from '../campanhas/teste-portao.js';
 import { oQueSeguraOAutomatico } from '../comentarios/automatico.js';
-import { oQueSeguraODirectAutomatico } from '../direct/automatico.js';
+import { ehAutomatica, oQueSeguraODirectAutomatico } from '../direct/automatico.js';
 import { conversaDoRecurso, FERRAMENTA_DO_DIRECT_AUTOMATICO } from './direct-plano.js';
 import { abrirSegundaRodadaDoComentario, FERRAMENTA_DA_OPERACAO, oQueDesligaOsPedidos } from '../comentarios/pedidos.js';
 import { EstadoDaAvaliacao, ParametrosDaResposta, resumoDoTexto } from './avaliacao-plano.js';
@@ -651,12 +651,18 @@ export class ActionService {
    * comentários, com o portão do Direct (a função, o Direct ligado e lido, o automático ligado na marca e a conversa de
    * agora: esperando, na janela, o tipo entre os marcados, sem pedir uma pessoa e sem duas automáticas seguidas). Quem
    * chama é a rotina do atendimento automático do Direct, na transação da empresa; fechado o portão, ou a política
-   * pedindo outra coisa, 409 (`automatico-segurado`) e a conversa fica com uma pessoa.
+   * pedindo outra coisa, 409 (`automatico-segurado`) e a conversa fica com uma pessoa. O texto termina sempre com o aviso
+   * de resposta automática (Termos 5.5 e 6.3; o portão conta as seguidas por ele): sem o aviso, 400 (parte 5c, D-A6-148,
+   * agora que o texto da pergunta vem do Social media).
    */
   async responderSozinhoNoDirect(alvo: { tenantId: string; agentKey: string; agentLabel: string; emNomeDe: string }, input: CreateActionRequest, agora = new Date()): Promise<string> {
     const conversationId = conversaDoRecurso(input.resource_id);
     if (input.tool !== FERRAMENTA_DO_DIRECT_AUTOMATICO || !conversationId || !input.brand_id) {
       throw new AppProblem(400, 'ferramenta-nao-e-automatica', 'Não é a resposta automática', 'Por aqui o funcionário só pede a resposta automática numa conversa do Direct.');
+    }
+    const texto = (input.params as { texto?: unknown } | undefined)?.texto;
+    if (typeof texto !== 'string' || !ehAutomatica(texto)) {
+      throw new AppProblem(400, 'sem-aviso-de-automatica', 'Falta o aviso de resposta automática', 'A resposta automática do Direct termina sempre com o aviso de resposta automática.');
     }
     const portao = await oQueSeguraODirectAutomatico(currentTx(), this.flags, { tenantId: alvo.tenantId, brandId: input.brand_id, connectedAccountId: input.account_id, conversationId }, agora);
     if ('segura' in portao) {
