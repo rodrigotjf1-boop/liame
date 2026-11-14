@@ -161,30 +161,33 @@ export interface ToolDefinition {
    */
   flag?: string;
   /**
-   * A resposta automática dos comentários (A6, Z11, parte 2e-1; D-A6-92 e D-A6-104): só o funcionário de IA pede, só pelo
-   * atendimento automático (a rotina, que confere o portão antes), e o pedido nasce aprovado, sem o código do app e sem o
-   * `autopilot`, pela regra própria da política (`comentario.responder_automatico`, só para o funcionário). O executor
-   * confere o portão de novo antes de publicar: desligar ou tirar o tipo segura na hora o que está na fila.
+   * O pedido desta ferramenta sai sem outra aprovação porque uma pessoa já decidiu antes, com o código do app; o valor
+   * diz qual decisão (`DecisaoJaTomada`). Só o funcionário de IA pede, só pela rotina da decisão, que confere o portão
+   * antes; o pedido nasce aprovado, sem outro código do app e sem o `autopilot`, pela regra própria da política, e o
+   * executor confere o portão de novo antes de escrever.
    */
-  atendimentoAutomatico?: boolean;
-  /**
-   * O passo de um dia do ritmo da semana (plano da região, R7, parte 1b-2; D-RG-62 e D-RG-63): só o funcionário de IA
-   * pede, só pela rotina do ritmo (que confere o portão antes: a função, o ritmo aprovado e não parado, o passo de hoje
-   * e o valor dentro do aprovado), e o pedido nasce aprovado, sem outro código do app e sem o `autopilot`, pela regra
-   * própria da política (`orcamento.ritmo_*`, só na Meta, só para o funcionário): a pessoa já aprovou a semana. O
-   * executor confere o portão de novo antes de mudar a verba: parar o ritmo ou desligar a função segura o que está na fila.
-   */
-  ritmoDaSemana?: boolean;
+  decisaoJaTomada?: DecisaoJaTomada;
 }
 
 /**
- * A ferramenta cujo pedido sai sem outra aprovação porque uma pessoa já decidiu antes, com o código do app: a resposta do
- * atendimento automático que a marca ligou, e o passo do ritmo da semana que a pessoa aprovou. Só o funcionário de IA
- * pede, só pela rotina dela, com o portão conferido no pedido e de novo na execução; nunca depende do `autopilot`. É o
- * mesmo predicado em todos os pontos do pedido e da execução.
+ * As decisões que uma pessoa toma uma vez, com o código do app, e que valem para os pedidos seguintes da rotina:
+ *  - `atendimento_automatico`: a resposta automática dos comentários e do Direct (A6, Z11, parte 2e-1; D-A6-92 e
+ *    D-A6-104). A marca ligou o atendimento automático; a regra da política é `comentario.responder_automatico`, só
+ *    para o funcionário. Desligar o atendimento ou tirar o tipo segura na hora o que está na fila.
+ *  - `ritmo_da_semana`: o passo de um dia do ritmo da semana (plano da região, R7, parte 1b-2; D-RG-62 e D-RG-63). A
+ *    pessoa aprovou a semana; o portão confere a função, o ritmo aprovado e não parado, o passo de hoje e o valor dentro
+ *    do aprovado; a regra da política é `orcamento.ritmo_*`, só na Meta, só para o funcionário. Parar o ritmo ou
+ *    desligar a função segura o que está na fila.
  */
-export const saiPorDecisaoJaTomada = (tool: Pick<ToolDefinition, 'atendimentoAutomatico' | 'ritmoDaSemana'> | undefined): boolean =>
-  tool?.atendimentoAutomatico === true || tool?.ritmoDaSemana === true;
+export type DecisaoJaTomada = 'atendimento_automatico' | 'ritmo_da_semana';
+
+/**
+ * A ferramenta cujo pedido sai sem outra aprovação porque uma pessoa já decidiu antes, com o código do app
+ * (`decisaoJaTomada`). Só o funcionário de IA pede, só pela rotina dela, com o portão conferido no pedido e de novo na
+ * execução; nunca depende do `autopilot`. É o mesmo predicado em todos os pontos do pedido e da execução.
+ */
+export const saiPorDecisaoJaTomada = <T extends Pick<ToolDefinition, 'decisaoJaTomada'>>(tool: T | undefined): tool is T & { decisaoJaTomada: DecisaoJaTomada } =>
+  tool?.decisaoJaTomada !== undefined;
 
 /** O plano não pode ser montado com este estado (cupom que já existe, loja sem permissão): vira 422 no pedido. */
 export class PlanoRecusado extends Error {}
@@ -507,7 +510,7 @@ export const TOOLS: Record<string, ToolDefinition> = {
   },
   // O passo de um dia do ritmo da semana (R7, parte 1b-2; D-RG-62 e D-RG-63): a verba de uma campanha ou de um conjunto
   // da Meta passa à do dia (ou volta à de antes, no fim da semana ou quando alguém para o ritmo). Só a rotina do ritmo
-  // pede, pelo ritmo que a pessoa aprovou com o código do app (`ritmoDaSemana`); a política tem a regra própria
+  // pede, pelo ritmo que a pessoa aprovou com o código do app (`decisaoJaTomada`); a política tem a regra própria
   // (`orcamento.ritmo_*`) e os limites de `orcamento.*` valem (10% por mudança, as mudanças por hora, o teto por
   // campanha). O plano só existe se a campanha está como o Liame deixou: mexida por fora, ela sai do ritmo.
   orcamento_do_ritmo: {
@@ -520,7 +523,7 @@ export const TOOLS: Record<string, ToolDefinition> = {
     risk: 'R2',
     providers: ['meta_ads'],
     compensation: 'restaurar_orcamento_anterior_se_inalterado',
-    ritmoDaSemana: true,
+    decisaoJaTomada: 'ritmo_da_semana',
     flag: 'ritmo_da_semana',
     params: PassoDoRitmoParams,
     plan(before, params) {
@@ -910,7 +913,7 @@ export const TOOLS: Record<string, ToolDefinition> = {
     risk: 'R2',
     providers: ['instagram', 'facebook_page'],
     compensation: 'apagar_a_resposta',
-    atendimentoAutomatico: true,
+    decisaoJaTomada: 'atendimento_automatico',
     flag: FLAG_DE_RESPONDER_COMENTARIOS,
     params: ParametrosDaRespostaAutomatica,
     plan(before, params, context) {
@@ -980,7 +983,7 @@ export const TOOLS: Record<string, ToolDefinition> = {
     risk: 'R2',
     providers: ['instagram', 'facebook_page'],
     compensation: 'sem_volta_pelo_liame',
-    atendimentoAutomatico: true,
+    decisaoJaTomada: 'atendimento_automatico',
     flag: FLAG_DE_RESPONDER_NO_DIRECT,
     params: ParametrosDaRespostaNoDirect,
     plan(before, params) {

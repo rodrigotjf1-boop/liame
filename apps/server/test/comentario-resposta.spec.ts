@@ -148,7 +148,7 @@ describe('as ferramentas, a política e o conector da conta', () => {
   it('as cinco ferramentas: a flag delas, a aprovação, a volta, quem só existe como volta e a resposta automática (2e-1)', () => {
     const doComentario = Object.values(TOOLS).filter((t) => t.name.startsWith('comentario_'));
     expect(
-      doComentario.map((t) => [t.name, t.flag, Boolean(t.alwaysApproval), Boolean(t.directByPerson), Boolean(t.onlyAsUndo), t.undo?.({}).tool ?? null, Boolean(t.atendimentoAutomatico)]),
+      doComentario.map((t) => [t.name, t.flag, Boolean(t.alwaysApproval), Boolean(t.directByPerson), Boolean(t.onlyAsUndo), t.undo?.({}).tool ?? null, t.decisaoJaTomada === 'atendimento_automatico']),
     ).toEqual([
       ['comentario_responder', FLAG_DE_RESPONDER_COMENTARIOS, true, false, false, 'comentario_apagar_resposta', false],
       // A resposta automática não tem a trava da aprovação: só sai pelo atendimento automático, com o portão dele.
@@ -159,7 +159,7 @@ describe('as ferramentas, a política e o conector da conta', () => {
     ]);
     // Só ela é do atendimento automático.
     // E a do Direct (A6, Z12, parte 5a).
-    expect(Object.values(TOOLS).filter((t) => t.atendimentoAutomatico).map((t) => t.name)).toEqual(['comentario_responder_auto', 'direct_responder_auto']);
+    expect(Object.values(TOOLS).filter((t) => t.decisaoJaTomada === 'atendimento_automatico').map((t) => t.name)).toEqual(['comentario_responder_auto', 'direct_responder_auto']);
     for (const t of doComentario) expect(t.providers, t.name).toEqual(['instagram', 'facebook_page']);
     // Só elas, a resposta no Direct (A6, Z12, parte 2), a campanha nova na Meta (A4, X5), o ritmo da semana e o passo dele (plano da
     // região, R7, parte 1b) e o envio pedido ao RegemCast (Hub DMS F5, parte D) têm flag própria.
