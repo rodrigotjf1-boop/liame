@@ -148,9 +148,9 @@ describe('as ferramentas e a política do teste de criativo', () => {
     expect(pausar.plan({ ...pronto, situacao: 'rodando', ativa: true }, {})).toMatchObject({ action: 'teste.pausar', budgetImpact: 'decrease', reserveMicros: 0 });
   });
 
-  it('a política da distribuição (versão 16): o teste pede aprovação; pausar sai direto só para uma pessoa, na Meta', () => {
+  it('a política da distribuição (versão 17): o teste pede aprovação; pausar sai direto só para uma pessoa, na Meta', () => {
     const proposta = (action: string, actor: 'human' | 'agent', provider = 'meta_ads') => ({ action, provider, actor, riskLevel: 'R2' as const, budgetImpact: 'none' as const, valueMicros: null, currentValueMicros: null });
-    expect(PLATFORM_POLICY.version).toBe(16);
+    expect(PLATFORM_POLICY.version).toBe(17);
     for (const acao of ['teste.criar', 'teste.ativar']) {
       for (const actor of ['human', 'agent'] as const) expect(chooseMode([PLATFORM_POLICY], proposta(acao, actor) as never).mode, `${acao} ${actor}`).toBe('APPROVAL');
     }

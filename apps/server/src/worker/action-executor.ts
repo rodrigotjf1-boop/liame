@@ -9,6 +9,7 @@ import { type DecisaoJaTomada, saiPorDecisaoJaTomada, TOOLS } from '../actions/t
 import { writeAudit } from '../audit/audit.js';
 import { conversaDoRecurso, FERRAMENTA_DO_DIRECT_AUTOMATICO } from '../actions/direct-plano.js';
 import { oQueSeguraOPassoDoRitmo } from '../campanhas/ritmo-portao.js';
+import { oQueSeguraOCupomDoTeste } from '../campanhas/teste-portao.js';
 import { oQueSeguraOAutomatico } from '../comentarios/automatico.js';
 import { oQueSeguraODirectAutomatico } from '../direct/automatico.js';
 import { ErroConector } from '../connectors/cliente-http.js';
@@ -350,6 +351,7 @@ export class ActionExecutor {
   private readonly portaoDaDecisao: Record<DecisaoJaTomada, { rotulo: string; segura: (tx: Tx, row: ActionRow) => Promise<string | null> }> = {
     atendimento_automatico: { rotulo: 'atendimento automático', segura: (tx, row) => this.portaoDoAutomatico(tx, row) },
     ritmo_da_semana: { rotulo: 'ritmo da semana', segura: (tx, row) => this.portaoDoRitmo(tx, row) },
+    teste: { rotulo: 'teste de criativo', segura: (tx, row) => this.portaoDoTeste(tx, row) },
   };
 
   /**
@@ -368,6 +370,17 @@ export class ActionExecutor {
     const commentId = row.resource_id?.startsWith(prefixo) ? row.resource_id.slice(prefixo.length) : null;
     if (row.actor_type !== 'agent' || !row.brand_id || !commentId || !row.account_id) return 'fora_do_automatico';
     return oQueSeguraOAutomatico(tx, this.flags, { tenantId: row.tenant_id, brandId: row.brand_id, connectedAccountId: row.account_id, commentId });
+  }
+
+  /**
+   * O portão do cupom do teste de criativo na hora de criar (plano da região, R8): o mesmo do pedido, pelo que o pedido
+   * guardou (o teste, a letra, o código e a regra). Nulo quando vale; senão, o porquê. Só o pedido do funcionário de IA passa.
+   */
+  private async portaoDoTeste(tx: Tx, row: ActionRow): Promise<string | null> {
+    const desejado = (row.desired_state ?? {}) as { codigo?: unknown; regra?: unknown; teste?: { id?: unknown; letra?: unknown } };
+    const { id, letra } = desejado.teste ?? {};
+    if (row.actor_type !== 'agent' || !row.brand_id || !row.account_id || typeof desejado.codigo !== 'string' || typeof id !== 'string' || (letra !== 'A' && letra !== 'B')) return 'fora_do_teste';
+    return oQueSeguraOCupomDoTeste(tx, this.flags, { tenantId: row.tenant_id, brandId: row.brand_id, accountId: row.account_id, codigo: desejado.codigo, regra: desejado.regra, teste: id, letra });
   }
 
   /**

@@ -25,6 +25,8 @@ import type { ResourceState } from './tools.js';
 // (criar cupom pela ligação pode, decisão F3-5), com o `rgm_it_` de reserva.
 
 const PREFIXO = 'cupom:';
+/** A ferramenta do cupom de um criativo do teste de criativo (plano da região, R8): a única que cria cupom sem campanha. */
+export const FERRAMENTA_DO_CUPOM_DO_TESTE = 'cupom_do_teste';
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /** O que a criação precisa do resto do app; ligado na subida (API e worker). Sem isso, só a leitura funciona. */
@@ -137,13 +139,24 @@ export class RegemCupomConnector implements Connector {
     if (!conta.pode_criar) return { ok: false, reason: 'recusado', mensagem: MENSAGEM['escopo-insuficiente']! };
 
     const regra = desired.regra as RegraDoCupom;
-    const vinculo = desired.campanha as { id: string; exclusivo: boolean };
+    // O cupom de um criativo do teste de criativo (plano da região, R8) nasce SEM campanha: a campanha de teste só entra
+    // na lista do Liame na leitura seguinte da Meta, e a rotina dos testes liga depois. Essa porta abre só para o pedido
+    // da ferramenta `cupom_do_teste` (a ferramenta do pedido, e não o formato do estado), que diz de qual teste o cupom é
+    // e nunca traz campanha. Qualquer outro pedido (o cupom de campanha, `regem_cupom_criar`) sempre traz a campanha: sem
+    // ela, nada é criado.
+    const vinculo = (desired.campanha ?? null) as { id: string; exclusivo: boolean } | null;
+    const doTeste = options.tool === FERRAMENTA_DO_CUPOM_DO_TESTE;
+    if (doTeste ? vinculo !== null || !desired.teste : vinculo === null) {
+      return { ok: false, reason: 'recusado', mensagem: 'O pedido do cupom não veio como esta ferramenta pede (a campanha, ou o teste): o cupom não foi criado. Peça de novo.' };
+    }
     // A campanha é conferida ANTES de criar: se ela foi encerrada entre o pedido e a aprovação, o cupom não nasce órfão.
-    try {
-      await campanhaDoVinculo(tx, vinculo.id, conta.brand_id);
-    } catch (err) {
-      if (err instanceof AppProblem) return { ok: false, reason: 'recusado', mensagem: `${err.detail} O cupom não foi criado: peça de novo com outra campanha.` };
-      throw err;
+    if (vinculo) {
+      try {
+        await campanhaDoVinculo(tx, vinculo.id, conta.brand_id);
+      } catch (err) {
+        if (err instanceof AppProblem) return { ok: false, reason: 'recusado', mensagem: `${err.detail} O cupom não foi criado: peça de novo com outra campanha.` };
+        throw err;
+      }
     }
     // Um cupom com o código já na lista do Liame não barra aqui: pode ser o desta mesma ação, criado numa
     // tentativa que caiu no meio e trazido pela leitura. Quem decide é o Regem: a mesma chave de idempotência
@@ -155,6 +168,8 @@ export class RegemCupomConnector implements Connector {
     const { criado, cupomId } = nascido;
     const estado: ResourceState = { codigo: criado.codigo, existe: true, cupom_id: cupomId, external_id: criado.id, ativo: criado.ativo, pode_criar: conta.pode_criar };
     if (!cupomId) return { ok: true, state: { ...estado, vinculo: 'pendente', vinculo_motivo: 'o cupom criado ainda não entrou na lista do Liame' }, version: Number(criado.versao) };
+    // O cupom do teste: criado pelo Liame, à espera da campanha de teste. Quem liga é a rotina dos testes.
+    if (!vinculo) return { ok: true, state: { ...estado, vinculo: 'do_teste', teste: desired.teste ?? null }, version: Number(criado.versao) };
 
     // Liga à campanha escolhida no pedido. Se a campanha deixou de valer entre o pedido e a execução, o cupom
     // fica criado e sem vínculo (a pessoa liga a outra na aba Cupons) — a criação não é desfeita por isso.

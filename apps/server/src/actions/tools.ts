@@ -179,8 +179,12 @@ export interface ToolDefinition {
  *    pessoa aprovou a semana; o portão confere a função, o ritmo aprovado e não parado, o passo de hoje e o valor dentro
  *    do aprovado; a regra da política é `orcamento.ritmo_*`, só na Meta, só para o funcionário. Parar o ritmo ou
  *    desligar a função segura o que está na fila.
+ *  - `teste`: o cupom de um criativo do teste de criativo (plano da região, R8; D-RG-77). A pessoa aprovou o teste, que
+ *    diz o código, o desconto e a validade de cada cupom; o portão confere a função, o teste aprovado e em criação, o
+ *    código e a regra exatamente como aprovados e a loja do teste; a regra da política é `cupom.criar_do_teste`, só no
+ *    Regem, só para o funcionário.
  */
-export type DecisaoJaTomada = 'atendimento_automatico' | 'ritmo_da_semana';
+export type DecisaoJaTomada = 'atendimento_automatico' | 'ritmo_da_semana' | 'teste';
 
 /**
  * A ferramenta cujo pedido sai sem outra aprovação porque uma pessoa já decidiu antes, com o código do app
@@ -189,6 +193,38 @@ export type DecisaoJaTomada = 'atendimento_automatico' | 'ritmo_da_semana';
  */
 export const saiPorDecisaoJaTomada = <T extends Pick<ToolDefinition, 'decisaoJaTomada'>>(tool: T | undefined): tool is T & { decisaoJaTomada: DecisaoJaTomada } =>
   tool?.decisaoJaTomada !== undefined;
+
+/** A regra de um cupom como o contrato de cupons do Regem pede, a partir dos parâmetros conferidos da ferramenta. */
+function regraDoCupom(p: {
+  codigo: string;
+  nome?: string | undefined;
+  tipo: 'percentual' | 'valor' | 'frete_gratis';
+  percentual?: number | undefined;
+  valor_centavos?: number | undefined;
+  pedido_minimo_centavos: number;
+  valido_de: string;
+  valido_ate: string;
+}): Record<string, unknown> {
+  return {
+    codigo: p.codigo,
+    nome: p.nome ?? `Campanha · ${p.codigo}`,
+    tipo: p.tipo,
+    ...(p.tipo === 'percentual' ? { percentual: `${p.percentual}.00` } : {}),
+    ...(p.tipo === 'valor' ? { valor_centavos: p.valor_centavos } : {}),
+    ...(p.pedido_minimo_centavos > 0 ? { pedido_minimo_centavos: p.pedido_minimo_centavos } : {}),
+    valido_de: p.valido_de,
+    valido_ate: p.valido_ate,
+  };
+}
+
+/**
+ * A regra do cupom que a ferramenta `cupom_do_teste` montaria com estes parâmetros; nula quando eles não são válidos. O
+ * portão do cupom do teste compara por ela a regra do pedido com a do teste aprovado.
+ */
+export function regraDoCupomDosParametros(params: unknown): Record<string, unknown> | null {
+  const p = CupomDoTesteParams.safeParse(params);
+  return p.success ? regraDoCupom(p.data) : null;
+}
 
 /** O plano não pode ser montado com este estado (cupom que já existe, loja sem permissão): vira 422 no pedido. */
 export class PlanoRecusado extends Error {}
@@ -218,6 +254,26 @@ const CupomParams = z
     if (p.tipo !== 'percentual' && p.percentual !== undefined) ctx.addIssue({ code: 'custom', path: ['percentual'], message: 'O percentual só vale no cupom percentual' });
     if (p.tipo === 'valor' && p.valor_centavos === undefined) ctx.addIssue({ code: 'custom', path: ['valor_centavos'], message: 'Informe o valor do desconto' });
     if (p.tipo !== 'valor' && p.valor_centavos !== undefined) ctx.addIssue({ code: 'custom', path: ['valor_centavos'], message: 'O valor só vale no cupom de valor fixo' });
+    if (p.valido_ate < p.valido_de) ctx.addIssue({ code: 'custom', path: ['valido_ate'], message: 'O fim não pode ser antes do início' });
+  });
+
+/** O cupom de um criativo do teste de criativo (plano da região, R8): o teste, a letra e a regra que a pessoa aprovou. */
+const CupomDoTesteParams = z
+  .strictObject({
+    teste: z.uuid(),
+    letra: z.enum(['A', 'B']),
+    codigo: z.string().regex(/^[A-Z0-9]{4,20}$/, { error: 'De 4 a 20 letras maiúsculas ou números, sem espaço' }),
+    nome: z.string().trim().min(1).max(80),
+    tipo: z.enum(['percentual', 'valor']),
+    percentual: z.int().min(1).max(100).optional(),
+    valor_centavos: z.int().min(1).max(100_000_000).optional(),
+    pedido_minimo_centavos: z.int().min(0).max(100_000_000).default(0),
+    valido_de: Dia,
+    valido_ate: Dia,
+  })
+  .superRefine((p, ctx) => {
+    if ((p.tipo === 'percentual') !== (p.percentual !== undefined)) ctx.addIssue({ code: 'custom', path: ['percentual'], message: 'O percentual vai no cupom percentual, e só nele' });
+    if ((p.tipo === 'valor') !== (p.valor_centavos !== undefined)) ctx.addIssue({ code: 'custom', path: ['valor_centavos'], message: 'O valor vai no cupom de valor fixo, e só nele' });
     if (p.valido_ate < p.valido_de) ctx.addIssue({ code: 'custom', path: ['valido_ate'], message: 'O fim não pode ser antes do início' });
   });
 
@@ -698,16 +754,7 @@ export const TOOLS: Record<string, ToolDefinition> = {
       if (before.codigo !== p.codigo) throw new PlanoRecusado('O código do cupom não confere com o recurso do pedido.');
       if (before.pode_criar !== true) throw new PlanoRecusado('A loja não liberou "criar cupom de campanha" no Regem. Autorize de novo em Contas conectadas e ligue essa chave lá.');
       if (before.existe === true) throw new PlanoRecusado('Já existe um cupom com este código nesta loja. Escolha outro código.');
-      const regra = {
-        codigo: p.codigo,
-        nome: p.nome ?? `Campanha · ${p.codigo}`,
-        tipo: p.tipo,
-        ...(p.tipo === 'percentual' ? { percentual: `${p.percentual}.00` } : {}),
-        ...(p.tipo === 'valor' ? { valor_centavos: p.valor_centavos } : {}),
-        ...(p.pedido_minimo_centavos > 0 ? { pedido_minimo_centavos: p.pedido_minimo_centavos } : {}),
-        valido_de: p.valido_de,
-        valido_ate: p.valido_ate,
-      };
+      const regra = regraDoCupom(p);
       return {
         action: 'cupom.criar',
         // O desconto sai do caixa da loja, não do orçamento de mídia: nada a reservar no envelope.
@@ -716,6 +763,40 @@ export const TOOLS: Record<string, ToolDefinition> = {
         currentValueMicros: null,
         reserveMicros: 0,
         desiredState: { codigo: p.codigo, existe: true, regra, campanha: { id: p.campaign_id, exclusivo: p.exclusive } },
+      };
+    },
+  },
+  // O cupom de um criativo do teste de criativo (plano da região, R8; D-RG-77): a irmã do `regem_cupom_criar`, com a mesma
+  // escrita no Regem. Sai sem outro pedido de aprovação porque a pessoa aprovou o teste, com o código do app, e o teste
+  // diz o código, o desconto e a validade de cada cupom (`decisaoJaTomada: 'teste'`): só a rotina dos testes pede, com o
+  // portão conferido no pedido e de novo na execução. O cupom não nasce ligado a campanha: a campanha de teste só entra
+  // na lista do Liame na leitura seguinte da Meta, e a rotina liga depois. O `regem_cupom_criar` continua sendo o cupom
+  // que uma pessoa aprova, um por um.
+  cupom_do_teste: {
+    name: 'cupom_do_teste',
+    version: 1,
+    owner: 'vendas',
+    description:
+      'Cria na loja do Regem o cupom de um criativo do teste de criativo que uma pessoa aprovou, com o código, o desconto e a validade que o teste aprovado diz. O cupom não nasce ligado a campanha: o Liame liga à campanha de teste depois.',
+    risk: 'R1',
+    providers: ['regem'],
+    compensation: 'desativar_cupom',
+    decisaoJaTomada: 'teste',
+    flag: FLAG_DO_TESTE_DE_CRIATIVO,
+    params: CupomDoTesteParams,
+    plan(before, params) {
+      const p = CupomDoTesteParams.parse(params);
+      if (before.codigo !== p.codigo) throw new PlanoRecusado('O código do cupom não confere com o recurso do pedido.');
+      if (before.pode_criar !== true) throw new PlanoRecusado('A loja não liberou "criar cupom de campanha" no Regem. Autorize de novo em Contas conectadas e ligue essa chave lá.');
+      if (before.existe === true) throw new PlanoRecusado('Já existe um cupom com este código nesta loja. Escolha outro código.');
+      return {
+        action: 'cupom.criar_do_teste',
+        // O desconto sai do caixa da loja, não do orçamento de mídia: nada a reservar no envelope.
+        budgetImpact: 'none',
+        valueMicros: null,
+        currentValueMicros: null,
+        reserveMicros: 0,
+        desiredState: { codigo: p.codigo, existe: true, regra: regraDoCupom(p), campanha: null, teste: { id: p.teste, letra: p.letra } },
       };
     },
   },

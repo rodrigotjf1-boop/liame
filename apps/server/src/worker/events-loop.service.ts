@@ -39,6 +39,7 @@ import { RegiaoFontesService } from './regiao-fontes.service.js';
 import { RegiaoMidiaLoop } from './regiao-midia.service.js';
 import { RegiaoPublicoLoop } from './regiao-publico.service.js';
 import { RitmoDaSemanaService } from './ritmo-da-semana.service.js';
+import { TestesDeCriativoRotina } from './testes-de-criativo.service.js';
 import { RotinaDoCrmLoop } from './rotina-do-crm-loop.js';
 import { SincronizacaoLoop } from './sincronizacao-loop.js';
 import { SombraLoop } from './sombra-loop.js';
@@ -97,6 +98,7 @@ export class EventsLoopService implements OnApplicationBootstrap, OnApplicationS
     private readonly regiaoMidia: RegiaoMidiaLoop,
     private readonly regiaoPublico: RegiaoPublicoLoop,
     private readonly ritmoDaSemana: RitmoDaSemanaService,
+    private readonly testesDeCriativo: TestesDeCriativoRotina,
     private readonly comparacao: ComparacaoDmsIdLoop,
     private readonly fotos: FotosLoop,
     private readonly numerosDosPosts: PostsNumerosLoop,
@@ -193,6 +195,10 @@ export class EventsLoopService implements OnApplicationBootstrap, OnApplicationS
       // Os passos do dia do ritmo aprovado (R7, parte 1b-2): a verba de cada campanha no começo do dia, a volta à de antes
       // e o fim do ritmo; de 5 em 5 minutos, e na hora quando o lote de pedidos encheu.
       this.loop('ritmo-do-dia', 20, 300_000, async (n) => (await this.ritmoDaSemana.executarPassos(n)).filter((r) => r.situacao === 'pedido').length),
+      // Os testes de criativo (R8): com a campanha de teste criada na Meta, a rotina pede os dois cupons pelo teste aprovado,
+      // deixa o teste pronto quando os dois existem e liga cada cupom à campanha de teste; de 2 em 2 minutos, e na hora
+      // quando o lote andou. Só com a função `teste_de_criativo` ligada.
+      this.loop('testes-de-criativo', 10, 120_000, async (n) => (await this.testesDeCriativo.executarLote(n)).filter((r) => r.situacao === 'cupom_pedido' || r.situacao === 'pronto').length),
       // Hub DMS (F2, A3): as leituras do RegemCast pelas duas credenciais, comparadas; cada conta uma vez por hora, só
       // com a função `comparacao_dms_id` ligada e o aplicativo do Liame no DMS ID configurado; a fila é olhada de 5 em 5 minutos.
       this.loop('comparacao-dms-id', 2, 300_000, async (n) => (await this.comparacao.executarLote(n)).length),

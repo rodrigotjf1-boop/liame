@@ -78,7 +78,7 @@ describe('o ritmo da semana como pedido (R7, parte 1b)', () => {
   });
 
   it('a política da distribuição (v15): o ritmo sempre em Aprovação; o automático só nas ações próprias do passo, só na Meta e só para o funcionário de IA', () => {
-    expect(PLATFORM_POLICY.version).toBe(16);
+    expect(PLATFORM_POLICY.version).toBe(17);
     const autonomia = PLATFORM_POLICY.document.rules.filter((r) => r.type === 'autonomy');
     expect(autonomia.filter((r) => r.action === 'ritmo.*')).toEqual([{ type: 'autonomy', action: 'ritmo.*', mode: 'APPROVAL' }]);
     expect(autonomia.filter((r) => r.action?.startsWith('orcamento.'))).toEqual([
