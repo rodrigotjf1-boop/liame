@@ -3,8 +3,8 @@ import { avisoDoTeste, DIAS_DO_AVISO_DO_TESTE, type TesteLido, textoDoAvisoDoTes
 
 // R8 (D-RG-80, D-RG-93 e D-RG-94), sem rede e sem banco: os três avisos do teste de criativo na Atenção. O teste que
 // terminou com vencedor avisa enquanto a campanha de teste segue no ar e o criativo que perdeu não foi pausado, sem
-// prazo; o que acabou sem vencedor só informa, pelo prazo; o interrompido avisa até alguém encerrar o teste (ou pelo
-// prazo, se a campanha de teste não está no ar). O prazo nunca cala o aviso de um dinheiro que ainda está sendo gasto.
+// prazo; o que acabou sem vencedor só informa, também sem prazo; o interrompido avisa até alguém encerrar o teste (ou
+// pelo prazo, se a campanha de teste não está no ar). O prazo nunca cala o aviso de um dinheiro que ainda está sendo gasto.
 // E as frases.
 
 const ID = '0190d2b0-0000-7000-8000-0000000000a1';
@@ -44,8 +44,9 @@ describe('os avisos do teste de criativo (R8)', () => {
     // O que não gasta mais sai no prazo: o interrompido que nem começou e o que teve a campanha pausada por fora.
     expect(avisoDoTeste(teste({ ...fora, situacao: 'interrompido', ativa: false, comecou: false, resultado: null }))).toBeNull();
     expect(avisoDoTeste(teste({ ...fora, situacao: 'interrompido', campanhaLida: 'pausada', resultado: null }))).toBeNull();
-    // O teste sem vencedor é informação (os dois ficam como estão, de propósito): sai no prazo.
-    expect(avisoDoTeste(teste({ ...fora, resultado: resultado('sem_vencedor', null, 31, 27, 28) }))).toBeNull();
+    // O teste sem vencedor é informação, e os dois conjuntos seguem gastando: fica até alguém encerrar o teste.
+    expect(avisoDoTeste(teste({ ...fora, resultado: resultado('sem_vencedor', null, 31, 27, 28) }))).toMatchObject({ tipo: 'sem_vencedor' });
+    expect(avisoDoTeste(teste({ ...fora, ativa: false, resultado: resultado('sem_vencedor', null, 31, 27, 28) }))).toBeNull();
   });
 
   it('com vencedor: avisa enquanto a campanha de teste segue no ar e o criativo que perdeu não foi pausado', () => {

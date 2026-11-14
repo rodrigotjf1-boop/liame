@@ -124,9 +124,9 @@ export const AttentionItem = z.strictObject({
    * `ritmo_sem_volta` (o ritmo acabou ou foi parado e a verba ainda não voltou à de antes) e `ritmo_campanha_saiu`
    * (alguém mexeu por fora e o Liame não muda mais a verba dela na semana). O teste de criativo (plano da região, R8),
    * um aviso por teste: `teste_com_vencedor` (um criativo venceu, e o outro continua gastando até alguém pedir a pausa
-   * dele ou encerrar o teste; sem prazo), `teste_sem_vencedor` (o teste acabou no último dia, e os dois ficam como
-   * estão; por 14 dias) e `teste_interrompido` (mexeram nele por fora, ou os cupons não saíram, e o Liame parou de
-   * medir; sem prazo com a campanha de teste no ar, por 14 dias sem ela). A recomendação da sombra numa ação
+   * dele ou encerrar o teste), `teste_sem_vencedor` (o teste acabou no último dia, e os dois ficam como estão até
+   * alguém encerrar o teste) e `teste_interrompido` (mexeram nele por fora, ou os cupons não saíram, e o Liame parou
+   * de medir). Nenhum tem prazo com a campanha de teste no ar; sem ela, o interrompido sai em 14 dias. A recomendação da sombra numa ação
    * que saiu de Sombra (A3, I13): `sugestao_pausar_campanha`, `sugestao_reduzir_verba` e `sugestao_aumentar_verba`.
    * As vendas informadas ao Google que pararam sem ninguém mandar parar (A5, Y1): `vendas_google_sem_permissao` e
    * `vendas_google_recusadas`, com a conta do Google Ads em `connected_account_id`. O Perfil da Empresa no Google (A6,

@@ -13,12 +13,12 @@ import { ResultadoDoTesteDeCriativo } from './teste-de-criativo-plano.js';
 //   - o teste foi interrompido: mexeram nele por fora, ou os cupons não saíram, e o Liame parou de medir. Com a campanha
 //     de teste no ar, o aviso não tem prazo: fica até alguém encerrar o teste. Sem ela no ar (o teste que nem começou,
 //     ou a campanha pausada por fora), vale o prazo;
-//   - o teste acabou sem vencedor: os dois criativos ficam como estão, de propósito (D-RG-80). É só informação: sai
-//     quando o teste é encerrado, ou no prazo.
+//   - o teste acabou sem vencedor: os dois criativos ficam como estão (D-RG-80). É só informação, e também não tem
+//     prazo: a campanha de teste segue gastando com os dois, e o aviso sai quando o teste é encerrado.
 // A regra do prazo: ele nunca cala o aviso de um dinheiro que ainda está sendo gasto sem ninguém ter decidido. Vale só
-// para o que não gasta mais, ou para o que a pessoa já sabe que fica como está.
+// para o que não gasta mais: o teste interrompido sem a campanha de teste no ar.
 
-/** Por quantos dias o aviso do que não gasta mais (e o do teste sem vencedor) ainda aparece. */
+/** Por quantos dias o aviso do que não gasta mais (o teste interrompido sem a campanha de teste no ar) ainda aparece. */
 export const DIAS_DO_AVISO_DO_TESTE = 14;
 
 /** O teste como o Liame o guardou e como a leitura da Meta mostra a campanha dele. */
@@ -32,7 +32,7 @@ export interface TesteLido {
   ativa: boolean;
   /** O teste chegou a rodar (tem o primeiro dia). */
   comecou: boolean;
-  /** Dentro do prazo do aviso: pelo último dia do teste, no terminado; pela hora em que o Liame parou, no interrompido. */
+  /** Dentro do prazo do aviso, pela hora em que o Liame parou de medir. Só decide no interrompido sem a campanha de teste no ar. */
   noPrazo: boolean;
   /** A situação da campanha de teste e a do conjunto do criativo que perdeu, pela leitura da Meta; nulas sem leitura. */
   campanhaLida: string | null;
@@ -74,7 +74,8 @@ export function avisoDoTeste(t: TesteLido): AvisoDoTeste | null {
     if (!lidaNoAr(t.perdedorLido)) return null;
     return { ...base, tipo: 'venceu', vencedor, pedidos, dias: ultima.dia };
   }
-  if (veredito === 'sem_vencedor' && t.noPrazo) return { ...base, tipo: 'sem_vencedor', pedidos, dias: ultima.dia };
+  // Sem vencedor, os dois conjuntos seguem gastando: a informação fica até alguém encerrar o teste.
+  if (veredito === 'sem_vencedor') return { ...base, tipo: 'sem_vencedor', pedidos, dias: ultima.dia };
   return null;
 }
 
@@ -119,8 +120,6 @@ export function textoDoAvisoDoTeste(a: AvisoDoTeste): { kind: TipoDoAvisoDoTeste
 
 // ------------------------------------------------------------------ a leitura
 
-const FUSO_PADRAO = 'America/Sao_Paulo';
-
 export interface AvisoDoTesteDaMarca {
   marca: string;
   /** A conta de anúncios da Meta do teste. */
@@ -136,8 +135,8 @@ export interface AvisoDoTesteDaMarca {
  * dentro do prazo, com a campanha de teste e o conjunto do criativo que perdeu como a leitura da Meta os mostra. Uma
  * consulta só, pelo índice da marca.
  *
- * O prazo do terminado conta do último dia do teste, no fuso da loja. O do interrompido conta de `updated_at`: é a hora
- * em que o Liame parou, porque depois disso só "Encerrar o teste" grava na linha, e o teste encerrado já não avisa.
+ * O prazo conta de `updated_at`: é a hora em que o Liame parou de medir, porque depois de interrompido só "Encerrar o
+ * teste" grava na linha, e o teste encerrado já não avisa.
  */
 export async function avisosDoTesteDasMarcas(tx: Tx, marcas: readonly string[], instante: string): Promise<AvisoDoTesteDaMarca[]> {
   if (!marcas.length) return [];
@@ -161,12 +160,7 @@ export async function avisosDoTesteDasMarcas(tx: Tx, marcas: readonly string[], 
       select t.id, t.brand_id, t.ad_account_id as conta, t.action_id, t.name, t.status, t.active, (t.started_on is not null) as comecou, x.no_prazo, t.result, t.reason,
              c.id as campanha, c.status as campanha_lida, p.status as perdedor_lido
         from liame.campaign_test t
-        cross join lateral (
-          select case when t.status = 'terminado'
-                      then t.ended_on >= (${instante}::timestamptz at time zone coalesce(t.plan->>'fuso', ${FUSO_PADRAO}))::date - ${DIAS_DO_AVISO_DO_TESTE}::int
-                      else t.updated_at >= ${instante}::timestamptz - make_interval(days => ${DIAS_DO_AVISO_DO_TESTE}::int)
-                 end as no_prazo
-        ) x
+        cross join lateral (select t.updated_at >= ${instante}::timestamptz - make_interval(days => ${DIAS_DO_AVISO_DO_TESTE}::int) as no_prazo) x
         left join liame.campaign c on c.tenant_id = t.tenant_id and c.connected_account_id = t.ad_account_id and c.external_id = t.meta_campaign_id
         left join lateral (
           select g.status
