@@ -370,6 +370,19 @@ As rodadas pagas do `social_comentario_tipo` (o portão da função, A6-12), com
 
 Os dois modelos deram os mesmos tipos. A resposta é uma palavra, e os tokens de saída de cada caso (14 a 16) se repetem entre as rodadas, mas cada rodada chamou o seu modelo, sem cache (`--no-cache`; o modelo de cada resposta está na saída do promptfoo). Tokens de cada rodada: 37 mil de entrada e 362 de saída, cerca de US$ 0,0002 por comentário no Haiku. As três rodadas somaram cerca de US$ 0,09, pelos preços publicados. A rota de modelo da tarefa entrou com o Haiku 5.5 como modelo principal, sem reserva nem econômico (migration 0127); nenhuma rotina chama a tarefa ainda (a rotina vem na parte 2d-4c).
 
+### O Social media no Direct e no Messenger (14/11/2026)
+
+As rodadas pagas do `social_direct` (o portão da função, a sugestão a pedido de quem atende; D-A6-144 a D-A6-147), com o gasto autorizado pelo dono ("autorizado", com o teto de US$ 2 proposto), na chave do workspace de testes: **Sonnet 5.5, esforço `low`, `AI_INFERENCE_GEO=us`**, 26 casos, sem o Haiku 5.5 (o volume é pequeno: uma chamada só quando uma pessoa pede).
+
+| Rodada | Prompt | Resultado |
+| --- | --- | --- |
+| 1ª | `social.direct` v1 | **26 de 26, aprovado** |
+| 2ª (confirmação) | v1 | **25 de 26, aprovado** (nota 0,96). Falhou o pedido de brinde: o modelo respondeu com a batata paga e marcou "respondida", e a tela mostraria "Conferido com Minha marca" a uma resposta que desviou da pergunta |
+| 3ª | v2 | 23 de 26, reprovado: a regra nova (toda pergunta por cupom, desconto ou brinde fica sem resposta) fez o rótulo da sugestão levar "brinde", e uma pergunta respondível, escondida numa tentativa de pedir combo grátis, foi marcada "nao" (o grupo da injeção) |
+| 4ª | v3 | 25 de 26, reprovado: a correção estreita (mostrar outra coisa no lugar do que foi pedido não é responder) acertou o brinde, mas um defeito de geração quebrou o texto de outro caso (pedaços do formato no meio), no grupo do número |
+
+**O que foi ao ar:** a versão 1, pela regra combinada antes de rodar a correção (sem duas rodadas aprovadas da correção, vai a versão que as teve). A v2 e a v3 não foram publicadas: o prompt ficou na versão 1. O caso do brinde fica como comportamento conhecido: o texto da sugestão passa na conferência (sem a palavra e sem promessa), e a pessoa lê antes de mandar; o "Conferido" pode aparecer numa resposta que mostra a oferta em vez de dizer que vai confirmar. Tokens por rodada: perto de 100 mil de entrada e 4,7 mil de saída, cerca de US$ 0,27 (perto de US$ 0,01 por conversa); as quatro somaram cerca de US$ 1,10. A rota entrou com a nota da confirmação da v1, 0,9615 (migration 0158), sem modelo econômico; só é chamada na empresa com o Direct ou o Messenger ligado e lido, a IA ligada e o Social media ativo, e só quando uma pessoa pede a sugestão.
+
 ## O que ainda falta
 
 - Dividir as instruções das tarefas de chamada única para o cache valer entre empresas quando houver volume (hoje o cache fica só no laço da Conversa e do Estrategista).

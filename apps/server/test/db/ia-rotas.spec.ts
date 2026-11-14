@@ -12,6 +12,7 @@ import { aceitaGeo } from '../../src/ai/modelos.js';
 import { TAREFA_PESQUISADOR } from '../../src/ai/pesquisador/prompt.js';
 import { TAREFA_REVISAO } from '../../src/ai/revisor/prompt.js';
 import { TAREFA_SOCIAL_COMENTARIO, TAREFA_SOCIAL_COMENTARIO_TIPO, TAREFA_SOCIAL_POST, TAREFA_SOCIAL_RESPOSTA } from '../../src/ai/social/prompt.js';
+import { TAREFA_SOCIAL_DIRECT } from '../../src/ai/social/direct.js';
 import { TAREFA_SOCIAL_VIDEO } from '../../src/ai/social/video.js';
 import { ownerQuery } from '../helpers/api.js';
 import { hasDb, OWNER_URL } from './env.js';
@@ -20,7 +21,7 @@ import { hasDb, OWNER_URL } from './env.js';
 // funcionário de CRM e mensageria; 0084, o Social media nas respostas às avaliações; 0113, a versão 2 com o Haiku 5.5 como
 // modelo econômico do Compliance, do Pesquisador e do Criativo de texto; 0116, o Social media nos posts; 0126, o Social
 // media nas respostas aos comentários; 0127, o tipo do comentário, com o Haiku 5.5 como modelo da rota; 0153, os textos
-// da campanha nova no Google e os do vídeo montado): uma
+// da campanha nova no Google e os do vídeo montado; 0158, a sugestão do Social media no Direct e no Messenger): uma
 // por tarefa de IA do código, com o modelo que passou no eval da tarefa. No banco de teste a linha da distribuição pode
 // estar em três situações: ativa (banco novo), aposentada (outro arquivo a tirou do caminho para usar o modelo simulado)
 // ou rascunho (a migration achou uma rota de teste ativa na tarefa e não a derrubou). Em produção não há rota de teste:
@@ -57,7 +58,7 @@ const MODELO_DA_TAREFA = (task: string): string => (task === TAREFA_SOCIAL_COMEN
 const SAIDA_DA_RODADA: Record<string, number> = { [TAREFA_SOCIAL_COMENTARIO_TIPO]: 300, [TAREFA_SOCIAL_VIDEO]: 600, [TAREFA_CRIATIVO_GOOGLE]: 1200 };
 const SAIDA_MINIMA = (task: string): number => SAIDA_DA_RODADA[task] ?? 1500;
 
-describe.skipIf(!hasDb)('rotas de modelo da distribuição (A3, I3; A4, X6; A5, Y6 e Y9; A6, Z6, Z11 e Z15; migrations 0046, 0051, 0061, 0084, 0113, 0116, 0126, 0127 e 0153) e o preço novo do Sonnet (0083)', () => {
+describe.skipIf(!hasDb)('rotas de modelo da distribuição (A3, I3; A4, X6; A5, Y6 e Y9; A6, Z6, Z11 e Z15; migrations 0046, 0051, 0061, 0084, 0113, 0116, 0126, 0127, 0153 e 0158) e o preço novo do Sonnet (0083)', () => {
   /** A versão mais nova da distribuição em cada tarefa (a 0113 aposenta a 1 e põe a 2 nas tarefas com o econômico). */
   const rotas = () =>
     ownerQuery<Rota>(
@@ -85,6 +86,7 @@ describe.skipIf(!hasDb)('rotas de modelo da distribuição (A3, I3; A4, X6; A5, 
         TAREFA_PESQUISADOR,
         TAREFA_SOCIAL_COMENTARIO,
         TAREFA_SOCIAL_COMENTARIO_TIPO,
+        TAREFA_SOCIAL_DIRECT,
         TAREFA_SOCIAL_POST,
         TAREFA_SOCIAL_RESPOSTA,
         TAREFA_SOCIAL_VIDEO,
@@ -129,6 +131,9 @@ describe.skipIf(!hasDb)('rotas de modelo da distribuição (A3, I3; A4, X6; A5, 
       // econômico: o Haiku 5.5 não foi medido nessas tarefas).
       [TAREFA_CRIATIVO_GOOGLE]: 'texto',
       [TAREFA_SOCIAL_VIDEO]: 'texto',
+      // E a sugestão do Social media numa conversa do Direct ou do Messenger, a pedido de quem atende (migration 0158, sem
+      // modelo econômico: o volume é pequeno e o Haiku 5.5 não foi medido nesta tarefa).
+      [TAREFA_SOCIAL_DIRECT]: 'texto',
       [TAREFA_ESTRATEGISTA]: 'analise',
       [TAREFA_EXPLICAR_RESULTADOS]: 'analise',
       [TAREFA_PESQUISADOR]: 'analise',
@@ -145,14 +150,14 @@ describe.skipIf(!hasDb)('rotas de modelo da distribuição (A3, I3; A4, X6; A5, 
 
   it('a migration é idempotente: rodar de novo não duplica a rota nem reativa a que saiu do caminho', async () => {
     const antes = await ownerQuery<{ task: string; status: string }>(`select task, status from liame.ai_model_route where ${DA_DISTRIBUICAO} order by task`);
-    for (const arquivo of ['0046_rotas_de_modelo.sql', '0051_rota_do_criativo.sql', '0061_rota_do_crm.sql', '0084_rota_do_social.sql', '0113_haiku_economico.sql', '0116_rota_dos_posts.sql', '0126_rota_dos_comentarios.sql', '0127_rota_do_tipo_do_comentario.sql', '0153_rotas_dos_textos_do_google_e_do_video.sql']) {
+    for (const arquivo of ['0046_rotas_de_modelo.sql', '0051_rota_do_criativo.sql', '0061_rota_do_crm.sql', '0084_rota_do_social.sql', '0113_haiku_economico.sql', '0116_rota_dos_posts.sql', '0126_rota_dos_comentarios.sql', '0127_rota_do_tipo_do_comentario.sql', '0153_rotas_dos_textos_do_google_e_do_video.sql', '0158_rota_da_sugestao_no_direct.sql']) {
       const sql = readFileSync(resolve(MIGRATIONS, arquivo), 'utf8');
       await ownerQuery(sql);
       await ownerQuery(sql);
     }
     const depois = await ownerQuery<{ task: string; status: string }>(`select task, status from liame.ai_model_route where ${DA_DISTRIBUICAO} order by task`);
     expect(depois.map((x) => x.task)).toEqual(antes.map((x) => x.task));
-    expect(new Set(depois.map((x) => x.task)).size).toBe(13);
+    expect(new Set(depois.map((x) => x.task)).size).toBe(14);
     // Nunca duas ativas na mesma tarefa (o índice único garante; aqui fica dito).
     const ativas = await ownerQuery<{ task: string; n: number }>(`select task, count(*)::int as n from liame.ai_model_route where status = 'ativa' group by task having count(*) > 1`);
     expect(ativas).toEqual([]);
