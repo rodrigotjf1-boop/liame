@@ -28,7 +28,9 @@ import { DetalheAnuncio, type Volta } from './detalhe-anuncio';
 import { DetalheCampanhaGoogle } from './detalhe-campanha-google';
 import { DetalheCampanhaNova } from './detalhe-campanha-nova';
 import { DetalheRitmo } from './detalhe-ritmo';
+import { DetalheTeste } from './detalhe-teste';
 import { ehPedidoDoRitmo } from './ritmo-textos';
+import { ehPedidoDoTeste } from './teste-textos';
 import { DetalheMensagem, type Feito } from './detalhe-mensagem';
 import { type AcaoDeMensagem, ehPedidoDeMensagem, etiquetaDaMensagem, mensagemApresentada } from './mensagem-textos';
 import { type AcaoDeComentario, canalETipoDaLista, comentarioApresentado, ehPedidoDeComentario, etiquetaDoComentario, operacaoDo } from './comentario-textos';
@@ -456,6 +458,30 @@ export function AprovacoesTela() {
     if (r.data.pending_action_id) setSel(chaveDaAcao(r.data.pending_action_id));
     focarOTitulo();
     return null;
+  }
+
+  // ---- o teste de criativo (R8): ativar o teste pronto e pausar o criativo que perdeu, pelas rotas do teste.
+  async function pedirAtivarTeste(teste: string): Promise<Problema | null> {
+    const r = await chamar(() => api.POST('/v1/creative-tests/{id}/activate', { params: { path: { id: teste } } }));
+    if (!r.ok) return r.problema;
+    avisar('Pedido de ativação criado. Ele espera a aprovação com o código do app.');
+    await carregar();
+    if (r.data.pending_action_id) setSel(chaveDaAcao(r.data.pending_action_id));
+    focarOTitulo();
+    return null;
+  }
+  async function pedirPausaDoPerdedor(teste: string): Promise<Problema | null> {
+    const r = await chamar(() => api.POST('/v1/creative-tests/{id}/pause-loser', { params: { path: { id: teste } } }));
+    if (!r.ok) return r.problema;
+    const pedido = r.data.loser_pause;
+    const espera = pedido !== null && pedido.status !== 'executada';
+    avisar(espera ? 'Pedido de pausa criado. Ele espera a decisão aqui em Aprovações.' : 'Pedido de pausa feito: o criativo que perdeu foi pausado.');
+    await carregar();
+    return null;
+  }
+  function abrirPedido(pedido: string) {
+    setSel(chaveDaAcao(pedido));
+    focarOTitulo();
   }
 
   async function desfazer(acao: AcaoDeAnuncio): Promise<Volta> {
@@ -978,6 +1004,26 @@ export function AprovacoesTela() {
         aoVoltar={voltarParaALista}
         aoAprovar={aprovar}
         aoRecusar={recusar}
+      />
+    );
+  } else if (aberta?.tipo === 'acao' && ehPedidoDoTeste(aberta.acao)) {
+    detalhe = (
+      <DetalheTeste
+        acao={aberta.acao}
+        grupo={grupoDe(aberta.acao, agora)}
+        agora={agora}
+        podeDecidir={podeDecidir}
+        podeOperar={pode('campanhas.operar')}
+        temApp={temApp}
+        temChave={temChave}
+        titulo={tituloDoDetalhe}
+        campoCodigo={campoCodigo}
+        aoVoltar={voltarParaALista}
+        aoAprovar={aprovar}
+        aoRecusar={recusar}
+        aoPedirAtivar={pedirAtivarTeste}
+        aoPedirPausa={pedirPausaDoPerdedor}
+        aoAbrirPedido={abrirPedido}
       />
     );
   } else if (aberta?.tipo === 'acao' && ehPedidoDeCampanhaNova(aberta.acao)) {

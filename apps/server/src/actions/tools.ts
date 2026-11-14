@@ -653,7 +653,9 @@ export const TOOLS: Record<string, ToolDefinition> = {
   },
   // Pausar a campanha de teste (D-RG-80): é o que "Encerrar o teste" pede. Para de gastar, então a pessoa que pede pela
   // tela do teste não precisa do código do app (`directByPerson`, com a regra `teste.pausar` da política); o funcionário
-  // de IA não pede esta ação. Só pela rota do teste (`POST /v1/creative-tests/{id}/stop`).
+  // de IA não pede esta ação. Só pela rota do teste (`POST /v1/creative-tests/{id}/stop`). Não depende da função
+  // `teste_de_criativo`: pausar só diminui o gasto, e quem desliga a função com o teste no ar ainda precisa parar a
+  // campanha; vale a escrita da Meta (`meta_write`), o interruptor geral (D-RG-95).
   teste_de_criativo_pausar: {
     name: 'teste_de_criativo_pausar',
     version: 1,
@@ -664,7 +666,6 @@ export const TOOLS: Record<string, ToolDefinition> = {
     compensation: 'ativar_de_novo_com_aprovacao',
     directByPerson: true,
     onlyByRoute: true,
-    flag: FLAG_DO_TESTE_DE_CRIATIVO,
     params: NoParams,
     plan(before) {
       const plano = planoDePausarOTeste(before);

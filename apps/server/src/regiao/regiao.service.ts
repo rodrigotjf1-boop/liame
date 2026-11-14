@@ -887,10 +887,15 @@ export class RegiaoService {
     });
 
     // As campanhas: a verba diária mora na campanha ou, quando ela não tem, no conjunto (nunca nas duas). O recurso é
-    // o nome do objeto no trilho de ações (`campanha:<id na Meta>` ou `conjunto:<id na Meta>`).
+    // o nome do objeto no trilho de ações (`campanha:<id na Meta>` ou `conjunto:<id na Meta>`). A campanha de um teste
+    // de criativo que ainda roda fica fora, com o motivo (R8): mudar a verba de um lado estragaria a comparação.
+    const emTeste = sql`exists (select 1 from liame.campaign_test t
+                                 where t.tenant_id = c.tenant_id and t.ad_account_id = c.connected_account_id and t.meta_campaign_id = c.external_id
+                                   and t.status in ('criando', 'pronto', 'rodando'))`;
     const candidatas = (
-      await tx.execute<{ id: string; nivel: string; nome: string; verba: string; recurso: string; conta: string }>(sql`
-        select c.id, 'campanha' as nivel, c.name as nome, c.daily_budget_micros::text as verba, 'campanha:' || c.external_id as recurso, a.id as conta
+      await tx.execute<{ id: string; nivel: string; nome: string; verba: string; recurso: string; conta: string; em_teste: boolean }>(sql`
+        select c.id, 'campanha' as nivel, c.name as nome, c.daily_budget_micros::text as verba, 'campanha:' || c.external_id as recurso, a.id as conta,
+               ${emTeste} as em_teste
           from liame.campaign c
           join liame.connected_account a on a.id = c.connected_account_id and a.tenant_id = c.tenant_id
          where a.brand_id = ${brandId} and a.provider = 'meta_ads' and ${contaConectada('a')}
@@ -898,7 +903,8 @@ export class RegiaoService {
            and not exists (select 1 from liame.ad_campaign_new n
                             where n.tenant_id = c.tenant_id and n.meta_campaign_id = c.external_id and n.objective in ('alcance', 'seguidores'))
         union all
-        select g.id, 'conjunto' as nivel, c.name || ' · ' || g.name as nome, g.daily_budget_micros::text as verba, 'conjunto:' || g.external_id as recurso, a.id as conta
+        select g.id, 'conjunto' as nivel, c.name || ' · ' || g.name as nome, g.daily_budget_micros::text as verba, 'conjunto:' || g.external_id as recurso, a.id as conta,
+               ${emTeste} as em_teste
           from liame.ad_group g
           join liame.campaign c on c.id = g.campaign_id
           join liame.connected_account a on a.id = c.connected_account_id and a.tenant_id = c.tenant_id
@@ -915,6 +921,10 @@ export class RegiaoService {
     const out: RegionRhythmResponse['out'] = [];
     const recursos: RitmoMontado['recursos'] = {};
     for (const c of candidatas) {
+      if (c.em_teste) {
+        out.push({ name: c.nome, reason: 'teste_de_criativo' });
+        continue;
+      }
       const conduzida = controle.objetos.get(c.recurso);
       const base = conduzida ? conduzida.baseMicros : Number(c.verba);
       // A véspera da semana: no ritmo que ainda roda, a verba do último dia dele; senão, a que o Liame deixou (ou a de hoje).

@@ -247,3 +247,27 @@
   .r7-tabela:not(.r7-camp) tfoot th, .r7-tabela:not(.r7-camp) tfoot td { border-top: 0; }
   .r7-tabela:not(.r7-camp) tfoot tr { border-top: 2px solid var(--border-strong); border-bottom: 0; }
 }
+
+/* O teste de criativo (plano da região, R8; protótipo dos testes aprovado pelo dono em 13/11/2026): o veredito da última
+   olhada, os dois criativos lado a lado (as medidas nas linhas, A e B nas colunas: cabe em qualquer largura, o texto
+   quebra e a tabela não rola) e as duas peças. */
+.r8-envolve { container: r8 / inline-size; }
+.r8-tabela th, .r8-tabela td { vertical-align: top; }
+.r8-tabela td.n, .r8-tabela th.n { text-align: right; font-family: var(--font-mono); }
+.r8-tabela td small, .r8-tabela th small { display: block; color: var(--text-muted); font-size: var(--text-xs); font-weight: 400; font-family: var(--font-sans); }
+.r8-tabela th.r8-frente, .r8-tabela td.r8-frente { background: var(--success-soft); }
+.r8-ab { table-layout: fixed; width: 100%; }
+.r8-ab th, .r8-ab td, .r8-ab td.n, .r8-ab th.n { white-space: normal; overflow-wrap: anywhere; }
+.r8-ab th:first-child { width: 40%; }
+.r8-pecas { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(200px, 100%), 1fr)); gap: var(--sp-3); margin: 0; padding: 0; list-style: none; }
+.r8-peca { display: grid; gap: 4px; padding: var(--sp-3) var(--sp-4); border: 1px solid var(--border); border-radius: var(--radius); min-width: 0; }
+.r8-peca b { overflow-wrap: anywhere; }
+.r8-peca span { color: var(--text-muted); font-size: var(--text-sm); overflow-wrap: anywhere; }
+.r8-peca .r8-texto { white-space: pre-line; color: var(--text); }
+.r8-letra { display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; border-radius: var(--radius-full); background: var(--primary-soft); color: var(--text); font-size: var(--text-xs); font-weight: 700; font-family: var(--font-sans); }
+.r8-veredito { display: grid; gap: 4px; margin-top: var(--sp-3); padding: var(--sp-4); border-radius: var(--radius); background: var(--bg-subtle); }
+.r8-veredito b { font-size: var(--text-lg); }
+.r8-veredito span { color: var(--text-muted); font-size: var(--text-sm); }
+.r8-veredito--venceu { background: var(--success-soft); }
+.r8-acoes { display: flex; flex-wrap: wrap; gap: var(--sp-2); margin-top: var(--sp-3); }
+.r8-acoes .btn { white-space: normal; text-align: center; }

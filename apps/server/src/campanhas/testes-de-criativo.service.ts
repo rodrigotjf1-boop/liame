@@ -85,6 +85,7 @@ type Linha = {
   plan: unknown;
   action_id: string | null;
   pending_action_id: string | null;
+  loser_pause: { action_id: string; status: string } | null;
   meta_campaign_id: string | null;
   meta_account_id: string | null;
   started_on: string | null;
@@ -410,9 +411,12 @@ export class TestesDeCriativoService {
   }
 
   /**
-   * "Encerrar o teste" (D-RG-80): com a campanha de teste no ar, pede `teste_de_criativo_pausar`, que para de gastar e não
-   * pede o código do app; o conector deixa o teste encerrado. Sem ela no ar (o teste pronto e ainda não ativado, ou o que
-   * já terminou), só marca o teste como encerrado: nada muda na Meta.
+   * "Encerrar o teste" (D-RG-80 e D-RG-95). Antes da hora, com a campanha de teste no ar (o teste rodando, ou o
+   * interrompido), pede `teste_de_criativo_pausar`, que para de gastar e não pede o código do app; o conector deixa o
+   * teste encerrado. O teste pronto e ainda não ativado só fica encerrado. O teste que já terminou fica encerrado SEM
+   * mudar nada na Meta ("Encerrar o teste sem mudar nada", do protótipo): os dois criativos seguem como estão, o que o
+   * teste mostrou fica guardado, e o aviso da Atenção sai; pausar ou mudar a verba é pedido em Resultados, como em
+   * qualquer campanha. O interrompido sem a campanha no ar já acabou e fica como está.
    */
   async encerrar(auth: AuthContext, id: string): Promise<CreativeTestResponse> {
     const tx = currentTx();
@@ -422,14 +426,46 @@ export class TestesDeCriativoService {
     if (t.status === 'pedido' || t.status === 'criando') {
       throw conflito('teste-nao-comecou', 'O teste ainda não começou', 'O pedido deste teste ainda está em Aprovações ou em criação. Recuse o pedido em Aprovações, ou espere a campanha de teste existir.');
     }
-    if (t.active) {
+    const antesDaHora = t.active && (t.status === 'rodando' || t.status === 'interrompido');
+    if (antesDaHora) {
       const conta = (await tx.execute<{ ad_account_id: string }>(sql`select ad_account_id from liame.campaign_test where id = ${id} and tenant_id = ${quem.tenantId}`)).rows[0]!;
       await this.actions.pedirPelaRota(auth, { tool: 'teste_de_criativo_pausar', brand_id: t.brand_id, provider: 'meta_ads', account_id: conta.ad_account_id, resource_id: recursoDoTesteDeCriativo(id), params: {} });
       await tx.execute(sql`update liame.campaign_test set stopped_by = ${quem.userId}, updated_at = now() where id = ${id} and tenant_id = ${quem.tenantId}`);
-    } else if (t.status === 'pronto') {
+    } else if (t.status === 'pronto' || t.status === 'terminado') {
       await tx.execute(sql`update liame.campaign_test set status = 'encerrado', stopped_at = now(), stopped_by = ${quem.userId}, version = version + 1, updated_at = now() where id = ${id} and tenant_id = ${quem.tenantId}`);
     }
-    auditDetail({ resourceId: id, before: { status: t.status, active: t.active }, after: { status: 'encerrado' } });
+    auditDetail({ resourceId: id, before: { status: t.status, active: t.active }, after: { status: 'encerrado', pausa_pedida: antesDaHora } });
+    return this.obter(auth, id);
+  }
+
+  /**
+   * "Pedir: pausar o criativo que perdeu" (D-RG-80): no teste que terminou com vencedor e com a campanha de teste no ar,
+   * pede `conjunto_pausar` para o conjunto do criativo que perdeu, pelo trilho de sempre (a política da empresa diz se o
+   * pedido espera em Aprovações). O Liame não pausa sozinho, e o vencedor segue com a metade dele: a verba não muda. Não
+   * pede a função ligada, como encerrar: pausar só diminui o gasto. O pedido igual em aberto é recusado pelo trilho.
+   */
+  async pausarOQuePerdeu(auth: AuthContext, id: string): Promise<CreativeTestResponse> {
+    const tx = currentTx();
+    const quem = this.quem(auth);
+    const t = await this.linha(quem.tenantId, id, true);
+    if (t.status === 'encerrado') {
+      throw conflito('teste-encerrado', 'O teste foi encerrado', 'O teste foi encerrado: a campanha de teste é agora uma campanha como as outras. Para pausar um criativo, peça em Resultados.');
+    }
+    const guardado = ResultadoDoTesteDeCriativo.safeParse(t.result);
+    const vencedor = t.status === 'terminado' && guardado.success && guardado.data.veredito === 'venceu' ? guardado.data.vencedor : null;
+    if (!vencedor) throw conflito('teste-sem-vencedor', 'O teste não tem vencedor', 'Só dá para pausar o criativo que perdeu num teste que terminou com um vencedor.');
+    if (!t.active) throw conflito('teste-fora-do-ar', 'A campanha de teste não está no ar', 'A campanha de teste já foi pausada: o criativo que perdeu não gasta mais.');
+    const perdeu: LetraDoTeste = vencedor === 'A' ? 'B' : 'A';
+    const alvo = (
+      await tx.execute<{ ad_account_id: string; meta_adset_id: string | null }>(sql`
+        select t.ad_account_id, b.meta_adset_id
+          from liame.campaign_test t
+          join liame.campaign_test_arm b on b.test_id = t.id and b.tenant_id = t.tenant_id and b.letter = ${perdeu}
+         where t.id = ${id} and t.tenant_id = ${quem.tenantId}`)
+    ).rows[0];
+    if (!alvo?.meta_adset_id) throw conflito('conjunto-nao-encontrado', 'O conjunto não foi encontrado', `O conjunto do criativo ${perdeu} não está guardado neste teste.`);
+    await this.actions.pedirPelaRota(auth, { tool: 'conjunto_pausar', brand_id: t.brand_id, provider: 'meta_ads', account_id: alvo.ad_account_id, resource_id: `conjunto:${alvo.meta_adset_id}`, params: {} });
+    auditDetail({ resourceId: id, before: { perdeu, conjunto: 'ativo' }, after: { perdeu, conjunto: 'pausa pedida' } });
     return this.obter(auth, id);
   }
 
@@ -491,6 +527,7 @@ export class TestesDeCriativoService {
       link: plano.link,
       action_id: t.action_id,
       pending_action_id: t.pending_action_id,
+      loser_pause: t.loser_pause ? { action_id: t.loser_pause.action_id, status: t.loser_pause.status as NonNullable<CreativeTestResponse['loser_pause']>['status'] } : null,
       started_on: t.started_on,
       ended_on: t.ended_on,
       error: t.error,
@@ -508,6 +545,11 @@ export class TestesDeCriativoService {
              (select p.id from liame.action_request p
                where p.tenant_id = t.tenant_id and p.tool = 'teste_de_criativo_ativar' and p.resource_id = ${recursoDoTesteDeCriativo(id)} and p.status in ${EM_ABERTO}
                order by p.created_at desc limit 1) as pending_action_id,
+             (select json_build_object('action_id', p.id, 'status', p.status) from liame.action_request p
+                join liame.campaign_test_arm b on b.test_id = t.id and b.tenant_id = t.tenant_id and b.letter <> (t.result->>'vencedor')
+               where p.tenant_id = t.tenant_id and p.tool = 'conjunto_pausar' and p.account_id = t.ad_account_id::text
+                 and p.resource_id = 'conjunto:' || b.meta_adset_id and t.result->>'veredito' = 'venceu'
+               order by p.created_at desc limit 1) as loser_pause,
              t.meta_campaign_id, a.external_id as meta_account_id, t.started_on::text as started_on, t.ended_on::text as ended_on, t.error, t.reason, t.result, t.created_at
         from liame.campaign_test t
         left join liame.connected_account a on a.id = t.ad_account_id and a.tenant_id = t.tenant_id

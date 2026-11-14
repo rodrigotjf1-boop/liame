@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { ActionStatus } from './actions.js';
 import { DistrictCode, NEW_CAMPAIGN_DISTRICTS_MAX } from './campanhas-novas.js';
 
 // O teste de criativo (plano da região, R8; protótipo dos testes aprovado pelo dono em 13/11/2026; D-RG-76 a D-RG-80 e
@@ -161,6 +162,11 @@ export const CreativeTestResponse = z.strictObject({
   reason: z.string().nullable(),
   /** O que o teste mostrou até a última olhada; nulo antes da primeira (o dia 7). */
   result: CreativeTestResult.nullable(),
+  /**
+   * Só no teste que terminou com vencedor: o pedido mais recente para pausar o conjunto do criativo que perdeu
+   * (`conjunto_pausar`, pedido por `POST /v1/creative-tests/{id}/pause-loser`), em qualquer situação; nulo se ninguém pediu.
+   */
+  loser_pause: z.strictObject({ action_id: z.uuid(), status: ActionStatus }).nullable(),
   meta: z.strictObject({ account_id: z.string().nullable(), campaign_id: z.string().nullable() }),
   created_at: z.iso.datetime(),
 });

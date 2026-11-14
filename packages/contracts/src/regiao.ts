@@ -569,7 +569,10 @@ export const RegionRhythmResponse = z.strictObject({
       week_micros: z.int(),
     }),
   ),
-  /** As que ficam fora, com o porquê: `verba_pequena`, `fracao_de_centavo`, `acima_do_teto` ou `fora_dos_limites`. */
+  /**
+   * As que ficam fora, com o porquê: `verba_pequena`, `fracao_de_centavo`, `acima_do_teto`, `fora_dos_limites` ou
+   * `teste_de_criativo` (a campanha de um teste de criativo que ainda roda: mudar a verba de um lado estragaria a comparação).
+   */
   out: z.array(z.strictObject({ name: z.string(), reason: Slug })),
   /** A verba de hoje por dia, somadas as campanhas do ritmo; a da semana sem o ritmo (7 dias) e a da semana com ele. */
   base_micros: z.int(),

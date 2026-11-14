@@ -180,6 +180,41 @@ function ritmoDaSemana(a: ActionResponse): PedidoApresentado {
   };
 }
 
+// O teste de criativo (plano da região, R8): o detalhe próprio lê o teste e o acompanha; aqui, a linha da lista dos
+// três pedidos (criar a campanha de teste pausada, ativar e encerrar).
+function testeDeCriativo(a: ActionResponse): PedidoApresentado {
+  const conta = a.account_name ? ` em ${a.account_name}` : '';
+  const verba = a.value_micros === null ? null : `${reaisDeMicros(String(a.value_micros))}/dia`;
+  if (a.tool === 'teste_de_criativo_ativar') {
+    return {
+      titulo: `Ativar o teste de criativo${conta}`,
+      resumo: `${a.requested_by.name} pediu para ativar a campanha de teste criada pausada. Ativada, ela gasta ${verba ?? 'a verba diária do teste'}, metade para cada criativo.`,
+      impacto: verba,
+      mudancas: [['Campanha de teste', 'pausada', 'ativa']],
+      desfazer: 'A volta é “Encerrar o teste”: pausa a campanha de teste, sem pedir o código.',
+      depoisDeAprovar: 'O Liame ativa os dois anúncios, os dois conjuntos e a campanha em instantes; a Meta revisa os anúncios antes de mostrar.',
+    };
+  }
+  if (a.tool === 'teste_de_criativo_pausar') {
+    return {
+      titulo: `Encerrar o teste de criativo${conta}`,
+      resumo: `${a.requested_by.name} encerrou o teste: a campanha de teste é pausada e para de gastar.`,
+      impacto: null,
+      mudancas: [['Campanha de teste', 'ativa', 'pausada']],
+      desfazer: 'O teste encerrado não volta: para testar de novo, peça outro teste em Criativos.',
+      depoisDeAprovar: 'O Liame pausa a campanha de teste em instantes.',
+    };
+  }
+  return {
+    titulo: `Teste de criativo${conta}, criado pausado`,
+    resumo: `${a.requested_by.name} pediu um teste de dois criativos na Meta: duas peças aprovadas lado a lado, com a mesma verba e o mesmo público, cada uma com o seu cupom. Tudo nasce pausado.`,
+    impacto: null,
+    mudancas: [['Campanha de teste na Meta', 'não existe', 'criada, pausada']],
+    desfazer: 'A campanha de teste fica pausada na Meta; “Encerrar o teste” encerra sem pedir o código.',
+    depoisDeAprovar: 'O Liame cria a campanha de teste, os dois conjuntos e os dois anúncios na Meta, tudo pausado, e pede os dois cupons ao Regem.',
+  };
+}
+
 const POR_FERRAMENTA: Record<string, (a: ActionResponse) => PedidoApresentado> = {
   ritmo_da_semana: ritmoDaSemana,
   regem_cupom_criar: cupom,
@@ -191,6 +226,9 @@ const POR_FERRAMENTA: Record<string, (a: ActionResponse) => PedidoApresentado> =
   campanha_google_criar: campanhaGoogle,
   campanha_google_ativar: campanhaGoogle,
   campanha_google_pausar: campanhaGoogle,
+  teste_de_criativo_criar: testeDeCriativo,
+  teste_de_criativo_ativar: testeDeCriativo,
+  teste_de_criativo_pausar: testeDeCriativo,
 };
 
 export function apresentar(a: ActionResponse): PedidoApresentado {
