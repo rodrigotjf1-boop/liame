@@ -523,18 +523,34 @@ describe.skipIf(!hasDb)('o ritmo da semana: os passos do dia (R7, parte 1b-2)', 
     expect([verbasNaMeta(sobe.id), verbasNaMeta(abaixo.id), verbasNaMeta(desce.id)]).toEqual([[], [], ['3600']]);
     expect(await volta()).toEqual([]);
 
+    // Os dois dias seguintes. O caso roda em qualquer dia da semana: no sábado e no domingo, amanhã ou depois de amanhã
+    // já são de outra semana, o ritmo acabou e a que desce também volta à verba de antes (assunto de outro caso). Por
+    // isso a lista inteira só é conferida com o dia ainda dentro da semana do ritmo; o assunto deste caso (a volta da que
+    // ficou abaixo, tentada todo dia até sair) é conferido sempre.
+    const fimDaSemana = diasDepois(segundaDe(HOJE), 6);
+    const daAbaixo = (lista: ReturnType<typeof resumo>) => lista.filter(([recurso]) => recurso === abaixo.recurso);
     // Amanhã: a que ficou abaixo tenta a volta de novo (e o mês ainda não deixa); a que saiu na verba de antes não volta
     // ao ritmo; a que desce já está na verba do dia.
-    expect(resumo(await volta(meioDiaDe(diasDepois(HOJE, 1))))).toEqual([
-      [abaixo.recurso, 'bloqueado'],
-      [desce.recurso, 'igual'],
-    ]);
+    const amanha = diasDepois(HOJE, 1);
+    const deAmanha = resumo(await volta(meioDiaDe(amanha)));
+    if (amanha <= fimDaSemana) {
+      expect(deAmanha).toEqual([
+        [abaixo.recurso, 'bloqueado'],
+        [desce.recurso, 'igual'],
+      ]);
+    }
+    expect(daAbaixo(deAmanha).at(-1)).toEqual([abaixo.recurso, 'bloqueado']);
     // Depois de amanhã, com o mês folgado: a volta sai (R$ 54,00 → R$ 59,40).
     expect((await tetoDoMes(e, 1_000_000)).status).toBe(204);
-    expect(resumo(await volta(meioDiaDe(diasDepois(HOJE, 2))))).toEqual([
-      [abaixo.recurso, 'pedido'],
-      [desce.recurso, 'igual'],
-    ]);
+    const depois = diasDepois(HOJE, 2);
+    const deDepois = resumo(await volta(meioDiaDe(depois)));
+    if (depois <= fimDaSemana) {
+      expect(deDepois).toEqual([
+        [abaixo.recurso, 'pedido'],
+        [desce.recurso, 'igual'],
+      ]);
+    }
+    expect(daAbaixo(deDepois).at(-1)).toEqual([abaixo.recurso, 'pedido']);
     expect((await passos(id)).filter((p) => p.resource_id === abaixo.recurso).at(-1)).toMatchObject({ kind: 'volta', status: 'pedido', target: String(59.4 * REAL), expected: String(54 * REAL) });
   }, 120_000);
 
