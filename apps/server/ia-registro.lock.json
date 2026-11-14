@@ -163,6 +163,18 @@
     "ritmo_da_semana": {
       "version": 2,
       "hash": "86c86abcd18ae1fec949042ed36cec420126eac52e0c54e1356ac9593e236e20"
+    },
+    "teste_de_criativo_ativar": {
+      "version": 1,
+      "hash": "1db51238737d01bd1016fc4566c38118b882e9b92c6a712d86020370b150dbac"
+    },
+    "teste_de_criativo_criar": {
+      "version": 1,
+      "hash": "0ee9c39937a4dedff2dc0a2925e1f42d0e8b19ac636c963e2a2fd40cee261875"
+    },
+    "teste_de_criativo_pausar": {
+      "version": 1,
+      "hash": "c216b4c5a8b347e2947f414477b8cc6e64fdd352d18196f2f3a96c38767929cf"
     }
   },
   "prompts": {

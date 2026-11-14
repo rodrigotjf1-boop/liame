@@ -25,6 +25,7 @@ import { EstadoDaMensagem, faseDaMensagem, impedimentoDaMensagem } from './mensa
 import { planoDaCampanhaGoogle, planoDeAtivarNoGoogle, planoDePausarNoGoogle } from '../campanhas/campanha-google-plano.js';
 import { planoDaCampanhaNova, planoDeAtivar, planoDePausar } from '../campanhas/campanha-nova-plano.js';
 import { FORA_DO_RITMO, planoDoRitmo } from '../campanhas/ritmo-plano.js';
+import { FLAG_DO_TESTE_DE_CRIATIVO, planoDeAtivarOTeste, planoDePausarOTeste, planoDoTesteDeCriativo } from '../campanhas/teste-de-criativo-plano.js';
 import { EstadoDoPost, planoDeApagarOPost, planoDeTentarDeNovo, planoDoPost, quandoSai } from '../posts/post-plano.js';
 import { motivoDoCompartilhado, orcamentoCompartilhado } from './orcamento-compartilhado.js';
 
@@ -535,6 +536,85 @@ export const TOOLS: Record<string, ToolDefinition> = {
     },
     // A volta de um passo, pedida por uma pessoa, devolve a verba de antes dele (e a campanha sai do ritmo no passo seguinte).
     undo: (before) => ({ tool: 'orcamento_ajustar', params: { daily_budget_micros: budgetOf(before) } }),
+  },
+  // O teste de criativo (plano da região, R8; protótipo dos testes aprovado em 13/11/2026; D-RG-76 a D-RG-80): duas peças
+  // aprovadas lado a lado numa campanha de teste da Meta, com dois conjuntos iguais, um anúncio em cada um e o cupom de
+  // cada criativo no fim do texto do anúncio dele. Tudo nasce pausado e não gasta (ativar é outro pedido); sempre com a
+  // aprovação de uma pessoa e o código do app. Só pela rota do teste (`POST /v1/creative-tests`), que confere as peças,
+  // as mídias, a Página, a loja, os cupons e o teto por campanha, e só com a função `teste_de_criativo`, além da escrita
+  // na Meta.
+  teste_de_criativo_criar: {
+    name: 'teste_de_criativo_criar',
+    version: 1,
+    owner: 'midia',
+    description:
+      'Cria na Meta uma campanha de teste com duas peças aprovadas em Criativos: dois conjuntos iguais (o mesmo público e a mesma verba, a metade da verba do teste para cada um) e um anúncio em cada um, com o cupom do criativo no fim do texto. Tudo nasce pausado e não gasta. Ativar é outro pedido, com outra aprovação.',
+    // É verba nova quando for ativada (o pedido mostra risco médio); criar não gasta.
+    risk: 'R2',
+    providers: ['meta_ads'],
+    compensation: 'fica_pausada_na_meta',
+    alwaysApproval: true,
+    onlyByRoute: true,
+    flag: FLAG_DO_TESTE_DE_CRIATIVO,
+    params: NoParams,
+    plan(before) {
+      const plano = planoDoTesteDeCriativo(before);
+      if (!plano.ok) throw new PlanoRecusado(plano.motivo);
+      return {
+        action: 'teste.criar',
+        // Nasce pausada: não gasta nada até ser ativada, então nada a reservar no envelope do mês.
+        budgetImpact: 'none',
+        valueMicros: null,
+        currentValueMicros: null,
+        reserveMicros: 0,
+        desiredState: plano.desejado as unknown as ResourceState,
+      };
+    },
+  },
+  // Ativar a campanha de teste (D-RG-78): os dois anúncios, os dois conjuntos e a campanha passam a rodar e a gastar a
+  // verba diária do teste, depois da revisão da Meta. É verba nova: os limites da empresa e a verba do mês valem, e a
+  // reserva é a do teste INTEIRO. O plano só existe com os dois cupons criados no Regem. Só pela rota do teste
+  // (`POST /v1/creative-tests/{id}/activate`). A volta é encerrar o teste, pela tela dele.
+  teste_de_criativo_ativar: {
+    name: 'teste_de_criativo_ativar',
+    version: 1,
+    owner: 'midia',
+    description:
+      'Ativa na Meta a campanha de teste que o Liame criou pausada: os dois anúncios, os dois conjuntos e a campanha passam a rodar e a gastar a verba diária do teste, depois da revisão da Meta. Só com os dois cupons do teste criados. Para parar, encerre o teste.',
+    risk: 'R2',
+    providers: ['meta_ads'],
+    compensation: 'encerrar_o_teste',
+    alwaysApproval: true,
+    onlyByRoute: true,
+    flag: FLAG_DO_TESTE_DE_CRIATIVO,
+    params: NoParams,
+    plan(before) {
+      const plano = planoDeAtivarOTeste(before);
+      if (!plano.ok) throw new PlanoRecusado(plano.motivo);
+      const verba = plano.desejado.verba_diaria_micros;
+      return { action: 'teste.ativar', budgetImpact: 'new_spend', valueMicros: verba, currentValueMicros: null, reserveMicros: verba, desiredState: plano.desejado as unknown as ResourceState };
+    },
+  },
+  // Pausar a campanha de teste (D-RG-80): é o que "Encerrar o teste" pede. Para de gastar, então a pessoa que pede pela
+  // tela do teste não precisa do código do app (`directByPerson`, com a regra `teste.pausar` da política); o funcionário
+  // de IA não pede esta ação. Só pela rota do teste (`POST /v1/creative-tests/{id}/stop`).
+  teste_de_criativo_pausar: {
+    name: 'teste_de_criativo_pausar',
+    version: 1,
+    owner: 'midia',
+    description: 'Pausa na Meta a campanha de teste que o Liame ativou: os dois anúncios param de aparecer e de gastar, e o teste fica encerrado.',
+    risk: 'R1',
+    providers: ['meta_ads'],
+    compensation: 'ativar_de_novo_com_aprovacao',
+    directByPerson: true,
+    onlyByRoute: true,
+    flag: FLAG_DO_TESTE_DE_CRIATIVO,
+    params: NoParams,
+    plan(before) {
+      const plano = planoDePausarOTeste(before);
+      if (!plano.ok) throw new PlanoRecusado(plano.motivo);
+      return { action: 'teste.pausar', budgetImpact: 'decrease', valueMicros: null, currentValueMicros: null, reserveMicros: 0, desiredState: plano.desejado as unknown as ResourceState };
+    },
   },
   // A campanha nova no Google, criada pausada (A5, Y9, parte 2; P45; D-A5-21 a D-A5-26): a peça aprovada, com os textos
   // nos tamanhos do Google e uma foto da loja recortada, vira uma Performance Max pausada, numa requisição só (o Google

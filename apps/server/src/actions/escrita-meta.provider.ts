@@ -10,6 +10,7 @@ import { VaultService } from '../vault/vault.service.js';
 import { publicoNoRaio } from '../campanhas/publico-no-raio.js';
 import { centrosDosBairros } from '../worker/centros-dos-bairros.js';
 import { campanhaNovaNaMetaConnector } from './campanha-nova-na-meta.js';
+import { testeDeCriativoNaMetaConnector } from './teste-de-criativo-na-meta.js';
 import { metaAnunciosConnector } from './meta-anuncios.js';
 
 /**
@@ -39,6 +40,15 @@ export class EscritaMeta implements OnModuleInit {
       versao: (capacidade) => versaoRegistrada(database.db, 'meta_ads', capacidade),
     });
     campanhaNovaNaMetaConnector.ligar({
+      lerSegredo: (tx, secretId) => this.vault.readSecret(tx, secretId),
+      cliente: () => new ClienteConector(database.db, { enderecos: enderecosDasPlataformas(this.config.plataformas), tentativas: 1 }),
+      graphUrl: this.config.plataformas.metaGraphUrl,
+      appSecret: this.config.plataformas.metaAppSecret,
+      versao: (capacidade) => versaoRegistrada(database.db, 'meta_ads', capacidade),
+      armazem: this.armazem,
+    });
+    // O teste de criativo (plano da região, R8): os mesmos passos de criação da campanha nova, com as mesmas dependências.
+    testeDeCriativoNaMetaConnector.ligar({
       lerSegredo: (tx, secretId) => this.vault.readSecret(tx, secretId),
       cliente: () => new ClienteConector(database.db, { enderecos: enderecosDasPlataformas(this.config.plataformas), tentativas: 1 }),
       graphUrl: this.config.plataformas.metaGraphUrl,

@@ -23,7 +23,7 @@ export const VARIACAO_MAXIMA_DA_VERBA_PCT = 10;
  */
 export const PLATFORM_POLICY: LoadedPolicy = {
   source: 'platform',
-  version: 15,
+  version: 16,
   document: {
     rules: [
       // Conteúdo político bloqueado por padrão (ADR-007; TSE 23.755/2026, base §6.1).
@@ -116,6 +116,14 @@ export const PLATFORM_POLICY: LoadedPolicy = {
       // Google é a R9): se outra plataforma vier a ter estas ações, ela não herda o automático sem alguém decidir.
       { type: 'autonomy', action: 'orcamento.ritmo_aumentar', provider: 'meta_ads', actor: 'agent', mode: 'AUTO' },
       { type: 'autonomy', action: 'orcamento.ritmo_reduzir', provider: 'meta_ads', actor: 'agent', mode: 'AUTO' },
+      // v16 (plano da região, R8; protótipo dos testes aprovado em 13/11/2026, D-RG-76 a D-RG-80): o teste de criativo só
+      // vale com a aprovação de uma pessoa, com o código do app (criar a campanha de teste e ativar); as ferramentas têm
+      // também a trava `alwaysApproval`. Sem esta regra, as ações novas ficariam em sombra.
+      { type: 'autonomy', action: 'teste.*', mode: 'APPROVAL' },
+      // "Encerrar o teste" pausa a campanha de teste sem o código do app, quando quem pede é uma pessoa, pela tela do
+      // teste (D-RG-80): para de gastar. A ferramenta declara `directByPerson` e só se pede pela rota (`onlyByRoute`); o
+      // funcionário de IA não pede esta ação. Só na Meta.
+      { type: 'autonomy', action: 'teste.pausar', provider: 'meta_ads', actor: 'human', mode: 'AUTO' },
     ],
   },
 };
