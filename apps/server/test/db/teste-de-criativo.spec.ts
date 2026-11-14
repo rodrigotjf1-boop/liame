@@ -348,7 +348,10 @@ describe.skipIf(!hasDb)('o teste de criativo na Meta (plano da região, R8)', ()
     const amanha = new Date(Date.now() + 24 * 3_600_000);
     expect(rodando.started_on).toBe(new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Sao_Paulo', year: 'numeric', month: '2-digit', day: '2-digit' }).format(amanha));
 
-    // Encerrar: sem o código do app. A campanha de teste pausa (os filhos herdam) e o teste fica encerrado.
+    // Encerrar: sem o código do app, e mesmo com a função desligada no meio do teste (pausar só diminui o gasto; D-RG-95).
+    // A campanha de teste pausa (os filhos herdam) e o teste fica encerrado.
+    await ownerQuery(`update liame.feature_flag_rule set value = 'false'::jsonb where flag_key = 'teste_de_criativo' and scope_type = 'tenant' and scope_id = $1`, [e.tenantId]);
+    api.app.get(FlagService).invalidate();
     const fim = await api.call('POST', `/v1/creative-tests/${id}/stop`, { cookie: e.cookie });
     expect(fim.status, JSON.stringify(fim.body)).toBe(201);
     const pausa = (await ownerQuery<{ id: string; status: string; mode: string }>(`select id, status, mode from liame.action_request where tool = 'teste_de_criativo_pausar' and resource_id = $1`, [`teste_de_criativo:${id}`]))[0]!;
@@ -365,6 +368,7 @@ describe.skipIf(!hasDb)('o teste de criativo na Meta (plano da região, R8)', ()
     ]);
     const encerrado = await testeDe(id);
     expect(encerrado).toMatchObject({ status: 'encerrado', active: false, stopped_by: e.userId });
+    await ligarFuncao('teste_de_criativo', e.tenantId);
     expect(encerrado.stopped_at).not.toBeNull();
     // Encerrar de novo devolve como está.
     expect((await api.call('POST', `/v1/creative-tests/${id}/stop`, { cookie: e.cookie })).body.status).toBe('encerrado');

@@ -133,12 +133,12 @@ describe('os objetos do teste na Meta', () => {
 });
 
 describe('as ferramentas e a política do teste de criativo', () => {
-  it('as três ferramentas: a aprovação, a rota, a função e o que cada uma reserva', () => {
+  it('as três ferramentas: a aprovação, a rota, a função (a pausa não depende dela) e o que cada uma reserva', () => {
     const [criar, ativar, pausar] = [TOOLS.teste_de_criativo_criar!, TOOLS.teste_de_criativo_ativar!, TOOLS.teste_de_criativo_pausar!];
     expect([criar, ativar, pausar].map((t) => [t.risk, t.providers, t.flag, t.onlyByRoute ?? false, t.alwaysApproval ?? false, t.directByPerson ?? false, t.undo === undefined])).toEqual([
       ['R2', ['meta_ads'], 'teste_de_criativo', true, true, false, true],
       ['R2', ['meta_ads'], 'teste_de_criativo', true, true, false, true],
-      ['R1', ['meta_ads'], 'teste_de_criativo', true, false, true, true],
+      ['R1', ['meta_ads'], undefined, true, false, true, true],
     ]);
     expect(criar.plan(estado(), {})).toMatchObject({ action: 'teste.criar', budgetImpact: 'none', reserveMicros: 0 });
     const pronto = comCupons(estado({ situacao: 'pronto' }), ['criado', 'criado']);

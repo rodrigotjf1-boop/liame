@@ -262,7 +262,7 @@ export function pausaDoPerdedor(t: Pick<Teste, 'status' | 'active' | 'result' | 
 export function dicaDoEncerrar(t: Pick<Teste, 'status' | 'active'>): string {
   if (t.status === 'terminado') {
     return t.active
-      ? 'O teste já acabou: encerrar não mexe na Meta. Os dois criativos seguem no ar como estão, o que o teste mostrou fica guardado e o aviso da Atenção sai. Para pausar ou mudar a verba, peça em Resultados.'
+      ? 'O teste já acabou: encerrar não mexe na Meta. A campanha de teste continua no ar e gastando com os dois criativos, como está; o que o teste mostrou fica guardado e o aviso da Atenção sai. Para pausar ou mudar a verba, peça em Resultados.'
       : 'O teste já acabou e a campanha de teste está pausada: encerrar não mexe na Meta.';
   }
   return t.active
@@ -296,11 +296,11 @@ export function andamentoDoTeste(t: Pick<Teste, 'status' | 'active' | 'started_o
     }
     case 'terminado':
       return t.active
-        ? 'O teste acabou, e a campanha de teste continua no ar com os dois criativos: o Liame avisa e não muda nada sozinho.'
+        ? 'O teste acabou, e a campanha de teste continua no ar e gastando com os dois criativos: o Liame avisa e não muda nada sozinho.'
         : 'O teste acabou, e a campanha de teste está pausada.';
     case 'encerrado':
       return t.active
-        ? 'O teste foi encerrado sem mudar nada na Meta: a campanha de teste segue no ar com os dois criativos, como uma campanha qualquer (para pausar ou mudar a verba, peça em Resultados). O que o teste mostrou fica guardado.'
+        ? 'O teste foi encerrado sem mudar nada na Meta: a campanha de teste segue no ar e gastando com os dois criativos, como uma campanha qualquer (para pausar ou mudar a verba, peça em Resultados). O que o teste mostrou fica guardado.'
         : 'O teste foi encerrado: o Liame parou de medir, e a campanha de teste está pausada. Os dois criativos continuam aprovados em Criativos, e os números até aqui ficam guardados.';
     case 'interrompido':
       return `${t.reason ?? 'O Liame parou de medir este teste.'} ${t.active ? 'A campanha de teste continua no ar na Meta, e o Liame não mexe nela sozinho: para parar o gasto, encerre o teste.' : 'A campanha de teste ficou pausada.'}`;

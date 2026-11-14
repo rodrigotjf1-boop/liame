@@ -205,7 +205,7 @@ describe('o teste de criativo em Aprovações (R8)', () => {
     expect(rotulosDoEncerrar({ status: 'rodando' })).toEqual({ botao: 'Encerrar o teste', confirmar: 'Encerrar o teste agora' });
     expect(dicaDoEncerrar({ status: 'rodando', active: true })).toContain('pausa a campanha de teste');
     expect(rotulosDoEncerrar({ status: 'terminado' })).toEqual({ botao: 'Encerrar o teste sem mudar nada', confirmar: 'Encerrar sem mudar nada' });
-    expect(dicaDoEncerrar({ status: 'terminado', active: true })).toContain('encerrar não mexe na Meta. Os dois criativos seguem no ar como estão');
+    expect(dicaDoEncerrar({ status: 'terminado', active: true })).toContain('encerrar não mexe na Meta. A campanha de teste continua no ar e gastando com os dois criativos');
     expect(andamentoDoTeste({ ...TESTE, status: 'encerrado', active: true }, '2026-11-30')).toContain('encerrado sem mudar nada na Meta');
     expect(andamentoDoTeste({ ...TESTE, status: 'encerrado', active: false }, '2026-11-30')).toContain('a campanha de teste está pausada');
   });

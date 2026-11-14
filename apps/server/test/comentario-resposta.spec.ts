@@ -162,9 +162,10 @@ describe('as ferramentas, a política e o conector da conta', () => {
     expect(Object.values(TOOLS).filter((t) => t.decisaoJaTomada === 'atendimento_automatico').map((t) => t.name)).toEqual(['comentario_responder_auto', 'direct_responder_auto']);
     for (const t of doComentario) expect(t.providers, t.name).toEqual(['instagram', 'facebook_page']);
     // Só elas, a resposta no Direct (A6, Z12, parte 2), a campanha nova na Meta (A4, X5), o ritmo da semana e o passo dele (plano da
-    // região, R7, parte 1b), o teste de criativo e o cupom dele (R8) e o envio pedido ao RegemCast (Hub DMS F5, parte D) têm flag própria.
+    // região, R7, parte 1b), o teste de criativo (criar e ativar; a pausa não depende da função, D-RG-95) e o cupom dele (R8) e o
+    // envio pedido ao RegemCast (Hub DMS F5, parte D) têm flag própria.
     expect(Object.values(TOOLS).filter((t) => t.flag).map((t) => t.name).sort()).toEqual(
-      [...doComentario.map((t) => t.name), 'direct_responder', 'direct_responder_auto', 'campanha_criar', 'campanha_nova_ativar', 'campanha_nova_pausar', 'ritmo_da_semana', 'orcamento_do_ritmo', 'teste_de_criativo_criar', 'teste_de_criativo_ativar', 'teste_de_criativo_pausar', 'cupom_do_teste', 'campanha_google_criar', 'campanha_google_ativar', 'campanha_google_pausar', 'mensagem_pedir_ao_destino'].sort(),
+      [...doComentario.map((t) => t.name), 'direct_responder', 'direct_responder_auto', 'campanha_criar', 'campanha_nova_ativar', 'campanha_nova_pausar', 'ritmo_da_semana', 'orcamento_do_ritmo', 'teste_de_criativo_criar', 'teste_de_criativo_ativar', 'cupom_do_teste', 'campanha_google_criar', 'campanha_google_ativar', 'campanha_google_pausar', 'mensagem_pedir_ao_destino'].sort(),
     );
     // A sugestão do Social media só o funcionário preenche.
     expect(TOOLS.comentario_responder!.agentParams).toEqual(['sugestoes']);
