@@ -748,6 +748,55 @@ describe.skipIf(!hasDb)('o ritmo da semana: os passos do dia (R7, parte 1b-2)', 
     expect((await lerAvisos()).map((i) => i.kind)).toEqual(['ritmo_campanha_saiu']);
   }, 120_000);
 
+  it('a campanha de um teste de criativo que ainda roda fica fora do ritmo, com o motivo; terminado o teste, ela pode entrar (R8)', async () => {
+    const e = await cenario('Brasa Ritmo E Teste');
+    const normal = await objetoLido(meta, e, 'campanha', { name: 'Combo sexta', daily_budget: '6000' });
+    await ownerQuery(`update liame.campaign set daily_budget_micros = $3 where tenant_id = $1 and external_id = $2`, [e.tenantId, normal.id, 60 * REAL]);
+    // A campanha de teste: a verba mora nos dois conjuntos, a metade para cada criativo (D-RG-92).
+    const [campanhaDoTeste, externa] = [randomUUID(), `9${Date.now()}`];
+    await ownerQuery(`insert into liame.campaign (id, tenant_id, connected_account_id, provider, external_id, name, status) values ($1, $2, $3, 'meta_ads', $4, 'Teste · Combo sexta', 'ativa')`, [
+      campanhaDoTeste,
+      e.tenantId,
+      e.conta,
+      externa,
+    ]);
+    for (const [letra, n] of [['A', 1], ['B', 2]] as const) {
+      await ownerQuery(
+        `insert into liame.ad_group (id, tenant_id, connected_account_id, provider, external_id, name, status, daily_budget_micros, campaign_id) values ($1, $2, $3, 'meta_ads', $4, $5, 'ativa', $6, $7)`,
+        [randomUUID(), e.tenantId, e.conta, `${externa}${n}`, `Criativo ${letra}`, 20 * REAL, campanhaDoTeste],
+      );
+    }
+    const [pagina, teste] = [randomUUID(), randomUUID()];
+    await ownerQuery(`insert into liame.connected_account (id, tenant_id, brand_id, provider, external_id, name, provider_attributes) values ($1, $2, $3, 'facebook_page', $4, 'Página', '{}'::jsonb)`, [
+      pagina,
+      e.tenantId,
+      e.brandId,
+      `10${Date.now()}`,
+    ]);
+    await ownerQuery(
+      `insert into liame.campaign_test (id, tenant_id, brand_id, unit_id, ad_account_id, page_account_id, kind, status, name, daily_budget_micros, min_days, max_days, plan, meta_campaign_id, active, started_on)
+       values ($1, $2, $3, $4, $5, $6, 'criativo', 'rodando', 'Combo sexta: a foto ou a outra', $7, 7, 28, '{}'::jsonb, $8, true, $9::date)`,
+      [teste, e.tenantId, e.brandId, e.loja, e.conta, pagina, 40 * REAL, externa, HOJE],
+    );
+    const previa = async () => {
+      const r = await api.call('GET', `/v1/region/rhythm?brand_id=${e.brandId}&unit_id=${e.loja}`, { cookie: e.cookie });
+      expect(r.status, JSON.stringify(r.body)).toBe(200);
+      return RegionRhythmResponse.parse(r.body);
+    };
+    // Com o teste rodando, os dois conjuntos ficam fora, com o motivo: mudar a verba de um lado estragaria a comparação.
+    const comTeste = await previa();
+    expect(comTeste.campaigns.map((c) => c.name)).toEqual(['Combo sexta']);
+    expect(comTeste.out).toEqual([
+      { name: 'Teste · Combo sexta · Criativo A', reason: 'teste_de_criativo' },
+      { name: 'Teste · Combo sexta · Criativo B', reason: 'teste_de_criativo' },
+    ]);
+    // Terminado o teste, a campanha volta a ser uma campanha como as outras.
+    await ownerQuery(`update liame.campaign_test set status = 'terminado', ended_on = $2::date where id = $1`, [teste, HOJE]);
+    const depois = await previa();
+    expect(depois.campaigns.map((c) => c.name)).toEqual(['Combo sexta', 'Teste · Combo sexta · Criativo A', 'Teste · Combo sexta · Criativo B']);
+    expect(depois.out).toEqual([]);
+  }, 120_000);
+
   it('a semana que continua de outra: a verba de hoje é a de antes do ritmo, e a segunda parte da verba de domingo', async () => {
     const e = await cenario('Brasa Semana Que Continua');
     const a = await objetoLido(meta, e, 'campanha', { name: 'Combo sexta', daily_budget: '7200' });

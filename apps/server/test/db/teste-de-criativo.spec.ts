@@ -22,7 +22,7 @@ import { VaultService } from '../../src/vault/vault.service.js';
 import { ActionExecutor } from '../../src/worker/action-executor.js';
 import { TestesDeCriativoRotina } from '../../src/worker/testes-de-criativo.service.js';
 import { ownerQuery, resetIpRateLimits, startApi, type TestApi } from '../helpers/api.js';
-import { type EmpresaComMeta, empresaComMeta, ligarFlagDaEmpresa, MetaDeMentira, SEGREDO_DO_APP_DA_META } from '../helpers/meta-de-mentira.js';
+import { type EmpresaComMeta, empresaComMeta, ligarConectorNaMetaDeMentira, ligarFlagDaEmpresa, MetaDeMentira, SEGREDO_DO_APP_DA_META } from '../helpers/meta-de-mentira.js';
 import { fotoGuardada, lojaComCardapio } from '../helpers/posts-semeados.js';
 import { hasDb } from './env.js';
 
@@ -40,7 +40,9 @@ import { hasDb } from './env.js';
 //     o teste é interrompido;
 //   - a Atenção (D-RG-80 e D-RG-94): o aviso do criativo que venceu, com o caminho para o teste em Aprovações, que sai
 //     quando o conjunto do que perdeu aparece pausado e quando o teste é encerrado, e NÃO sai pelo prazo (a campanha de
-//     teste segue gastando); e o aviso do teste interrompido, com o motivo, que também fica enquanto ela está no ar.
+//     teste segue gastando); e o aviso do teste interrompido, com o motivo, que também fica enquanto ela está no ar;
+//   - pausar o criativo que perdeu (D-RG-80): o pedido de sempre (`conjunto_pausar`) para o conjunto dele, na conta do
+//     teste; recusado sem vencedor, com a campanha de teste pausada e quando já há um pedido igual em aberto.
 
 const CARDAPIO = 'https://cardapio.exemplo.com.br/mister-centro';
 const OFERTA = 'Combo sexta: smash, batata e refri por R$ 34,90';
@@ -85,6 +87,8 @@ describe.skipIf(!hasDb)('o teste de criativo na Meta (plano da região, R8)', ()
     executor = new ActionExecutor(database, api.app.get(BudgetService), api.app.get(KillSwitchService), api.app.get(FlagService));
     armazem = api.app.get(ARMAZEM_DE_IMAGENS);
     const vault = api.app.get(VaultService);
+    // O conector de anúncios de sempre: o pedido de pausar o criativo que perdeu (`conjunto_pausar`) lê o conjunto na Meta.
+    ligarConectorNaMetaDeMentira(api, meta);
     testeDeCriativoNaMetaConnector.ligar({
       lerSegredo: (tx, id) => vault.readSecret(tx, id),
       cliente: () => new ClienteConector(database.db, { enderecos: { meta_ads: [`${meta.base}/graph`] }, tentativas: 1, balde: { capacidade: 10_000, porSegundo: 1_000 } }),
@@ -530,15 +534,34 @@ describe.skipIf(!hasDb)('o teste de criativo na Meta (plano da região, R8)', ()
     expect(await avisos()).toEqual([]);
     await conjuntoDoB('ativa');
     expect((await avisos()).map((i) => i.kind)).toEqual(['teste_com_vencedor']);
+    // "Pedir: pausar o criativo que perdeu" (D-RG-80): o pedido de sempre (`conjunto_pausar`) para o conjunto do B, na
+    // conta de anúncios do teste; a resposta do teste traz o pedido. O pedido igual em aberto é recusado pelo trilho.
+    const pausa = await api.call('POST', `/v1/creative-tests/${id}/pause-loser`, { cookie: e.cookie });
+    expect(pausa.status, JSON.stringify(pausa.body)).toBe(201);
+    const pedidosDaPausa = await ownerQuery<{ id: string; status: string; account_id: string }>(
+      `select id, status, account_id from liame.action_request where tenant_id = $1 and tool = 'conjunto_pausar' and resource_id = $2`,
+      [e.tenantId, `conjunto:${bracoB.meta_adset_id}`],
+    );
+    expect(pedidosDaPausa).toHaveLength(1);
+    expect(pedidosDaPausa[0]!.account_id).toBe(e.conta);
+    expect(pausa.body.loser_pause).toEqual({ action_id: pedidosDaPausa[0]!.id, status: pedidosDaPausa[0]!.status });
+    expect(((await ler()) as { loser_pause: unknown }).loser_pause).toEqual(pausa.body.loser_pause);
+    const deNovo = await api.call('POST', `/v1/creative-tests/${id}/pause-loser`, { cookie: e.cookie });
+    expect(deNovo.status, JSON.stringify(deNovo.body)).toBe(409);
     // Vinte dias depois do fim, o aviso continua: o prazo de 14 dias não cala o aviso de uma campanha que segue gastando.
     await ownerQuery(`update liame.campaign_test set started_on = started_on - 20, ended_on = ended_on - 20 where id = $1`, [id]);
     expect((await avisos()).map((i) => i.kind)).toEqual(['teste_com_vencedor']);
-    // Quem tira o aviso é a pessoa: "Encerrar o teste" pausa a campanha de teste (sem o código do app), e o aviso sai.
+    // Quem tira o aviso é a pessoa: depois do fim, "Encerrar o teste" não mexe na Meta (D-RG-95, "sem mudar nada"): o
+    // teste fica encerrado, a campanha de teste segue no ar como está, o resultado fica guardado, e o aviso sai.
+    const pausasAntes = (await ownerQuery(`select 1 from liame.action_request where tenant_id = $1 and tool = 'teste_de_criativo_pausar'`, [e.tenantId])).length;
     const encerrar = await api.call('POST', `/v1/creative-tests/${id}/stop`, { cookie: e.cookie });
     expect(encerrar.status, JSON.stringify(encerrar.body)).toBe(201);
-    await executar(e);
-    expect(await testeDe(id)).toMatchObject({ status: 'terminado', active: false });
+    expect(encerrar.body).toMatchObject({ status: 'encerrado', active: true, ended_on: menos(22), result: { verdict: 'venceu', winner: 'A' } });
+    expect((await ownerQuery(`select 1 from liame.action_request where tenant_id = $1 and tool = 'teste_de_criativo_pausar'`, [e.tenantId])).length).toBe(pausasAntes);
     expect(await avisos()).toEqual([]);
+    // Encerrado, o teste não pede mais a pausa do criativo que perdeu: a campanha é como as outras, e se pede em Resultados.
+    const encerrado = await api.call('POST', `/v1/creative-tests/${id}/pause-loser`, { cookie: e.cookie });
+    expect([encerrado.status, encerrado.body.code]).toEqual([409, 'teste-encerrado']);
   }, 180_000);
 
   it('o teste mexido por fora: um conjunto pausado na Meta, lido depois do começo, interrompe o teste com o motivo', async () => {
@@ -575,6 +598,9 @@ describe.skipIf(!hasDb)('o teste de criativo na Meta (plano da região, R8)', ()
     expect(t.status).toBe('interrompido');
     expect(t.reason).toContain('A verba do conjunto do criativo B foi mudada fora do Liame.');
     expect(await volta()).toEqual([]);
+    // Sem vencedor, não há criativo que perdeu: o pedido de pausar é recusado.
+    const semVencedor = await api.call('POST', `/v1/creative-tests/${id}/pause-loser`, { cookie: e.cookie });
+    expect([semVencedor.status, semVencedor.body.code]).toEqual([409, 'teste-sem-vencedor']);
     // A Atenção avisa que o teste foi interrompido, com o motivo. A campanha de teste segue no ar: o Liame não mexe sozinho.
     const lido = await api.call('GET', `/v1/results/attention?brand_id=${e.brandId}`, { cookie: e.cookie });
     expect(lido.status, JSON.stringify(lido.body)).toBe(200);

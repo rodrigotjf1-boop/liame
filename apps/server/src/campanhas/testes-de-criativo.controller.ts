@@ -72,7 +72,7 @@ export class TestesDeCriativoController {
   @ApiOperation({
     summary: 'Encerrar o teste',
     description:
-      'Encerra o teste antes da hora: o Liame para de medir. Com a campanha de teste no ar, ela é pausada na Meta (a ferramenta `teste_de_criativo_pausar`): para de gastar, e por isso não pede o código do app. Com o teste pronto e ainda não ativado, só o teste é marcado como encerrado, e nada muda na Meta. Os dois cupons continuam valendo até a validade deles. O teste já encerrado ou cancelado devolve como está.',
+      'Encerra o teste: o Liame para de medir e de avisar. Antes da hora, com a campanha de teste no ar (o teste rodando ou interrompido), ela é pausada na Meta (a ferramenta `teste_de_criativo_pausar`): para de gastar, e por isso não pede o código do app. O teste pronto e ainda não ativado só é marcado como encerrado. O teste que já terminou é encerrado sem mudar nada na Meta: os dois criativos seguem como estão, e o que o teste mostrou fica guardado. Os dois cupons continuam valendo até a validade deles. O teste já encerrado ou cancelado devolve como está.',
   })
   @ApiCreatedResponse({ standardSchema: CreativeTestResponse })
   @ApiBadRequestResponse({ standardSchema: ProblemDetails })
@@ -82,6 +82,25 @@ export class TestesDeCriativoController {
   @ApiUnprocessableEntityResponse({ standardSchema: ProblemDetails })
   encerrar(@Auth() auth: AuthContext, @Param('id', { schema: ResourceId }) id: string): Promise<CreativeTestResponse> {
     return this.testes.encerrar(auth, id);
+  }
+
+  @Post(':id/pause-loser')
+  @HttpCode(201)
+  @Permissao('campanhas.operar')
+  @Auditar('teste_de_criativo.pausar_o_que_perdeu', { recurso: 'campaign_test' })
+  @ApiOperation({
+    summary: 'Pedir para pausar o criativo que perdeu',
+    description:
+      'No teste que terminou com um vencedor, com a campanha de teste no ar: pede para pausar o conjunto do criativo que perdeu (a ferramenta `conjunto_pausar`), pelo trilho de sempre; a política da empresa diz se o pedido espera em Aprovações. O Liame não pausa sozinho, e o vencedor segue com a verba dele. O teste sem vencedor ou com a campanha de teste já pausada é recusado (409); o pedido igual em aberto também.',
+  })
+  @ApiCreatedResponse({ standardSchema: CreativeTestResponse })
+  @ApiBadRequestResponse({ standardSchema: ProblemDetails })
+  @ApiForbiddenResponse({ standardSchema: ProblemDetails })
+  @ApiNotFoundResponse({ standardSchema: ProblemDetails })
+  @ApiConflictResponse({ standardSchema: ProblemDetails })
+  @ApiUnprocessableEntityResponse({ standardSchema: ProblemDetails })
+  pausarOQuePerdeu(@Auth() auth: AuthContext, @Param('id', { schema: ResourceId }) id: string): Promise<CreativeTestResponse> {
+    return this.testes.pausarOQuePerdeu(auth, id);
   }
 
   @Get()

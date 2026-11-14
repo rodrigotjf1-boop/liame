@@ -478,6 +478,7 @@ const FORA: Record<string, string> = {
   fracao_de_centavo: 'a verba tem fração de centavo',
   acima_do_teto: 'já está acima do teto por campanha',
   fora_dos_limites: 'não coube nos limites do ritmo',
+  teste_de_criativo: 'está num teste de criativo: mudar a verba de um lado estragaria a comparação',
 };
 
 /** Os limites que valem para o ritmo, na ordem do protótipo (sem o horário, que é a parte seguinte). */
