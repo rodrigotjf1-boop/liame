@@ -1,4 +1,3 @@
-import { createHmac } from 'node:crypto';
 import type { Tx } from '@liame/database';
 import { Logger } from '@nestjs/common';
 import { sql } from 'drizzle-orm';
@@ -6,7 +5,6 @@ import {
   campanhaNovaDoRecurso,
   EstadoDaCampanhaNova,
   type MidiaNaMeta,
-  type ParametrosDaMeta,
   parametrosDaCampanha,
   parametrosDoAnuncio,
   parametrosDoConjunto,
@@ -14,13 +12,22 @@ import {
   type ObjetivoDaCampanhaNova,
 } from '../campanhas/campanha-nova-plano.js';
 import { contaConectada } from '../connections/conectada.js';
-import type { CredencialGuardada } from '../connections/oauth.js';
-import { type ClienteConector, ErroConector } from '../connectors/cliente-http.js';
-import { VIDEO_EM_PREPARO } from '../connectors/meta/publicacao.js';
-import { chaveDaMiniatura } from '../fotos/conferencia.js';
-import type { ArmazemDeImagens } from '../imagens/armazem.js';
+import { ErroConector } from '../connectors/cliente-http.js';
 import type { ApplyOptions, ApplyResult, Connector, ReadResult, ResourceRef } from './connectors.js';
 import { recusaDaMeta } from './meta-anuncios.js';
+import {
+  APAGADA_NA_META,
+  CriacaoRecusada,
+  criarNaMeta,
+  type DependenciasDaCriacaoNaMeta,
+  enderecoDaMeta,
+  type GrafoDaMeta,
+  MIDIA_SAIU,
+  midiaNaMeta,
+  mudarSituacaoNaMeta,
+  SEM_ACESSO,
+  tokenDaConta,
+} from './meta-criacao.js';
 import type { ResourceState } from './tools.js';
 
 // A campanha nova na Meta, criada pausada (A4, X5, parte 1; D-A4-31, D-A4-35, D-A4-40 e D-A4-41; base de conhecimento
@@ -38,22 +45,18 @@ import type { ResourceState } from './tools.js';
 
 const PROVIDER = 'meta_ads';
 
-/** Quanto o endereço assinado da mídia vale para a Meta buscar (a validação e a criação buscam de novo). */
-const VALIDADE_DA_MIDIA_S = 60 * 60;
-/** Quanto a Meta pode levar preparando o vídeo antes de a criação desistir. */
-const PREPARO_DO_VIDEO_MS = 15 * 60_000;
-/** A espera entre as conferências do vídeo (a Meta recomenda conferir uma vez por minuto). */
-const ESPERA_DO_VIDEO_MS = 60_000;
+/** O que o conector precisa do resto do app; ligado na subida (API e worker). São as dependências dos passos comuns. */
+export type DependenciasDaCampanhaNova = DependenciasDaCriacaoNaMeta;
 
-/** O que o conector precisa do resto do app; ligado na subida (API e worker). */
-export type DependenciasDaCampanhaNova = {
-  lerSegredo: (tx: Tx, secretId: string) => Promise<string | null>;
-  cliente: () => ClienteConector;
-  graphUrl: string;
-  appSecret: string | null;
-  versao: (capacidade: 'anuncio_criar' | 'anuncio_video' | 'entity_state' | 'entity_update') => Promise<string>;
-  armazem: Pick<ArmazemDeImagens, 'enderecoDeLeitura'>;
-};
+/** Os passos da criação que levam chave de idempotência (o vídeo não leva: o id dele fica guardado na linha). */
+export type PassoDaCampanhaNova = 'campanha' | 'conjunto' | 'criativo' | 'anuncio';
+
+/**
+ * A chave de idempotência de um passo da criação (`X-Client-Idempotent-Key`): a campanha nova e o passo. NÃO mude o
+ * formato: a criação que estiver no meio quando um deploy entrar repete o passo com a mesma chave, e com outra a Meta
+ * criaria o objeto de novo.
+ */
+export const chaveDoPassoDaCampanhaNova = (campanhaNova: string, passo: PassoDaCampanhaNova): string => `${campanhaNova}:${passo}`;
 
 type Linha = {
   id: string;
@@ -75,17 +78,11 @@ type Linha = {
 
 const recusado = (mensagem: string): ApplyResult => ({ ok: false, reason: 'recusado', mensagem });
 
-/** O id que a Meta devolve: só algarismos, conferidos um a um (sem expressão regular sobre o que vem de fora, V48). */
-const idDaMeta = (v: unknown): string | null =>
-  typeof v === 'string' && v.length > 0 && v.length <= 32 && [...v].every((c) => c >= '0' && c <= '9') ? v : null;
 const FORA_DO_AMBIENTE = 'A criação de campanha na Meta não está disponível neste ambiente.';
 const SUMIU = 'Esta campanha nova não está mais aqui (a peça, a mídia ou a conta saiu da marca).';
-const SEM_ACESSO = 'A Meta recusou o acesso desta conta (a autorização foi revogada ou venceu). Conecte a Meta de novo em Contas conectadas.';
-const MIDIA_SAIU = 'A foto ou o vídeo desta campanha saiu de Fotos: a campanha não foi criada. Peça de novo com outra mídia.';
 const VIDEO_SEM_PREPARO = 'A Meta não terminou de preparar o vídeo em 15 minutos: a campanha não foi criada. Peça de novo; se repetir, use outro vídeo.';
 const VIDEO_RECUSADO = 'A Meta não aceitou o vídeo: a campanha não foi criada. Use outro vídeo de Fotos.';
 const FICOU_PAUSADO = 'O que já foi criado na Meta ficou pausado: nada aparece para ninguém nem gasta.';
-const APAGADA_NA_META = 'A campanha foi apagada ou arquivada no Gerenciador de Anúncios: nada foi mudado.';
 const REELS_SAIU = 'O Reels desta campanha saiu do Instagram da marca (ou da leitura do Liame): a campanha não foi criada.';
 const REELS_NAO_PODE =
   'A Meta não deixa este Reels virar anúncio (por exemplo, com música do Instagram ou um filtro interativo): a campanha não foi criada, e nada foi criado na Meta. Use um vídeo de Fotos.';
@@ -233,24 +230,24 @@ export class CampanhaNovaNaMetaConnector implements Connector {
     if (!linha.midia_viva) return this.naoCriou(tx, linha, doReels ? REELS_SAIU : MIDIA_SAIU);
 
     await tx.execute(sql`update liame.ad_campaign_new set status = 'criando', updated_at = now() where id = ${linha.id}`);
-    const g = { deps, conta: linha.conta_externa, token: await this.token(tx, linha, deps), versao: await deps.versao('anuncio_criar') };
-    const chave = (passo: string) => `${linha.id}:${passo}`;
+    const g = { deps, conta: linha.conta_externa, token: await tokenDaConta(tx, linha.credential_secret_id, deps), versao: await deps.versao('anuncio_criar') };
+    const chave = (passo: PassoDaCampanhaNova) => chaveDoPassoDaCampanhaNova(linha.id, passo);
     const guardar = (coluna: 'meta_campaign_id' | 'meta_adset_id' | 'meta_video_id' | 'meta_creative_id' | 'meta_ad_id', valor: string) =>
       tx.execute(sql`update liame.ad_campaign_new set ${sql.raw(coluna)} = ${valor}, updated_at = now() where id = ${linha.id}`);
     try {
       // O Reels (D-A4-46): antes de criar qualquer coisa, a pergunta à Meta se o post pode virar anúncio (o campo
       // `boost_eligibility_info` do post; a música do Instagram e os filtros interativos não podem). Recusado, nada é criado.
       if (doReels && !linha.meta_campaign_id && (await this.reelsPodeVirarAnuncio(g, estado.midia.id)) === false) return this.naoCriou(tx, linha, REELS_NAO_PODE);
-      const campanha = linha.meta_campaign_id ?? (await this.criar(g, 'campaigns', parametrosDaCampanha(estado), chave('campanha')));
+      const campanha = linha.meta_campaign_id ?? (await criarNaMeta(g, 'campaigns', parametrosDaCampanha(estado), chave('campanha')));
       if (!linha.meta_campaign_id) await guardar('meta_campaign_id', campanha);
-      const conjunto = linha.meta_adset_id ?? (await this.criar(g, 'adsets', parametrosDoConjunto(estado, campanha), chave('conjunto')));
+      const conjunto = linha.meta_adset_id ?? (await criarNaMeta(g, 'adsets', parametrosDoConjunto(estado, campanha), chave('conjunto')));
       if (!linha.meta_adset_id) await guardar('meta_adset_id', conjunto);
       const midia = await this.midia(tx, g, linha, estado, guardar);
       if (midia === 'recusado') return this.naoCriou(tx, linha, `${VIDEO_RECUSADO} ${FICOU_PAUSADO}`);
       if (midia === 'sem_preparo') return this.naoCriou(tx, linha, `${VIDEO_SEM_PREPARO} ${FICOU_PAUSADO}`);
-      const criativo = linha.meta_creative_id ?? (await this.criar(g, 'adcreatives', parametrosDoCriativo(estado, midia), chave('criativo')));
+      const criativo = linha.meta_creative_id ?? (await criarNaMeta(g, 'adcreatives', parametrosDoCriativo(estado, midia), chave('criativo')));
       if (!linha.meta_creative_id) await guardar('meta_creative_id', criativo);
-      const anuncio = linha.meta_ad_id ?? (await this.criar(g, 'ads', parametrosDoAnuncio(estado, conjunto, criativo), chave('anuncio')));
+      const anuncio = linha.meta_ad_id ?? (await criarNaMeta(g, 'ads', parametrosDoAnuncio(estado, conjunto, criativo), chave('anuncio')));
       if (!linha.meta_ad_id) await guardar('meta_ad_id', anuncio);
       await tx.execute(sql`update liame.ad_campaign_new set status = 'criada', error = null, video_waiting_since = null, updated_at = now() where id = ${linha.id}`);
       return { ok: true, state: { ...estado, situacao: 'criada', meta: { campanha, conjunto, criativo, anuncio } } as unknown as ResourceState, version: linha.version };
@@ -273,44 +270,11 @@ export class CampanhaNovaNaMetaConnector implements Connector {
   private async mudarSituacao(tx: Tx, linha: Linha, estado: EstadoDaCampanhaNova, ativar: boolean, deps: DependenciasDaCampanhaNova): Promise<ApplyResult> {
     const ids = ativar ? [linha.meta_ad_id, linha.meta_adset_id, linha.meta_campaign_id] : [linha.meta_campaign_id];
     if (ids.some((id) => !id)) return recusado('O Liame não guardou os objetos desta campanha na Meta: confira no Gerenciador de Anúncios.');
-    const token = await this.token(tx, linha, deps);
-    const g: Grafo = { deps, conta: linha.conta_externa, token, versao: await deps.versao('entity_update') };
+    const token = await tokenDaConta(tx, linha.credential_secret_id, deps);
+    const g: GrafoDaMeta = { deps, conta: linha.conta_externa, token, versao: await deps.versao('entity_update') };
     const leitura = await deps.versao('entity_state');
-    const alvo = ativar ? 'ACTIVE' : 'PAUSED';
-    try {
-      for (const id of ids as string[]) {
-        const r = await deps.cliente().requisitar<{ id?: unknown; status?: unknown; account_id?: unknown } | null>({
-          provider: PROVIDER,
-          conta: g.conta,
-          url: this.endereco(g, leitura, id, { fields: 'id,status,account_id' }),
-          endpoint: 'entity_state',
-          apiVersion: leitura,
-          cabecalhos: { authorization: `Bearer ${token}` },
-        });
-        const s = r.corpo?.status;
-        if (`act_${String(r.corpo?.account_id ?? '')}` !== g.conta || s === 'DELETED' || s === 'ARCHIVED') return recusado(APAGADA_NA_META);
-      }
-      for (const passo of ['validar', 'mudar'] as const) {
-        for (const id of ids as string[]) {
-          const r = await deps.cliente().requisitar<{ success?: unknown } | null>({
-            provider: PROVIDER,
-            conta: g.conta,
-            url: this.endereco(g, g.versao, id, passo === 'validar' ? { status: alvo, execution_options: JSON.stringify(['validate_only']) } : { status: alvo }),
-            metodo: 'POST',
-            endpoint: 'entity_update',
-            apiVersion: g.versao,
-            cabecalhos: { authorization: `Bearer ${token}` },
-            custo: 3,
-          });
-          if (r.corpo?.success !== true) return recusado('A Meta não confirmou a mudança. Confira a campanha no Gerenciador de Anúncios antes de pedir de novo.');
-        }
-      }
-    } catch (err) {
-      if (err instanceof ErroConector && err.tipo === 'definitivo' && err.codigoProvider === '100' && err.subcodigo === '33') return recusado(APAGADA_NA_META);
-      const motivo = err instanceof ErroConector && err.tipo === 'autenticacao' ? SEM_ACESSO : recusaDaMeta(err);
-      if (!motivo) throw err;
-      return recusado(motivo);
-    }
+    const recusa = await mudarSituacaoNaMeta(g, leitura, ids as string[], ativar);
+    if (recusa) return recusado(recusa);
     await tx.execute(sql`
       update liame.ad_campaign_new
          set active = ${ativar}, activated_at = case when ${ativar} then now() else activated_at end, version = version + 1, updated_at = now()
@@ -325,101 +289,23 @@ export class CampanhaNovaNaMetaConnector implements Connector {
     return recusado(motivo);
   }
 
-  private async token(tx: Tx, linha: Linha, deps: DependenciasDaCampanhaNova): Promise<string> {
-    const guardada = linha.credential_secret_id ? await deps.lerSegredo(tx, linha.credential_secret_id) : null;
-    const credencial = guardada ? (JSON.parse(guardada) as CredencialGuardada) : null;
-    if (!credencial || credencial.tipo !== 'meta') throw new ErroConector('autenticacao', PROVIDER, 'autorização revogada ou ausente');
-    return credencial.access_token;
-  }
-
-  private endereco(g: Grafo, versao: string, caminho: string, params: Record<string, string>): string {
-    const query = new URLSearchParams(params);
-    if (g.deps.appSecret) query.set('appsecret_proof', createHmac('sha256', g.deps.appSecret).update(g.token).digest('hex'));
-    return `${g.deps.graphUrl}/${versao}/${caminho}?${query.toString()}`;
-  }
-
   /**
-   * Um objeto novo na conta: primeiro a validação da Meta (que não cria nada), depois a criação com a chave de
-   * idempotência do passo. Devolve o id do objeto.
-   */
-  private async criar(g: Grafo, aresta: 'campaigns' | 'adsets' | 'adcreatives' | 'ads', params: ParametrosDaMeta, chave: string): Promise<string> {
-    const caminho = `${g.conta}/${aresta}`;
-    const validacao = await g.deps.cliente().requisitar<{ success?: unknown } | null>({
-      provider: PROVIDER,
-      conta: g.conta,
-      url: this.endereco(g, g.versao, caminho, { ...params, execution_options: JSON.stringify(['validate_only']) }),
-      metodo: 'POST',
-      endpoint: 'anuncio_criar',
-      apiVersion: g.versao,
-      cabecalhos: { authorization: `Bearer ${g.token}` },
-      custo: 3,
-    });
-    if (validacao.corpo?.success !== true) throw new CriacaoRecusada('A Meta não confirmou a conferência da campanha nova: nada mais foi criado.');
-    const r = await g.deps.cliente().requisitar<{ id?: unknown } | null>({
-      provider: PROVIDER,
-      conta: g.conta,
-      url: this.endereco(g, g.versao, caminho, params),
-      metodo: 'POST',
-      endpoint: 'anuncio_criar',
-      apiVersion: g.versao,
-      cabecalhos: { authorization: `Bearer ${g.token}`, 'x-client-idempotent-key': chave },
-      custo: 3,
-    });
-    const id = idDaMeta(r.corpo?.id);
-    if (!id) throw new CriacaoRecusada('A Meta não devolveu o objeto criado: confira a conta de anúncios antes de pedir de novo.');
-    return id;
-  }
-
-  /**
-   * A mídia do criativo: a foto pelo endereço assinado; o vídeo enviado pelo `file_url` (uma vez só, guardado), pronto
-   * quando a Meta termina de preparar, com a capa guardada pelo endereço assinado.
+   * A mídia do criativo: o Reels é o próprio post (D-A4-46); a foto e o vídeo de Fotos vão pelos passos comuns da
+   * criação na Meta (`midiaNaMeta`). O que é desta tabela fica aqui: o id do vídeo enviado e desde quando a Meta o prepara.
    */
   private async midia(
     tx: Tx,
-    g: Grafo,
+    g: GrafoDaMeta,
     linha: Linha,
     estado: EstadoDaCampanhaNova,
     guardar: (coluna: 'meta_video_id', valor: string) => Promise<unknown>,
   ): Promise<MidiaNaMeta | 'recusado' | 'sem_preparo'> {
     // O Reels é o próprio post: nada a enviar (D-A4-46).
     if (estado.midia.tipo === 'reels') return { tipo: 'reels', id: estado.midia.id };
-    const chaveDaMidia = linha.midia_chave;
-    if (!chaveDaMidia) throw new CriacaoRecusada(MIDIA_SAIU);
-    if (estado.midia.tipo === 'foto') return { tipo: 'foto', imagem: await g.deps.armazem.enderecoDeLeitura(chaveDaMidia, VALIDADE_DA_MIDIA_S) };
-    const versao = await g.deps.versao('anuncio_video');
-    let video = linha.meta_video_id;
-    if (!video) {
-      const r = await g.deps.cliente().requisitar<{ id?: unknown } | null>({
-        provider: PROVIDER,
-        conta: g.conta,
-        url: this.endereco(g, versao, `${g.conta}/advideos`, { file_url: await g.deps.armazem.enderecoDeLeitura(chaveDaMidia, VALIDADE_DA_MIDIA_S), name: estado.nome }),
-        metodo: 'POST',
-        endpoint: 'anuncio_video',
-        apiVersion: versao,
-        cabecalhos: { authorization: `Bearer ${g.token}` },
-        custo: 3,
-      });
-      video = idDaMeta(r.corpo?.id);
-      if (!video) throw new CriacaoRecusada('A Meta não devolveu o vídeo enviado: a campanha não foi criada.');
+    return midiaNaMeta(g, { tipo: estado.midia.tipo, chave: linha.midia_chave, nome: estado.nome, video: linha.meta_video_id, esperandoMs: linha.video_esperando_ms }, async (video) => {
       await guardar('meta_video_id', video);
       await tx.execute(sql`update liame.ad_campaign_new set video_waiting_since = coalesce(video_waiting_since, now()) where id = ${linha.id}`);
-    }
-    const situacao = await g.deps.cliente().requisitar<{ status?: { video_status?: unknown } } | null>({
-      provider: PROVIDER,
-      conta: g.conta,
-      url: this.endereco(g, versao, video, { fields: 'status' }),
-      endpoint: 'anuncio_video',
-      apiVersion: versao,
-      cabecalhos: { authorization: `Bearer ${g.token}` },
     });
-    const s = situacao.corpo?.status?.video_status;
-    if (s === 'error' || s === 'expired') return 'recusado';
-    if (s !== 'ready') {
-      if ((linha.video_esperando_ms ?? 0) >= PREPARO_DO_VIDEO_MS) return 'sem_preparo';
-      // A espera fixa do vídeo (como no post): não conta tentativa; quem encerra são os 15 minutos acima.
-      throw new ErroConector('limite', PROVIDER, 'a Meta ainda prepara o vídeo da campanha nova', null, ESPERA_DO_VIDEO_MS, VIDEO_EM_PREPARO);
-    }
-    return { tipo: 'video', videoId: video, capa: await g.deps.armazem.enderecoDeLeitura(chaveDaMiniatura(chaveDaMidia), VALIDADE_DA_MIDIA_S) };
   }
 
   /**
@@ -428,13 +314,13 @@ export class CampanhaNovaNaMetaConnector implements Connector {
    * permissão que falta no post, o campo que não veio), segue: a recusa do criativo, se vier, diz o porquê. O que é
    * passageiro e o acesso revogado sobem, como nos outros passos.
    */
-  private async reelsPodeVirarAnuncio(g: Grafo, midia: string): Promise<boolean | null> {
+  private async reelsPodeVirarAnuncio(g: GrafoDaMeta, midia: string): Promise<boolean | null> {
     const versao = await g.deps.versao('entity_state');
     try {
       const r = await g.deps.cliente().requisitar<{ boost_eligibility_info?: { eligible_to_boost?: unknown } } | null>({
         provider: PROVIDER,
         conta: g.conta,
-        url: this.endereco(g, versao, midia, { fields: 'boost_eligibility_info' }),
+        url: enderecoDaMeta(g, versao, midia, { fields: 'boost_eligibility_info' }),
         endpoint: 'reels_elegivel',
         apiVersion: versao,
         cabecalhos: { authorization: `Bearer ${g.token}` },
@@ -448,10 +334,5 @@ export class CampanhaNovaNaMetaConnector implements Connector {
     }
   }
 }
-
-type Grafo = { deps: DependenciasDaCampanhaNova; conta: string; token: string; versao: string };
-
-/** A recusa que encerra a criação, com a frase para a pessoa. */
-class CriacaoRecusada extends Error {}
 
 export const campanhaNovaNaMetaConnector = new CampanhaNovaNaMetaConnector();
