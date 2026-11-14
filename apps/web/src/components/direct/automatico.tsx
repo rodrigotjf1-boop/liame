@@ -241,11 +241,12 @@ export function GavetaDoAutomaticoDoDirect({ r, reserva, aoSalvar, aoFechar, con
                 </label>
               );
             })}
-            {nota('info', 'As perguntas que ele sabe responder com certeza entram quando o Social media escrever as respostas do Direct.')}
+            {nota('info', 'Na pergunta, ele só responde quando o Social media tem certeza pelo que está em Minha marca, e a conferência passa sem aviso.')}
           </fieldset>
           <section className="com-auto-bloco" aria-labelledby={`${ids}-espera`}>
             <h3 id={`${ids}-espera`}>O que sempre espera você</h3>
-            {nota('message', 'Vão para você com o passo a passo.', 'Reclamações e perguntas.')}
+            {nota('message', 'Vão para você com o passo a passo e as sugestões.', 'Reclamações.')}
+            {nota('info', 'Vai para você com uma sugestão, como a que fala de brinde, reembolso ou saúde.', 'A pergunta que ele não sabe responder com certeza.')}
             {nota('user-plus', 'Quem escreve que quer falar com alguém da equipe.', 'Quem pede uma pessoa.')}
             {nota('alert', 'O Liame nunca responde golpe.', 'Golpe ou ofensa.')}
           </section>
@@ -258,6 +259,7 @@ export function GavetaDoAutomaticoDoDirect({ r, reserva, aoSalvar, aoFechar, con
           </section>
           <details className="com-auto-previa" id="dir-auto-previa" open={!r.enabled}>
             <summary>Veja como ele teria respondido</summary>
+            <p className="campo-dica">As perguntas ficam fora da prévia: o Social media decide cada uma quando ela chega.</p>
             {previa === 'carregando' ? (
               <p className="campo-dica" aria-busy="true">
                 Montando a prévia…

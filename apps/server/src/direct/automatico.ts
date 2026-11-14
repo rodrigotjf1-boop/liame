@@ -9,11 +9,13 @@ import { sugestaoNoDirect, type TipoNoDirect, tipoNoDirect } from './tipo-no-dir
 
 // O atendimento automático do Direct (A6, Z12, parte 5a; P39 versão 2; D-A6-115 e D-A6-119; migration 0133). Com ele
 // ligado numa marca (pelo Dono ou por um Administrador, com o código do app), o Liame responde sozinho, sem uma pessoa
-// ver antes, as conversas dos tipos marcados: nesta parte, a resposta pronta (o elogio, a resposta ao story e a menção no
-// story), sem IA. Toda resposta automática termina com o aviso e o caminho para uma pessoa (Termos 5.5 e 6.3). Sempre
-// esperam uma pessoa: a reclamação, o golpe, a ofensa, a pergunta (até a parte 4b), quem pede uma pessoa e a terceira
-// automática seguida na mesma conversa. Aqui ficam as regras e o portão, que o Action Service confere ao criar o pedido e
-// o executor confere de novo antes de mandar: desligar segura na hora até o que já estava na fila.
+// ver antes, as conversas dos tipos marcados: a resposta pronta (o elogio, a resposta ao story e a menção no story), sem
+// IA, e, desde a parte 5c (D-A6-148), a pergunta que o Social media sabe responder com certeza (o texto é dele; a rotina
+// confere a certeza: `worker/direct-automatico.ts`). Toda resposta automática termina com o aviso e o caminho para uma
+// pessoa (Termos 5.5 e 6.3). Sempre esperam uma pessoa: a reclamação, o golpe, a ofensa, a pergunta sem certeza, a que
+// fala de compensação ou de saúde, quem pede uma pessoa e a terceira automática seguida na mesma conversa. Aqui ficam as
+// regras e o portão, que o Action Service confere ao criar o pedido e o executor confere de novo antes de mandar:
+// desligar (ou tirar o tipo) segura na hora até o que já estava na fila.
 
 /** A função do atendimento automático do Direct (migration 0133): nasce desligada. */
 export const FLAG_DO_DIRECT_AUTOMATICO = 'direct_automatico';
@@ -36,9 +38,10 @@ export function ehAutomatica(texto: string): boolean {
   return texto.trimEnd().endsWith(DIRECT_AUTO_REPLY_NOTICE.trim());
 }
 
-/** O tipo do automático para o tipo da conversa: `pronta` no elogio e na menção; nulo nos outros. */
+/** O tipo do automático para o tipo da conversa: `pronta` no elogio e na menção; `pergunta` na pergunta; nulo nos outros. */
 export function tipoDoAutomatico(tipo: TipoNoDirect | null): (typeof TIPOS_DO_DIRECT_AUTOMATICO)[number] | null {
-  return tipo === 'elogio' || tipo === 'mencao' ? 'pronta' : null;
+  if (tipo === 'elogio' || tipo === 'mencao') return 'pronta';
+  return tipo === 'pergunta' ? 'pergunta' : null;
 }
 
 /** Minúsculas e sem acento (as marcas de acento saem depois da decomposição). Sem expressão regular (V41). */
@@ -63,6 +66,24 @@ const PEDE_UMA_PESSOA = [
 export function pedeUmaPessoa(texto: string): boolean {
   const t = normalizado(texto);
   return PEDE_UMA_PESSOA.some((f) => t.includes(f));
+}
+
+/**
+ * Na pergunta, o que fala de compensação (brinde, cortesia, grátis, reembolso) ou de saúde (alergia, glúten, lactose,
+ * passar mal) sempre espera uma pessoa no automático (D-A6-148): quem decide a compensação é a empresa, e o erro sobre
+ * saúde custa caro; o caso do brinde respondido como "respondida" na rodada paga do eval (D-A6-147) fica fechado pelo
+ * código, sem depender do modelo. A sugestão a pedido (a pessoa lê antes de mandar) não muda.
+ */
+const COMPENSACAO_OU_SAUDE = [
+  'brinde', 'cortesia', 'gratis', 'de graca', 'reembolso', 'estorno', 'devolver o dinheiro', 'dinheiro de volta', 'compensa',
+  'alergi', 'alergic', 'intoleran', 'gluten', 'lactose', 'celiac', 'passou mal', 'passei mal', 'passando mal', 'intoxic',
+  'hospital', 'vomit', 'diarreia',
+];
+
+/** A pergunta fala de compensação ou de saúde: no automático, vai para uma pessoa (D-A6-148). */
+export function falaDeCompensacaoOuSaude(texto: string): boolean {
+  const t = normalizado(texto);
+  return COMPENSACAO_OU_SAUDE.some((f) => t.includes(f));
 }
 
 /**
@@ -104,8 +125,11 @@ const MENSAGENS_DO_PORTAO = 20;
 
 export type AlvoDoDirect = { tenantId: string; brandId: string; connectedAccountId: string; conversationId: string };
 
-/** O que o automático mandaria agora na conversa: o tipo, o texto com o aviso e a mensagem da pessoa que ele responde. */
-export type RespostaDoAutomatico = { tipo: TipoNoDirect; texto: string; mensagem: string };
+/**
+ * O que o automático mandaria agora na conversa: o tipo, o texto com o aviso e a mensagem da pessoa que ele responde. Na
+ * pergunta (parte 5c), `texto` é nulo: quem escreve é o Social media, e a rotina só manda o que ele sabe com certeza.
+ */
+export type RespostaDoAutomatico = { tipo: TipoNoDirect; texto: string | null; mensagem: string };
 
 /**
  * O portão (o mesmo na criação e na execução): a função ligada, o Direct ligado na marca e o Regem sem atender a conta,
@@ -172,8 +196,14 @@ export async function oQueSeguraODirectAutomatico(
   const tipo = tipoNoDirect(pendentes, ajuste.messenger ? null : ajuste.usuario);
   const doAutomatico = tipoDoAutomatico(tipo);
   if (!tipo || !doAutomatico || !marca.kinds.includes(doAutomatico)) return { segura: 'tipo_fora_do_automatico' };
-  if (pedeUmaPessoa(pendentes.map((p) => p.body).join(' '))) return { segura: 'pede_uma_pessoa' };
+  const doQueAPessoaMandou = pendentes.map((p) => p.body).join(' ');
+  if (pedeUmaPessoa(doQueAPessoaMandou)) return { segura: 'pede_uma_pessoa' };
   if (automaticasSeguidas(mensagens) >= AUTOMATICAS_SEGUIDAS) return { segura: 'automaticas_seguidas' };
+  // A pergunta (parte 5c): sem compensação nem saúde, o Social media escreve, e a rotina confere a certeza dele.
+  if (doAutomatico === 'pergunta') {
+    if (falaDeCompensacaoOuSaude(doQueAPessoaMandou)) return { segura: 'compensacao_ou_saude' };
+    return { resposta: { tipo, texto: null, mensagem: ultimaDaPessoa.message_id } };
+  }
   const sugestao = sugestaoNoDirect(tipo, ultimaDaPessoa.message_id);
   if (sugestao?.kind !== 'pronta') return { segura: 'tipo_fora_do_automatico' };
   return { resposta: { tipo, texto: comAvisoDoDirect(sugestao.text), mensagem: ultimaDaPessoa.message_id } };

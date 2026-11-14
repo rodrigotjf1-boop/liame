@@ -13,9 +13,10 @@ import { dataCompleta, diasAte, horaDe, quandoComHora } from '@/lib/formato';
 
 // ------------------------------------------------------------------ o atendimento automático (parte 5b; P39 versão 2)
 
-/** Os tipos que o automático do Direct responde sozinho, nesta versão (a pergunta entra com o Social media, na 4b). */
+/** Os tipos que o automático do Direct responde sozinho (P39 versão 2; a pergunta, desde a parte 5c, D-A6-148). */
 export const TIPOS_DO_AUTOMATICO_DO_DIRECT: ReadonlyArray<{ id: (typeof DIRECT_AUTO_REPLY_KINDS)[number]; rotulo: string; texto: string }> = [
   { id: 'pronta', rotulo: 'Elogios, respostas ao story e menções', texto: 'Um agradecimento curto, com a resposta pronta, sem IA, com variação.' },
+  { id: 'pergunta', rotulo: 'Perguntas que ele sabe responder com certeza', texto: 'Preço, horário, endereço e entrega: só o que está em Minha marca, como está escrito.' },
 ];
 
 /** O aviso no fim de cada resposta automática, como a pessoa lê no Instagram (sem as quebras de linha do começo). */
@@ -29,11 +30,12 @@ export function saiuSozinha(texto: string): boolean {
 /** A linha do topo da caixa: o que está valendo agora. */
 export function resumoDoAutomaticoDoDirect(r: DirectAutoReplyResponse): string {
   if (!r.enabled) {
-    return 'Desligado: nenhuma resposta sai sem uma pessoa da equipe. Ligado, o Liame responde sozinho os elogios, as respostas ao story e as menções.';
+    return 'Desligado: nenhuma resposta sai sem uma pessoa da equipe. Ligado, o Liame responde sozinho os elogios, as respostas ao story, as menções e as perguntas que sabe responder com certeza.';
   }
   if (r.last_hour >= r.hourly_limit) return `Chegou a ${r.hourly_limit} respostas sozinho nesta hora, o teto: o resto fica com você.`;
   const n = r.last_hour === 1 ? '1 resposta' : `${r.last_hour} respostas`;
-  return `${n} sozinho nesta hora (no máximo ${r.hourly_limit}). Perguntas, reclamações e quem pede alguém esperam você.`;
+  const esperam = r.kinds.includes('pergunta') ? 'Reclamações, perguntas sem certeza e quem pede alguém esperam você.' : 'Perguntas, reclamações e quem pede alguém esperam você.';
+  return `${n} sozinho nesta hora (no máximo ${r.hourly_limit}). ${esperam}`;
 }
 
 /** O botão da linha: ajustar (ligado), ver e ligar (quem liga) ou ver como funciona (os outros). */

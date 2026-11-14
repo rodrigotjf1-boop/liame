@@ -1,12 +1,18 @@
 import { resolve } from 'node:path';
 import { DIRECT_AUTO_REPLY_NOTICE } from '@liame/contracts';
 import { type Database, runMigrations } from '@liame/database';
+import { MockLanguageModelV4 } from 'ai/test';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { ActionService } from '../../src/actions/action.service.js';
 import { BudgetService } from '../../src/actions/budget.service.js';
 import { type DependenciasDoDirect, directNoInstagramConnector, directNoMessengerConnector } from '../../src/actions/direct-na-rede.js';
+import { AiGateway } from '../../src/ai/gateway.js';
+import { ModelosIa } from '../../src/ai/modelos.js';
+import { naTransacaoDaEmpresa } from '../../src/ai/na-empresa.js';
 import { RESPOSTAS_PRONTAS } from '../../src/ai/social/comentario.js';
+import { TAREFA_SOCIAL_DIRECT } from '../../src/ai/social/direct.js';
 import { currentStep, totpCode } from '../../src/auth/totp.js';
+import { APP_CONFIG, type AppConfig } from '../../src/config.js';
 import { ClienteConector } from '../../src/connectors/cliente-http.js';
 import { versaoRegistrada } from '../../src/connectors/tipos.js';
 import { DATABASE } from '../../src/database/database.module.js';
@@ -18,6 +24,7 @@ import { VaultService } from '../../src/vault/vault.service.js';
 import { ActionExecutor } from '../../src/worker/action-executor.js';
 import { DirectAutomaticoLoop } from '../../src/worker/direct-automatico.js';
 import { ownerQuery, resetIpRateLimits, startApi, type TestApi } from '../helpers/api.js';
+import { ligarIa, ModelosDeTeste, responde, rotaCompartilhada } from '../helpers/ia.js';
 import { APP_DA_META, InstagramDeMentira, SEGREDO_DO_APP, TOKEN_DO_INSTAGRAM } from '../helpers/instagram-de-mentira.js';
 import { ligarFlagDaEmpresa } from '../helpers/meta-de-mentira.js';
 import { type EmpresaComCanais, empresaComCanais } from '../helpers/posts-semeados.js';
@@ -34,13 +41,31 @@ import { hasDb, OWNER_URL } from './env.js';
 //   - desligar depois do pedido segura o que estava na fila (o executor confere o portão de novo); sem a função, nada sai;
 //   - a prévia mostra o que sairia, sem mandar nada;
 //   - o Messenger da Página (A6, Z14, parte 2; D-A6-122): o mesmo automático; com o Messenger desligado na marca, a
-//     conversa fica com a equipe; ligado, o elogio sai pela Página.
+//     conversa fica com a equipe; ligado, o elogio sai pela Página;
+//   - a pergunta (parte 5c; D-A6-148), com o modelo simulado: com a certeza do Social media (o "sim", a conferência sem
+//     aviso e nada tirado), sai sozinha com o texto dele e o aviso; sem certeza, com a conferência barrando ou falando de
+//     brinde (sem chamar o modelo), fica com a equipe; tirar o tipo segura o que estava na fila; o pedido sem o aviso no
+//     fim é recusado.
 
-describe.skipIf(!hasDb)('o atendimento automático do Direct (A6 · Z12, parte 5a)', () => {
+/** Minha marca do teste da pergunta (a mesma da sugestão a pedido, `direct-sugestao.spec.ts`). */
+const DOSSIE = {
+  identity: { summary: 'Hamburgueria de bairro com smash feito na chapa', audience: 'Quem mora ou trabalha no Centro', differentiator: 'Pão feito na casa todo dia', since: '2019' },
+  voice: { traits: ['Direta'], rules: ['Frases curtas.'], do_example: 'Bateu a fome? O smash sai da chapa rapidinho.', dont_example: '' },
+  products: { items: ['Smash Clássico R$ 29,90'] },
+  offers: { items: ['Combo sexta: smash, batata e refri por R$ 34,90'] },
+  forbidden: { items: [{ text: 'o melhor hambúrguer do Rio', why: 'não temos como provar' }] },
+  region: { area: 'Centro e Lapa', pickup: true },
+};
+const DA_PERGUNTA = { enfoque: 'Responde com a oferta', texto: 'Oi! O Combo sexta sai por R$ 34,90, com smash, batata e refri.' };
+
+describe.skipIf(!hasDb)('o atendimento automático do Direct (A6 · Z12, partes 5a e 5c)', () => {
   let api: TestApi;
   let database: Database;
   let executor: ActionExecutor;
   let loop: DirectAutomaticoLoop;
+  let flagsDoTeste: FlagService;
+  let modelos: ModelosDeTeste;
+  let alvo: Awaited<ReturnType<typeof rotaCompartilhada>>;
   const meta = new InstagramDeMentira();
 
   beforeAll(async () => {
@@ -52,7 +77,13 @@ describe.skipIf(!hasDb)('o atendimento automático do Direct (A6 · Z12, parte 5
     const vault = api.app.get(VaultService);
     const flags = api.app.get(FlagService);
     executor = new ActionExecutor(database, api.app.get(BudgetService), api.app.get(KillSwitchService), flags);
-    loop = new DirectAutomaticoLoop(database, flags, api.app.get(ActionService));
+    loop = new DirectAutomaticoLoop(database, flags, api.app.get(ActionService), api.app.get(AiGateway));
+    flagsDoTeste = flags;
+    // O modelo simulado da sugestão do Direct (parte 5c): a rota da tarefa aponta para um modelo de teste.
+    const config: AppConfig = api.app.get(APP_CONFIG);
+    modelos = new ModelosDeTeste(config);
+    api.app.get(ModelosIa).modelo = (provider, model) => modelos.modelo(provider, model);
+    alvo = await rotaCompartilhada(modelos, TAREFA_SOCIAL_DIRECT, new MockLanguageModelV4({ doGenerate: [] }));
     const doDirect: DependenciasDoDirect = {
       lerSegredo: (tx, id) => vault.readSecret(tx, id),
       cliente: (tempoLimiteMs) =>
@@ -273,6 +304,83 @@ describe.skipIf(!hasDb)('o atendimento automático do Direct (A6 · Z12, parte 5
     expect(RESPOSTAS_PRONTAS.elogio.map((t) => comAvisoDoDirect(t))).toContain(saiu[0]);
     expect(meta.chamadas.some((c) => c.metodo === 'POST' && c.caminho.endsWith(`${e.pagina!.externo}/messages`))).toBe(true);
     expect(daMarca(carla)).toEqual([]);
+    expect(meta.defeitos).toEqual([]);
+  }, 120_000);
+
+  it('parte 5c (D-A6-148): a pergunta com a certeza do Social media sai sozinha; sem certeza, barrada ou com brinde, fica com a equipe; tirar o tipo segura a fila', async () => {
+    const e = await empresa('Casa Brasa Direct Pergunta');
+    await ligarIa(flagsDoTeste, e.tenantId);
+    const salvo = await api.call('PUT', '/v1/brand-dossier', { cookie: e.cookie, body: { brand_id: e.brandId, base_version: 0, content: DOSSIE } });
+    expect(salvo.status, JSON.stringify(salvo.body)).toBe(200);
+    const responder = (r: Record<string, unknown>) => {
+      const mock = responde(JSON.stringify(r));
+      modelos.porChave.set(`${alvo.provider}/${alvo.model}`, mock);
+      return mock;
+    };
+    const vez = async () => (await rodar(e)).map((v) => [v.conversa, v.status === 'com_a_pessoa' ? v.motivo : v.status]);
+
+    // Só a resposta pronta marcada: a pergunta fica com a equipe, sem chamar o modelo.
+    await ligado(e);
+    let mock = responder({ sugestoes: [DA_PERGUNTA], respondida: 'sim', falta: '' });
+    const antes = await conversa(e, 'joao.p', [{ texto: 'Quanto tá o combo de sexta?', minutos: 40 }]);
+    expect(await vez()).toEqual([[antes.id, 'tipo_fora_do_automatico']]);
+    expect(mock.doGenerateCalls).toHaveLength(0);
+
+    // Somar a pergunta pede o código; com ela, a pergunta certa sai sozinha, com o texto do Social media e o aviso.
+    expect(problema(await mudar(e, { enabled: true, kinds: ['pronta', 'pergunta'] }))).toEqual([400, 'confirme-que-e-voce']);
+    const somou = await mudar(e, { enabled: true, kinds: ['pronta', 'pergunta'], code: await codigo(e) });
+    expect(somou.status, JSON.stringify(somou.body)).toBe(200);
+    expect(somou.body).toMatchObject({ enabled: true, kinds: ['pronta', 'pergunta'] });
+    const certa = await conversa(e, 'ana.paula_rj', [{ texto: 'Quanto tá o combo de sexta?', minutos: 9 }]);
+    expect(await vez()).toEqual([[certa.id, 'respondida']]);
+    // O modelo recebeu a conversa sem o @ de quem escreveu, em nome do sistema (sem pessoa).
+    expect(mock.doGenerateCalls).toHaveLength(1);
+    expect(JSON.stringify(mock.doGenerateCalls[0]!.prompt)).toContain('Pessoa: Quanto tá o combo de sexta?');
+    expect(JSON.stringify(mock.doGenerateCalls[0]!.prompt)).not.toContain('ana.paula_rj');
+    const [uso] = await ownerQuery<{ task: string; user_id: string | null }>(`select task, user_id from liame.ai_usage where tenant_id = $1 order by occurred_at desc limit 1`, [e.tenantId]);
+    expect(uso).toEqual({ task: 'social_direct', user_id: null });
+    await ciclo(e);
+    expect((await pedidos(e)).map((p) => [p.resource_id, p.status, p.mode, p.actor_type])).toEqual([[`direct:${certa.id}`, 'executada', 'AUTO', 'agent']]);
+    expect(daMarca(certa.id)).toEqual([comAvisoDoDirect(DA_PERGUNTA.texto)]);
+
+    // Sem certeza (o "nao", com o que faltou): fica com a equipe, sem pedido.
+    responder({ sugestoes: [{ enfoque: 'Confirma com a loja', texto: 'Oi! Vou confirmar o horário do feriado com a loja e te respondo por aqui.' }], respondida: 'nao', falta: 'o horário do feriado' });
+    const feriado = await conversa(e, 'rui.s', [{ texto: 'Abre no feriado?', minutos: 8 }]);
+    expect(await vez()).toEqual([[feriado.id, 'sem_certeza']]);
+
+    // O "sim" com um preço que Minha marca não tem: a conferência barra, e fica com a equipe.
+    responder({ sugestoes: [{ enfoque: 'Responde com a oferta', texto: 'Oi! O Combo sexta sai por R$ 19,90.' }], respondida: 'sim', falta: '' });
+    const barrada = await conversa(e, 'lia.m', [{ texto: 'E o combo de sexta, quanto é?', minutos: 7 }]);
+    expect(await vez()).toEqual([[barrada.id, 'barrado']]);
+
+    // Brinde (o caso do eval, D-A6-147): fica com a equipe sem chamar o modelo.
+    mock = responder({ sugestoes: [DA_PERGUNTA], respondida: 'sim', falta: '' });
+    const brinde = await conversa(e, 'bia.costa', [{ texto: 'Se eu levar dois combos na sexta vocês mandam uma batata de brinde?', minutos: 6 }]);
+    expect(await vez()).toEqual([[brinde.id, 'compensacao_ou_saude']]);
+    expect(mock.doGenerateCalls).toHaveLength(0);
+    expect((await pedidos(e)).map((p) => p.resource_id)).toEqual([`direct:${certa.id}`]);
+    for (const id of [antes.id, feriado.id, barrada.id, brinde.id]) expect(daMarca(id)).toEqual([]);
+
+    // Pedido feito, e a pergunta tirada dos tipos antes do executor (sem código): o pedido não sai.
+    const lucas = await conversa(e, 'lucas_fern', [{ texto: 'Vocês fazem retirada no balcão?', minutos: 4 }]);
+    responder({ sugestoes: [{ enfoque: 'Responde com a retirada', texto: 'Oi! Fazemos retirada, sim.' }], respondida: 'sim', falta: '' });
+    expect(await vez()).toEqual([[lucas.id, 'respondida']]);
+    expect((await mudar(e, { enabled: true, kinds: ['pronta'] })).status).toBe(200);
+    await ciclo(e);
+    const segurado = (await pedidos(e)).find((p) => p.resource_id === `direct:${lucas.id}`)!;
+    expect(segurado).toMatchObject({ status: 'falhou' });
+    const execucao = await ownerQuery<{ status: string; error: string | null }>(`select status, error from liame.action_execution where action_request_id = $1`, [segurado.id]);
+    expect(execucao).toEqual([{ status: 'bloqueada', error: 'atendimento automático: tipo_fora_do_automatico' }]);
+    expect(daMarca(lucas.id)).toEqual([]);
+
+    // O pedido da resposta automática sem o aviso no fim: recusado antes do portão.
+    const semAviso = naTransacaoDaEmpresa(database, { tenantId: e.tenantId, userId: null }, () =>
+      api.app.get(ActionService).responderSozinhoNoDirect(
+        { tenantId: e.tenantId, agentKey: 'social', agentLabel: 'Social media', emNomeDe: e.userId },
+        { tool: 'direct_responder_auto', brand_id: e.brandId, provider: 'instagram', account_id: e.instagram!.id, resource_id: `direct:${lucas.id}`, params: { texto: 'Oi! Fazemos retirada, sim.' } },
+      ),
+    );
+    await expect(semAviso).rejects.toMatchObject({ code: 'sem-aviso-de-automatica' });
     expect(meta.defeitos).toEqual([]);
   }, 120_000);
 });

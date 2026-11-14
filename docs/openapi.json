@@ -104702,12 +104702,13 @@
                     "type": "boolean"
                   },
                   "kinds": {
-                    "maxItems": 1,
+                    "maxItems": 2,
                     "type": "array",
                     "items": {
                       "type": "string",
                       "enum": [
-                        "pronta"
+                        "pronta",
+                        "pergunta"
                       ]
                     }
                   },
