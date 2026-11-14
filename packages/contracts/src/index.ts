@@ -715,7 +715,10 @@ export {
   CreativeTestCouponCode,
   CreativeTestCouponStatus,
   CreativeTestDiscount,
+  CreativeTestListQuery,
+  CreativeTestListResponse,
   CreativeTestResponse,
+  CreativeTestResult,
   CreativeTestStatus,
 } from './testes-de-criativo.js';
 export {

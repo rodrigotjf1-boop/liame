@@ -1,5 +1,5 @@
-import { CreateCreativeTestRequest, CreativeTestResponse, ProblemDetails, ResourceId } from '@liame/contracts';
-import { Body, Controller, Get, HttpCode, Param, Post } from '@nestjs/common';
+import { CreateCreativeTestRequest, CreativeTestListQuery, CreativeTestListResponse, CreativeTestResponse, ProblemDetails, ResourceId } from '@liame/contracts';
+import { Body, Controller, Get, HttpCode, Param, Post, Query } from '@nestjs/common';
 import {
   ApiBadRequestResponse,
   ApiConflictResponse,
@@ -84,12 +84,27 @@ export class TestesDeCriativoController {
     return this.testes.encerrar(auth, id);
   }
 
+  @Get()
+  @Permissao('campanhas.ver')
+  @ApiOperation({
+    summary: 'Listar os testes de criativo da marca',
+    description:
+      'Os testes de criativo da marca, do mais novo para o mais antigo (até 50), cada um com os dois criativos, a situação e o que mostrou até a última olhada. O que funcionou fica guardado por empresa: nada é comparado entre empresas.',
+  })
+  @ApiOkResponse({ standardSchema: CreativeTestListResponse })
+  @ApiBadRequestResponse({ standardSchema: ProblemDetails })
+  @ApiForbiddenResponse({ standardSchema: ProblemDetails })
+  @ApiNotFoundResponse({ standardSchema: ProblemDetails })
+  listar(@Auth() auth: AuthContext, @Query({ schema: CreativeTestListQuery }) query: CreativeTestListQuery): Promise<CreativeTestListResponse> {
+    return this.testes.listar(auth, query);
+  }
+
   @Get(':id')
   @Permissao('campanhas.ver')
   @ApiOperation({
     summary: 'Ler um teste de criativo',
     description:
-      'O teste com os dois criativos (a peça, a mídia, o texto que sai no anúncio e o cupom de cada um, com a situação dele), o desconto e até quando os cupons valem, quem vê, a verba, os dias, a situação e o que já existe na Meta.',
+      'O teste com os dois criativos (a peça, a mídia, o texto que sai no anúncio e o cupom de cada um, com a situação dele), o desconto e até quando os cupons valem, quem vê, a verba, os dias, a situação, o que já existe na Meta e, a partir do dia 7, o que o teste mostrou até a última olhada (os pedidos de cada criativo no caixa, a chance de a diferença ser acaso e o veredito). O Liame olha só ao fim de cada semana inteira e não espia no meio.',
   })
   @ApiOkResponse({ standardSchema: CreativeTestResponse })
   @ApiBadRequestResponse({ standardSchema: ProblemDetails })

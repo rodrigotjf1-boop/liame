@@ -1,4 +1,4 @@
-import type { CreateCreativeTestRequest, CreativeTestResponse } from '@liame/contracts';
+import type { CreateCreativeTestRequest, CreativeTestListQuery, CreativeTestListResponse, CreativeTestResponse } from '@liame/contracts';
 import { uuidv7 } from '@liame/database';
 import { Injectable } from '@nestjs/common';
 import { sql } from 'drizzle-orm';
@@ -25,6 +25,7 @@ import {
   LIMITE_DO_TEXTO_DO_ANUNCIO,
   oQueImpedeOTeste,
   recursoDoTesteDeCriativo,
+  ResultadoDoTesteDeCriativo,
   textoDoAnuncioDoTeste,
   VALIDADE_DOS_CUPONS_DO_TESTE_DIAS,
 } from './teste-de-criativo-plano.js';
@@ -55,6 +56,22 @@ function diaMais(dia: string, dias: number): string {
   return d.toISOString().slice(0, 10);
 }
 
+/** O resultado guardado pela rotina, como a resposta o mostra; nulo antes da primeira olhada. */
+function resultadoDaResposta(guardado: unknown): CreativeTestResponse['result'] {
+  const r = ResultadoDoTesteDeCriativo.safeParse(guardado);
+  if (!r.success) return null;
+  const numeros = (letter: LetraDoTeste) => {
+    const n = r.data.criativos[letter];
+    return { letter, orders: n.pedidos, revenue_micros: Math.round(n.receita_micros), spend_micros: n.gasto_micros === null ? null : Math.round(n.gasto_micros), link_clicks: n.visitas };
+  };
+  return {
+    looks: r.data.olhadas.map((o) => ({ day: o.dia, orders_a: o.a, orders_b: o.b, chance: o.acaso })),
+    verdict: r.data.veredito,
+    winner: r.data.vencedor,
+    arms: [numeros('A'), numeros('B')],
+  };
+}
+
 type Linha = {
   id: string;
   brand_id: string;
@@ -73,6 +90,8 @@ type Linha = {
   started_on: string | null;
   ended_on: string | null;
   error: string | null;
+  reason: string | null;
+  result: unknown;
   created_at: Date;
 };
 
@@ -414,6 +433,21 @@ export class TestesDeCriativoService {
     return this.obter(auth, id);
   }
 
+  /** Os testes de criativo da marca, do mais novo para o mais antigo (D-RG-83: o que funcionou fica guardado por empresa). */
+  async listar(auth: AuthContext, query: CreativeTestListQuery): Promise<CreativeTestListResponse> {
+    const quem = this.quem(auth);
+    const tx = currentTx();
+    const marca = await tx.execute(sql`select 1 from liame.brand where id = ${query.brand_id} and tenant_id = ${quem.tenantId} and archived_at is null`);
+    if (!marca.rows[0]) throw new AppProblem(404, 'nao-encontrado', 'Não encontramos', 'Marca não encontrada nesta empresa.');
+    const ids = (
+      await tx.execute<{ id: string }>(sql`
+        select id from liame.campaign_test where tenant_id = ${quem.tenantId} and brand_id = ${query.brand_id} and kind = 'criativo' order by created_at desc, id desc limit 50`)
+    ).rows;
+    const items: CreativeTestResponse[] = [];
+    for (const { id } of ids) items.push(await this.obter(auth, id));
+    return { items };
+  }
+
   async obter(auth: AuthContext, id: string): Promise<CreativeTestResponse> {
     const quem = this.quem(auth);
     const t = await this.linha(quem.tenantId, id, false);
@@ -460,6 +494,8 @@ export class TestesDeCriativoService {
       started_on: t.started_on,
       ended_on: t.ended_on,
       error: t.error,
+      reason: t.reason,
+      result: resultadoDaResposta(t.result),
       meta: { account_id: t.meta_account_id, campaign_id: t.meta_campaign_id },
       created_at: new Date(t.created_at).toISOString(),
     };
@@ -472,7 +508,7 @@ export class TestesDeCriativoService {
              (select p.id from liame.action_request p
                where p.tenant_id = t.tenant_id and p.tool = 'teste_de_criativo_ativar' and p.resource_id = ${recursoDoTesteDeCriativo(id)} and p.status in ${EM_ABERTO}
                order by p.created_at desc limit 1) as pending_action_id,
-             t.meta_campaign_id, a.external_id as meta_account_id, t.started_on::text as started_on, t.ended_on::text as ended_on, t.error, t.created_at
+             t.meta_campaign_id, a.external_id as meta_account_id, t.started_on::text as started_on, t.ended_on::text as ended_on, t.error, t.reason, t.result, t.created_at
         from liame.campaign_test t
         left join liame.connected_account a on a.id = t.ad_account_id and a.tenant_id = t.tenant_id
        where t.id = ${id} and t.tenant_id = ${tenantId} and t.kind = 'criativo'

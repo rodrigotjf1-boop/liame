@@ -1,12 +1,16 @@
 import { randomBytes, randomUUID } from 'node:crypto';
 import { createServer, type Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
-import type { Database } from '@liame/database';
+import { type Database, withTenant } from '@liame/database';
+import { sql } from 'drizzle-orm';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { ActionService } from '../../src/actions/action.service.js';
 import { BudgetService } from '../../src/actions/budget.service.js';
 import { testeDeCriativoNaMetaConnector } from '../../src/actions/teste-de-criativo-na-meta.js';
+import { MODELO_PADRAO } from '../../src/attribution/motor.js';
 import { currentStep, totpCode } from '../../src/auth/totp.js';
 import { publicoNoRaio } from '../../src/campanhas/publico-no-raio.js';
+import { consultaDaEntrega } from '../../src/campanhas/teste-medida.js';
 import { ClienteConector } from '../../src/connectors/cliente-http.js';
 import { versaoRegistrada } from '../../src/connectors/tipos.js';
 import { DATABASE } from '../../src/database/database.module.js';
@@ -15,6 +19,7 @@ import { ARMAZEM_DE_IMAGENS, type ArmazemNaMemoria } from '../../src/imagens/arm
 import { KillSwitchService } from '../../src/kill-switch/kill-switch.service.js';
 import { VaultService } from '../../src/vault/vault.service.js';
 import { ActionExecutor } from '../../src/worker/action-executor.js';
+import { TestesDeCriativoRotina } from '../../src/worker/testes-de-criativo.service.js';
 import { ownerQuery, resetIpRateLimits, startApi, type TestApi } from '../helpers/api.js';
 import { type EmpresaComMeta, empresaComMeta, ligarFlagDaEmpresa, MetaDeMentira, SEGREDO_DO_APP_DA_META } from '../helpers/meta-de-mentira.js';
 import { fotoGuardada, lojaComCardapio } from '../helpers/posts-semeados.js';
@@ -28,7 +33,10 @@ import { hasDb } from './env.js';
 //   - criar: uma campanha "Teste · …", dois conjuntos com a metade da verba cada, dois criativos e dois anúncios, cada
 //     um validado antes, com a chave de idempotência do passo, tudo pausado; o teste fica `criando` até os cupons;
 //   - ativar: só com o teste pronto; com o código e os limites; os cinco objetos em ativo, o anúncio antes da campanha;
-//   - encerrar: sem o código, a campanha de teste pausa e o teste fica encerrado.
+//   - encerrar: sem o código, a campanha de teste pausa e o teste fica encerrado;
+//   - a medida (D-RG-79 e D-RG-91): a olhada só ao fim de cada semana inteira e só com a leitura do caixa em dia; os
+//     pedidos de cada criativo pelo cupom e pelo anúncio, uma vez cada; o vencedor termina o teste; mexido por fora,
+//     o teste é interrompido.
 
 const CARDAPIO = 'https://cardapio.exemplo.com.br/mister-centro';
 const OFERTA = 'Combo sexta: smash, batata e refri por R$ 34,90';
@@ -352,5 +360,173 @@ describe.skipIf(!hasDb)('o teste de criativo na Meta (plano da região, R8)', ()
     expect(encerrado.stopped_at).not.toBeNull();
     // Encerrar de novo devolve como está.
     expect((await api.call('POST', `/v1/creative-tests/${id}/stop`, { cookie: e.cookie })).body.status).toBe('encerrado');
+  }, 180_000);
+  it('a medida: a olhada só ao fim da semana e com o caixa em dia; os pedidos pelo cupom e pelo anúncio; o vencedor termina o teste; mexido por fora, interrompe', async () => {
+    const e = await cenario('Brasa Teste Mede');
+    const fotos: [string, string] = [(await fotoGuardada(e, armazem, { largura: 1080, altura: 1350 })).id, (await fotoGuardada(e, armazem, { largura: 1080, altura: 1080 })).id];
+    await limites(e, 50_000_000);
+    const r = await pedir(e, fotos);
+    const id = r.body.id as string;
+    await aprovar(e, r.body.action_id as string);
+    await executar(e);
+    await ownerQuery(`update liame.campaign_test_arm set coupon_status = 'criado' where test_id = $1`, [id]);
+    await ownerQuery(`update liame.campaign_test set status = 'pronto' where id = $1`, [id]);
+    const ativacao = (await api.call('POST', `/v1/creative-tests/${id}/activate`, { cookie: e.cookie })).body.pending_action_id as string;
+    await aprovar(e, ativacao);
+    await executar(e);
+    expect((await testeDe(id)).status).toBe('rodando');
+
+    const rotina = new TestesDeCriativoRotina(api.app.get(DATABASE), api.app.get(ActionService), api.app.get(FlagService));
+    const FUSO = 'America/Sao_Paulo';
+    const diaDeHoje = new Intl.DateTimeFormat('en-CA', { timeZone: FUSO, year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
+    const menos = (dias: number) => new Date(Date.parse(`${diaDeHoje}T12:00:00Z`) - dias * 86_400_000).toISOString().slice(0, 10);
+    const volta = async () => (await rotina.executarLote(10, { tenantIds: [e.tenantId] })).map((x) => [x.situacao, x.motivo]);
+    const comecou = (diasAtras: number) => ownerQuery(`update liame.campaign_test set started_on = $2::date where id = $1`, [id, menos(diasAtras)]);
+    const ler = async () => (await api.call('GET', `/v1/creative-tests/${id}`, { cookie: e.cookie })).body as Record<string, unknown>;
+    let seq = 0;
+    /** Um pedido confirmado na loja do teste, ao meio-dia de `dia` (no fuso da loja), com o cupom dado. */
+    const pedido = async (dia: string, cupom: string | null, o: { status?: string } = {}) => {
+      const pid = randomUUID();
+      seq += 1;
+      await ownerQuery(
+        `insert into liame.order_fact (id, tenant_id, brand_id, unit_id, connected_account_id, provider, external_id, channel, channel_group, status, currency, timezone, revenue_micros,
+                                       coupon_code, confirmed_at, cancelled_at, source_version, source_updated_at)
+         values ($1, $2, $3, $4, $5, 'regem', $6, 'cardapio', 'cardapio', $7, 'BRL', $8, 42000000, $9, ($10::date + time '12:00') at time zone $8,
+                 case when $7 = 'cancelado' then now() else null end, 1, now())`,
+        [pid, e.tenantId, e.brandId, e.unitId, e.regem, `pedido-${seq}-${pid.slice(0, 8)}`, o.status ?? 'confirmado', FUSO, cupom, dia],
+      );
+      return pid;
+    };
+    const varios = async (n: number, dia: string, cupom: string | null) => {
+      for (let i = 0; i < n; i++) await pedido(dia, cupom);
+    };
+
+    // Dia 5 do teste: a primeira semana ainda não fechou, e o Liame não olha.
+    await comecou(4);
+    expect(await volta()).toEqual([['esperando', 'antes_da_primeira_olhada']]);
+    expect((await ler()).result).toBeNull();
+
+    // O teste começou há 8 dias: a olhada é a do dia 7, com os pedidos do dia 1 ao dia 7. Sem a leitura do caixa em dia, espera.
+    await comecou(8);
+    const [dia1, dia7, dia8] = [menos(8), menos(2), menos(1)];
+    await varios(11, dia1, 'SEXTAFOTO');
+    await varios(6, dia7, 'SEXTAOUTRA');
+    await pedido(dia7, 'SEXTAFOTO', { status: 'cancelado' });
+    await pedido(dia7, 'OUTROCUPOM');
+    await pedido(dia8, 'SEXTAOUTRA'); // depois da olhada: só conta na próxima
+    // Um pedido sem cupom que a atribuição liga ao anúncio do criativo B (o clique que chegou pelo cardápio).
+    const bracoB = (await bracosDe(id))[1]!;
+    const [campanhaNaLista, anuncioB, pedidoPeloLink] = [randomUUID(), randomUUID(), await pedido(dia7, null)];
+    const linha = await testeDe(id);
+    await ownerQuery(`insert into liame.campaign (id, tenant_id, connected_account_id, provider, external_id, name, status) values ($1, $2, $3, 'meta_ads', $4, 'Teste', 'ativa')`, [campanhaNaLista, e.tenantId, e.conta, linha.meta_campaign_id]);
+    await ownerQuery(`insert into liame.ad (id, tenant_id, connected_account_id, provider, external_id, name, status) values ($1, $2, $3, 'meta_ads', $4, 'Anúncio B', 'ativa')`, [anuncioB, e.tenantId, e.conta, bracoB.meta_ad_id]);
+    await ownerQuery(
+      `insert into liame.attribution_result (order_id, model_id, tenant_id, brand_id, status, provider, campaign_id, ad_id, evidence, confidence, window_days, counted)
+       values ($1, $2, $3, $4, 'atribuido', 'meta_ads', $5, $6, 'clique', 'alta', 7, true)`,
+      [pedidoPeloLink, MODELO_PADRAO, e.tenantId, e.brandId, campanhaNaLista, anuncioB],
+    );
+    // O gasto e os cliques no link de cada anúncio, pela leitura da Meta (pelo id do anúncio na Meta, na conta do teste):
+    // os do período entram; o de depois da olhada, não. O anúncio do A nem está na lista do Liame, e os números dele vêm.
+    const bracoA = (await bracosDe(id))[0]!;
+    const metrica = (anuncio: string, dia: string, nome: string, valor: string) =>
+      ownerQuery(
+        `insert into liame.metric_latest (connected_account_id, level, external_entity_id, metric_date, metric_name, attribution_window, tenant_id, brand_id, provider, metric_value, currency, observed_at, changed_at)
+         values ($1, 'ad', $2, $3::date, $4, '', $5, $6, 'meta_ads', $7::numeric, 'BRL', now(), now())`,
+        [e.conta, anuncio, dia, nome, e.tenantId, e.brandId, valor],
+      );
+    await metrica(bracoA.meta_ad_id!, dia1, 'spend', '20.000000');
+    await metrica(bracoA.meta_ad_id!, dia7, 'spend', '19.500000');
+    await metrica(bracoA.meta_ad_id!, dia7, 'link_clicks', '31');
+    await metrica(bracoA.meta_ad_id!, dia8, 'spend', '20.000000');
+    await metrica(bracoB.meta_ad_id!, dia7, 'spend', '20.000000');
+    await metrica(bracoB.meta_ad_id!, dia7, 'link_clicks', '24');
+    expect(await volta()).toEqual([['esperando', 'leitura_dos_pedidos_atrasada']]);
+    await ownerQuery(
+      `insert into liame.sync_state (connected_account_id, dataset, tenant_id, expected_every_minutes, last_success_at) values ($1, 'pedidos', $2, 60, now())
+       on conflict (connected_account_id, dataset) do update set last_success_at = now()`,
+      [e.regem, e.tenantId],
+    );
+
+    // A olhada do dia 7: 11 pedidos do A (o cancelado e o de outro cupom ficam fora) contra 7 do B (6 pelo cupom e 1 pelo anúncio).
+    expect(await volta()).toEqual([['olhado', null]]);
+    const depois7 = (await ler()).result as { looks: Array<Record<string, number>>; verdict: string; winner: string | null; arms: Array<Record<string, unknown>> };
+    expect(depois7.looks).toHaveLength(1);
+    expect(depois7.looks[0]).toMatchObject({ day: 7, orders_a: 11, orders_b: 7 });
+    expect(depois7.looks[0]!.chance).toBeGreaterThan(0.4);
+    expect([depois7.verdict, depois7.winner]).toEqual(['ainda_nao', null]);
+    expect(depois7.arms).toEqual([
+      { letter: 'A', orders: 11, revenue_micros: 11 * 42_000_000, spend_micros: 39_500_000, link_clicks: 31 },
+      { letter: 'B', orders: 7, revenue_micros: 7 * 42_000_000, spend_micros: 20_000_000, link_clicks: 24 },
+    ]);
+    // A leitura das métricas vai pelo índice da chave (a conta de anúncios na frente): a tabela guarda as métricas de
+    // todas as empresas. Com a varredura inteira desligada, o plano só usa o índice se a consulta couber nele.
+    const plano = await withTenant(api.app.get(DATABASE).db, e.tenantId, async (tx) => {
+      await tx.execute(sql`set local enable_seqscan = off`);
+      const r = await tx.execute<Record<string, unknown>>(sql`explain (format json) ${consultaDaEntrega({ teste: id, tenantId: e.tenantId, de: dia1, ate: dia7, fuso: FUSO })}`);
+      return JSON.stringify(r.rows);
+    });
+    expect(plano).toContain('metric_latest_pkey');
+    expect(plano).toMatch(/"Index Cond":"[^"]*connected_account_id = [^"]*external_entity_id = /);
+    expect(plano).not.toMatch(/"Node Type":"Seq Scan"[^}]*"Relation Name":"metric_latest"/);
+    // A olhada guardada não é refeita: um pedido que chegue agora com data da primeira semana não muda o dia 7.
+    await pedido(dia1, 'SEXTAOUTRA');
+    expect(await volta()).toEqual([['esperando', 'olhada_feita']]);
+    expect(((await ler()).result as typeof depois7).looks[0]).toMatchObject({ day: 7, orders_a: 11, orders_b: 7 });
+
+    // Dia 15: a olhada do dia 14 soma tudo do dia 1 ao 14. O A abre distância (45 contra 9) e vence: o teste termina.
+    await ownerQuery(`update liame.order_fact set confirmed_at = confirmed_at - interval '7 days' where tenant_id = $1`, [e.tenantId]);
+    await comecou(15);
+    await varios(34, menos(3), 'SEXTAFOTO');
+    expect(await volta()).toEqual([['terminado', null]]);
+    const fim = await ler();
+    expect(fim).toMatchObject({ status: 'terminado', active: true, ended_on: menos(2) });
+    const resultado = fim.result as typeof depois7;
+    expect(resultado.looks.map((l) => [l.day, l.orders_a, l.orders_b])).toEqual([
+      [7, 11, 7],
+      [14, 45, 9],
+    ]);
+    expect([resultado.verdict, resultado.winner]).toEqual(['venceu', 'A']);
+    expect(resultado.looks[1]!.chance).toBeLessThan(0.0182);
+    // Terminado, a rotina não olha mais; a campanha segue como está (o Liame avisa e não mexe sozinho), e o teste aparece na lista da marca.
+    expect(await volta()).toEqual([]);
+    const lista = await api.call('GET', `/v1/creative-tests?brand_id=${e.brandId}`, { cookie: e.cookie });
+    expect(lista.status, JSON.stringify(lista.body)).toBe(200);
+    expect((lista.body.items as Array<{ id: string; status: string }>).map((t) => [t.id, t.status])).toEqual([[id, 'terminado']]);
+  }, 180_000);
+
+  it('o teste mexido por fora: um conjunto pausado na Meta, lido depois do começo, interrompe o teste com o motivo', async () => {
+    const e = await cenario('Brasa Teste Mexido');
+    const fotos: [string, string] = [(await fotoGuardada(e, armazem, { largura: 1080, altura: 1350 })).id, (await fotoGuardada(e, armazem, { largura: 1080, altura: 1080 })).id];
+    await limites(e, 50_000_000);
+    const r = await pedir(e, fotos);
+    const id = r.body.id as string;
+    await aprovar(e, r.body.action_id as string);
+    await executar(e);
+    await ownerQuery(`update liame.campaign_test_arm set coupon_status = 'criado' where test_id = $1`, [id]);
+    await ownerQuery(`update liame.campaign_test set status = 'pronto' where id = $1`, [id]);
+    await aprovar(e, (await api.call('POST', `/v1/creative-tests/${id}/activate`, { cookie: e.cookie })).body.pending_action_id as string);
+    await executar(e);
+    await ownerQuery(`update liame.campaign_test set started_on = current_date - 3 where id = $1`, [id]);
+    const rotina = new TestesDeCriativoRotina(api.app.get(DATABASE), api.app.get(ActionService), api.app.get(FlagService));
+    const volta = async () => (await rotina.executarLote(10, { tenantIds: [e.tenantId] })).map((x) => x.situacao);
+    const [a, b] = await bracosDe(id);
+    const conjunto = (externo: string, status: string, verba: number, visto: string) =>
+      ownerQuery(
+        `insert into liame.ad_group (id, tenant_id, connected_account_id, provider, external_id, name, status, daily_budget_micros, last_seen_at)
+         values ($1, $2, $3, 'meta_ads', $4, 'Conjunto', $5, $6, now() - $7::interval)
+         on conflict (connected_account_id, external_id) do update set status = excluded.status, daily_budget_micros = excluded.daily_budget_micros, last_seen_at = excluded.last_seen_at`,
+        [randomUUID(), e.tenantId, e.conta, externo, status, verba, visto],
+      );
+    // A leitura de ANTES de o teste começar ainda mostra o conjunto pausado, como ele nasceu: não é "mexido por fora".
+    await conjunto(a!.meta_adset_id!, 'pausada', 20_000_000, '10 days');
+    await conjunto(b!.meta_adset_id!, 'ativa', 20_000_000, '1 hour');
+    expect(await volta()).toEqual(['esperando']);
+    // A verba de um lado mudada fora do Liame, lida depois do começo: a comparação não vale mais.
+    await conjunto(b!.meta_adset_id!, 'ativa', 35_000_000, '1 hour');
+    expect(await volta()).toEqual(['interrompido']);
+    const t = (await api.call('GET', `/v1/creative-tests/${id}`, { cookie: e.cookie })).body as { status: string; reason: string };
+    expect(t.status).toBe('interrompido');
+    expect(t.reason).toContain('A verba do conjunto do criativo B foi mudada fora do Liame.');
+    expect(await volta()).toEqual([]);
   }, 180_000);
 });

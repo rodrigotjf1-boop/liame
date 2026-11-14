@@ -134788,6 +134788,130 @@
                         "null"
                       ]
                     },
+                    "reason": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "result": {
+                      "type": [
+                        "object",
+                        "null"
+                      ],
+                      "properties": {
+                        "looks": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "day": {
+                                "type": "integer",
+                                "minimum": -9007199254740991,
+                                "maximum": 9007199254740991
+                              },
+                              "orders_a": {
+                                "type": "integer",
+                                "minimum": -9007199254740991,
+                                "maximum": 9007199254740991
+                              },
+                              "orders_b": {
+                                "type": "integer",
+                                "minimum": -9007199254740991,
+                                "maximum": 9007199254740991
+                              },
+                              "chance": {
+                                "type": "number"
+                              }
+                            },
+                            "required": [
+                              "day",
+                              "orders_a",
+                              "orders_b",
+                              "chance"
+                            ],
+                            "additionalProperties": false
+                          }
+                        },
+                        "verdict": {
+                          "type": "string",
+                          "enum": [
+                            "ainda_nao",
+                            "venceu",
+                            "sem_vencedor"
+                          ]
+                        },
+                        "winner": {
+                          "type": [
+                            "string",
+                            "null"
+                          ],
+                          "enum": [
+                            "A",
+                            "B",
+                            null
+                          ]
+                        },
+                        "arms": {
+                          "minItems": 2,
+                          "maxItems": 2,
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "letter": {
+                                "type": "string",
+                                "enum": [
+                                  "A",
+                                  "B"
+                                ]
+                              },
+                              "orders": {
+                                "type": "integer",
+                                "minimum": -9007199254740991,
+                                "maximum": 9007199254740991
+                              },
+                              "revenue_micros": {
+                                "type": "integer",
+                                "minimum": -9007199254740991,
+                                "maximum": 9007199254740991
+                              },
+                              "spend_micros": {
+                                "type": [
+                                  "integer",
+                                  "null"
+                                ],
+                                "minimum": -9007199254740991,
+                                "maximum": 9007199254740991
+                              },
+                              "link_clicks": {
+                                "type": [
+                                  "integer",
+                                  "null"
+                                ],
+                                "minimum": -9007199254740991,
+                                "maximum": 9007199254740991
+                              }
+                            },
+                            "required": [
+                              "letter",
+                              "orders",
+                              "revenue_micros",
+                              "spend_micros",
+                              "link_clicks"
+                            ],
+                            "additionalProperties": false
+                          }
+                        }
+                      },
+                      "required": [
+                        "looks",
+                        "verdict",
+                        "winner",
+                        "arms"
+                      ],
+                      "additionalProperties": false
+                    },
                     "meta": {
                       "type": "object",
                       "properties": {
@@ -134836,6 +134960,8 @@
                     "started_on",
                     "ended_on",
                     "error",
+                    "reason",
+                    "result",
                     "meta",
                     "created_at"
                   ],
@@ -135174,6 +135300,682 @@
         "tags": [
           "testes-de-criativo"
         ]
+      },
+      "get": {
+        "description": "Os testes de criativo da marca, do mais novo para o mais antigo (até 50), cada um com os dois criativos, a situação e o que mostrou até a última olhada. O que funcionou fica guardado por empresa: nada é comparado entre empresas.",
+        "operationId": "TestesDeCriativoController_listar",
+        "parameters": [
+          {
+            "name": "brand_id",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string",
+                            "format": "uuid",
+                            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                          },
+                          "brand_id": {
+                            "type": "string",
+                            "format": "uuid",
+                            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                          },
+                          "unit_id": {
+                            "type": "string",
+                            "format": "uuid",
+                            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                          },
+                          "name": {
+                            "type": "string"
+                          },
+                          "status": {
+                            "type": "string",
+                            "enum": [
+                              "pedido",
+                              "criando",
+                              "pronto",
+                              "rodando",
+                              "terminado",
+                              "encerrado",
+                              "interrompido",
+                              "cancelado"
+                            ]
+                          },
+                          "active": {
+                            "type": "boolean"
+                          },
+                          "arms": {
+                            "minItems": 2,
+                            "maxItems": 2,
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "letter": {
+                                  "type": "string",
+                                  "enum": [
+                                    "A",
+                                    "B"
+                                  ]
+                                },
+                                "piece_id": {
+                                  "type": "string",
+                                  "format": "uuid",
+                                  "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                                },
+                                "piece_version": {
+                                  "type": "integer",
+                                  "minimum": 1,
+                                  "maximum": 9007199254740991
+                                },
+                                "media_id": {
+                                  "type": "string",
+                                  "format": "uuid",
+                                  "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                                },
+                                "title": {
+                                  "type": "string"
+                                },
+                                "ad_text": {
+                                  "type": "string"
+                                },
+                                "coupon_code": {
+                                  "type": "string"
+                                },
+                                "coupon_status": {
+                                  "type": "string",
+                                  "enum": [
+                                    "a_criar",
+                                    "pedido",
+                                    "criado",
+                                    "falhou"
+                                  ]
+                                },
+                                "meta": {
+                                  "type": "object",
+                                  "properties": {
+                                    "adset_id": {
+                                      "type": [
+                                        "string",
+                                        "null"
+                                      ]
+                                    },
+                                    "ad_id": {
+                                      "type": [
+                                        "string",
+                                        "null"
+                                      ]
+                                    }
+                                  },
+                                  "required": [
+                                    "adset_id",
+                                    "ad_id"
+                                  ],
+                                  "additionalProperties": false
+                                }
+                              },
+                              "required": [
+                                "letter",
+                                "piece_id",
+                                "piece_version",
+                                "media_id",
+                                "title",
+                                "ad_text",
+                                "coupon_code",
+                                "coupon_status",
+                                "meta"
+                              ],
+                              "additionalProperties": false
+                            }
+                          },
+                          "discount": {
+                            "type": "object",
+                            "properties": {
+                              "kind": {
+                                "type": "string",
+                                "enum": [
+                                  "percentual",
+                                  "valor"
+                                ]
+                              },
+                              "percent": {
+                                "type": [
+                                  "integer",
+                                  "null"
+                                ],
+                                "minimum": -9007199254740991,
+                                "maximum": 9007199254740991
+                              },
+                              "value_cents": {
+                                "type": [
+                                  "integer",
+                                  "null"
+                                ],
+                                "minimum": -9007199254740991,
+                                "maximum": 9007199254740991
+                              },
+                              "min_order_cents": {
+                                "type": "integer",
+                                "minimum": -9007199254740991,
+                                "maximum": 9007199254740991
+                              },
+                              "valid_until": {
+                                "type": "string",
+                                "format": "date",
+                                "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+                              }
+                            },
+                            "required": [
+                              "kind",
+                              "percent",
+                              "value_cents",
+                              "min_order_cents",
+                              "valid_until"
+                            ],
+                            "additionalProperties": false
+                          },
+                          "radius_km": {
+                            "type": [
+                              "number",
+                              "null"
+                            ]
+                          },
+                          "districts": {
+                            "type": [
+                              "array",
+                              "null"
+                            ],
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "code": {
+                                  "type": "string"
+                                },
+                                "name": {
+                                  "type": "string"
+                                },
+                                "meta": {
+                                  "type": "boolean"
+                                },
+                                "radius_km": {
+                                  "type": "number"
+                                }
+                              },
+                              "required": [
+                                "code",
+                                "name",
+                                "meta",
+                                "radius_km"
+                              ],
+                              "additionalProperties": false
+                            }
+                          },
+                          "daily_budget_micros": {
+                            "type": "integer",
+                            "minimum": -9007199254740991,
+                            "maximum": 9007199254740991
+                          },
+                          "min_days": {
+                            "type": "integer",
+                            "minimum": -9007199254740991,
+                            "maximum": 9007199254740991
+                          },
+                          "max_days": {
+                            "type": "integer",
+                            "minimum": -9007199254740991,
+                            "maximum": 9007199254740991
+                          },
+                          "link": {
+                            "type": "string"
+                          },
+                          "action_id": {
+                            "type": [
+                              "string",
+                              "null"
+                            ],
+                            "format": "uuid",
+                            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                          },
+                          "pending_action_id": {
+                            "type": [
+                              "string",
+                              "null"
+                            ],
+                            "format": "uuid",
+                            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                          },
+                          "started_on": {
+                            "type": [
+                              "string",
+                              "null"
+                            ],
+                            "format": "date",
+                            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+                          },
+                          "ended_on": {
+                            "type": [
+                              "string",
+                              "null"
+                            ],
+                            "format": "date",
+                            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+                          },
+                          "error": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
+                          "reason": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
+                          "result": {
+                            "type": [
+                              "object",
+                              "null"
+                            ],
+                            "properties": {
+                              "looks": {
+                                "type": "array",
+                                "items": {
+                                  "type": "object",
+                                  "properties": {
+                                    "day": {
+                                      "type": "integer",
+                                      "minimum": -9007199254740991,
+                                      "maximum": 9007199254740991
+                                    },
+                                    "orders_a": {
+                                      "type": "integer",
+                                      "minimum": -9007199254740991,
+                                      "maximum": 9007199254740991
+                                    },
+                                    "orders_b": {
+                                      "type": "integer",
+                                      "minimum": -9007199254740991,
+                                      "maximum": 9007199254740991
+                                    },
+                                    "chance": {
+                                      "type": "number"
+                                    }
+                                  },
+                                  "required": [
+                                    "day",
+                                    "orders_a",
+                                    "orders_b",
+                                    "chance"
+                                  ],
+                                  "additionalProperties": false
+                                }
+                              },
+                              "verdict": {
+                                "type": "string",
+                                "enum": [
+                                  "ainda_nao",
+                                  "venceu",
+                                  "sem_vencedor"
+                                ]
+                              },
+                              "winner": {
+                                "type": [
+                                  "string",
+                                  "null"
+                                ],
+                                "enum": [
+                                  "A",
+                                  "B",
+                                  null
+                                ]
+                              },
+                              "arms": {
+                                "minItems": 2,
+                                "maxItems": 2,
+                                "type": "array",
+                                "items": {
+                                  "type": "object",
+                                  "properties": {
+                                    "letter": {
+                                      "type": "string",
+                                      "enum": [
+                                        "A",
+                                        "B"
+                                      ]
+                                    },
+                                    "orders": {
+                                      "type": "integer",
+                                      "minimum": -9007199254740991,
+                                      "maximum": 9007199254740991
+                                    },
+                                    "revenue_micros": {
+                                      "type": "integer",
+                                      "minimum": -9007199254740991,
+                                      "maximum": 9007199254740991
+                                    },
+                                    "spend_micros": {
+                                      "type": [
+                                        "integer",
+                                        "null"
+                                      ],
+                                      "minimum": -9007199254740991,
+                                      "maximum": 9007199254740991
+                                    },
+                                    "link_clicks": {
+                                      "type": [
+                                        "integer",
+                                        "null"
+                                      ],
+                                      "minimum": -9007199254740991,
+                                      "maximum": 9007199254740991
+                                    }
+                                  },
+                                  "required": [
+                                    "letter",
+                                    "orders",
+                                    "revenue_micros",
+                                    "spend_micros",
+                                    "link_clicks"
+                                  ],
+                                  "additionalProperties": false
+                                }
+                              }
+                            },
+                            "required": [
+                              "looks",
+                              "verdict",
+                              "winner",
+                              "arms"
+                            ],
+                            "additionalProperties": false
+                          },
+                          "meta": {
+                            "type": "object",
+                            "properties": {
+                              "account_id": {
+                                "type": [
+                                  "string",
+                                  "null"
+                                ]
+                              },
+                              "campaign_id": {
+                                "type": [
+                                  "string",
+                                  "null"
+                                ]
+                              }
+                            },
+                            "required": [
+                              "account_id",
+                              "campaign_id"
+                            ],
+                            "additionalProperties": false
+                          },
+                          "created_at": {
+                            "type": "string",
+                            "format": "date-time",
+                            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "brand_id",
+                          "unit_id",
+                          "name",
+                          "status",
+                          "active",
+                          "arms",
+                          "discount",
+                          "radius_km",
+                          "districts",
+                          "daily_budget_micros",
+                          "min_days",
+                          "max_days",
+                          "link",
+                          "action_id",
+                          "pending_action_id",
+                          "started_on",
+                          "ended_on",
+                          "error",
+                          "reason",
+                          "result",
+                          "meta",
+                          "created_at"
+                        ],
+                        "additionalProperties": false
+                      }
+                    }
+                  },
+                  "required": [
+                    "items"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string",
+                      "format": "uri"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "integer",
+                      "minimum": 400,
+                      "maximum": 599
+                    },
+                    "detail": {
+                      "type": "string"
+                    },
+                    "instance": {
+                      "type": "string"
+                    },
+                    "code": {
+                      "type": "string"
+                    },
+                    "trace_id": {
+                      "type": "string"
+                    },
+                    "errors": {
+                      "description": "Campos inválidos, quando o erro é de validação",
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "path": {
+                            "type": "string"
+                          },
+                          "message": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "path",
+                          "message"
+                        ],
+                        "additionalProperties": false
+                      }
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "title",
+                    "status",
+                    "code",
+                    "trace_id"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string",
+                      "format": "uri"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "integer",
+                      "minimum": 400,
+                      "maximum": 599
+                    },
+                    "detail": {
+                      "type": "string"
+                    },
+                    "instance": {
+                      "type": "string"
+                    },
+                    "code": {
+                      "type": "string"
+                    },
+                    "trace_id": {
+                      "type": "string"
+                    },
+                    "errors": {
+                      "description": "Campos inválidos, quando o erro é de validação",
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "path": {
+                            "type": "string"
+                          },
+                          "message": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "path",
+                          "message"
+                        ],
+                        "additionalProperties": false
+                      }
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "title",
+                    "status",
+                    "code",
+                    "trace_id"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string",
+                      "format": "uri"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "integer",
+                      "minimum": 400,
+                      "maximum": 599
+                    },
+                    "detail": {
+                      "type": "string"
+                    },
+                    "instance": {
+                      "type": "string"
+                    },
+                    "code": {
+                      "type": "string"
+                    },
+                    "trace_id": {
+                      "type": "string"
+                    },
+                    "errors": {
+                      "description": "Campos inválidos, quando o erro é de validação",
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "path": {
+                            "type": "string"
+                          },
+                          "message": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "path",
+                          "message"
+                        ],
+                        "additionalProperties": false
+                      }
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "title",
+                    "status",
+                    "code",
+                    "trace_id"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "liame_sessao": []
+          }
+        ],
+        "summary": "Listar os testes de criativo da marca",
+        "tags": [
+          "testes-de-criativo"
+        ]
       }
     },
     "/v1/creative-tests/{id}/activate": {
@@ -135456,6 +136258,130 @@
                         "null"
                       ]
                     },
+                    "reason": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "result": {
+                      "type": [
+                        "object",
+                        "null"
+                      ],
+                      "properties": {
+                        "looks": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "day": {
+                                "type": "integer",
+                                "minimum": -9007199254740991,
+                                "maximum": 9007199254740991
+                              },
+                              "orders_a": {
+                                "type": "integer",
+                                "minimum": -9007199254740991,
+                                "maximum": 9007199254740991
+                              },
+                              "orders_b": {
+                                "type": "integer",
+                                "minimum": -9007199254740991,
+                                "maximum": 9007199254740991
+                              },
+                              "chance": {
+                                "type": "number"
+                              }
+                            },
+                            "required": [
+                              "day",
+                              "orders_a",
+                              "orders_b",
+                              "chance"
+                            ],
+                            "additionalProperties": false
+                          }
+                        },
+                        "verdict": {
+                          "type": "string",
+                          "enum": [
+                            "ainda_nao",
+                            "venceu",
+                            "sem_vencedor"
+                          ]
+                        },
+                        "winner": {
+                          "type": [
+                            "string",
+                            "null"
+                          ],
+                          "enum": [
+                            "A",
+                            "B",
+                            null
+                          ]
+                        },
+                        "arms": {
+                          "minItems": 2,
+                          "maxItems": 2,
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "letter": {
+                                "type": "string",
+                                "enum": [
+                                  "A",
+                                  "B"
+                                ]
+                              },
+                              "orders": {
+                                "type": "integer",
+                                "minimum": -9007199254740991,
+                                "maximum": 9007199254740991
+                              },
+                              "revenue_micros": {
+                                "type": "integer",
+                                "minimum": -9007199254740991,
+                                "maximum": 9007199254740991
+                              },
+                              "spend_micros": {
+                                "type": [
+                                  "integer",
+                                  "null"
+                                ],
+                                "minimum": -9007199254740991,
+                                "maximum": 9007199254740991
+                              },
+                              "link_clicks": {
+                                "type": [
+                                  "integer",
+                                  "null"
+                                ],
+                                "minimum": -9007199254740991,
+                                "maximum": 9007199254740991
+                              }
+                            },
+                            "required": [
+                              "letter",
+                              "orders",
+                              "revenue_micros",
+                              "spend_micros",
+                              "link_clicks"
+                            ],
+                            "additionalProperties": false
+                          }
+                        }
+                      },
+                      "required": [
+                        "looks",
+                        "verdict",
+                        "winner",
+                        "arms"
+                      ],
+                      "additionalProperties": false
+                    },
                     "meta": {
                       "type": "object",
                       "properties": {
@@ -135504,6 +136430,8 @@
                     "started_on",
                     "ended_on",
                     "error",
+                    "reason",
+                    "result",
                     "meta",
                     "created_at"
                   ],
@@ -136124,6 +137052,130 @@
                         "null"
                       ]
                     },
+                    "reason": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "result": {
+                      "type": [
+                        "object",
+                        "null"
+                      ],
+                      "properties": {
+                        "looks": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "day": {
+                                "type": "integer",
+                                "minimum": -9007199254740991,
+                                "maximum": 9007199254740991
+                              },
+                              "orders_a": {
+                                "type": "integer",
+                                "minimum": -9007199254740991,
+                                "maximum": 9007199254740991
+                              },
+                              "orders_b": {
+                                "type": "integer",
+                                "minimum": -9007199254740991,
+                                "maximum": 9007199254740991
+                              },
+                              "chance": {
+                                "type": "number"
+                              }
+                            },
+                            "required": [
+                              "day",
+                              "orders_a",
+                              "orders_b",
+                              "chance"
+                            ],
+                            "additionalProperties": false
+                          }
+                        },
+                        "verdict": {
+                          "type": "string",
+                          "enum": [
+                            "ainda_nao",
+                            "venceu",
+                            "sem_vencedor"
+                          ]
+                        },
+                        "winner": {
+                          "type": [
+                            "string",
+                            "null"
+                          ],
+                          "enum": [
+                            "A",
+                            "B",
+                            null
+                          ]
+                        },
+                        "arms": {
+                          "minItems": 2,
+                          "maxItems": 2,
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "letter": {
+                                "type": "string",
+                                "enum": [
+                                  "A",
+                                  "B"
+                                ]
+                              },
+                              "orders": {
+                                "type": "integer",
+                                "minimum": -9007199254740991,
+                                "maximum": 9007199254740991
+                              },
+                              "revenue_micros": {
+                                "type": "integer",
+                                "minimum": -9007199254740991,
+                                "maximum": 9007199254740991
+                              },
+                              "spend_micros": {
+                                "type": [
+                                  "integer",
+                                  "null"
+                                ],
+                                "minimum": -9007199254740991,
+                                "maximum": 9007199254740991
+                              },
+                              "link_clicks": {
+                                "type": [
+                                  "integer",
+                                  "null"
+                                ],
+                                "minimum": -9007199254740991,
+                                "maximum": 9007199254740991
+                              }
+                            },
+                            "required": [
+                              "letter",
+                              "orders",
+                              "revenue_micros",
+                              "spend_micros",
+                              "link_clicks"
+                            ],
+                            "additionalProperties": false
+                          }
+                        }
+                      },
+                      "required": [
+                        "looks",
+                        "verdict",
+                        "winner",
+                        "arms"
+                      ],
+                      "additionalProperties": false
+                    },
                     "meta": {
                       "type": "object",
                       "properties": {
@@ -136172,6 +137224,8 @@
                     "started_on",
                     "ended_on",
                     "error",
+                    "reason",
+                    "result",
                     "meta",
                     "created_at"
                   ],
@@ -136514,7 +137568,7 @@
     },
     "/v1/creative-tests/{id}": {
       "get": {
-        "description": "O teste com os dois criativos (a peça, a mídia, o texto que sai no anúncio e o cupom de cada um, com a situação dele), o desconto e até quando os cupons valem, quem vê, a verba, os dias, a situação e o que já existe na Meta.",
+        "description": "O teste com os dois criativos (a peça, a mídia, o texto que sai no anúncio e o cupom de cada um, com a situação dele), o desconto e até quando os cupons valem, quem vê, a verba, os dias, a situação, o que já existe na Meta e, a partir do dia 7, o que o teste mostrou até a última olhada (os pedidos de cada criativo no caixa, a chance de a diferença ser acaso e o veredito). O Liame olha só ao fim de cada semana inteira e não espia no meio.",
         "operationId": "TestesDeCriativoController_obter",
         "parameters": [
           {
@@ -136792,6 +137846,130 @@
                         "null"
                       ]
                     },
+                    "reason": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "result": {
+                      "type": [
+                        "object",
+                        "null"
+                      ],
+                      "properties": {
+                        "looks": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "day": {
+                                "type": "integer",
+                                "minimum": -9007199254740991,
+                                "maximum": 9007199254740991
+                              },
+                              "orders_a": {
+                                "type": "integer",
+                                "minimum": -9007199254740991,
+                                "maximum": 9007199254740991
+                              },
+                              "orders_b": {
+                                "type": "integer",
+                                "minimum": -9007199254740991,
+                                "maximum": 9007199254740991
+                              },
+                              "chance": {
+                                "type": "number"
+                              }
+                            },
+                            "required": [
+                              "day",
+                              "orders_a",
+                              "orders_b",
+                              "chance"
+                            ],
+                            "additionalProperties": false
+                          }
+                        },
+                        "verdict": {
+                          "type": "string",
+                          "enum": [
+                            "ainda_nao",
+                            "venceu",
+                            "sem_vencedor"
+                          ]
+                        },
+                        "winner": {
+                          "type": [
+                            "string",
+                            "null"
+                          ],
+                          "enum": [
+                            "A",
+                            "B",
+                            null
+                          ]
+                        },
+                        "arms": {
+                          "minItems": 2,
+                          "maxItems": 2,
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "letter": {
+                                "type": "string",
+                                "enum": [
+                                  "A",
+                                  "B"
+                                ]
+                              },
+                              "orders": {
+                                "type": "integer",
+                                "minimum": -9007199254740991,
+                                "maximum": 9007199254740991
+                              },
+                              "revenue_micros": {
+                                "type": "integer",
+                                "minimum": -9007199254740991,
+                                "maximum": 9007199254740991
+                              },
+                              "spend_micros": {
+                                "type": [
+                                  "integer",
+                                  "null"
+                                ],
+                                "minimum": -9007199254740991,
+                                "maximum": 9007199254740991
+                              },
+                              "link_clicks": {
+                                "type": [
+                                  "integer",
+                                  "null"
+                                ],
+                                "minimum": -9007199254740991,
+                                "maximum": 9007199254740991
+                              }
+                            },
+                            "required": [
+                              "letter",
+                              "orders",
+                              "revenue_micros",
+                              "spend_micros",
+                              "link_clicks"
+                            ],
+                            "additionalProperties": false
+                          }
+                        }
+                      },
+                      "required": [
+                        "looks",
+                        "verdict",
+                        "winner",
+                        "arms"
+                      ],
+                      "additionalProperties": false
+                    },
                     "meta": {
                       "type": "object",
                       "properties": {
@@ -136840,6 +138018,8 @@
                     "started_on",
                     "ended_on",
                     "error",
+                    "reason",
+                    "result",
                     "meta",
                     "created_at"
                   ],
