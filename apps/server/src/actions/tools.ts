@@ -26,6 +26,7 @@ import { planoDaCampanhaGoogle, planoDeAtivarNoGoogle, planoDePausarNoGoogle } f
 import { planoDaCampanhaNova, planoDeAtivar, planoDePausar } from '../campanhas/campanha-nova-plano.js';
 import { FORA_DO_RITMO, planoDoRitmo } from '../campanhas/ritmo-plano.js';
 import { FLAG_DO_TESTE_DE_CRIATIVO, planoDeAtivarOTeste, planoDePausarOTeste, planoDoTesteDeCriativo } from '../campanhas/teste-de-criativo-plano.js';
+import { FLAG_DO_TESTE_DE_REGIAO, planoDoTesteDeRegiao } from '../campanhas/teste-regiao-plano.js';
 import { EstadoDoPost, planoDeApagarOPost, planoDeTentarDeNovo, planoDoPost, quandoSai } from '../posts/post-plano.js';
 import { motivoDoCompartilhado, orcamentoCompartilhado } from './orcamento-compartilhado.js';
 
@@ -672,6 +673,40 @@ export const TOOLS: Record<string, ToolDefinition> = {
       const plano = planoDePausarOTeste(before);
       if (!plano.ok) throw new PlanoRecusado(plano.motivo);
       return { action: 'teste.pausar', budgetImpact: 'decrease', valueMicros: null, currentValueMicros: null, reserveMicros: 0, desiredState: plano.desejado as unknown as ResourceState };
+    },
+  },
+  // O teste de região (plano da região, R8; D-RG-81 e D-RG-82): um bairro da área de entrega fica 14 dias sem anúncio
+  // nas campanhas que o Liame criou, e o caixa diz quanto o anúncio traz ali. Aprovar NÃO muda nada na Meta nem reserva
+  // verba (a verba das campanhas fica como está: a Meta mostra os anúncios para os outros bairros): marca o teste como
+  // pronto, e a saída e a volta do bairro em cada conjunto saem depois como passos próprios. Sempre com uma pessoa e o
+  // código do app, só pela rota do teste (`POST /v1/region-tests`, que confere a D-RG-82) e só com a função
+  // `teste_de_regiao`. A volta é encerrar o teste, pela tela dele, que devolve o bairro.
+  teste_de_regiao: {
+    name: 'teste_de_regiao',
+    version: 1,
+    owner: 'midia',
+    description:
+      'Aprova o teste de região: um bairro da área de entrega fica 14 dias sem anúncio nas campanhas que o Liame criou, e o caixa diz quanto o anúncio traz ali. Aprovar não muda nada na Meta nem a verba: o bairro sai de cada conjunto no começo e volta no fim, cada passo pelo trilho de ações.',
+    // Não gasta mais, mas o bairro pode vender menos nos 14 dias (o pedido mostra risco médio).
+    risk: 'R2',
+    providers: ['meta_ads'],
+    compensation: 'devolver_o_bairro',
+    alwaysApproval: true,
+    onlyByRoute: true,
+    flag: FLAG_DO_TESTE_DE_REGIAO,
+    params: NoParams,
+    plan(before) {
+      const plano = planoDoTesteDeRegiao(before);
+      if (!plano.ok) throw new PlanoRecusado(plano.motivo);
+      return {
+        action: 'teste.regiao',
+        // A verba das campanhas não muda: nada a reservar no envelope do mês.
+        budgetImpact: 'none',
+        valueMicros: null,
+        currentValueMicros: null,
+        reserveMicros: 0,
+        desiredState: plano.desejado as unknown as ResourceState,
+      };
     },
   },
   // A campanha nova no Google, criada pausada (A5, Y9, parte 2; P45; D-A5-21 a D-A5-26): a peça aprovada, com os textos

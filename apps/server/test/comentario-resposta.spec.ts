@@ -162,11 +162,11 @@ describe('as ferramentas, a política e o conector da conta', () => {
     expect(Object.values(TOOLS).filter((t) => t.decisaoJaTomada === 'atendimento_automatico').map((t) => t.name)).toEqual(['comentario_responder_auto', 'direct_responder_auto']);
     for (const t of doComentario) expect(t.providers, t.name).toEqual(['instagram', 'facebook_page']);
     // Só elas, a resposta no Direct (A6, Z12, parte 2), a campanha nova na Meta e no Google (A4, X5; A5, Y9: criar e ativar),
-    // o ritmo da semana e o passo dele (plano da região, R7, parte 1b), o teste de criativo (criar e ativar) e o cupom dele
-    // (R8) e o envio pedido ao RegemCast (Hub DMS F5, parte D) têm flag própria. Pausar não depende da função (só diminui o
+    // o ritmo da semana e o passo dele (plano da região, R7, parte 1b), o teste de criativo (criar e ativar), o cupom dele
+    // e o teste de região (R8) e o envio pedido ao RegemCast (Hub DMS F5, parte D) têm flag própria. Pausar não depende da função (só diminui o
     // gasto): a do teste (D-RG-95) e as das campanhas novas (D-A4-48; ERR-238) ficam só com a escrita da plataforma.
     expect(Object.values(TOOLS).filter((t) => t.flag).map((t) => t.name).sort()).toEqual(
-      [...doComentario.map((t) => t.name), 'direct_responder', 'direct_responder_auto', 'campanha_criar', 'campanha_nova_ativar', 'ritmo_da_semana', 'orcamento_do_ritmo', 'teste_de_criativo_criar', 'teste_de_criativo_ativar', 'cupom_do_teste', 'campanha_google_criar', 'campanha_google_ativar', 'mensagem_pedir_ao_destino'].sort(),
+      [...doComentario.map((t) => t.name), 'direct_responder', 'direct_responder_auto', 'campanha_criar', 'campanha_nova_ativar', 'ritmo_da_semana', 'orcamento_do_ritmo', 'teste_de_criativo_criar', 'teste_de_criativo_ativar', 'cupom_do_teste', 'teste_de_regiao', 'campanha_google_criar', 'campanha_google_ativar', 'mensagem_pedir_ao_destino'].sort(),
     );
     // E nenhuma ferramenta que só diminui o gasto (pausar) depende da função dela.
     expect(Object.values(TOOLS).filter((t) => t.name.endsWith('_pausar') && t.flag).map((t) => t.name)).toEqual([]);

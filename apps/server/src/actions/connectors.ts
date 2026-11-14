@@ -4,6 +4,7 @@ import { campanhaGoogleDoRecurso } from '../campanhas/campanha-google-plano.js';
 import { campanhaNovaDoRecurso } from '../campanhas/campanha-nova-plano.js';
 import { ritmoDoRecurso } from '../campanhas/ritmo-plano.js';
 import { testeDeCriativoDoRecurso } from '../campanhas/teste-de-criativo-plano.js';
+import { testeDeRegiaoDoRecurso } from '../campanhas/teste-regiao-plano.js';
 import { campanhaGoogleConnector } from './campanha-google-no-google.js';
 import { campanhaNovaNaMetaConnector } from './campanha-nova-na-meta.js';
 import { comentarioDoRecurso, comentarioNaPaginaConnector, comentarioNoInstagramConnector } from './comentario-na-rede.js';
@@ -17,6 +18,7 @@ import { regemCupomConnector } from './regem-cupom.js';
 import { regemcastMensagemConnector } from './regemcast-mensagem.js';
 import { ritmoDaSemanaConnector } from './ritmo-da-semana.js';
 import { testeDeCriativoNaMetaConnector } from './teste-de-criativo-na-meta.js';
+import { testeDeRegiaoConnector } from './teste-de-regiao.js';
 import type { ResourceState } from './tools.js';
 
 // Connectors (arquitetura §6): um por provedor, com a mesma interface. Na A1 só existia o sandbox
@@ -186,6 +188,8 @@ export class ConectorDaMeta implements Connector {
     private readonly doRitmo: Connector | null = null,
     /** O teste de criativo do Liame (`teste_de_criativo:<id>`; plano da região, R8): a campanha de teste, com dois conjuntos. */
     private readonly doTesteDeCriativo: Connector | null = null,
+    /** O teste de região do Liame (`teste_de_regiao:<id>`; R8): o pedido que não escreve na plataforma. */
+    private readonly doTesteDeRegiao: Connector | null = null,
   ) {
     this.provider = dosObjetos.provider;
     this.writeFlag = dosObjetos.writeFlag;
@@ -196,6 +200,7 @@ export class ConectorDaMeta implements Connector {
   de(resourceId: string): Connector {
     if (this.doRitmo && ritmoDoRecurso(resourceId) !== null) return this.doRitmo;
     if (this.doTesteDeCriativo && testeDeCriativoDoRecurso(resourceId) !== null) return this.doTesteDeCriativo;
+    if (this.doTesteDeRegiao && testeDeRegiaoDoRecurso(resourceId) !== null) return this.doTesteDeRegiao;
     return this.ehDaCampanhaNova(resourceId) ? this.daCampanhaNova : this.dosObjetos;
   }
 
@@ -242,8 +247,8 @@ export const CONNECTORS: Record<string, Connector> = {
   regem: regemCupomConnector,
   // A4, X5: a campanha nova (`campanha_nova:<id>`) pelo mesmo provedor; os objetos que já existem, como sempre.
   // Plano da região, R7: o ritmo da semana (`ritmo:<id>`) entra pelo mesmo provedor, com a trava e a flag de escrita dele.
-  // R8: o teste de criativo (`teste_de_criativo:<id>`), igual.
-  meta_ads: new ConectorDaMeta(metaAnunciosConnector, campanhaNovaNaMetaConnector, ritmoDaSemanaConnector, testeDeCriativoNaMetaConnector),
+  // R8: o teste de criativo (`teste_de_criativo:<id>`) e o teste de região (`teste_de_regiao:<id>`), igual.
+  meta_ads: new ConectorDaMeta(metaAnunciosConnector, campanhaNovaNaMetaConnector, ritmoDaSemanaConnector, testeDeCriativoNaMetaConnector, testeDeRegiaoConnector),
   // A5, Y9: a campanha nova no Google (`campanha_google:<id>`) pelo mesmo provedor; os objetos que já existem, como sempre.
   google_ads: new ConectorDoGoogle(googleAnunciosConnector, campanhaGoogleConnector),
   // A5, Y5: o pedido de mensagem de WhatsApp. Só com a flag de escrita `whatsapp_campaign` ligada para a empresa.

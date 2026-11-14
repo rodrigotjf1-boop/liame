@@ -61,6 +61,8 @@ describe('ferramentas de anúncio (A4 · X2)', () => {
       teste_de_criativo_criar: ['R2', 'meta_ads', 'fica_pausada_na_meta'],
       teste_de_criativo_ativar: ['R2', 'meta_ads', 'encerrar_o_teste'],
       teste_de_criativo_pausar: ['R1', 'meta_ads', 'ativar_de_novo_com_aprovacao'],
+      // O teste de região (R8): aprovar não muda nada na Meta; a volta é encerrar o teste, que devolve o bairro.
+      teste_de_regiao: ['R2', 'meta_ads', 'devolver_o_bairro'],
     });
     for (const t of Object.values(TOOLS)) expect(t.params.safeParse({ qualquer: 1 }).success, t.name).toBe(false);
   });
@@ -203,7 +205,8 @@ describe('ferramentas de anúncio (A4 · X2)', () => {
     // pedem pela rota do teste (`onlyByRoute`), e a volta de uma ferramenta assim não passa pelo "desfazer" de
     // Aprovações: a volta de ativar é "Encerrar o teste" (que pausa, sem o código), e a de encerrar é pedir para ativar de
     // novo, com a aprovação. O teste de banco (`teste-de-criativo.spec.ts`) prova os dois caminhos.
-    const semVoltaNaMeta = ['campanha_criar', 'ritmo_da_semana', 'teste_de_criativo_criar', 'teste_de_criativo_ativar', 'teste_de_criativo_pausar'];
+    // O teste de região (R8; D-RG-81): aprovar só marca o teste como pronto, sem tocar a Meta; a volta é "Encerrar o teste".
+    const semVoltaNaMeta = ['campanha_criar', 'ritmo_da_semana', 'teste_de_criativo_criar', 'teste_de_criativo_ativar', 'teste_de_criativo_pausar', 'teste_de_regiao'];
     for (const t of Object.values(TOOLS)) expect(Boolean(t.undo), t.name).toBe((t.providers.includes('meta_ads') && !semVoltaNaMeta.includes(t.name)) || comVolta.includes(t.name));
   });
 });

@@ -128,6 +128,22 @@ export function conjuntoAlcancaOBairro(targeting: unknown, bairro: BairroNoMapa)
   return { alcanca: false, porque: 'os lugares do público ficam longe do bairro' };
 }
 
+/**
+ * O conjunto anuncia SÓ no bairro? Tirar o bairro o deixaria sem lugar nenhum: com uma campanha assim, o teste não é
+ * pedido. Só os formatos que o Liame escreve contam (os bairros da Meta e os círculos); com qualquer outro lugar, não é
+ * "só no bairro".
+ */
+export function anunciaSoNoBairro(targeting: unknown, bairro: BairroNoMapa): boolean {
+  const t = targeting && typeof targeting === 'object' ? (targeting as Record<string, unknown>) : null;
+  const geo = t?.geo_locations && typeof t.geo_locations === 'object' ? (t.geo_locations as Record<string, unknown>) : null;
+  if (!geo) return false;
+  for (const [chave, valor] of Object.entries(geo)) if (!CONHECIDOS.has(chave) && temConteudo(valor)) return false;
+  const deCirculo = circulos(geo);
+  const deBairro = chavesDeBairro(geo);
+  if (deCirculo === null || deBairro === null || (!deCirculo.length && !deBairro.length)) return false;
+  return deCirculo.every((c) => distanciaKm(c, bairro) + c.raioKm <= bairro.raio_km + 0.05) && deBairro.every((k) => bairro.meta !== null && k === bairro.meta);
+}
+
 // ------------------------------------------------------------ o que o anúncio traz no bairro
 
 export type PedidosDoTeste = {
