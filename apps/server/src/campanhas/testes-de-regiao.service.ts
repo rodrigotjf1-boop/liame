@@ -4,6 +4,7 @@ import { Injectable } from '@nestjs/common';
 import { sql } from 'drizzle-orm';
 import { ActionService } from '../actions/action.service.js';
 import { problemaDaLeitura } from '../actions/leitura-na-plataforma.js';
+import { contaConectada } from '../connections/conectada.js';
 import { ErroConector } from '../connectors/cliente-http.js';
 import { type AuthContext, auditDetail, currentTx } from '../context/request-context.js';
 import { AppProblem } from '../errors/problems.js';
@@ -153,17 +154,39 @@ export class TestesDeRegiaoService {
     }
     if (alvos.length > 50) throw conflito('conjuntos-demais', 'Conjuntos demais no bairro', 'Mais de 50 conjuntos do Liame mostram anúncio no bairro: o teste fica para depois do piloto nesse tamanho.');
 
-    // O Google não deixa tirar um bairro de um raio: a campanha do Google ativa que alcança o bairro segura o teste.
+    // O Google não deixa tirar um bairro de um raio, e o Liame não lê os lugares das campanhas do Google: a campanha do
+    // Google do Liame (com o raio conhecido) que alcança o bairro segura o teste, e QUALQUER outra campanha ativa do
+    // Google da marca conta como "alcança" (o lado seguro, como o formato desconhecido na Meta), com o nome dela.
     const google = (
-      await tx.execute<{ radius_km: string; latitude: string | null; longitude: string | null }>(sql`
-        select g.radius_km::text as radius_km, u.latitude::text as latitude, u.longitude::text as longitude
+      await tx.execute<{ nome: string; raio: string | null; latitude: string | null; longitude: string | null }>(sql`
+        select c.name as nome, g.radius_km::text as raio, u.latitude::text as latitude, u.longitude::text as longitude
+          from liame.campaign c
+          join liame.connected_account a on a.id = c.connected_account_id and a.tenant_id = c.tenant_id
+          left join liame.google_campaign_new g on g.tenant_id = c.tenant_id and g.brand_id = a.brand_id and g.google_campaign_id = c.external_id and g.status = 'criada'
+          left join liame.unit u on u.id = g.unit_id and u.tenant_id = g.tenant_id
+         where c.tenant_id = ${quem.tenantId} and a.brand_id = ${body.brand_id} and a.provider = 'google_ads' and ${contaConectada('a')} and c.status = 'ativa'
+        union all
+        select g.name, g.radius_km::text, u.latitude::text, u.longitude::text
           from liame.google_campaign_new g
           join liame.unit u on u.id = g.unit_id and u.tenant_id = g.tenant_id
-         where g.tenant_id = ${quem.tenantId} and g.brand_id = ${body.brand_id} and g.active and g.status = 'criada'`)
+         where g.tenant_id = ${quem.tenantId} and g.brand_id = ${body.brand_id} and g.active and g.status = 'criada'
+         order by 1`)
     ).rows;
-    const googleNoBairro = google.some((g) => g.latitude === null || g.longitude === null || distanciaKm({ latitude: Number(g.latitude), longitude: Number(g.longitude) }, bairro) <= Number(g.radius_km) + bairro.raio_km);
-    if (googleNoBairro) {
-      throw conflito('google-no-bairro', `Não dá para testar ${bairro.nome} agora`, `A campanha do Google que o Liame criou mostra anúncio em ${bairro.nome}, e o Google não deixa tirar um bairro de um raio. Pause a campanha do Google durante o teste, ou escolha um bairro fora do raio dela.`);
+    for (const g of google) {
+      if (g.raio === null || g.latitude === null || g.longitude === null) {
+        throw conflito(
+          'google-no-bairro',
+          `Não dá para testar ${bairro.nome} agora`,
+          `A campanha do Google “${g.nome.slice(0, 120)}” está ativa e não foi criada pelo Liame com um raio: o Liame não lê os lugares dela, e ela pode mostrar anúncio em ${bairro.nome}. Pause essa campanha no Google durante o teste.`,
+        );
+      }
+      if (distanciaKm({ latitude: Number(g.latitude), longitude: Number(g.longitude) }, bairro) <= Number(g.raio) + bairro.raio_km) {
+        throw conflito(
+          'google-no-bairro',
+          `Não dá para testar ${bairro.nome} agora`,
+          `A campanha do Google “${g.nome.slice(0, 120)}”, que o Liame criou, mostra anúncio em ${bairro.nome}, e o Google não deixa tirar um bairro de um raio. Pause essa campanha durante o teste, ou escolha um bairro fora do raio dela.`,
+        );
+      }
     }
 
     // Grava o teste, com cada conjunto que o bairro vai deixar e o público de antes, e pede em Aprovações.

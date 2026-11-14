@@ -33,6 +33,8 @@ async function lerTeste(tx: Tx, ref: ResourceRef, travar = false): Promise<{ lin
 
 export class TesteDeRegiaoConnector implements Connector {
   readonly provider = PROVIDER;
+  // Aprovar não escreve na Meta, mas o teste só existe para os passos seguintes escreverem no público dos conjuntos: sem
+  // a escrita na Meta liberada (a flag e a autorização), um teste aprovado nunca andaria. Por isso a trava é a da Meta.
   readonly writeFlag = 'meta_write';
   // Aprovar o teste não gasta: a verba das campanhas não muda (a Meta mostra os anúncios para os outros bairros).
   readonly requiresSpendLimits = false;

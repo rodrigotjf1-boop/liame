@@ -22,8 +22,9 @@ import { hasDb } from './env.js';
 // Plano da região, R8: o pedido do teste de região (D-RG-81 e D-RG-82; migration 0159), contra Postgres e uma Graph de
 // mentira que devolve os conjuntos ativos da conta com o público. O que se prova:
 //   - só com a função; o bairro com menos de 15 pedidos por semana não é pedido, com o motivo;
-//   - a campanha criada fora do Liame que mostra anúncio no bairro segura o pedido, com o motivo; a falha da leitura na
-//     Meta sai na frase de sempre;
+//   - a campanha criada fora do Liame que mostra anúncio no bairro segura o pedido, com o motivo; a campanha ativa do
+//     Google que não é a do Liame com um raio conhecido também (o lado seguro); a falha da leitura na Meta sai na frase
+//     de sempre;
 //   - o pedido certo guarda o teste com cada conjunto do Liame que alcança o bairro (o público de antes, inteiro, e a
 //     impressão dos campos que o Liame controla), mostra os pedidos por bairro das 4 semanas, e espera o código do app em
 //     Aprovações; o conjunto do Liame longe do bairro fica de fora; um teste por vez na marca;
@@ -184,6 +185,27 @@ describe.skipIf(!hasDb)('o pedido do teste de região (plano da região, R8)', (
     const deFora = await pedir(e, 'Lapa Teste');
     expect([deFora.status, deFora.body.code]).toEqual([409, 'campanha-de-fora-no-bairro']);
     expect(deFora.body.detail).toContain('“Promo da semana”');
+
+    // Uma campanha do Google ativa que o Liame não criou com um raio: o Liame não lê os lugares dela, então ela conta como
+    // "alcança" (o lado seguro), com o nome dela. Pausada, deixa de contar.
+    graph.conjuntos = graph.conjuntos.filter((c) => c.name !== 'Promo da semana');
+    const contaDoGoogle = randomUUID();
+    await ownerQuery(`insert into liame.connected_account (id, tenant_id, brand_id, provider, external_id, name) values ($1, $2, $3, 'google_ads', $4, 'Google Ads da marca')`, [
+      contaDoGoogle,
+      e.tenantId,
+      e.brandId,
+      String(randomInt(1_000_000_000, 9_999_999_999)),
+    ]);
+    const campanhaDoGoogle = randomUUID();
+    await ownerQuery(`insert into liame.campaign (id, tenant_id, connected_account_id, provider, external_id, name, status) values ($1, $2, $3, 'google_ads', '20000000001', 'Busca da marca', 'ativa')`, [
+      campanhaDoGoogle,
+      e.tenantId,
+      contaDoGoogle,
+    ]);
+    const doGoogle = await pedir(e, 'Lapa Teste');
+    expect([doGoogle.status, doGoogle.body.code]).toEqual([409, 'google-no-bairro']);
+    expect(doGoogle.body.detail).toContain('“Busca da marca”');
+    await ownerQuery(`update liame.campaign set status = 'pausada' where id = $1`, [campanhaDoGoogle]);
 
     // A Meta recusa a autorização da conta: a frase de sempre (conectar de novo).
     graph.falha = { status: 400, corpo: { error: { code: 190, type: 'OAuthException', message: 'Error validating access token' } } };
