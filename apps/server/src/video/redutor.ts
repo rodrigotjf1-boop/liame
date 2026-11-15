@@ -85,19 +85,7 @@ export const TAXA_MAXIMA_DA_COPIA = '12M';
  */
 export function argumentosDaReducao(entrada: string, saida: string, s: Sondagem): string[] {
   const { largura, altura } = medidasDaCopia(s);
-  const imagem =
-    s.transferencia && TRANSFERENCIAS_DO_HDR.has(s.transferencia)
-      ? [
-          // A entrada dita inteira (a transferência, as primárias, a matriz e a faixa): sem uma delas, o zscale não acha
-          // o caminho entre as cores ("no path between colorspaces").
-          `zscale=w=${largura}:h=${altura}:f=lanczos:tin=${s.transferencia}:pin=bt2020:min=bt2020nc:rin=${s.faixa}:t=linear:npl=100`,
-          'format=gbrpf32le',
-          'zscale=p=bt709',
-          'tonemap=tonemap=hable:desat=0',
-          'zscale=t=bt709:m=bt709:r=tv',
-          'format=yuv420p',
-        ].join(',')
-      : `scale=${largura}:${altura}:flags=lanczos,format=yuv420p`;
+  const imagem = filtroDaImagem(s, largura, altura);
   const som = s.temAudio ? ['-map', '0:a:0', '-c:a', 'aac', '-b:a', '128k', '-ar', '48000', '-ac', '2'] : ['-an'];
   return [
     '-hide_banner',
@@ -144,14 +132,48 @@ export function argumentosDaReducao(entrada: string, saida: string, s: Sondagem)
   ];
 }
 
+/**
+ * O filtro da imagem: reduzida às medidas dadas (girada como aparece: o ffmpeg aplica a rotação sozinho) e, no HDR, as
+ * cores convertidas para o SDR (BT.709) antes, para não sair lavada. Termina em yuv420p. Vale para a cópia do Instagram
+ * e para os quadros que vão à IA (`video/quadros.ts`).
+ */
+export function filtroDaImagem(s: Pick<Sondagem, 'transferencia' | 'faixa'>, largura: number, altura: number): string {
+  if (s.transferencia && TRANSFERENCIAS_DO_HDR.has(s.transferencia)) {
+    return [
+      // A entrada dita inteira (a transferência, as primárias, a matriz e a faixa): sem uma delas, o zscale não acha o
+      // caminho entre as cores ("no path between colorspaces").
+      `zscale=w=${largura}:h=${altura}:f=lanczos:tin=${s.transferencia}:pin=bt2020:min=bt2020nc:rin=${s.faixa}:t=linear:npl=100`,
+      'format=gbrpf32le',
+      'zscale=p=bt709',
+      'tonemap=tonemap=hable:desat=0',
+      'zscale=t=bt709:m=bt709:r=tv',
+      'format=yuv420p',
+    ].join(',');
+  }
+  return `scale=${largura}:${altura}:flags=lanczos,format=yuv420p`;
+}
+
 /** O ffmpeg tem até 20 minutos por vídeo (90 s de 4K em HEVC, em 2 núcleos, levam bem menos). */
 export const TEMPO_DA_REDUCAO_MS = 20 * 60_000;
 const TEMPO_DA_SONDAGEM_MS = 60_000;
 
-type ChamadaDoFf = (bin: 'ffmpeg' | 'ffprobe', args: string[], tempoMs: number) => Promise<string>;
+/** Uma chamada ao ffmpeg ou ao ffprobe, com o prazo: devolve a saída padrão (trocável nos testes). */
+export type ChamadaDoFf = (bin: 'ffmpeg' | 'ffprobe', args: string[], tempoMs: number) => Promise<string>;
+
+/** A sondagem do vídeo pelo ffprobe (as medidas como aparece, o HDR, a faixa, a duração e o som). */
+export async function sondarVideo(arquivo: string, chamar: ChamadaDoFf = chamarPeloRemotion): Promise<Sondagem> {
+  const saida = await chamar('ffprobe', ['-v', 'error', '-print_format', 'json', '-show_streams', '-show_format', arquivo], TEMPO_DA_SONDAGEM_MS);
+  let json: unknown;
+  try {
+    json = JSON.parse(saida);
+  } catch {
+    throw new VideoQueNaoReduz('o ffprobe não devolveu o JSON do vídeo');
+  }
+  return lerSondagem(json);
+}
 
 /** O ffmpeg e o ffprobe que vêm com o Remotion (a pasta do binário e as bibliotecas dele, pelo próprio renderer). */
-const chamarPeloRemotion: ChamadaDoFf = async (bin, args, tempoMs) => {
+export const chamarPeloRemotion: ChamadaDoFf = async (bin, args, tempoMs) => {
   const { RenderInternals } = await import('@remotion/renderer');
   try {
     const r = await RenderInternals.callFf({ bin, args, indent: false, logLevel: 'error', binariesDirectory: null, cancelSignal: undefined, options: { timeout: tempoMs } });
@@ -169,15 +191,8 @@ export class RedutorFfmpeg implements Redutor {
     private readonly chamar: ChamadaDoFf = chamarPeloRemotion,
   ) {}
 
-  private async sondar(arquivo: string): Promise<Sondagem> {
-    const saida = await this.chamar('ffprobe', ['-v', 'error', '-print_format', 'json', '-show_streams', '-show_format', arquivo], TEMPO_DA_SONDAGEM_MS);
-    let json: unknown;
-    try {
-      json = JSON.parse(saida);
-    } catch {
-      throw new VideoQueNaoReduz('o ffprobe não devolveu o JSON do vídeo');
-    }
-    return lerSondagem(json);
+  private sondar(arquivo: string): Promise<Sondagem> {
+    return sondarVideo(arquivo, this.chamar);
   }
 
   async reduzir(entrada: string, pasta: string): Promise<VideoReduzidoNoDisco> {
