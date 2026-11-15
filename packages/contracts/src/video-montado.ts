@@ -141,6 +141,112 @@ export const VideoTextsResponse = z.strictObject({
 });
 export type VideoTextsResponse = z.infer<typeof VideoTextsResponse>;
 
+// Os melhores momentos (A6 · Z16, parte 3; P46; D-A6-150 a D-A6-154): a pessoa escolhe de 1 a 4 vídeos de Fotos e pede os
+// cortes. O serviço de montagem (`liame-render`) tira os quadros dos vídeos e o worker os manda ao Social media, que propõe
+// os cortes; a proposta passa pela régua (`cortesDaResposta`) antes de a pessoa ver.
+
+/** As durações do vídeo dos melhores momentos, em segundos (D-A6-150). */
+export const VIDEO_CUTS_DURATIONS = [10, 15, 20] as const;
+
+export const VIDEO_CUTS_LIMITS = {
+  /** Cada vídeo escolhido tem pelo menos 3 segundos (o corte mais curto tem 1,5). */
+  minVideoMs: 3_000,
+  /** Quantas vezes a pessoa pode "Pedir outros cortes" a partir de um pedido (D-A6-151). */
+  others: 2,
+  /** Pedidos de cortes por marca por dia (cada um gasta a IA com até 16 imagens; o limite volta à meia-noite, no fuso da empresa). */
+  perDay: 10,
+} as const;
+
+export const CreateVideoCutsRequest = z.strictObject({
+  brand_id: z.uuid(),
+  /** Os vídeos de Fotos desta marca, na ordem, de 1 a 4, sem repetir. */
+  media_ids: z
+    .array(z.uuid())
+    .min(1)
+    .max(4)
+    .refine((ids) => new Set(ids).size === ids.length, { error: 'Cada vídeo entra uma vez só' }),
+  duration_s: z.union([z.literal(10), z.literal(15), z.literal(20)]),
+  /** O pedido de antes, no "Pedir outros cortes" (até 2 vezes: `others_left`). */
+  previous_id: z.uuid().optional(),
+});
+export type CreateVideoCutsRequest = z.infer<typeof CreateVideoCutsRequest>;
+
+export const VIDEO_CUTS_STATUSES = ['pedido', 'quadros_prontos', 'lendo', 'pronta', 'falhou'] as const;
+/** `pedido` (o serviço de montagem vai tirar os quadros), `quadros_prontos` (espera o Social media), `lendo`, `pronta` ou `falhou`. */
+export const VideoCutsStatus = z.enum(VIDEO_CUTS_STATUSES);
+export type VideoCutsStatus = z.infer<typeof VideoCutsStatus>;
+
+/**
+ * O porquê de `falhou`, hoje: o que a régua recusou na proposta (`quantidade`, `video_fora`, `tempo_fora`, `corte_curto`,
+ * `corte_longo`, `repetido`, `total_fora`, `vazio`, `longo`, `emoji_ou_hashtag`, `dado_pessoal`, `compliance`), a resposta
+ * fora do formato (`formato`), a IA que não respondeu (`ia_desligada`, `sem-rota`, `teto`, `limite-usuario`, `travada`,
+ * `parada`, `indisponivel`, `entrada-grande`), o Social media desligado na marca (`funcionario_desligado`), os quadros que
+ * não chegaram (`sem_quadros`) ou o pedido parado no caminho (`parado`). A lista pode crescer (o serviço de montagem
+ * também pode dar por falho; V23): na resposta, o motivo vai como texto.
+ */
+export const VIDEO_CUTS_FAIL_REASONS = [
+  'quantidade',
+  'video_fora',
+  'tempo_fora',
+  'corte_curto',
+  'corte_longo',
+  'repetido',
+  'total_fora',
+  'vazio',
+  'longo',
+  'emoji_ou_hashtag',
+  'dado_pessoal',
+  'compliance',
+  'formato',
+  'ia_desligada',
+  'sem-rota',
+  'teto',
+  'limite-usuario',
+  'travada',
+  'parada',
+  'indisponivel',
+  'entrada-grande',
+  'funcionario_desligado',
+  'sem_quadros',
+  'parado',
+] as const;
+export type VideoCutsFailReason = (typeof VIDEO_CUTS_FAIL_REASONS)[number];
+
+/**
+ * Um corte dos "Melhores momentos" (A6 · Z16; D-A6-150 e D-A6-152): o vídeo de Fotos (um dos `media_ids`), o começo e o
+ * fim em milissegundos e a legenda (até 40 letras). A ordem da lista é a ordem do vídeo; o servidor confere cada corte
+ * dentro do vídeo, de 1,5 a 8 segundos, sem repetir pedaço, o total perto da duração e as legendas pelo Compliance.
+ */
+export const VideoCut = z.strictObject({
+  media_id: z.uuid(),
+  start_ms: z.int().min(0),
+  end_ms: z.int().min(1),
+  caption: z.string().trim().min(1).max(40),
+});
+export type VideoCut = z.infer<typeof VideoCut>;
+
+export const VideoCutsResponse = z.strictObject({
+  id: z.uuid(),
+  brand_id: z.uuid(),
+  media_ids: z.array(z.uuid()),
+  duration_s: z.int(),
+  status: VideoCutsStatus,
+  /** Os cortes na ordem do vídeo, conferidos pela régua; nulo até ficar pronta. */
+  cuts: z.array(VideoCut).nullable(),
+  /** A soma dos cortes, em milissegundos; nula até ficar pronta. */
+  total_ms: z.int().min(0).nullable(),
+  /** O porquê de `falhou` (os de hoje em `VIDEO_CUTS_FAIL_REASONS`); texto, porque a lista pode crescer (V23). */
+  reason: z
+    .string()
+    .regex(/^[a-z][a-z_-]{1,40}$/)
+    .nullable()
+    .describe('O porquê de `falhou` (a lista cresce; ignore o que não conhecer): `quantidade`, `video_fora`, `tempo_fora`, `corte_curto`, `corte_longo`, `repetido`, `total_fora`, `vazio`, `longo`, `emoji_ou_hashtag`, `dado_pessoal`, `compliance`, `formato`, `ia_desligada`, `sem-rota`, `teto`, `limite-usuario`, `travada`, `parada`, `indisponivel`, `entrada-grande`, `funcionario_desligado`, `sem_quadros` ou `parado`. Nulo nas outras situações.'),
+  /** Quantos "Pedir outros cortes" restam a partir deste pedido (2 menos os pedidos de antes dele). */
+  others_left: z.int().min(0).max(VIDEO_CUTS_LIMITS.others),
+  created_at: z.iso.datetime({ offset: true }),
+});
+export type VideoCutsResponse = z.infer<typeof VideoCutsResponse>;
+
 /**
  * O que o serviço de montagem (`liame-render`, A6 · Z15 parte 2b; D-A6-139) passa ao modelo do Remotion
  * (`packages/video-modelos`). Interno: não sai na API. As fotos, o vídeo e a logo vão por endereços de leitura assinados

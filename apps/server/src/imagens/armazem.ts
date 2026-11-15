@@ -99,8 +99,10 @@ export const MAIOR_LEITURA_BYTES = 20 * 1024 * 1024;
 // As chaves que o Liame grava e os prefixos que apaga. A foto das Fotos (`t/{empresa}/b/{marca}/foto_produto/{id}.jpg`)
 // e a miniatura dela; o vídeo das Fotos (`t/{empresa}/b/{marca}/video/{id}.mp4` ou `.mov`, A6 · Z10) e a capa dele
 // (`{id}-mini.jpg`) e a cópia reduzida para o Instagram (`{id}-instagram.mp4`, A6 · Z10, parte 3b); o recorte do post
-// do Instagram (`t/{empresa}/b/{marca}/post/{post}-instagram.jpg`, A6 · Z5b); o logo da agência (`t/{agência}/agencia/logo/{id}.jpg`, A7 · W7, parte 3). Conferidas parte por parte antes de qualquer
-// gravação, leitura ou apagamento: nada fora do desenho chega ao disco ou ao bucket.
+// do Instagram (`t/{empresa}/b/{marca}/post/{post}-instagram.jpg`, A6 · Z5b); o logo da agência (`t/{agência}/agencia/logo/{id}.jpg`, A7 · W7, parte 3);
+// os quadros do pedido dos cortes (`t/{empresa}/b/{marca}/cortes/{pedido}-{n}.jpg`, de 0 a 15, A6 · Z16, parte 3), que
+// ficam só até o Social media ler. Conferidas parte por parte antes de qualquer gravação, leitura ou apagamento: nada fora
+// do desenho chega ao disco ou ao bucket.
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 
 function ehUuid(s: string): boolean {
@@ -111,6 +113,26 @@ function ehUuid(s: string): boolean {
 function semFinal(arquivo: string, finais: readonly string[]): string {
   for (const f of finais) if (arquivo.endsWith(f)) return arquivo.slice(0, -f.length);
   return '';
+}
+
+/** Quantos quadros um pedido dos cortes tem no máximo: o teto de imagens por pedido do gateway de IA (`IMAGENS_POR_PEDIDO_MAXIMAS`). */
+export const QUADROS_DOS_CORTES_MAXIMOS = 16;
+
+/** O quadro do pedido dos cortes (`{pedido}-{n}.jpg`, `n` de 0 a 15, sem zero à esquerda): o id do pedido; vazio fora do desenho. */
+function pedidoDoQuadro(arquivo: string): string {
+  const m = /^(.+)-(0|[1-9]\d?)\.jpg$/.exec(arquivo);
+  return m && Number(m[2]) < QUADROS_DOS_CORTES_MAXIMOS ? (m[1] ?? '') : '';
+}
+
+/**
+ * A chave do quadro `n` (de 0 a 15, na ordem do `frame_index`) do pedido dos cortes (A6 · Z16, parte 3): o serviço de
+ * montagem grava, o worker lê e apaga.
+ */
+export function chaveDoQuadroDosCortes(tenantId: string, brandId: string, pedidoId: string, n: number): string {
+  if (!Number.isInteger(n) || n < 0 || n >= QUADROS_DOS_CORTES_MAXIMOS) throw new Error('armazenamento de imagens: quadro fora do desenho');
+  const chave = `t/${tenantId}/b/${brandId}/cortes/${pedidoId}-${n}.jpg`;
+  exigirChave(chave);
+  return chave;
 }
 
 function chaveValida(chave: string): boolean {
@@ -129,7 +151,9 @@ function chaveValida(chave: string): boolean {
           : // A logo do restaurante em Minha marca (A6 · Z15, parte 1) e a cópia da miniatura do anúncio (A3 · I14).
             p[4] === 'logo' || p[4] === 'anuncio'
             ? semFinal(arquivo, ['.jpg'])
-            : '';
+            : p[4] === 'cortes'
+              ? pedidoDoQuadro(arquivo)
+              : '';
   return ehUuid(p[1] ?? '') && ehUuid(p[3] ?? '') && ehUuid(id);
 }
 

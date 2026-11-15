@@ -386,6 +386,7 @@ export async function ligarFlagDaEmpresa(
     | 'campanha_nova'
     | 'campanha_google'
     | 'video_montado'
+    | 'video_momentos'
     | 'regiao'
     | 'ia',
   tenantId: string,
