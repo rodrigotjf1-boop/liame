@@ -109,6 +109,16 @@ describe('a tarefa dos cortes do Social media', () => {
       [3000, 9000],
       [0, 6000],
     ]);
+    // O cruzamento pequeno (até 0,5 s) entre dois cortes do mesmo vídeo é desfeito: o de depois começa onde o outro termina.
+    const cruzados = conferir([corte(1, 0.5, 5.5), corte(1, 5, 9), corte(2, 0, 5)]);
+    expect(cruzados).toMatchObject({ ok: true, totalMs: 13_500 });
+    expect(cruzados.ok && cruzados.cortes.map((c) => [c.inicioMs, c.fimMs])).toEqual([
+      [500, 5500],
+      [5500, 9000],
+      [0, 5000],
+    ]);
+    // Cruzamento maior é pedaço repetido de verdade: a régua recusa.
+    expect(conferir([corte(1, 0, 6), corte(1, 5, 11), corte(2, 0, 3)])).toMatchObject({ ok: false, motivo: 'repetido', corte: 1 });
     // O corte longo demais não é encurtado pelo ajuste, mesmo com o total acima: a régua o recusa.
     expect(conferir([corte(1, 0, 9), corte(2, 0, 7.5), corte(1, 9.5, 12)])).toMatchObject({ ok: false, motivo: 'corte_longo', corte: 0 });
     // No pedido de montagem (a pessoa), não há ajuste: a régua só recusa.

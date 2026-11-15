@@ -30,7 +30,7 @@ const SOBREPOSICAO_MAXIMA_S = 0.2;
 
 export const PROMPT_SOCIAL_CORTES: PromptDef = {
   key: 'social.cortes',
-  version: 3,
+  version: 4,
   task: TAREFA_SOCIAL_CORTES,
   content: [
     'Você é o funcionário de Social media da Liame: um assistente de inteligência artificial que monta o roteiro de um vídeo curto de um restaurante ou pequeno negócio com os vídeos reais da loja. Você escolhe os cortes (de que vídeo, de que segundo a que segundo), a ordem e a legenda de cada corte; o sistema monta o vídeo com eles. Uma pessoa da empresa confere, ajusta e pede o vídeo.',
@@ -46,7 +46,7 @@ export const PROMPT_SOCIAL_CORTES: PromptDef = {
     '4. Escolha os momentos em que o produto aparece bem: de perto, nítido, sendo preparado, saindo da chapa ou pronto para comer. Evite pessoas em primeiro plano e rostos, quadros escuros, tremidos ou desfocados, e quadros com tela ou cartaz em destaque.',
     '5. A ordem conta uma pequena história: comece pelo momento mais forte e termine com o produto pronto.',
     '6. A legenda de cada corte é curta (até 32 caracteres, contando os espaços), sem ponto final, sem emoji e sem hashtag, e fala do que aparece no corte. Sem link e sem endereço de site.',
-    '7. O preço: quando uma oferta em vigor inclui o produto que aparece nos vídeos (mesmo num combo, em dobro ou com outro nome), a última legenda traz o preço dessa oferta, escrito exatamente como está nela (se a oferta diz "Prato do dia por R$ 27,50", a legenda traz "R$ 27,50"). Se a oferta vale só em alguns dias ou com uma condição, a legenda diz isso junto, curto ("Só no sábado, por R$ 27,50"), para não prometer o preço num dia em que a oferta não vale. Fora isso, nenhuma legenda leva preço: nem o do cardápio, nem um preço que não está numa oferta.',
+    '7. O preço só pode vir da lista de ofertas em vigor do contexto: o preço da lista de produtos do dossiê nunca vai em legenda. Quando uma oferta em vigor inclui o produto que aparece nos vídeos (mesmo num combo, em dobro ou com outro nome), a última legenda é a dessa oferta, sempre: o preço escrito exatamente como está nela; as quantidades como ela escreve (se a oferta diz "dois", escreva "dois", nunca "2"); e, se ela vale só em alguns dias ou com uma condição, o dia ou a condição, curto ("Só no sábado, dois por R$ 27,50"), para não prometer o preço num dia em que a oferta não vale. Sem oferta que inclua o produto, nenhuma legenda leva preço.',
     '8. Não invente produto, ingrediente ou tamanho que não aparecem nos quadros, nas ofertas ou no dossiê. Nada do que o dossiê lista em NUNCA DIZER, nem com outras palavras. Não cite concorrente.',
     '9. Sem promessa e sem exagero ("garantimos", "o melhor", "número 1", prazo de entrega), sem política, eleição ou bebida alcoólica, e sem dado pessoal ou nome de cliente.',
     '',
@@ -171,11 +171,31 @@ function problemaDoTempo(c: CorteLido, anteriores: readonly CorteLido[], videos:
 
 /** O passo do ajuste do total: um décimo de segundo, o mesmo arredondamento dos tempos. */
 const PASSO_DO_AJUSTE_MS = 100;
+/** O cruzamento entre dois cortes do mesmo vídeo que o ajuste desfaz (acima da tolerância da régua e até isto). */
+const CRUZAMENTO_DESFEITO_MS = 500;
+
+/**
+ * O cruzamento pequeno entre dois cortes do mesmo vídeo (D-A6-155; na rodada paga do v3, "0,5–5,5" e "5–9"): acima da
+ * tolerância da régua e até meio segundo, o corte que começa depois passa a começar onde o outro termina, se ele seguir com
+ * pelo menos 1,5 s. Cruzamento maior é pedaço repetido de verdade, e a régua recusa. Só a proposta da IA passa por aqui.
+ */
+function desfazerCruzamentos(lista: CorteLido[]): void {
+  for (const [i, a] of lista.entries()) {
+    for (const b of lista.slice(i + 1)) {
+      if (a.video !== b.video || ![a.inicioMs, a.fimMs, b.inicioMs, b.fimMs].every(Number.isFinite)) continue;
+      const cruza = Math.min(a.fimMs, b.fimMs) - Math.max(a.inicioMs, b.inicioMs);
+      if (cruza <= SOBREPOSICAO_MAXIMA_S * 1000 || cruza > CRUZAMENTO_DESFEITO_MS) continue;
+      const [antes, depois] = a.inicioMs <= b.inicioMs ? [a, b] : [b, a];
+      if (depois.fimMs - antes.fimMs >= LIMITES_DOS_CORTES.corteMinimoS * 1000) depois.inicioMs = antes.fimMs;
+    }
+  }
+}
 
 /**
  * O ajuste do total da proposta do Social media (D-A6-155): o modelo escolhe bem os momentos e erra a conta da soma
- * (na rodada paga de 15/11/2026, 3 de 18 casos passaram da duração com cortes bons). Antes da régua, e só quando cada
- * corte já passa sozinho nas regras do tempo (o ajuste mexe na soma, nunca conserta um corte errado):
+ * (na rodada paga de 15/11/2026, 3 de 18 casos passaram da duração com cortes bons). Antes da régua, primeiro o
+ * cruzamento pequeno entre dois cortes do mesmo vídeo é desfeito (`desfazerCruzamentos`); depois, só quando cada corte já
+ * passa sozinho nas regras do tempo (o ajuste mexe no tempo, nunca conserta um corte longo, curto ou fora do vídeo):
  *   - acima da duração mais a folga: encurta o fim do corte mais longo, um décimo por vez, até a duração, sem nenhum
  *     ficar abaixo de 1,5 s;
  *   - abaixo de 80% da duração: alonga o corte mais curto, um décimo por vez, pelo fim (ou pelo começo) dentro do vídeo,
@@ -185,6 +205,7 @@ const PASSO_DO_AJUSTE_MS = 100;
  */
 export function ajustarOTotal(cortes: readonly CorteLido[], p: { duracaoS: number; videos: ReadonlyArray<{ duracaoMs: number }> }): CorteLido[] {
   const lista = cortes.map((c) => ({ ...c }));
+  desfazerCruzamentos(lista);
   if (lista.some((c, i) => problemaDoTempo(c, lista.slice(0, i), p.videos) !== null)) return lista;
   const tamanho = (c: CorteLido) => c.fimMs - c.inicioMs;
   const alvo = p.duracaoS * 1000;
