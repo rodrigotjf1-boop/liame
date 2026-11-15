@@ -637,4 +637,37 @@ describe.skipIf(!hasDb)('AI Gateway: custo, teto, limpeza de dado pessoal e func
     expect(sobrou.map((x) => x.usage_id)).toEqual([recente.usageId]);
     expect(await usos(d.tenantId, task)).toHaveLength(2);
   });
+
+  it('D-A6-82: a imagem só vai na tarefa da lista, como imagem JPEG, e não fica guardada; fora da lista ou acima do teto, nada é chamado', async () => {
+    const d = await dono();
+    const m = await modelo(responde('ok'));
+    const jpeg = Uint8Array.from([0xff, 0xd8, 0xff, 0xe0, 1, 2, 3, 4]);
+    const comImagens = (task: string, n = 1): GenerateRequest =>
+      pedido(d, task, {
+        messages: [{ role: 'user', content: [{ tipo: 'texto', texto: 'Escolha os cortes de 21 99876-5432.' }, ...Array.from({ length: n }, () => ({ tipo: 'imagem' as const, jpeg, largura: 768, altura: 432 }))] }],
+      });
+    // A tarefa fora da lista: recusada antes de qualquer chamada.
+    const outra = await rota(m);
+    await expect(gateway().generate(comImagens(outra))).rejects.toMatchObject({ code: 'entrada-grande' });
+    expect(m.mock.doGenerateCalls).toHaveLength(0);
+    // A tarefa da lista: a imagem chega ao modelo como JPEG, e o texto ao lado dela passa pela limpeza.
+    const task = await rotaAtiva('social_cortes', m);
+    const r = await gateway().generate(comImagens(task));
+    const enviado = JSON.stringify(m.mock.doGenerateCalls[0]!.prompt);
+    expect(enviado).toContain('image/jpeg');
+    expect(enviado).toContain('Escolha os cortes de [telefone].');
+    // O que fica guardado (30 dias): só os bytes e o resumo da imagem, nunca ela.
+    const [guardado] = await ownerQuery<{ request: unknown }>(`select request from liame.ai_exchange where usage_id = $1`, [r.usageId]);
+    const texto = JSON.stringify(guardado!.request);
+    expect(texto).toContain('"bytes":8');
+    expect(texto).toMatch(/"sha256":"[0-9a-f]{64}"/);
+    expect(texto).not.toContain('"0":255');
+    // Acima de 16 imagens, ou o que não é JPEG: recusado antes de chamar.
+    const chamadas = m.mock.doGenerateCalls.length;
+    await expect(gateway().generate(comImagens(task, 17))).rejects.toMatchObject({ code: 'entrada-grande' });
+    await expect(
+      gateway().generate(pedido(d, task, { messages: [{ role: 'user', content: [{ tipo: 'imagem', jpeg: Uint8Array.from([0x89, 0x50, 0x4e, 0x47]), largura: 10, altura: 10 }] }] })),
+    ).rejects.toMatchObject({ code: 'entrada-grande' });
+    expect(m.mock.doGenerateCalls).toHaveLength(chamadas);
+  });
 });
