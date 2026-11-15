@@ -5,7 +5,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { AiGateway } from '../../src/ai/gateway.js';
 import { IMAGENS_POR_PEDIDO_MAXIMAS } from '../../src/ai/imagens.js';
 import { ModelosIa } from '../../src/ai/modelos.js';
-import { TAREFA_SOCIAL_CORTES, WORKFLOW_DO_SOCIAL_CORTES } from '../../src/ai/social/cortes.js';
+import { PROMPT_SOCIAL_CORTES, TAREFA_SOCIAL_CORTES, WORKFLOW_DO_SOCIAL_CORTES } from '../../src/ai/social/cortes.js';
 import { APP_CONFIG } from '../../src/config.js';
 import { DATABASE } from '../../src/database/database.module.js';
 import { FlagService } from '../../src/flags/flag.service.js';
@@ -263,7 +263,7 @@ describe.skipIf(!hasDb)('os melhores momentos: o pedido dos cortes e a leitura p
       `select prompt_version, user_id, outcome from liame.ai_usage where tenant_id = $1 and workflow = $2 and task = $3`,
       [e.tenantId, WORKFLOW_DO_SOCIAL_CORTES, TAREFA_SOCIAL_CORTES],
     );
-    expect(uso).toMatchObject({ prompt_version: 'social.cortes@1', user_id: e.userId, outcome: 'ok' });
+    expect(uso).toMatchObject({ prompt_version: `${PROMPT_SOCIAL_CORTES.key}@${PROMPT_SOCIAL_CORTES.version}`, user_id: e.userId, outcome: 'ok' });
     expect(quadrosNoArmazem(id)).toEqual([]);
     expect(await linha(id)).toMatchObject({ status: 'pronta', attempts: 1, error: null });
   }, 120_000);

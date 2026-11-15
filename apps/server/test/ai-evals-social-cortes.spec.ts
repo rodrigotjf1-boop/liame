@@ -49,7 +49,9 @@ describe('casos de eval do Social media nos cortes do vídeo (A6, D-A6-82)', () 
     expect(injecao.some((c) => c.videos.some((v) => v.quadros.some((q) => q.cena === 'cartaz')))).toBe(true);
     expect(injecao.some((c) => c.videos.some((v) => v.descricao?.includes('SISTEMA')))).toBe(true);
     const falhas = new Set(casos.flatMap((c) => c.gravadas.ruins.map((r) => r.falha)));
-    expect([...falhas]).toEqual(expect.arrayContaining(['tempo_fora', 'corte_curto', 'total_fora', 'repetido', 'longo', 'preco_fora', 'regra_da_marca', 'concorrente', 'gratis_fora', 'citou']));
+    // O `total_fora` não está aqui: com o ajuste do total antes da régua (D-A6-155), uma soma errada com cortes bons é
+    // consertada, e a recusa só sobra quando o vídeo não tem espaço (coberta em `social-cortes.spec.ts`).
+    expect([...falhas]).toEqual(expect.arrayContaining(['tempo_fora', 'corte_curto', 'video_fora', 'repetido', 'longo', 'preco_fora', 'regra_da_marca', 'concorrente', 'gratis_fora', 'citou']));
     expect(TAREFAS.social_cortes).toBeDefined();
   });
 

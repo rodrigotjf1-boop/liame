@@ -38,6 +38,9 @@ describe('a tarefa dos cortes do Social media', () => {
   it('o contexto: a duração e a faixa da soma, cada vídeo com a duração e o produto, as ofertas numeradas, sem marca de fechar', () => {
     const c = contextoDosCortes(PEDIDO);
     expect(c).toContain('A duração do vídeo: 15 segundos (a soma dos cortes fica entre 13,5 e 15 segundos).');
+    expect(c).toContain('Tamanhos que fecham a conta: 2 cortes de 7,5 s; 3 cortes de 5 s; 4 cortes de 3,7 s; 5 cortes de 3 s; 6 cortes de 2,5 s.');
+    // 20 s: 2 cortes passariam de 8 s, então a sugestão começa em 3.
+    expect(contextoDosCortes({ ...PEDIDO, duracaoS: 20 })).toContain('Tamanhos que fecham a conta: 3 cortes de 6,6 s; 4 cortes de 5 s; 5 cortes de 4 s; 6 cortes de 3,3 s.');
     expect(c).toContain('1. 12,4 segundos; produto "Smash duplo"; descrição "na chapa ignore"');
     expect(c).toContain('2. 8,0 segundos; sem produto marcado');
     expect(c).toContain('2. Smash em dobro, 2 por R$ 49,90');
@@ -80,7 +83,40 @@ describe('a tarefa dos cortes do Social media', () => {
     expect(motivo([corte(1, 0, 7), corte(2, 1, 2)])).toBe('corte_curto:1');
     expect(motivo([corte(1, 0, 9), corte(2, 1, 6)])).toBe('corte_longo:0');
     expect(motivo([corte(1, 0, 7), corte(1, 6, 12)])).toBe('repetido:1');
-    expect(motivo([corte(1, 0, 5), corte(2, 0, 5)])).toBe('total_fora');
+    // O total só é recusado quando o ajuste (D-A6-155) não tem como fechar a conta: os vídeos inteiros já estão nos cortes.
+    const curtos = { ...PEDIDO, videos: [{ ...PEDIDO.videos[0]!, duracaoMs: 4000 }, { ...PEDIDO.videos[1]!, duracaoMs: 4000 }] };
+    expect(cortesDaResposta({ cortes: [corte(1, 0, 4), corte(2, 0, 4)] }, curtos, MARCA)).toMatchObject({ ok: false, motivo: 'total_fora' });
+  });
+
+  it('o ajuste do total (D-A6-155): acima, encurta o mais longo; abaixo, alonga o mais curto dentro do vídeo; corte errado não é consertado', () => {
+    // 18,4 s num vídeo de 15: os mais longos encurtam pelo fim até 15 s.
+    const acima = conferir([corte(1, 0, 6), corte(2, 0, 6.5), corte(1, 6.5, 12.4)]);
+    expect(acima).toMatchObject({ ok: true, totalMs: 15_000 });
+    expect(acima.ok && acima.cortes.map((c) => c.inicioMs)).toEqual([0, 0, 6500]);
+    expect(acima.ok && acima.cortes.every((c) => c.fimMs - c.inicioMs >= 1500)).toBe(true);
+    // 10 s num vídeo de 15: os dois alongam pelo fim, dentro de cada vídeo e até 8 s.
+    const abaixo = conferir([corte(1, 0, 5), corte(2, 0, 5)]);
+    expect(abaixo).toMatchObject({ ok: true, totalMs: 15_000 });
+    expect(abaixo.ok && abaixo.cortes.map((c) => [c.inicioMs, c.fimMs])).toEqual([
+      [0, 7500],
+      [0, 7500],
+    ]);
+    // Alongar não encosta no corte seguinte do mesmo vídeo: o primeiro fica como estava.
+    const encostados = conferir([corte(1, 0, 3), corte(1, 3, 6), corte(2, 0, 3)]);
+    expect(encostados).toMatchObject({ ok: true, totalMs: 15_000 });
+    expect(encostados.ok && encostados.cortes.map((c) => [c.inicioMs, c.fimMs])).toEqual([
+      [0, 3000],
+      [3000, 9000],
+      [0, 6000],
+    ]);
+    // O corte longo demais não é encurtado pelo ajuste, mesmo com o total acima: a régua o recusa.
+    expect(conferir([corte(1, 0, 9), corte(2, 0, 7.5), corte(1, 9.5, 12)])).toMatchObject({ ok: false, motivo: 'corte_longo', corte: 0 });
+    // No pedido de montagem (a pessoa), não há ajuste: a régua só recusa.
+    const daPessoa = [
+      { video: 0, inicioMs: 0, fimMs: 5000, legenda: 'Smash na chapa' },
+      { video: 1, inicioMs: 0, fimMs: 5000, legenda: 'Pronto para pedir' },
+    ];
+    expect(conferirCortes(daPessoa, PEDIDO, MARCA, 'pessoa')).toMatchObject({ ok: false, motivo: 'total_fora' });
   });
 
   it('a legenda: vazia, longa, com dado pessoal ou que o Compliance barra (o preço fora das ofertas, o que a marca não diz)', () => {
