@@ -284,7 +284,10 @@ describe.skipIf(!hasDb)('o post com vídeo (A6 · Z10, parte 3a)', () => {
     expect(ig.postsDe(e.instagram!.externo)).toHaveLength(0);
     expect((await pedidoDe(pedido)).status).not.toBe('pendente');
 
-    // O Story do Instagram com o 4K: a cópia, com o limite de 100 MB conferido nela.
+    // O Story do Instagram com o 4K: a cópia, com o limite de 100 MB conferido nela. O fuso da empresa volta ao de São Paulo
+    // antes: o `chegaAHora` acima o trocou para um em que agora são 12h, e o Story de amanhã às 19h de Brasília cairia fora
+    // das 8h às 22h nesse fuso quando o teste roda de madrugada (V46).
+    await ownerQuery(`update liame.organization set timezone = $2 where id = $1`, [e.tenantId, FUSO_DO_PEDIDO]);
     await ligarFlagDaEmpresa(api, 'stories', e.tenantId, true);
     const outro = await videoGuardado(e, armazem, { largura: 2160, altura: 3840, bytes: 200_000_000, duracaoMs: 30_000, copia: 'pronta' });
     const story = await api.call('POST', '/v1/posts', {
