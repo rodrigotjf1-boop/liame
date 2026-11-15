@@ -35,7 +35,7 @@ import { marcaDoCriativo } from '../criativo/base.js';
 import { DATABASE } from '../database/database.module.js';
 import { AppProblem } from '../errors/problems.js';
 import { FlagService } from '../flags/flag.service.js';
-import { REGRAS_DE_TEXTO_VERSAO } from '../policy/texto.js';
+import { normalizar, REGRAS_DE_TEXTO_VERSAO } from '../policy/texto.js';
 import { contarNaFrente } from '../worker/fila-do-video.js';
 
 // O vídeo montado pelo Liame (A6 · Z15, parte 2a; P43 aprovado em 11/11/2026; D-A6-133 a D-A6-138): os pedidos e a
@@ -131,9 +131,10 @@ export function recusaDosCortes(
     case 'compliance': {
       const motivo = (tipo: string) =>
         tipo === 'preco_fora' ? 'o preço não é o de uma oferta em vigor em Minha marca' : tipo === 'regra_da_marca' ? 'a marca não diz isso (Minha marca)' : 'uma regra do Liame barra este texto';
-      // O Compliance lê as legendas juntas: o trecho diz de qual corte veio.
+      // O Compliance lê as legendas juntas: o trecho (sem acento e em minúsculas, como o Compliance compara) diz de qual
+      // corte veio.
       const errors = c.achados.map((a) => {
-        const i = cortes.findIndex((k) => k.caption.toLowerCase().includes(a.trecho.toLowerCase()));
+        const i = cortes.findIndex((k) => normalizar(k.caption).includes(normalizar(a.trecho)));
         return { path: i >= 0 ? `cuts.${i}.caption` : 'cuts', message: `"${a.trecho}": ${motivo(a.tipo)}` };
       });
       return { detail: `O Compliance barrou: ${c.achados.map((a) => `"${a.trecho}" (${motivo(a.tipo)})`).join('; ')}.`, errors };
