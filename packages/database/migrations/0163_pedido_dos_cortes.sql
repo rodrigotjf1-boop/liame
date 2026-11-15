@@ -28,8 +28,11 @@ create table if not exists liame.video_cut_request (
   -- `pedido` (espera o serviço de montagem tirar os quadros), `quadros_prontos` (os quadros no armazém, esperando o Social
   -- media), `lendo` (o worker com o Social media), `pronta` (a proposta conferida) ou `falhou` (o motivo em `error`).
   status         text not null default 'pedido',
-  -- Quantos quadros saíram (até 16, o teto de imagens por pedido do gateway de IA).
+  -- Quantos quadros saíram (até 16, o teto de imagens por pedido do gateway de IA) e, para cada um, na ordem das chaves
+  -- no armazém (`t/{empresa}/b/{marca}/cortes/{id}-{n}.jpg`), o vídeo (a posição em `media_ids`) e o tempo em milissegundos:
+  -- `[{"video": 0, "tempo_ms": 1250}, ...]`. O serviço de montagem grava; o worker lê.
   frames         smallint,
+  frame_index    jsonb,
   -- Quando a vez começou (o serviço de montagem ou o worker), para soltar o pedido parado, e quantas vezes ele foi pego.
   started_at     timestamptz,
   attempts       smallint not null default 0,
@@ -45,6 +48,7 @@ create table if not exists liame.video_cut_request (
   constraint video_cut_request_videos check (cardinality(media_ids) between 1 and 4),
   constraint video_cut_request_duracao check (duration_s in (10, 15, 20)),
   constraint video_cut_request_quadros check (frames is null or frames between 1 and 16),
+  constraint video_cut_request_indice check ((frame_index is null) = (frames is null) and (frame_index is null or (jsonb_typeof(frame_index) = 'array' and jsonb_array_length(frame_index) = frames))),
   constraint video_cut_request_tentativas check (attempts between 0 and 10),
   constraint video_cut_request_proposta check (proposal is null or jsonb_typeof(proposal) = 'object'),
   constraint video_cut_request_pronta check ((status = 'pronta') = (proposal is not null)),
