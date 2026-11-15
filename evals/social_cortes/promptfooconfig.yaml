@@ -1,0 +1,16 @@
+# Eval da tarefa `social_cortes` (A6, item 7 do dono; D-A6-82; P44; ADR-006 item 8).
+# O promptfoo só percorre os casos e junta o relatório: o prompt, o contexto, a mensagem (os quadros de cada vídeo entre as
+# marcas, desenhados pelo eval) e o formato da resposta são os do servidor (apoio/provedor.mjs), e quem aprova ou reprova é o
+# avaliador do servidor (apoio/conferir.mjs), com a conferência da produção e o que cada caso espera.
+# Rodar: ver evals/README.md.
+description: 'Liame · social_cortes: os cortes do vídeo com os vídeos da loja (de que vídeo, de quando a quando) e a legenda de cada um; os tempos dentro de cada vídeo, cortes de 1,5 a 8 segundos, nenhum pedaço repetido, o total perto da duração, o preço só o de uma oferta em vigor, nada do que a marca não diz nem concorrente, e ordens escritas num cartaz de um quadro ou na descrição do vídeo'
+
+prompts:
+  - '{{id}}'
+
+providers:
+  - id: file://../apoio/provedor.mjs
+    config:
+      tarefa: social_cortes
+
+tests: file://testes.mjs

@@ -8,6 +8,7 @@ import { PESQUISADOR } from '../ai/pesquisador/prompt.js';
 import { WORKFLOW_DO_REVISOR } from '../ai/revisor/prompt.js';
 import type { FuncionarioDef } from '../ai/registro/definicoes.js';
 import { SOCIAL, WORKFLOW_DO_SOCIAL, WORKFLOW_DO_SOCIAL_COMENTARIO, WORKFLOW_DO_SOCIAL_COMENTARIO_TIPO, WORKFLOW_DO_SOCIAL_POST } from '../ai/social/prompt.js';
+import { WORKFLOW_DO_SOCIAL_CORTES } from '../ai/social/cortes.js';
 import { WORKFLOW_DO_SOCIAL_VIDEO } from '../ai/social/video.js';
 
 // A equipe da A3 (I13b; protótipo P7, aprovado em 03/10/2026): quem trabalha para a marca. Os funcionários de IA têm
@@ -74,13 +75,13 @@ export const EQUIPE: Record<Membro, DefinicaoDoMembro> = {
   // A chave é a do funcionário no registro, a do pedido que ele faz (`action_request.agent_key`) e a da pausa que as
   // rotinas dele conferem (`oQueDesligaAsSugestoes`, `oQueDesligaOsPosts` e `oQueDesligaOsPedidos`): desligado aqui, ele
   // não sugere resposta, não propõe post nem pede nada pelos comentários nesta marca. O custo soma os três trabalhos: as
-  // respostas, os posts e os comentários (A6, Z11, parte 2d-2), com o tipo do comentário que ele decide (parte 2d-4c), e
-  // os textos do vídeo montado (A6, Z15, parte 3b).
+  // respostas, os posts e os comentários (A6, Z11, parte 2d-2), com o tipo do comentário que ele decide (parte 2d-4c), os
+  // textos do vídeo montado (A6, Z15, parte 3b) e os cortes dos melhores momentos (A6, Z16, parte 3).
   social: {
     key: SOCIAL_DA_EQUIPE,
     kind: 'ia',
     funcionario: SOCIAL,
-    fluxos: [WORKFLOW_DO_SOCIAL, WORKFLOW_DO_SOCIAL_POST, WORKFLOW_DO_SOCIAL_COMENTARIO, WORKFLOW_DO_SOCIAL_COMENTARIO_TIPO, WORKFLOW_DO_SOCIAL_VIDEO],
+    fluxos: [WORKFLOW_DO_SOCIAL, WORKFLOW_DO_SOCIAL_POST, WORKFLOW_DO_SOCIAL_COMENTARIO, WORKFLOW_DO_SOCIAL_COMENTARIO_TIPO, WORKFLOW_DO_SOCIAL_VIDEO, WORKFLOW_DO_SOCIAL_CORTES],
     desligavel: true,
   },
 };

@@ -756,7 +756,16 @@ export {
   GoogleCampaignTextsResponse,
 } from './campanhas-google.js';
 export {
+  CreateVideoCutsRequest,
   CreateVideoMontageRequest,
+  VIDEO_CUTS_DURATIONS,
+  VIDEO_CUTS_FAIL_REASONS,
+  VIDEO_CUTS_LIMITS,
+  VIDEO_CUTS_STATUSES,
+  VideoCut,
+  type VideoCutsFailReason,
+  VideoCutsResponse,
+  VideoCutsStatus,
   VIDEO_FORMATS,
   VIDEO_MONTAGE_LIMITS,
   VIDEO_MONTAGE_STATUSES,

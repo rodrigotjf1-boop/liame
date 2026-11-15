@@ -12,6 +12,7 @@ import { ESTRATEGISTA, PROMPT_ESTRATEGISTA } from '../estrategista/prompt.js';
 import { ANALISTA, PROMPT_EXPLICAR_RESULTADOS } from '../explicar/prompt.js';
 import { PESQUISADOR, PROMPT_PESQUISADOR } from '../pesquisador/prompt.js';
 import { PROMPT_REVISOR } from '../revisor/prompt.js';
+import { PROMPT_SOCIAL_CORTES } from '../social/cortes.js';
 import { PROMPT_SOCIAL_DIRECT } from '../social/direct.js';
 import { PROMPT_SOCIAL_COMENTARIO, PROMPT_SOCIAL_COMENTARIO_TIPO, PROMPT_SOCIAL_POST, PROMPT_SOCIAL_RESPOSTA, SOCIAL } from '../social/prompt.js';
 import { PROMPT_SOCIAL_VIDEO } from '../social/video.js';
@@ -89,6 +90,7 @@ export const PROMPTS: PromptDef[] = [
   PROMPT_SOCIAL_COMENTARIO_TIPO,
   PROMPT_SOCIAL_VIDEO,
   PROMPT_SOCIAL_DIRECT,
+  PROMPT_SOCIAL_CORTES,
 ];
 export const FUNCIONARIOS: FuncionarioDef[] = [ANALISTA, LIA, ESTRATEGISTA, PESQUISADOR, CRIATIVO, CRM, SOCIAL];
 

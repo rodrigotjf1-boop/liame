@@ -1,4 +1,5 @@
 import type { FuncionarioDef, PromptDef } from '../registro/definicoes.js';
+import { TAREFA_SOCIAL_CORTES } from './cortes.js';
 import { TAREFA_SOCIAL_DIRECT } from './direct.js';
 import { TAREFA_SOCIAL_VIDEO } from './video.js';
 
@@ -198,7 +199,7 @@ export const PROMPT_SOCIAL_COMENTARIO_TIPO: PromptDef = {
  */
 export const SOCIAL: FuncionarioDef = {
   key: 'social',
-  version: 6,
+  version: 7,
   name: 'Social media',
   cargo: 'Posts e avaliações',
   responsabilidades: [
@@ -208,6 +209,7 @@ export const SOCIAL: FuncionarioDef = {
     'Decidir o tipo do comentário que a regra do Liame não decide (pergunta, reclamação, elogio, marcação de amigo, ofensivo, golpe ou nenhum), sem receber o nome nem o perfil de ninguém',
     'Propor o título, a linha do preço e a chamada do vídeo montado pelo Liame sobre as fotos da loja, com o preço só o de uma oferta em vigor, para uma pessoa usar, ajustar e pedir o vídeo',
     'Escrever sugestões de resposta da marca numa conversa do Direct ou do Messenger: uma para a pergunta, só com o que Minha marca diz, e três caminhos para a reclamação, para uma pessoa da equipe escolher, ajustar e mandar',
+    'Escolher os cortes, a ordem e a legenda de um vídeo curto com os vídeos reais da loja, vendo quadros dos vídeos que a pessoa escolheu, para ela conferir, ajustar e pedir o vídeo',
     'Entregar cada sugestão e cada post para a conferência do Compliance, antes de uma pessoa ver e decidir',
     'Nunca prometer desconto, brinde ou reembolso numa resposta, nem citar o nome de quem avaliou ou comentou; nunca criar imagem nem usar foto de fora',
   ],
@@ -219,6 +221,7 @@ export const SOCIAL: FuncionarioDef = {
     { task: TAREFA_SOCIAL_COMENTARIO_TIPO, prompt: 'social.comentario_tipo' },
     { task: TAREFA_SOCIAL_VIDEO, prompt: 'social.video' },
     { task: TAREFA_SOCIAL_DIRECT, prompt: 'social.direct' },
+    { task: TAREFA_SOCIAL_CORTES, prompt: 'social.cortes' },
   ],
   ativoPorPadrao: true,
 };

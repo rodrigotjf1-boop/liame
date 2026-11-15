@@ -44,7 +44,9 @@ describe('as imagens que vão ao modelo', () => {
       instructions: 'x',
       messages: [
         { role: 'user', content: 'só texto' },
-        { role: 'user', content: [{ type: 'text', text: 'Escolha os cortes.' }, { type: 'image', image: JPEG, mediaType: 'image/jpeg' }] },
+        { role: 'user', content: [{ type: 'text', text: 'Escolha os cortes.' }, { type: 'file', data: JPEG, mediaType: 'image/jpeg' }] },
+        // A forma antiga (parte `image`, obsoleta no AI SDK) também não fica guardada.
+        { role: 'user', content: [{ type: 'image', image: JPEG, mediaType: 'image/jpeg' }] },
       ],
     };
     const g = paraGuardar(enviado);
@@ -53,6 +55,7 @@ describe('as imagens que vão ao modelo', () => {
       { type: 'text', text: 'Escolha os cortes.' },
       { type: 'image', bytes: JPEG.byteLength, sha256: expect.stringMatching(/^[0-9a-f]{64}$/) },
     ]);
+    expect(g.messages[2]!.content).toEqual([{ type: 'image', bytes: JPEG.byteLength, sha256: expect.stringMatching(/^[0-9a-f]{64}$/) }]);
     expect(JSON.stringify(g)).not.toContain('"0":255');
   });
 });

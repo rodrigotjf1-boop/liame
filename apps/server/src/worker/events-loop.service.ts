@@ -24,6 +24,7 @@ import { DoSeuInstagramLoop } from './do-seu-instagram-loop.js';
 import { ComentariosLoop } from './comentarios-loop.js';
 import { DirectLoop } from './direct-loop.js';
 import { DirectAutomaticoLoop } from './direct-automatico.js';
+import { CortesDoSocialLoop } from './cortes-do-social.js';
 import { EstrategistaAgenda, MARCAS_POR_VOLTA } from './estrategista-agenda.js';
 import { EstrategistaLoop } from './estrategista-loop.js';
 import { PedidosNoDestino } from './pedidos-no-destino.js';
@@ -108,6 +109,7 @@ export class EventsLoopService implements OnApplicationBootstrap, OnApplicationS
     private readonly comentarios: ComentariosLoop,
     private readonly direct: DirectLoop,
     private readonly directAutomatico: DirectAutomaticoLoop,
+    private readonly cortesDoSocial: CortesDoSocialLoop,
     private readonly pedidosDosComentarios: PedidosDosComentariosLoop,
     private readonly tiposDosComentarios: TiposDosComentariosLoop,
     private readonly sugestoes: SugestoesDeRespostaLoop,
@@ -227,6 +229,11 @@ export class EventsLoopService implements OnApplicationBootstrap, OnApplicationS
       // marcas com o automático ligado, vira a resposta pronta pelo trilho (o elogio, a resposta ao story, a menção), com o
       // portão de novo no pedido e na execução; o que não é dele fica com uma pessoa. Olhada a cada 15 segundos.
       this.loop('direct-automatico', 10, 15_000, async (n) => (await this.directAutomatico.executarLote(n)).length),
+      // Os melhores momentos (A6, Z16, parte 3; D-A6-151): os quadros que o serviço de montagem tirou vão ao Social media, e a
+      // proposta conferida pela régua fica pronta para a pessoa, que espera na gaveta: a fila é olhada a cada 5 segundos. A
+      // limpeza solta a leitura parada há 10 minutos e dá por perdido o pedido que esperou mais de uma hora, de minuto em minuto.
+      this.loop('cortes-do-social', 3, 5_000, async (n) => (await this.cortesDoSocial.executarLote(n)).length),
+      this.loop('cortes-do-social-limpeza', 100, 60_000, () => this.cortesDoSocial.limparLote()),
       // Os pedidos do Social media para os comentários (A6, Z11, parte 2d-2): a leitura dos comentários abre a vez de cada
       // um que pede uma ação da marca (com a função `comentarios_sugeridos` ligada); a fila é olhada a cada 30 segundos.
       // Quem espera a vez (uma chave desligada, sem a rota do modelo, o limite) volta em uma hora.
