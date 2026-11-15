@@ -179,7 +179,13 @@ export function faixaDoAtraso(o: BillingOverdue, quem: { paga: boolean; souDono:
   }
   if (o.status === 'suspensa') {
     return quem.souDono
-      ? { tipo: 'perigo', titulo: `A conta da ${o.brand_name} está suspensa desde ${diaMesDe(o.suspends_on)}`, texto: 'Só você entra, para pagar ou exportar os dados.', pagar: podePagar }
+      ? {
+          tipo: 'perigo',
+          titulo: `A conta da ${o.brand_name} está suspensa desde ${diaMesDe(o.suspends_on)}`,
+          // O dia do apagamento (P26; W3, parte 4d): o 60º dia, se nada for pago.
+          texto: `Só você entra, para pagar ou exportar os dados.${o.purges_on ? ` Se nada for pago, os dados são apagados em ${diaMesDe(o.purges_on)}.` : ''}`,
+          pagar: podePagar,
+        }
       : {
           tipo: 'perigo',
           titulo: `A conta da ${o.brand_name} está suspensa desde ${diaMesDe(o.suspends_on)}`,
@@ -294,7 +300,8 @@ export function situacao(m: Momento, r: BillingResponse, o: { aberta: BillingInv
         ...base,
         selos: [{ texto: 'Cancelada', tom: 'espera' }],
         titulo: s.period_end ? `A assinatura termina em ${diaMesDe(s.period_end)}` : 'A assinatura foi cancelada',
-        frase: s.period_end ? `A assinatura foi cancelada. Até ${diaMesDe(s.period_end)}, tudo funciona como hoje, e a mensalidade seguinte não é cobrada.` : 'A assinatura foi cancelada, e a mensalidade seguinte não é cobrada.',
+        // Depois do fim, o prazo para exportar (P26: "há até … para exportar os dados"; W3, parte 4d).
+        frase: `${s.period_end ? `A assinatura foi cancelada. Até ${diaMesDe(s.period_end)}, tudo funciona como hoje, e a mensalidade seguinte não é cobrada.` : 'A assinatura foi cancelada, e a mensalidade seguinte não é cobrada.'}${s.purge_on ? ` Depois, os funcionários param, e há até ${diaMesDe(s.purge_on)} para exportar os dados.` : ''}`,
         nota: o.souDono ? null : 'Só o Dono pode manter a assinatura.',
         manter: mudaContrato,
       };
@@ -348,6 +355,8 @@ export function situacao(m: Momento, r: BillingResponse, o: { aberta: BillingInv
         selos: [{ texto: 'Conta suspensa', tom: 'perigo' }],
         titulo: 'A conta está suspensa',
         frase: `${od ? `Desde ${diaMesDe(od.suspends_on)}, só` : 'Só'} você entra, para pagar ou exportar os dados. A mensalidade em aberto é a de ${mesDe(venc)} (${valorAberto}).`,
+        // O 60º dia (P26; W3, parte 4d): se nada for pago, a assinatura termina e os dados são apagados.
+        degraus: od?.purges_on ? [{ dia: od.purges_on, oQue: 'os dados são apagados de vez, se nada for pago', tom: 'perigo' }] : [],
         nota: 'Pagou, tudo volta na hora: a equipe entra de novo, e os funcionários voltam a trabalhar.',
         pagar: r.can_pay && Boolean(o.aberta),
         exportar: o.souDono,
@@ -396,6 +405,8 @@ export function fases(m: Momento, s: BrandSubscription | null): Fase[] {
     ['1º dia de atraso', od ? somarDias(od.due_date, 1) : null, 'Quem paga recebe um aviso por e-mail e no alto das telas.'],
     ['10º dia', od?.actions_stop_on ?? null, 'Os funcionários de IA param. Ver e ler continuam, e nenhum anúncio é pausado pelo Liame.'],
     ['30º dia', od?.suspends_on ?? null, 'A conta é suspensa: só o Dono entra, para pagar ou exportar os dados.'],
+    // O 60º dia (P26; W3, parte 4d). O certificado só sai quando a empresa inteira é apagada (a última marca dela).
+    ['60º dia', od?.purges_on ?? null, 'A assinatura termina, e os dados da marca são apagados de vez. Se ela for a última marca da empresa, o Dono recebe o certificado da exclusão.'],
   ];
   return linhas.map(([quando, dia, oQue], i) => ({ quando, dia, oQue, agora: i === agora }));
 }

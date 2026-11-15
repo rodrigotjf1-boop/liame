@@ -90,9 +90,16 @@ export function situacaoPeloAtraso(vencimentoEmAberto: string | null, hoje: stri
   return 'ativa';
 }
 
-/** As datas dos próximos passos de uma mensalidade em atraso, para a tela e para o aviso (Termos 10.4). */
-export function passosDoAtraso(vencimento: string): { acoesParamEm: string; suspendeEm: string } {
-  return { acoesParamEm: somarDias(vencimento, DIA_DAS_ACOES_PARADAS), suspendeEm: somarDias(vencimento, DIA_DA_SUSPENSAO) };
+/**
+ * As datas dos próximos passos de uma mensalidade em atraso, para a tela e para o aviso (Termos 10.4 e 11.2): as ações
+ * param, a conta é suspensa e, no 60º dia, a assinatura termina e os dados são apagados (W3, partes 4a e 4d).
+ */
+export function passosDoAtraso(vencimento: string): { acoesParamEm: string; suspendeEm: string; apagaEm: string } {
+  return {
+    acoesParamEm: somarDias(vencimento, DIA_DAS_ACOES_PARADAS),
+    suspendeEm: somarDias(vencimento, DIA_DA_SUSPENSAO),
+    apagaEm: somarDias(vencimento, DIA_DO_APAGAMENTO_NO_ATRASO),
+  };
 }
 
 /**

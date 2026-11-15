@@ -670,13 +670,24 @@ async function paraATela(tx: Tx, s: LinhaDaAssinatura, hoje: string): Promise<Br
     period_end: s.period_end,
     first_payment_until:
       s.status === 'aguardando_pagamento' ? somarDias(diaNoFuso(new Date(iso(s.created_at)), s.timezone), DIAS_PARA_O_PRIMEIRO_PAGAMENTO - 1) : null,
-    overdue: venc && passos ? { due_date: venc, days: diasEntre(venc, hoje), actions_stop_on: passos.acoesParamEm, suspends_on: passos.suspendeEm } : null,
+    overdue:
+      venc && passos
+        ? { due_date: venc, days: diasEntre(venc, hoje), actions_stop_on: passos.acoesParamEm, suspends_on: passos.suspendeEm, purges_on: passos.apagaEm }
+        : null,
     cancel_at_period_end: s.cancel_at_period_end,
     withdraw_until: viva && s.withdraw_until && diasEntre(hoje, s.withdraw_until) >= 0 ? s.withdraw_until : null,
     ended_at: isoOuNulo(s.ended_at),
     end_reason: s.end_reason,
     withdraw_protocol: s.end_reason === 'desistencia' && s.ended_at ? protocoloDaDesistencia(s.id, new Date(iso(s.ended_at))) : null,
-    // O dia do apagamento (W3, partes 4a e 4b): na assinatura que terminou, enquanto ele não passou.
-    purge_on: !viva && s.purge_on && diasEntre(hoje, s.purge_on) >= 0 ? s.purge_on : null,
+    // O dia do apagamento (W3, partes 4a, 4b e 4d): na assinatura que terminou, enquanto ele não passou; na cancelada que
+    // ainda não terminou, o dia projetado, pela mesma conta do `encerrar` (o fim do período + 30, ou o 60º dia de atraso).
+    purge_on: !viva ? (s.purge_on && diasEntre(hoje, s.purge_on) >= 0 ? s.purge_on : null) : apagamentoDaCancelada(s, passos?.apagaEm ?? null),
   };
+}
+
+/** O dia projetado do apagamento da assinatura cancelada no fim do período (a conta do `encerrar`); nulo nas outras. */
+function apagamentoDaCancelada(s: LinhaDaAssinatura, peloAtraso: string | null): string | null {
+  if (!s.cancel_at_period_end || !s.period_end || !s.first_paid_at) return null;
+  const peloFim = somarDias(s.period_end, DIAS_PARA_EXPORTAR);
+  return peloAtraso && peloAtraso < peloFim ? peloAtraso : peloFim;
 }
