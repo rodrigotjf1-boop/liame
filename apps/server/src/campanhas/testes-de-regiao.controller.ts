@@ -1,5 +1,5 @@
-import { CreateRegionTestRequest, ProblemDetails, RegionTestResponse, ResourceId } from '@liame/contracts';
-import { Body, Controller, Get, HttpCode, Param, Post } from '@nestjs/common';
+import { CreateRegionTestRequest, ProblemDetails, RegionTestListQuery, RegionTestListResponse, RegionTestResponse, ResourceId } from '@liame/contracts';
+import { Body, Controller, Get, HttpCode, Param, Post, Query } from '@nestjs/common';
 import {
   ApiBadRequestResponse,
   ApiConflictResponse,
@@ -44,6 +44,21 @@ export class TestesDeRegiaoController {
   @ApiUnprocessableEntityResponse({ standardSchema: ProblemDetails })
   criar(@Auth() auth: AuthContext, @Body({ schema: CreateRegionTestRequest }) body: CreateRegionTestRequest): Promise<RegionTestResponse> {
     return this.testes.criar(auth, body);
+  }
+
+  @Get()
+  @Permissao('campanhas.ver')
+  @ApiOperation({
+    summary: 'Listar os testes de região da marca',
+    description:
+      'Os testes de região da marca, do mais novo para o mais antigo (até 50), cada um como a leitura de um teste: o bairro, os pedidos por bairro de antes, os conjuntos que o bairro deixa, a situação e os dias. O que cada teste mostrou fica guardado por empresa: nada é comparado entre empresas.',
+  })
+  @ApiOkResponse({ standardSchema: RegionTestListResponse })
+  @ApiBadRequestResponse({ standardSchema: ProblemDetails })
+  @ApiForbiddenResponse({ standardSchema: ProblemDetails })
+  @ApiNotFoundResponse({ standardSchema: ProblemDetails })
+  listar(@Auth() auth: AuthContext, @Query({ schema: RegionTestListQuery }) query: RegionTestListQuery): Promise<RegionTestListResponse> {
+    return this.testes.listar(auth, query);
   }
 
   @Get(':id')

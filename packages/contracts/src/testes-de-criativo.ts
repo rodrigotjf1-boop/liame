@@ -42,6 +42,18 @@ export const CreativeTestDiscount = z
   .refine((d) => (d.kind === 'valor') === (d.value_cents !== undefined), { error: 'O valor vai no desconto de valor fixo, e só nele.', path: ['value_cents'] });
 export type CreativeTestDiscount = z.infer<typeof CreativeTestDiscount>;
 
+const reais = (centavos: number): string => `R$ ${(centavos / 100).toFixed(2).replace('.', ',')}`;
+
+/**
+ * A linha do cupom no fim do texto do anúncio do teste (a mesma no servidor e na prévia da gaveta): o código, o desconto e
+ * o pedido mínimo, quando há. Diz só o que o cupom faz no Regem.
+ */
+export function creativeTestCouponLine(code: string, d: { kind: 'percentual' | 'valor'; percent?: number | null; value_cents?: number | null; min_order_cents?: number | null }): string {
+  const quanto = d.kind === 'percentual' ? `${d.percent ?? 0}% de desconto` : `${reais(d.value_cents ?? 0)} de desconto`;
+  const minimo = (d.min_order_cents ?? 0) > 0 ? ` em pedidos a partir de ${reais(d.min_order_cents ?? 0)}` : '';
+  return `Cupom ${code}: ${quanto}${minimo}.`;
+}
+
 const CreativeTestArmRequest = z.strictObject({
   /** Uma peça aprovada em Criativos; vai a versão atual dela. */
   piece_id: z.uuid(),
@@ -178,3 +190,25 @@ export type CreativeTestListQuery = z.infer<typeof CreativeTestListQuery>;
 /** Os testes da marca, do mais novo para o mais antigo (até 50): o que foi testado e o que cada um mostrou (D-RG-83). */
 export const CreativeTestListResponse = z.strictObject({ items: z.array(CreativeTestResponse) });
 export type CreativeTestListResponse = z.infer<typeof CreativeTestListResponse>;
+
+// ---------------------------------------------------------------- as opções da gaveta (R8, D-RG-96)
+
+export const CreativeTestOptionsQuery = z.strictObject({ brand_id: z.uuid() });
+export type CreativeTestOptionsQuery = z.infer<typeof CreativeTestOptionsQuery>;
+
+/**
+ * Se o Liame consegue criar os dois cupons na loja, na ordem em que o pedido confere: `pronto`, `sem_regem` (a loja não
+ * está ligada ao Regem), `sem_permissao` (a loja não liberou "criar cupom de campanha") ou `escrita_desligada` (criar
+ * cupom no Regem não está ligado para a empresa).
+ */
+export const CREATIVE_TEST_COUPON_READINESS = ['pronto', 'sem_regem', 'sem_permissao', 'escrita_desligada'] as const;
+
+export const CreativeTestOptionsResponse = z.strictObject({
+  /** A função `teste_de_criativo` ligada para esta empresa e esta marca. Desligada, a peça não mostra o botão. */
+  enabled: z.boolean(),
+  /** O teste vivo da marca (de criativo ou de região: um por vez), quando há; a gaveta diz e não deixa pedir. */
+  live: z.strictObject({ id: z.uuid(), kind: z.enum(['criativo', 'regiao']), name: z.string(), status: z.string() }).nullable(),
+  /** Cada loja da marca e se dá para criar os dois cupons nela (a mesma conferência do pedido). */
+  units: z.array(z.strictObject({ unit_id: z.uuid(), coupons: z.enum(CREATIVE_TEST_COUPON_READINESS) })),
+});
+export type CreativeTestOptionsResponse = z.infer<typeof CreativeTestOptionsResponse>;

@@ -214,3 +214,14 @@
 @media (prefers-reduced-motion: reduce) {
   .recarregando, .dica-graf { transition: none; }
 }
+
+/* "Testes" (R8, D-RG-97): cada teste da marca com a situação, o veredito em uma frase e os números que decidiram. */
+.r8t-lista { display: grid; gap: var(--sp-3); margin: 0; padding: 0; list-style: none; }
+.r8t-teste { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: var(--sp-2) var(--sp-4); align-items: start; padding: var(--sp-3) var(--sp-4); border: 1px solid var(--border); border-radius: var(--radius); }
+.r8t-teste-nome { display: grid; gap: 4px; min-width: 0; }
+.r8t-teste-nome b { overflow-wrap: anywhere; }
+.r8t-teste-nome small { color: var(--text-muted); font-size: var(--text-xs); }
+.r8t-teste-veredito { grid-column: 1 / -1; margin: 0; font-size: var(--text-sm); overflow-wrap: anywhere; }
+.r8t-teste-numeros { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 4px var(--sp-4); margin: 0; color: var(--text-muted); font-size: var(--text-xs); font-family: var(--font-mono); }
+.r8t-teste .btn { white-space: normal; }
+@media (max-width: 520px) { .r8t-teste { grid-template-columns: minmax(0, 1fr); } }

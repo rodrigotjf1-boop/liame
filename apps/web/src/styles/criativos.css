@@ -144,3 +144,17 @@
   .noar li { grid-template-columns: minmax(0, 1fr); }
   .noar li .btn { justify-self: start; }
 }
+
+/* A gaveta "Testar contra outra peça" (R8, D-RG-96): os dois criativos lado a lado, que viram um embaixo do outro no estreito. */
+.r8t-bracos { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(280px, 100%), 1fr)); gap: var(--sp-3); }
+.r8t-braco { display: grid; gap: var(--sp-3); align-content: start; padding: var(--sp-3) var(--sp-4); border: 1px solid var(--border); border-radius: var(--radius); min-width: 0; }
+.r8t-braco > h3 { display: flex; gap: var(--sp-2); align-items: center; margin: 0; font-size: var(--text-base); }
+.r8t-peca { display: grid; gap: 4px; min-width: 0; }
+.r8t-peca b { overflow-wrap: anywhere; }
+.r8t-peca p { margin: 0; color: var(--text-muted); font-size: var(--text-sm); overflow-wrap: anywhere; }
+.r8t-linha { margin: 0; padding: var(--sp-2) var(--sp-3); border-radius: var(--radius); background: var(--bg-subtle); font-size: var(--text-sm); overflow-wrap: anywhere; }
+.r8t-linha code { font-family: var(--font-mono); }
+.r8t-desconto { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(180px, 100%), 1fr)); gap: var(--sp-3); align-items: start; }
+.r8t-notas { display: grid; gap: var(--sp-2); margin: 0; padding: 0; list-style: none; font-size: var(--text-sm); }
+.r8t-notas li { display: flex; gap: var(--sp-2); align-items: flex-start; }
+.r8t-notas .ic { flex: none; margin-top: 2px; color: var(--text-muted); }

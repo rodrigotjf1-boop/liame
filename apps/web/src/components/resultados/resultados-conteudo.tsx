@@ -18,6 +18,7 @@ import { CartaoCampanhas } from './cartao-campanhas';
 import { CartaoCiclo } from './cartao-ciclo';
 import { CartaoFontes, FaixaDoTopoDosResultados } from './cartao-fontes';
 import { CartaoGoogle, type GoogleDaTela } from './cartao-google';
+import { CartaoTestes } from './cartao-testes';
 import { CartaoOrigem } from './cartao-origem';
 import { type ConsultaDePedidos, CartaoPedidos } from './cartao-pedidos';
 import { CartaoRoas } from './cartao-roas';
@@ -67,6 +68,8 @@ type Props = {
    * Console ligada para a empresa.
    */
   google?: GoogleDaTela | null;
+  /** "Testes" (R8, D-RG-97): a marca e hoje, para quem vê as campanhas; nulo para os outros. */
+  testes?: { brandId: string; hoje: string } | null;
 };
 
 /** "Ver por campanha": leva ao cartão das campanhas e, no Lite, abre os detalhes dele (como no protótipo). */
@@ -96,6 +99,7 @@ export function ResultadosConteudo({
   podeVerAgenda = false,
   anuncios = null,
   google = null,
+  testes = null,
 }: Props) {
   const pro = useModo().modo === 'pro';
   const explicacao = useExplicacao(explicar?.pedido ?? null);
@@ -148,6 +152,7 @@ export function ResultadosConteudo({
         {pro && <CartaoFontes fontes={tela.fontes} />}
         <CartaoCiclo ciclo={tela.ciclo} lite={graficos.real} rotuloPeriodo={tela.base.rotuloPeriodo} datas={tela.contexto.datas} />
         <CartaoCampanhas campanhas={tela.campanhas} lite={graficos.campanhas} rotuloPeriodo={tela.base.rotuloPeriodo} pedir={pedir} vendasAoGoogle={vendasAoGoogle} />
+        {testes && <CartaoTestes key={testes.brandId} brandId={testes.brandId} hoje={testes.hoje} />}
         {/* Uma marca, um cartão: trocar de marca recomeça a leitura pedida. */}
         {anuncios && (
           <CartaoAnuncios

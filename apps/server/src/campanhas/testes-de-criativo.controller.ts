@@ -1,4 +1,13 @@
-import { CreateCreativeTestRequest, CreativeTestListQuery, CreativeTestListResponse, CreativeTestResponse, ProblemDetails, ResourceId } from '@liame/contracts';
+import {
+  CreateCreativeTestRequest,
+  CreativeTestListQuery,
+  CreativeTestListResponse,
+  CreativeTestOptionsQuery,
+  CreativeTestOptionsResponse,
+  CreativeTestResponse,
+  ProblemDetails,
+  ResourceId,
+} from '@liame/contracts';
 import { Body, Controller, Get, HttpCode, Param, Post, Query } from '@nestjs/common';
 import {
   ApiBadRequestResponse,
@@ -101,6 +110,21 @@ export class TestesDeCriativoController {
   @ApiUnprocessableEntityResponse({ standardSchema: ProblemDetails })
   pausarOQuePerdeu(@Auth() auth: AuthContext, @Param('id', { schema: ResourceId }) id: string): Promise<CreativeTestResponse> {
     return this.testes.pausarOQuePerdeu(auth, id);
+  }
+
+  @Get('options')
+  @Permissao('campanhas.ver')
+  @ApiOperation({
+    summary: 'As opções da gaveta do teste de criativo',
+    description:
+      'Se a função `teste_de_criativo` está ligada para a empresa e a marca, o teste vivo da marca (de criativo ou de região: um por vez) e, em cada loja, se o Liame consegue criar os dois cupons no Regem (a loja ligada ao Regem, com "criar cupom de campanha" liberado e a escrita ligada), na ordem em que o pedido confere. Só leitura: o pedido confere tudo de novo.',
+  })
+  @ApiOkResponse({ standardSchema: CreativeTestOptionsResponse })
+  @ApiBadRequestResponse({ standardSchema: ProblemDetails })
+  @ApiForbiddenResponse({ standardSchema: ProblemDetails })
+  @ApiNotFoundResponse({ standardSchema: ProblemDetails })
+  opcoes(@Auth() auth: AuthContext, @Query({ schema: CreativeTestOptionsQuery }) query: CreativeTestOptionsQuery): Promise<CreativeTestOptionsResponse> {
+    return this.testes.opcoes(auth, query);
   }
 
   @Get()

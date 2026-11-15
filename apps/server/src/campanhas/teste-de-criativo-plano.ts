@@ -1,3 +1,4 @@
+import { creativeTestCouponLine } from '@liame/contracts';
 import { z } from 'zod';
 import { BairroDaCampanha, MAXIMO_DE_BAIRROS } from './bairros-da-campanha.js';
 import type { EstadoDaCampanhaNova } from './campanha-nova-plano.js';
@@ -116,16 +117,18 @@ export type ResultadoDoTesteDeCriativo = z.infer<typeof ResultadoDoTesteDeCriati
 
 // ------------------------------------------------------------ o texto com o cupom
 
-const reais = (centavos: number): string => `R$ ${(centavos / 100).toFixed(2).replace('.', ',')}`;
-
 /**
  * A linha do cupom no fim do texto do anúncio: o código, o desconto e o pedido mínimo, quando há. Diz só o que o cupom
  * faz no Regem (nada de "na primeira compra": o cupom do teste não tem essa regra).
  */
 export function linhaDoCupom(codigo: string, desconto: DescontoDoTeste): string {
-  const quanto = desconto.tipo === 'percentual' ? `${desconto.percentual}% de desconto` : `${reais(desconto.valor_centavos)} de desconto`;
-  const minimo = desconto.pedido_minimo_centavos > 0 ? ` em pedidos a partir de ${reais(desconto.pedido_minimo_centavos)}` : '';
-  return `Cupom ${codigo}: ${quanto}${minimo}.`;
+  // A fórmula fica no contrato: a prévia da gaveta mostra exatamente esta linha.
+  return creativeTestCouponLine(
+    codigo,
+    desconto.tipo === 'percentual'
+      ? { kind: 'percentual', percent: desconto.percentual, min_order_cents: desconto.pedido_minimo_centavos }
+      : { kind: 'valor', value_cents: desconto.valor_centavos, min_order_cents: desconto.pedido_minimo_centavos },
+  );
 }
 
 /** O texto que sai no anúncio: o da peça e, depois de uma linha em branco, a linha do cupom. Nada é cortado. */

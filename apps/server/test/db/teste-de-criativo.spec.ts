@@ -277,6 +277,37 @@ describe.skipIf(!hasDb)('o teste de criativo na Meta (plano da região, R8)', ()
     expect((await api.call('GET', `/v1/creative-tests/${r.body.id}`, { cookie: e.cookie })).body.status).toBe('cancelado');
   }, 120_000);
 
+  it('as opções da gaveta (D-RG-96): a função, o cupom da loja na ordem do pedido e o teste vivo da marca', async () => {
+    const e = await cenario('Brasa Teste Opcoes', { ligada: false });
+    type Opcoes = { enabled: boolean; live: unknown; units: Array<{ unit_id: string; coupons: string }> };
+    const ler = async () => {
+      const r = await api.call('GET', `/v1/creative-tests/options?brand_id=${e.brandId}`, { cookie: e.cookie });
+      expect(r.status, JSON.stringify(r.body)).toBe(200);
+      return r.body as Opcoes;
+    };
+    const doCupom = async () => (await ler()).units.find((u) => u.unit_id === e.unitId)?.coupons;
+    expect(await ler()).toMatchObject({ enabled: false, live: null });
+    expect(await doCupom()).toBe('pronto');
+    await ligarFuncao('teste_de_criativo', e.tenantId);
+    expect((await ler()).enabled).toBe(true);
+    // A mesma ordem do pedido: o Regem ligado, a permissão de criar cupom, a escrita da empresa.
+    await ownerQuery(`update liame.feature_flag_rule set value = 'false'::jsonb where flag_key = 'regem_write' and scope_type = 'tenant' and scope_id = $1`, [e.tenantId]);
+    api.app.get(FlagService).invalidate();
+    expect(await doCupom()).toBe('escrita_desligada');
+    await ownerQuery(`update liame.connected_account set provider_attributes = provider_attributes - 'escopos' where id = $1`, [e.regem]);
+    expect(await doCupom()).toBe('sem_permissao');
+    await ownerQuery(`update liame.connected_account set disconnected_at = now() where id = $1`, [e.regem]);
+    expect(await doCupom()).toBe('sem_regem');
+    await ownerQuery(`update liame.connected_account set disconnected_at = null, provider_attributes = provider_attributes || '{"escopos": ["cupons.criar"]}'::jsonb where id = $1`, [e.regem]);
+    await ligarFuncao('regem_write', e.tenantId);
+    expect(await doCupom()).toBe('pronto');
+    // O teste vivo da marca aparece; a gaveta diz e não deixa pedir outro.
+    const fotos: [string, string] = [(await fotoGuardada(e, armazem, { largura: 1080, altura: 1350 })).id, (await fotoGuardada(e, armazem, { largura: 1080, altura: 1080 })).id];
+    const r = await pedir(e, fotos);
+    expect(r.status, JSON.stringify(r.body)).toBe(201);
+    expect((await ler()).live).toEqual({ id: r.body.id, kind: 'criativo', name: 'Combo sexta: a foto ou a outra', status: 'pedido' });
+  }, 120_000);
+
   it('criar, ativar e encerrar: uma campanha com dois conjuntos de metade da verba, tudo pausado; ativar com o código; encerrar sem ele', async () => {
     const e = await cenario('Brasa Teste Cria');
     const fotos: [string, string] = [(await fotoGuardada(e, armazem, { largura: 1080, altura: 1350 })).id, (await fotoGuardada(e, armazem, { largura: 1080, altura: 1080 })).id];

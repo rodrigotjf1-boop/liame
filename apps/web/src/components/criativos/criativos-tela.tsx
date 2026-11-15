@@ -7,6 +7,7 @@ import type {
   BrandPhoto,
   BrandResponse,
   CreateAdPieceRequest,
+  CreativeTestOptionsResponse,
   GoogleCampaignOptionsResponse,
   NewCampaignOptionsResponse,
 } from '@liame/contracts';
@@ -23,6 +24,7 @@ import { useModo } from '@/lib/modo';
 import { useSessao } from '@/lib/sessao';
 import { GavetaCampanhaGoogle } from './gaveta-campanha-google';
 import { GavetaCampanhaNova } from './gaveta-campanha-nova';
+import { GavetaTesteDeCriativo } from './gaveta-teste-de-criativo';
 import { CriativosLista } from './lista';
 import { PecaAberta } from './peca';
 import { DialogoPedirPeca } from './pedir-peca';
@@ -67,6 +69,9 @@ export function CriativosTela() {
   // A campanha nova no Google (P45): as opções da gaveta e a peça com as fotos de Fotos, quando a gaveta está aberta.
   const [campanhasGoogle, setCampanhasGoogle] = useState<GoogleCampaignOptionsResponse | null>(null);
   const [montandoGoogle, setMontandoGoogle] = useState<{ peca: AdPieceResponse; midias: BrandPhoto[] | null } | null>(null);
+  // O teste de criativo (R8, D-RG-96): as opções (a função, o teste vivo, o cupom de cada loja) e a gaveta aberta.
+  const [opcoesDoTeste, setOpcoesDoTeste] = useState<CreativeTestOptionsResponse | null>(null);
+  const [montandoTeste, setMontandoTeste] = useState<{ peca: AdPieceResponse; midias: BrandPhoto[] | null } | null>(null);
   /** O elemento que recebe o foco depois do próximo desenho (pelo id), ou o título da tela. */
   const focar = useRef<string | null>(null);
   const seq = useRef(0);
@@ -106,7 +111,7 @@ export function CriativosTela() {
     const id = ++seq.current;
     if (!quieto) setCarga({ tipo: 'carregando' });
     const query = { brand_id: brandId };
-    const [o, p, r, c, g] = await Promise.all([
+    const [o, p, r, c, g, t] = await Promise.all([
       chamar(() => api.GET('/v1/ad-pieces/options', { params: { query } })),
       chamar(() => api.GET('/v1/ad-pieces', { params: { query } })),
       // Os pedidos só enfeitam a tela (de onde a peça veio, o pedido que não deu certo): sem eles, ela abre do mesmo jeito.
@@ -114,10 +119,13 @@ export function CriativosTela() {
       // A campanha nova (P42) e a do Google (P45): sem as opções, a peça só não mostra o botão.
       chamar(() => api.GET('/v1/new-campaigns/options', { params: { query } })),
       chamar(() => api.GET('/v1/google-campaigns/options', { params: { query } })),
+      // O teste de criativo (D-RG-96): sem as opções, a peça só não mostra o botão.
+      chamar(() => api.GET('/v1/creative-tests/options', { params: { query } })),
     ]);
     if (id !== seq.current) return null;
     setCampanhas(c.ok ? c.data : null);
     setCampanhasGoogle(g.ok ? g.data : null);
+    setOpcoesDoTeste(t.ok ? t.data : null);
     if (!o.ok || !p.ok) {
       // A releitura que falha não derruba a tela que já está aberta.
       if (!quieto) setCarga({ tipo: 'erro', problema: !o.ok ? o.problema : !p.ok ? p.problema : ({} as Problema) });
@@ -156,6 +164,14 @@ export function CriativosTela() {
     const r = await chamar(() => api.GET('/v1/brand-photos', { params: { query: { brand_id: brandId } } }));
     setAbrindoCampanha(false);
     setMontando({ peca: p, midias: r.ok && r.data.enabled ? r.data.items : null });
+  }, []);
+  /** A gaveta do teste de criativo (D-RG-96), com as fotos e os vídeos de Fotos, como a da campanha nova. */
+  const [abrindoTeste, setAbrindoTeste] = useState(false);
+  const abrirTeste = useCallback(async (p: AdPieceResponse, brandId: string) => {
+    setAbrindoTeste(true);
+    const r = await chamar(() => api.GET('/v1/brand-photos', { params: { query: { brand_id: brandId } } }));
+    setAbrindoTeste(false);
+    setMontandoTeste({ peca: p, midias: r.ok && r.data.enabled ? r.data.items : null });
   }, []);
   /** O mesmo para a campanha no Google (P45): só as fotos servem, e a gaveta filtra. */
   const [abrindoGoogle, setAbrindoGoogle] = useState(false);
@@ -489,6 +505,12 @@ export function CriativosTela() {
               }
             : null
         }
+        teste={
+          // Só com a função ligada, para quem opera campanhas, com as lojas lidas e outra peça aprovada na marca.
+          opcoesDoTeste?.enabled && campanhas && podeOperar && pecas.some((x) => x.status === 'aprovada' && x.id !== detalhe.id)
+            ? { abrindo: abrindoTeste, aoTestar: (p) => disparar(abrirTeste(p, carga.marca)) }
+            : null
+        }
         campanhaGoogle={
           campanhasGoogle?.enabled
             ? {
@@ -547,6 +569,20 @@ export function CriativosTela() {
           hoje={new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Sao_Paulo', year: 'numeric', month: '2-digit', day: '2-digit' }).format(agora)}
           reserva={titulo}
           aoFechar={() => setMontando(null)}
+          aoCriado={() => disparar(ler(carga.marca, true))}
+        />
+      )}
+      {montandoTeste && opcoesDoTeste && campanhas && (
+        <GavetaTesteDeCriativo
+          brandId={carga.marca}
+          peca={montandoTeste.peca}
+          outras={pecas.filter((x) => x.status === 'aprovada' && x.id !== montandoTeste.peca.id)}
+          midias={montandoTeste.midias}
+          opcoes={opcoesDoTeste}
+          campanhas={campanhas}
+          hoje={new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Sao_Paulo', year: 'numeric', month: '2-digit', day: '2-digit' }).format(agora)}
+          reserva={titulo}
+          aoFechar={() => setMontandoTeste(null)}
           aoCriado={() => disparar(ler(carga.marca, true))}
         />
       )}
