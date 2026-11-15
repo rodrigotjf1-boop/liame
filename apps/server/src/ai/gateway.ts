@@ -326,7 +326,7 @@ export class AiGateway {
       if (m.role === 'assistant') return { role: 'assistant', content: limpo(textoDa(m)) };
       return {
         role: 'user',
-        content: m.content.map((p) => (p.tipo === 'texto' ? { type: 'text' as const, text: limpo(p.texto) } : { type: 'image' as const, image: p.jpeg, mediaType: 'image/jpeg' })),
+        content: m.content.map((p) => (p.tipo === 'texto' ? { type: 'text' as const, text: limpo(p.texto) } : { type: 'file' as const, data: p.jpeg, mediaType: 'image/jpeg' })),
       };
     });
     const removidos = instrucoes.removidos + (contextoDoPedido?.removidos ?? 0) + removidosNasMensagens;

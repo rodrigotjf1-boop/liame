@@ -25,7 +25,7 @@ export async function responderCortes(modelos: ModelosIa, alvo: AlvoDoEval, caso
     partes.flatMap((p) => (p.tipo === 'imagem' ? [p] : [])),
   );
   if (problema) throw new Error(`eval: ${problema}`);
-  const content = partes.map((p) => (p.tipo === 'texto' ? { type: 'text' as const, text: limparTexto(p.texto).texto } : { type: 'image' as const, image: p.jpeg, mediaType: 'image/jpeg' }));
+  const content = partes.map((p) => (p.tipo === 'texto' ? { type: 'text' as const, text: limparTexto(p.texto).texto } : { type: 'file' as const, data: p.jpeg, mediaType: 'image/jpeg' }));
   try {
     const r = await generateText({
       model,

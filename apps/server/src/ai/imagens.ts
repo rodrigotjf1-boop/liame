@@ -75,18 +75,23 @@ export function problemaDasImagens(task: string, imagens: ReadonlyArray<{ jpeg: 
 
 /**
  * O pedido como fica guardado em `ai_exchange` (30 dias, para investigar erro e abuso): cada imagem vira só os bytes e o
- * resumo (sha256), nunca o conteúdo. O resto do pedido fica como foi enviado (o texto já passou pela limpeza).
+ * resumo (sha256), nunca o conteúdo. O resto do pedido fica como foi enviado (o texto já passou pela limpeza). A imagem
+ * vai ao SDK como parte `file` com o `mediaType` de imagem (a parte `image` está obsoleta no AI SDK); as duas formas são
+ * reconhecidas aqui, para nenhuma deixar a imagem inteira no registro.
  */
 export function paraGuardar<T extends { messages: ReadonlyArray<{ role: string; content: unknown }> }>(enviado: T): T {
+  const bytesDa = (p: { type?: string; image?: unknown; data?: unknown }): Uint8Array | null =>
+    p.type === 'image' && p.image instanceof Uint8Array ? p.image : p.type === 'file' && p.data instanceof Uint8Array ? p.data : null;
   return {
     ...enviado,
     messages: enviado.messages.map((m) =>
       Array.isArray(m.content)
         ? {
             ...m,
-            content: m.content.map((p: { type?: string; image?: unknown }) =>
-              p.type === 'image' && p.image instanceof Uint8Array ? { type: 'image', bytes: p.image.byteLength, sha256: createHash('sha256').update(p.image).digest('hex') } : p,
-            ),
+            content: m.content.map((p: { type?: string; image?: unknown; data?: unknown }) => {
+              const bytes = bytesDa(p);
+              return bytes ? { type: 'image', bytes: bytes.byteLength, sha256: createHash('sha256').update(bytes).digest('hex') } : p;
+            }),
           }
         : m,
     ),
