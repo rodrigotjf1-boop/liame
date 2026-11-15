@@ -8,7 +8,16 @@ import { api, chamar, mensagemDe, type Problema } from '@/lib/api';
 import type { Prova } from '@/lib/chave-de-acesso';
 import { disparar } from '@/lib/disparar';
 import { BarraDaDecisao, type Decisao } from './barra-da-decisao';
-import { andamentoDoTesteDeRegiao, bairrosDoTeste, conjuntosDoTesteDeRegiao, idDoTesteDeRegiao, semanasDoTeste, situacaoDoTesteDeRegiao, tituloDoTesteDeRegiao } from './teste-de-regiao-textos';
+import {
+  andamentoDoTesteDeRegiao,
+  bairrosDoTeste,
+  conjuntosDoTesteDeRegiao,
+  idDoTesteDeRegiao,
+  semanasDoTeste,
+  situacaoDoTesteDeRegiao,
+  tituloDoTesteDeRegiao,
+  vereditoDoTesteDeRegiao,
+} from './teste-de-regiao-textos';
 import { cabecalhoDe, type Grupo, MOTIVOS_DA_RECUSA, resultadoDe, riscoDe, ROTULO_RISCO } from './textos';
 
 // O teste de região em Aprovações (plano da região, R8; protótipo dos testes aprovado pelo dono em 13/11/2026; D-RG-81 e
@@ -121,6 +130,7 @@ export function DetalheTesteDeRegiao({ acao, grupo, agora, podeDecidir, temApp, 
   const resultado = pendente ? null : resultadoDe(acao);
   const perigo = t.status === 'interrompido' || t.status === 'cancelado';
   const bairros = bairrosDoTeste(t);
+  const veredito = vereditoDoTesteDeRegiao(t);
 
   return (
     <>
@@ -158,6 +168,12 @@ export function DetalheTesteDeRegiao({ acao, grupo, agora, podeDecidir, temApp, 
             <div className="politica">
               <Icone nome={t.status === 'encerrado' ? 'pause' : 'check'} />
               <span>{andamento}</span>
+            </div>
+          )}
+          {veredito && (
+            <div className={`r8-veredito${veredito.provou ? ' r8-veredito--venceu' : ''}`} id={`${ids}-veredito`}>
+              <b>{veredito.titulo}</b>
+              <span>{veredito.texto}</span>
             </div>
           )}
         </div>

@@ -1,4 +1,4 @@
-import { REGION_TEST_WEEKS_BEFORE, type RegionTestResponse } from '@liame/contracts';
+import { REGION_TEST_MIN_OTHER_DISTRICTS, REGION_TEST_WEEKS_BEFORE, type RegionTestResponse } from '@liame/contracts';
 
 // O teste de região em Aprovações (plano da região, R8; protótipo dos testes aprovado pelo dono em 13/11/2026; D-RG-81 e
 // D-RG-82): as regras puras do detalhe. Por enquanto, aprovar só marca o teste como pronto: os passos que tiram o bairro
@@ -75,6 +75,54 @@ export function andamentoDoTesteDeRegiao(t: RegionTestResponse): string | null {
     case 'cancelado':
       return t.error ?? 'O pedido foi recusado ou expirou em Aprovações: nada mudou na Meta.';
   }
+}
+
+// ------------------------------------------------------------ o resultado (a medida, D-RG-102)
+
+/** Pedidos por semana com uma casa decimal, como a tela escreve ("12,5", "84,0"). */
+const umaCasa = (n: number): string => n.toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+
+const sobraram = (n: number): string => (n === 0 ? 'não sobrou nenhum bairro' : n === 1 ? 'sobrou 1 bairro' : `sobraram ${n} bairros`);
+
+/**
+ * O que o teste mostrou, em uma frase: com a conta (o que o bairro fez, o que faria seguindo os outros e a faixa do que o
+ * anúncio traz) ou o motivo de não haver conta. Enquanto o teste terminado espera a medida, a frase diz quando ela sai.
+ * Nulo nas outras situações.
+ */
+export function resultadoDoTesteDeRegiao(t: Pick<RegionTestResponse, 'status' | 'days' | 'result'>): string | null {
+  const r = t.result;
+  if (!r) return t.status === 'terminado' ? `O resultado sai depois que a leitura dos pedidos do Regem cobrir os ${t.days} dias.` : null;
+  const e = r.effect;
+  if (e) {
+    if (e.proven) {
+      return `Sem anúncio, o bairro fez ${umaCasa(e.actual_per_week)} pedidos por semana; seguindo os outros bairros, faria ${umaCasa(e.expected_per_week)}. O anúncio traz de ${umaCasa(e.range.from)} a ${umaCasa(e.range.to)} pedidos por semana ali.`;
+    }
+    return `Não deu para provar que o anúncio traz pedido no bairro: a faixa vai de 0 a ${umaCasa(e.range.to)} por semana.`;
+  }
+  switch (r.reason) {
+    case 'incompleto':
+      return `O teste parou antes dos ${t.days} dias: com menos, o Liame não tira conclusão.`;
+    case 'poucos_bairros':
+      return `Nos dias do teste, ${sobraram(r.districts.length)} para comparar; a conta pede pelo menos ${REGION_TEST_MIN_OTHER_DISTRICTS}.`;
+    case 'abaixo_do_minimo':
+      return `O bairro teve menos pedidos do que o mínimo que o Regem mostra por bairro${r.regem_minimum ? ` (${r.regem_minimum} nos ${t.days} dias)` : ''}${typeof r.expected_per_week === 'number' ? `; seguindo os outros bairros, faria ${umaCasa(r.expected_per_week)} pedidos por semana` : ''}.`;
+    case 'sem_conta':
+      return 'Faltou pedido de um dos lados, antes ou durante o teste: não há conta.';
+    case 'sem_leitura':
+      return `O Liame não conseguiu ler os pedidos do Regem dos ${t.days} dias: sem eles, não há conta.`;
+    default:
+      return 'Não deu para fazer a conta deste teste.';
+  }
+}
+
+/** O resultado no detalhe: um título curto e a frase; `provou` pinta o quadro de sucesso. Nulo quando não há o que mostrar. */
+export function vereditoDoTesteDeRegiao(t: Pick<RegionTestResponse, 'status' | 'days' | 'result'>): { titulo: string; texto: string; provou: boolean } | null {
+  const texto = resultadoDoTesteDeRegiao(t);
+  if (!texto) return null;
+  const e = t.result?.effect;
+  if (!t.result) return { titulo: 'Ainda medindo', texto, provou: false };
+  if (e?.proven) return { titulo: 'O anúncio traz pedido no bairro', texto, provou: true };
+  return { titulo: e ? 'Não deu para provar' : 'Sem conta neste teste', texto, provou: false };
 }
 
 /** Os conjuntos das campanhas do Liame que mostram anúncio no bairro, numa frase (de onde o bairro sai no teste). */

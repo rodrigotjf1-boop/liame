@@ -762,6 +762,7 @@ export {
   RegionTestOptionsQuery,
   RegionTestOptionsResponse,
   RegionTestResponse,
+  RegionTestResult,
 } from './testes-de-regiao.js';
 export {
   CreateGoogleCampaignRequest,

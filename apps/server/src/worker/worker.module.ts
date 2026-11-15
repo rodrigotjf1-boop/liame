@@ -90,6 +90,7 @@ import { RegiaoMidiaLoop } from './regiao-midia.service.js';
 import { RegiaoPublicoLoop } from './regiao-publico.service.js';
 import { RitmoDaSemanaService } from './ritmo-da-semana.service.js';
 import { TestesDeCriativoRotina } from './testes-de-criativo.service.js';
+import { TestesDeRegiaoRotina } from './testes-de-regiao.service.js';
 import { ComparacaoDmsIdLoop } from './comparacao-dms-id.js';
 import { RotinaDoCrmService } from './rotina-do-crm.service.js';
 import { SugestoesDeRespostaLoop } from './sugestoes-de-resposta-loop.js';
@@ -177,6 +178,8 @@ import { WebhookDeliverer } from './webhook-deliverer.js';
     RitmoDaSemanaService,
     // Os testes de criativo (plano da região, R8): os cupons do teste aprovado e a ligação deles à campanha de teste.
     TestesDeCriativoRotina,
+    // A medida dos testes de região (plano da região, R8): o resultado em faixa, pelos pedidos do Regem, depois do fim.
+    TestesDeRegiaoRotina,
     // Hub DMS (F2, A3): compara as leituras do RegemCast pelas duas credenciais; só com a função `comparacao_dms_id` ligada.
     ComparacaoDmsIdLoop,
     // Fotos dos produtos (A6, Z4): tira do armazenamento o arquivo da foto apagada (e do envio que não terminou), e depois a linha.
