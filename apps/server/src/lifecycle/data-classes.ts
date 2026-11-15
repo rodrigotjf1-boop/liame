@@ -218,6 +218,9 @@ export const DATA_CLASSES: Record<string, TableClassification> = {
   // O vídeo montado pelo Liame (A6, Z15; migration 0143): o pedido (o modelo, as fotos de Fotos, os textos da marca, o
   // formato) e a fila; quem pediu fica ligado ao pedido. O vídeo pronto é uma linha de `brand_photo`.
   video_montage: { class: 'PERSONAL', retention: 'com a marca (quem pediu fica ligado ao pedido; o vídeo pronto segue a regra de Fotos)' },
+  // O pedido dos cortes ao Social media (A6, Z16; migration 0163): os vídeos de Fotos, a duração e a proposta conferida (os
+  // cortes e as legendas escritas pela IA); quem pediu fica ligado. Os quadros não ficam aqui: saem do armazém no fim do pedido.
+  video_cut_request: { class: 'PERSONAL', retention: 'com a marca (quem pediu fica ligado ao pedido; os quadros saem do armazém no fim do pedido)' },
   // O pedido de mensagem (A5, Y5): o retrato do que o Liame montou no RegemCast antes de pedir a aprovação (o texto do
   // modelo, escrito pela loja; o nome e a regra do público; contagens; a janela; a regra do cupom) e quem propôs.
   // Nenhum telefone, nome de contato ou conteúdo de conversa: os contatos ficam no RegemCast.
