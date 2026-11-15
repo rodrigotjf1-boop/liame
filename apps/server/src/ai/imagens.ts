@@ -28,6 +28,35 @@ export const tokensDaImagem = (largura: number, altura: number): number => Math.
 /** Os bytes começam como JPEG (o marcador SOI, FF D8 FF)? Só JPEG vai ao modelo. */
 export const ehJpeg = (b: Uint8Array): boolean => b.length > 3 && b[0] === 0xff && b[1] === 0xd8 && b[2] === 0xff;
 
+/** Os marcadores SOF do JPEG (C0 a CF, menos C4, C8 e CC): é neles que vêm a altura e a largura da imagem. */
+const ehSof = (m: number): boolean => m >= 0xc0 && m <= 0xcf && m !== 0xc4 && m !== 0xc8 && m !== 0xcc;
+
+/**
+ * As medidas lidas do próprio JPEG (o primeiro segmento SOF depois do SOI), para a medida não depender de quem chama;
+ * nulo quando os bytes não trazem um SOF antes do começo da imagem (SOS) ou acabam no meio.
+ */
+export function medidasDoJpeg(b: Uint8Array): { largura: number; altura: number } | null {
+  if (!ehJpeg(b)) return null;
+  let i = 2;
+  while (i + 3 < b.length) {
+    if (b[i] !== 0xff) return null;
+    const m = b[i + 1]!;
+    if (m === 0xff) {
+      i += 1;
+      continue;
+    }
+    if (m === 0xd9 || m === 0xda) return null;
+    const tamanho = (b[i + 2]! << 8) | b[i + 3]!;
+    if (ehSof(m)) {
+      if (i + 8 >= b.length) return null;
+      return { altura: (b[i + 5]! << 8) | b[i + 6]!, largura: (b[i + 7]! << 8) | b[i + 8]! };
+    }
+    if (tamanho < 2) return null;
+    i += 2 + tamanho;
+  }
+  return null;
+}
+
 /** O que impede mandar estas imagens nesta tarefa; nulo quando pode. */
 export function problemaDasImagens(task: string, imagens: ReadonlyArray<{ jpeg: Uint8Array }>): string | null {
   if (!imagens.length) return null;
@@ -35,6 +64,12 @@ export function problemaDasImagens(task: string, imagens: ReadonlyArray<{ jpeg: 
   if (imagens.length > IMAGENS_POR_PEDIDO_MAXIMAS) return `${imagens.length} imagens, acima do máximo de ${IMAGENS_POR_PEDIDO_MAXIMAS}`;
   if (imagens.some((i) => !ehJpeg(i.jpeg))) return 'imagem que não é JPEG';
   if (imagens.some((i) => i.jpeg.byteLength > BYTES_POR_IMAGEM_MAXIMOS)) return `imagem acima de ${BYTES_POR_IMAGEM_MAXIMOS} bytes`;
+  // As medidas vêm do próprio JPEG: o teto de custo vale mesmo se quem chama esquecer de reduzir o quadro.
+  for (const i of imagens) {
+    const m = medidasDoJpeg(i.jpeg);
+    if (!m || !m.largura || !m.altura) return 'imagem sem as medidas no JPEG';
+    if (Math.max(m.largura, m.altura) > LADO_MAIOR_DA_IMAGEM) return `imagem com ${Math.max(m.largura, m.altura)} px no lado maior, acima de ${LADO_MAIOR_DA_IMAGEM}`;
+  }
   return null;
 }
 

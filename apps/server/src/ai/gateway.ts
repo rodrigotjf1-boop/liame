@@ -60,10 +60,10 @@ export class AiError extends Error {
 }
 
 /**
- * Uma parte da mensagem: texto, ou uma imagem JPEG (só nas tarefas de `TAREFAS_COM_IMAGEM`, só na mensagem da pessoa). A
- * imagem leva a largura e a altura, para a estimativa de tokens; ela nunca vai para o registro de uso nem para o log.
+ * Uma parte da mensagem: texto, ou uma imagem JPEG (só nas tarefas de `TAREFAS_COM_IMAGEM`, só na mensagem da pessoa). As
+ * medidas são lidas do próprio JPEG; a imagem nunca vai para o registro de uso nem para o log.
  */
-export type AiPart = { tipo: 'texto'; texto: string } | { tipo: 'imagem'; jpeg: Uint8Array; largura: number; altura: number };
+export type AiPart = { tipo: 'texto'; texto: string } | { tipo: 'imagem'; jpeg: Uint8Array };
 
 export interface AiMessage {
   role: 'user' | 'assistant';
@@ -292,7 +292,9 @@ export class AiGateway {
     }
     const tamanho = req.instructions.length + (req.context?.length ?? 0) + req.messages.reduce((n, m) => n + textoDa(m).length, 0);
     // A imagem: só nas tarefas da lista, só na mensagem da pessoa, só JPEG e dentro dos tetos (D-A6-82). O log diz a
-    // quantidade, nunca a imagem.
+    // quantidade, nunca a imagem. Não há reserva de custo antes da chamada (o teto confere o gasto já feito): o custo das
+    // imagens entra pelo uso que o fornecedor devolve, como o do texto, e os tetos daqui (16 imagens de até 768 px)
+    // limitam o que um pedido pode custar.
     const imagens = req.messages.flatMap(imagensDa);
     const semImagem = req.messages.some((m) => m.role === 'assistant' && imagensDa(m).length > 0) ? 'imagem na mensagem do modelo' : problemaDasImagens(req.task, imagens);
     if (semImagem) {

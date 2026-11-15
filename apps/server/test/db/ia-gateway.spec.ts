@@ -641,17 +641,26 @@ describe.skipIf(!hasDb)('AI Gateway: custo, teto, limpeza de dado pessoal e func
   it('D-A6-82: a imagem só vai na tarefa da lista, como imagem JPEG, e não fica guardada; fora da lista ou acima do teto, nada é chamado', async () => {
     const d = await dono();
     const m = await modelo(responde('ok'));
-    const jpeg = Uint8Array.from([0xff, 0xd8, 0xff, 0xe0, 1, 2, 3, 4]);
+    // Um JPEG de 768 × 432 (o SOI e o SOF0 com as medidas): o gateway lê as medidas do próprio arquivo.
+    const jpeg = Uint8Array.from([0xff, 0xd8, 0xff, 0xc0, 0x00, 0x11, 0x08, 0x01, 0xb0, 0x03, 0x00, 0x03, 1, 0x22, 0, 2, 0x11, 1, 3, 0x11, 1, 0xff, 0xd9]);
     const comImagens = (task: string, n = 1): GenerateRequest =>
       pedido(d, task, {
-        messages: [{ role: 'user', content: [{ tipo: 'texto', texto: 'Escolha os cortes de 21 99876-5432.' }, ...Array.from({ length: n }, () => ({ tipo: 'imagem' as const, jpeg, largura: 768, altura: 432 }))] }],
+        messages: [{ role: 'user', content: [{ tipo: 'texto', texto: 'Escolha os cortes de 21 99876-5432.' }, ...Array.from({ length: n }, () => ({ tipo: 'imagem' as const, jpeg }))] }],
       });
     // A tarefa fora da lista: recusada antes de qualquer chamada.
     const outra = await rota(m);
     await expect(gateway().generate(comImagens(outra))).rejects.toMatchObject({ code: 'entrada-grande' });
     expect(m.mock.doGenerateCalls).toHaveLength(0);
     // A tarefa da lista: a imagem chega ao modelo como JPEG, e o texto ao lado dela passa pela limpeza.
-    const task = await rotaAtiva('social_cortes', m);
+    // A rota da tarefa da lista: a anterior aposentada e a próxima versão livre (o banco local guarda as rodadas de antes).
+    const task = 'social_cortes';
+    await ownerQuery(`update liame.ai_model_route set status = 'aposentada' where task = $1 and status = 'ativa'`, [task]);
+    const [versao] = await ownerQuery<{ v: number }>(`select coalesce(max(version), 0)::int + 1 as v from liame.ai_model_route where task = $1`, [task]);
+    await ownerQuery(
+      `insert into liame.ai_model_route (id, task, version, status, purpose, provider, model, max_output_tokens, timeout_ms, max_cost_usd_micros, fallback, created_by, deployed_at)
+       values (gen_random_uuid(), $1, $2, 'ativa', 'analise', $3, $4, 4000, 30000, 200000, '[]'::jsonb, 'testes', now())`,
+      [task, versao!.v, m.provider, m.model],
+    );
     const r = await gateway().generate(comImagens(task));
     const enviado = JSON.stringify(m.mock.doGenerateCalls[0]!.prompt);
     expect(enviado).toContain('image/jpeg');
@@ -659,14 +668,16 @@ describe.skipIf(!hasDb)('AI Gateway: custo, teto, limpeza de dado pessoal e func
     // O que fica guardado (30 dias): só os bytes e o resumo da imagem, nunca ela.
     const [guardado] = await ownerQuery<{ request: unknown }>(`select request from liame.ai_exchange where usage_id = $1`, [r.usageId]);
     const texto = JSON.stringify(guardado!.request);
-    expect(texto).toContain('"bytes":8');
+    expect(texto).toContain(`"bytes":${jpeg.byteLength}`);
+    // O custo é o do uso que o fornecedor devolve (o modelo simulado diz 1.000 tokens de entrada), sem reserva antes.
+    expect((await usos(d.tenantId, task)).at(-1)).toMatchObject({ input_tokens: 1000, outcome: 'ok' });
     expect(texto).toMatch(/"sha256":"[0-9a-f]{64}"/);
     expect(texto).not.toContain('"0":255');
     // Acima de 16 imagens, ou o que não é JPEG: recusado antes de chamar.
     const chamadas = m.mock.doGenerateCalls.length;
     await expect(gateway().generate(comImagens(task, 17))).rejects.toMatchObject({ code: 'entrada-grande' });
     await expect(
-      gateway().generate(pedido(d, task, { messages: [{ role: 'user', content: [{ tipo: 'imagem', jpeg: Uint8Array.from([0x89, 0x50, 0x4e, 0x47]), largura: 10, altura: 10 }] }] })),
+      gateway().generate(pedido(d, task, { messages: [{ role: 'user', content: [{ tipo: 'imagem', jpeg: Uint8Array.from([0x89, 0x50, 0x4e, 0x47]) }] }] })),
     ).rejects.toMatchObject({ code: 'entrada-grande' });
     expect(m.mock.doGenerateCalls).toHaveLength(chamadas);
   });
