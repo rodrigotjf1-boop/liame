@@ -13,11 +13,20 @@ import { contaConectada } from '../connections/conectada.js';
 import { ClienteConector, ErroConector } from '../connectors/cliente-http.js';
 import { enderecosDasPlataformas } from '../connectors/enderecos.js';
 import { lerOrcamentoDeMensagens, lerPublicos } from '../connectors/regemcast/conector-regemcast.js';
+import {
+  type AcessoAoRegemcast,
+  comAcessoDaConta,
+  type CredencialDaConta,
+  FLAG_DO_PEDIDO_AO_DESTINO,
+  ligacaoGrava,
+  podeGravar,
+  recusaDaConta,
+} from '../connectors/regemcast/credencial-da-conta.js';
 import { currentTx } from '../context/request-context.js';
 import { marcaDoCriativo } from '../criativo/base.js';
 import { DATABASE } from '../database/database.module.js';
 import { FlagService } from '../flags/flag.service.js';
-import { lerContaDoRegemcast } from '../mensageria/conta-do-regemcast.js';
+import { type ContaDoRegemcast, lerContaDoRegemcast } from '../mensageria/conta-do-regemcast.js';
 import { cupomDoDesconto, type DescontoGuardado } from '../mensageria/desconto.js';
 import { FLAG_MENSAGERIA } from '../mensageria/mensageria.service.js';
 import { FLAG_DO_CUPOM, FLAG_DO_ENVIO } from '../mensageria/pedido-de-mensagem.service.js';
@@ -26,6 +35,7 @@ import { abrirProposta } from '../mensageria/proposta-do-crm.js';
 import {
   codigoDoCupom,
   DIAS_PARA_REPETIR_A_OFERTA,
+  ESCOPOS_DE_ESCRITA_NO_REGEMCAST,
   fimDoIntervalo,
   LETRAS_DO_CODIGO,
   ofertaDaVez,
@@ -45,7 +55,7 @@ import { VaultService } from '../vault/vault.service.js';
 //
 // Três tempos, para não segurar uma transação enquanto o RegemCast responde:
 // 1. banco (transação curta da empresa): a marca, o funcionário, o que já existe, o desconto, o responsável, a conta
-//    do RegemCast com o token, o dossiê e a oferta da vez;
+//    do RegemCast com a credencial (o token da distribuição ou a ligação do clique), o dossiê e a oferta da vez;
 // 2. RegemCast (sem transação): o teto de gasto de mensagens e quantas pessoas há em cada perfil;
 // 3. banco (transação da empresa): o código do cupom e a proposta, com a auditoria.
 
@@ -73,7 +83,8 @@ export type Olhada = { resultado: ResultadoDoOlhar; ate?: Date; proposta?: strin
 
 type Lido = {
   conta: { id: string; external_id: string };
-  token: string;
+  /** O token da distribuição ou a ligação do clique (Hub DMS F5, parte D): a leitura do passo 2 vai pela mesma. */
+  credencial: CredencialDaConta;
   apiUrl: string;
   responsavel: string;
   desconto: DescontoGuardado;
@@ -127,16 +138,22 @@ export class RotinaDoCrmService {
 
     // ---- 2. O RegemCast: o teto de gasto de mensagens e os perfis, só com a contagem.
     const ctx = { cliente: this.cliente(database), apiUrl: lido.apiUrl };
-    const acesso = { token: lido.token, contaChave: `rotina:${lido.conta.external_id}` };
+    const contaChave = `rotina:${lido.conta.external_id}`;
+    // Pelo token, direto; pela ligação do clique, com o token do DMS ID das leituras de sempre (as de gravar ficam para
+    // quem grava, no passo do modelo).
+    const ler = <T>(fn: (a: AcessoAoRegemcast) => Promise<T>) => comAcessoDaConta(lido.credencial, this.config, contaChave, fn);
     let publicos: Awaited<ReturnType<typeof lerPublicos>>;
     let orcamento: Awaited<ReturnType<typeof lerOrcamentoDeMensagens>>;
     try {
-      [publicos, orcamento] = await Promise.all([lerPublicos(ctx, acesso), lerOrcamentoDeMensagens(ctx, acesso)]);
+      [publicos, orcamento] = await Promise.all([ler((a) => lerPublicos(ctx, a)), ler((a) => lerOrcamentoDeMensagens(ctx, a))]);
     } catch (err) {
       if (!(err instanceof ErroConector)) throw err;
       // O motivo fica no log (sem token e sem dado pessoal: a mensagem do conector traz só a ferramenta e o campo).
       this.logger.warn(`marca ${alvo.brandId}: o RegemCast não foi lido (conta ${lido.conta.id}): ${err.tipo}: ${err.message}`);
-      return { resultado: err.tipo === 'autenticacao' ? 'sem_autorizacao' : err.tipo === 'permissao' ? 'sem_permissao' : 'regemcast_fora' };
+      // A recusa é da conta pela via e pelo código (V137, ERR-149): pela ligação, só `ligacao-invalida`; o token do DMS
+      // ID recusado é do aplicativo, passageiro, e a rotina olha de novo logo.
+      if (recusaDaConta(lido.credencial, err)) return { resultado: 'sem_autorizacao' };
+      return { resultado: err.tipo === 'permissao' ? 'sem_permissao' : 'regemcast_fora' };
     }
     if (tetoCheio(orcamento)) return { resultado: 'teto_cheio' };
     const publico = publicoDoMotivo(publicos, alvo.motivo);
@@ -231,11 +248,12 @@ export class RotinaDoCrmService {
     // A conta do RegemCast da marca, com a credencial do cofre. Uma marca tem, na prática, uma conta.
     const conta = await lerContaDoRegemcast(tx, this.vault, { tenantId, brandId });
     if (!conta) return { resultado: 'sem_regemcast' };
-    if (!conta.credencial) return { resultado: 'sem_autorizacao' };
+    const credencial = conta.credencial;
+    if (!credencial) return { resultado: 'sem_autorizacao' };
     // Sem poder gravar o rascunho do modelo, montar a campanha e pedir o disparo, a proposta pararia no meio (e a IA
-    // já teria sido gasta no texto). A conta ligada pela autorização do dono (Hub DMS, B1) só lê: cai aqui também.
-    if (!conta.escreve || conta.credencial.via !== 'token') return { resultado: 'sem_permissao' };
-    const token = conta.credencial.token;
+    // já teria sido gasta no texto). A régua é a do passo do modelo (`modelo-do-crm.service.ts`): o token da
+    // distribuição com as três de escrita, ou a ligação do clique com elas e a flag da parte D do Hub DMS.
+    if (!(await this.grava(alvo, conta, credencial))) return { resultado: 'sem_permissao' };
     const apiUrl = this.config.produtos.regemcastApiUrl;
     if (!apiUrl) return { resultado: 'regemcast_fora' };
 
@@ -257,7 +275,18 @@ export class RotinaDoCrmService {
     }
     const hoje = (await tx.execute<{ dia: string }>(sql`select (${agora.toISOString()}::timestamptz at time zone ${fuso})::date::text as dia`)).rows[0]!.dia;
     const desconto: DescontoGuardado = { kind: d.kind, percent: d.percent, value_cents: d.value_cents, min_order_cents: d.min_order_cents, valid_days: d.valid_days, coupon_account_id: d.coupon_account_id };
-    return { conta: { id: conta.id, external_id: conta.external_id }, token, apiUrl, responsavel: d.updated_by, desconto, comoPedir: d.cardapio ? 'cardapio' : 'whatsapp', oferta, hoje };
+    return { conta: { id: conta.id, external_id: conta.external_id }, credencial, apiUrl, responsavel: d.updated_by, desconto, comoPedir: d.cardapio ? 'cardapio' : 'whatsapp', oferta, hoje };
+  }
+
+  /**
+   * A conta grava no RegemCast (o rascunho do modelo, a campanha e o pedido do disparo)? Pelo token da distribuição,
+   * quando a conexão tem as três de escrita. Pela ligação do clique (Hub DMS, B1), só com as mesmas três ligadas pelo
+   * dono no RegemCast e a flag `regemcast_pede_ao_destino` da empresa (F5, parte D): o disparo sai como pedido aprovado lá.
+   */
+  private async grava(alvo: AlvoDoOlhar, conta: ContaDoRegemcast, credencial: CredencialDaConta): Promise<boolean> {
+    if (podeGravar(credencial)) return conta.escreve;
+    if (!ligacaoGrava(credencial, ESCOPOS_DE_ESCRITA_NO_REGEMCAST)) return false;
+    return this.flags.isEnabled(FLAG_DO_PEDIDO_AO_DESTINO, this.flags.context({ tenantId: alvo.tenantId, brandId: alvo.brandId }));
   }
 
   /**
