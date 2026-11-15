@@ -2,7 +2,7 @@ import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import { createServer, type Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { resolve } from 'node:path';
-import type { Database } from '@liame/database';
+import { type Database, withTenant } from '@liame/database';
 import { MockLanguageModelV4 } from 'ai/test';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import type { MotivoDaMensagem } from '../../src/ai/crm/mensagem.js';
@@ -33,6 +33,11 @@ const PERFIS = [
 ];
 const HORA = 3_600_000;
 const DIA = 24 * HORA;
+/** O aplicativo do Liame no DMS ID de mentira, e o valor dele (nome neutro, V123): a ligação do clique vai com o token dele. */
+const APLICATIVO_NO_DMS_ID = 'aplicativo-do-liame-na-rotina';
+const VALOR_DO_APLICATIVO = 'valor-do-aplicativo-da-rotina-1234509876';
+/** As leituras do clique do RegemCast; as três de gravar (Hub DMS F5, parte D) o dono liga à parte, na página de lá. */
+const LEITURAS_DO_CLIQUE = ['conta.ler', 'campanhas.ler', 'publicos.ler', 'modelos.ler', 'orcamento.ler', 'conversas.anuncio.ler'];
 
 type Perfil = { id: string; nome: string; regra: string | null; pessoas: number };
 /** Um modelo no RegemCast falso: nasce rascunho, e só aparece na lista (a da Meta) depois de uma pessoa enviá-lo. */
@@ -130,6 +135,28 @@ describe.skipIf(!hasDb)('a rotina do CRM e mensageria olha a marca e abre a prop
   // ---------------------------------------------------------------- o RegemCast falso
   const contas = new Map<string, ContaFalsa>();
   const chamadas: Array<{ token: string; ferramenta: string }> = [];
+  /** Os tokens que o DMS ID de mentira deu ao aplicativo do Liame; com a chave ligada, o RegemCast recusa todos. */
+  const tokensDoDmsId = new Set<string>();
+  let recusarOsTokensDoDmsId = false;
+  const problema = (tipo: string, status: number) => ({
+    status,
+    corpo: { type: `https://dev.dmstecnologias.com/erros/${tipo}`, title: tipo, status, detail: `recusado: ${tipo}` },
+    problema: true,
+  });
+  /** O `/token` do DMS ID (client credentials, com o aplicativo do Liame). */
+  function tokenDoDmsId(autorizacao: string | undefined, texto: string): { status: number; corpo: unknown } {
+    const esperado = `Basic ${Buffer.from(`${encodeURIComponent(APLICATIVO_NO_DMS_ID)}:${encodeURIComponent(VALOR_DO_APLICATIVO)}`).toString('base64')}`;
+    if (autorizacao !== esperado || new URLSearchParams(texto).get('grant_type') !== 'client_credentials') return { status: 401, corpo: { error: 'invalid_client' } };
+    const token = `tok-${randomUUID()}`;
+    tokensDoDmsId.add(token);
+    return { status: 200, corpo: { access_token: token, token_type: 'Bearer', expires_in: 3600 } };
+  }
+  /** A via do clique, na ordem das conferências do RegemCast: o token do DMS ID primeiro, a ligação depois. */
+  function pelaLigacao(bearer: string, ligacao: string, corpo: { id?: unknown; params?: { name?: string; arguments?: Record<string, unknown> } }) {
+    if (!tokensDoDmsId.has(bearer) || recusarOsTokensDoDmsId) return problema('token-invalido', 401);
+    if (!contas.has(ligacao)) return problema('ligacao-invalida', 401);
+    return responder(ligacao, corpo);
+  }
   const resultado = (sc: unknown) => ({ result: { content: [{ type: 'text', text: JSON.stringify(sc) }], structuredContent: sc, resultType: 'complete' } });
   const recusada = (texto: string) => ({ result: { content: [{ type: 'text', text: texto }], isError: true, resultType: 'complete' } });
 
@@ -310,6 +337,25 @@ describe.skipIf(!hasDb)('a rotina do CRM e mensageria olha a marca e abre a prop
     );
   const fila = (e: Empresa) => ownerQuery<Linha>(`select motive, outcome, checked_at, next_check_at from liame.message_routine where tenant_id = $1 order by motive`, [e.tenantId]);
   const doToken = (e: Empresa) => chamadas.filter((c) => c.token === e.token).map((c) => c.ferramenta).sort();
+  const daLigacao = (ligacao: string) => chamadas.filter((c) => c.token === ligacao).map((c) => c.ferramenta).sort();
+  /**
+   * A conta do RegemCast passa a ser lida pela ligação da autorização por clique (Hub DMS, B1): o cofre guarda o segredo
+   * da ligação com as permissões que o dono liberou na página, e o `rct_it_` da conta some (a troca pelo clique o tira).
+   * O caminho de verdade do clique está provado em `regemcast-pela-ligacao.spec.ts`; aqui importa a credencial guardada.
+   */
+  async function passarParaALigacao(e: Empresa, permissoes: string[]): Promise<string> {
+    const ligacao = `dms_lg_regemcast_${randomBytes(32).toString('base64url')}`;
+    const falsa = contas.get(e.token)!;
+    contas.set(ligacao, { ...falsa, permissoes, modelos: [] });
+    contas.delete(e.token);
+    const guardada = { tipo: 'regemcast_ligacao', ligacao, prefixo: ligacao.slice(0, 22), conta_id: falsa.contaId, conta: 'Mister Burgers', permissoes, obtido_em: new Date().toISOString() };
+    const segredo = await withTenant(database.db, e.tenantId, (tx) => deps.vault.putSecret(tx, { tenantId: e.tenantId, purpose: 'oauth_regemcast', plaintext: JSON.stringify(guardada) }));
+    await ownerQuery(
+      `update liame.connected_account set credential_secret_id = $2, provider_attributes = jsonb_set(coalesce(provider_attributes, '{}'::jsonb), '{escopos}', $3::jsonb) where id = $1`,
+      [e.conta, segredo, JSON.stringify(permissoes)],
+    );
+    return ligacao;
+  }
   /** O dia de um instante no fuso da marca (São Paulo), como o banco o calcula, mais tantos dias. O instante é o mesmo relógio que foi para a rotina (V89). */
   const diaEm = async (instante: Date, mais = 0) => (await ownerQuery<{ dia: string }>(`select ((($1::timestamptz) at time zone 'America/Sao_Paulo')::date + $2::int)::text as dia`, [instante, mais]))[0]!.dia;
   const pedidosDe = (e: Empresa) =>
@@ -374,22 +420,37 @@ describe.skipIf(!hasDb)('a rotina do CRM e mensageria olha a marca e abre a prop
       const partes: Buffer[] = [];
       req.on('data', (d: Buffer) => partes.push(d));
       req.on('end', () => {
-        let r: { status: number; corpo: unknown };
+        let r: { status: number; corpo: unknown; problema?: boolean };
         try {
-          const corpo = JSON.parse(Buffer.concat(partes).toString('utf8') || '{}') as { id?: unknown; method?: string; params?: { name?: string } };
-          if (new URL(req.url ?? '/', 'http://x').pathname !== '/cast/mcp' || req.method !== 'POST') r = { status: 405, corpo: { mensagem: 'só POST' } };
-          else if (req.headers['mcp-method'] !== corpo.method || req.headers['mcp-name'] !== (corpo.params?.name ?? '')) r = { status: 400, corpo: { jsonrpc: '2.0', id: corpo.id, error: { code: -32020, message: 'header mismatch' } } };
-          else r = responder((req.headers.authorization ?? '').replace(/^Bearer /, ''), corpo);
+          const texto = Buffer.concat(partes).toString('utf8');
+          const caminho = new URL(req.url ?? '/', 'http://x').pathname;
+          const bearer = (req.headers.authorization ?? '').replace(/^Bearer /, '');
+          if (caminho === '/dmsid/oidc/token' && req.method === 'POST') r = tokenDoDmsId(req.headers.authorization, texto);
+          else {
+            const corpo = JSON.parse(texto || '{}') as { id?: unknown; method?: string; params?: { name?: string } };
+            if (caminho !== '/cast/mcp' || req.method !== 'POST') r = { status: 405, corpo: { mensagem: 'só POST' } };
+            else if (req.headers['mcp-method'] !== corpo.method || req.headers['mcp-name'] !== (corpo.params?.name ?? '')) r = { status: 400, corpo: { jsonrpc: '2.0', id: corpo.id, error: { code: -32020, message: 'header mismatch' } } };
+            else if (req.headers['dms-ligacao']) r = pelaLigacao(bearer, String(req.headers['dms-ligacao']), corpo);
+            else r = responder(bearer, corpo);
+          }
         } catch {
           r = { status: 500, corpo: {} };
         }
-        res.writeHead(r.status, { 'content-type': 'application/json', ...(r.status === 401 ? { 'www-authenticate': 'Bearer error="invalid_token"' } : {}) });
+        res.writeHead(r.status, { 'content-type': r.problema ? 'application/problem+json' : 'application/json', ...(r.status === 401 ? { 'www-authenticate': 'Bearer error="invalid_token"' } : {}) });
         res.end(JSON.stringify(r.corpo));
       });
     });
     await new Promise<void>((ok) => regemcast.listen(0, '127.0.0.1', ok));
-    anterior.REGEMCAST_API_URL = process.env.REGEMCAST_API_URL;
-    process.env.REGEMCAST_API_URL = `http://127.0.0.1:${(regemcast.address() as AddressInfo).port}/cast`;
+    const base = `http://127.0.0.1:${(regemcast.address() as AddressInfo).port}`;
+    for (const [nome, valor] of [
+      ['REGEMCAST_API_URL', `${base}/cast`],
+      ['DMS_ID_EMISSOR', `${base}/dmsid/oidc`],
+      ['DMS_ID_APLICATIVO', APLICATIVO_NO_DMS_ID],
+      ['DMS_ID_SEGREDO', VALOR_DO_APLICATIVO],
+    ] as const) {
+      anterior[nome] = process.env[nome];
+      process.env[nome] = valor;
+    }
 
     ajuda = await import('../helpers/api.js');
     ({ ownerQuery } = ajuda);
@@ -1106,6 +1167,57 @@ describe.skipIf(!hasDb)('a rotina do CRM e mensageria olha a marca e abre a prop
     const olhadas = await Promise.all([1, 2, 3, 4].map(() => acompanhar(e, em20)));
     expect(olhadas.flat().map((v) => v.visto)).toEqual([{ status: 'esperando', situacao: 'rascunho' }]);
     expect(doToken(e)).toEqual(['modelos_listar']);
+  });
+
+  it('Hub DMS F5, parte D: a conta ligada pelo clique, com as três de gravar e a flag do pedido ao destino, abre a proposta e grava o rascunho pela ligação; sem a flag ou sem as três, nem propõe', async () => {
+    // Sem a flag da parte D: a ligação lê, mas não grava; ele nem propõe, e não chama o RegemCast.
+    const semFlag = await empresa();
+    const daSemFlag = await passarParaALigacao(semFlag, [...LEITURAS_DO_CLIQUE, 'modelos.rascunhar', 'campanhas.rascunhar', 'campanhas.disparar']);
+    expect(await olhar(semFlag, 'promocao')).toEqual({ resultado: 'sem_permissao' });
+    expect(daLigacao(daSemFlag)).toEqual([]);
+    // Com a flag, mas o dono ligou só o rascunho de modelo no RegemCast: a campanha e o pedido do disparo parariam no meio.
+    const soModelo = await empresa();
+    const daSoModelo = await passarParaALigacao(soModelo, [...LEITURAS_DO_CLIQUE, 'modelos.rascunhar']);
+    await ligarFlag(soModelo.tenantId, 'regemcast_pede_ao_destino', true);
+    expect(await olhar(soModelo, 'promocao')).toEqual({ resultado: 'sem_permissao' });
+    expect(daLigacao(daSoModelo)).toEqual([]);
+    expect(await propostas(soModelo)).toEqual([]);
+
+    // Com a flag e as três: ele lê o teto e os perfis pela ligação (o token do DMS ID e o segredo no cabeçalho), abre a
+    // proposta e, depois do texto, grava o rascunho do modelo pela mesma ligação.
+    const e = await empresa();
+    const ligacao = await passarParaALigacao(e, [...LEITURAS_DO_CLIQUE, 'modelos.rascunhar', 'campanhas.rascunhar', 'campanhas.disparar']);
+    await ligarFlag(e.tenantId, 'regemcast_pede_ao_destino', true);
+    const p = await comTexto(e);
+    expect(daLigacao(ligacao)).toEqual(['orcamento_ler', 'publicos_listar']);
+    expect(doToken(e)).toEqual([]);
+    expect((await propostas(e))[0]).toMatchObject({ id: p.id, connected_account_id: e.conta, status: 'preparando' });
+    chamadas.length = 0;
+    expect((await rascunhar(e)).map((v) => v.feito.status)).toEqual(['rascunhado']);
+    expect(daLigacao(ligacao)).toEqual(['modelo_rascunhar']);
+    expect(contas.get(ligacao)!.modelos).toHaveLength(1);
+  });
+
+  it('pela ligação, a recusa é da conta só com `ligacao-invalida` (sem autorização); o token do DMS ID recusado é do aplicativo, e ele olha de novo logo', async () => {
+    const todas = [...LEITURAS_DO_CLIQUE, 'modelos.rascunhar', 'campanhas.rascunhar', 'campanhas.disparar'];
+    // O RegemCast recusa todo token do DMS ID, mesmo o pedido de novo: é do aplicativo do Liame, não da conta.
+    const doAplicativo = await empresa();
+    await passarParaALigacao(doAplicativo, todas);
+    await ligarFlag(doAplicativo.tenantId, 'regemcast_pede_ao_destino', true);
+    recusarOsTokensDoDmsId = true;
+    try {
+      expect(await olhar(doAplicativo, 'promocao')).toEqual({ resultado: 'regemcast_fora' });
+    } finally {
+      recusarOsTokensDoDmsId = false;
+    }
+    // A ligação revogada lá: a recusa é da conta.
+    const revogada = await empresa();
+    const ligacao = await passarParaALigacao(revogada, todas);
+    await ligarFlag(revogada.tenantId, 'regemcast_pede_ao_destino', true);
+    contas.delete(ligacao);
+    expect(await olhar(revogada, 'promocao')).toEqual({ resultado: 'sem_autorizacao' });
+    expect(await propostas(doAplicativo)).toEqual([]);
+    expect(await propostas(revogada)).toEqual([]);
   });
 
   it('a tabela da fila (migration 0064): uma linha por marca e tipo, o resultado em código, e só quem olhou diz o que decidiu', async () => {
