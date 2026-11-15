@@ -3,6 +3,7 @@ import { type Tx, uuidv7 } from '@liame/database';
 import { sql } from 'drizzle-orm';
 import { writeAudit } from '../audit/audit.js';
 import { protocoloDaDesistencia } from './confirmacao-da-desistencia.js';
+import { acertarParadaSemAssinatura } from './parada-sem-assinatura.js';
 import {
   DIA_DO_APAGAMENTO_NO_ATRASO,
   DIAS_DA_FATURA_ANTES,
@@ -198,6 +199,10 @@ export async function encerrar(tx: Tx, assinaturaId: string, motivo: MotivoDoFim
   await tx.execute(sql`
     update liame.kill_switch set deactivated_at = ${agora.toISOString()}::timestamptz
      where subscription_id = ${assinaturaId} and deactivated_at is null`);
+  // Sem assinatura paga, a equipe para na hora, com a parada sem assinatura (W3, parte 4c; D-A7-108): a assinatura só
+  // existe com a cobrança ligada, e a rotina das paradas acerta a marca se a cobrança for desligada depois.
+  const marca = (await tx.execute<{ tenant_id: string; brand_id: string }>(sql`select tenant_id, brand_id from liame.subscription where id = ${assinaturaId}`)).rows[0];
+  if (marca) await acertarParadaSemAssinatura(tx, { tenantId: marca.tenant_id, brandId: marca.brand_id }, true, agora);
 }
 
 /** O motivo da parada da cobrança, como a empresa lê na lista das paradas e em Sua equipe. */
@@ -304,6 +309,8 @@ export async function pagarFatura(tx: Tx, p: { faturaId: string; pagoEm: Date; f
              next_check_at = ${comecoDoDia(somarDias(diaNoFuso(p.agora, s.timezone), 1), s.timezone)}, updated_at = now()
        where id = ${s.id}`);
     await auditarDaRotina(tx, s, 'cobranca.pagamento', null, { fatura: f.id, tipo: 'primeira', forma: p.forma, periodo_ate: fim }, 'integration');
+    // A primeira mensalidade paga: a equipe volta na hora (a parada sem assinatura sai; W3, parte 4c; D-A7-108).
+    await acertarParadaSemAssinatura(tx, { tenantId: s.tenant_id, brandId: s.brand_id }, true, p.agora);
     return { situacao: 'paga', assinatura: s.id, status: 'ativa' };
   }
 

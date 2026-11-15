@@ -331,7 +331,9 @@ describe.skipIf(!hasDb)('Plano e cobrança: os planos, a assinatura e a vida del
     expect((await paradas()).filter((x) => x.deactivated_at === null)).toHaveLength(1);
     await withSystem(database.db, (tx) => encerrar(tx, s.id, 'cancelada', meioDia('2027-01-02')));
     expect(await assinatura(e)).toMatchObject({ status: 'encerrada' });
-    expect((await paradas()).filter((x) => x.deactivated_at === null)).toEqual([]);
+    // A parada da cobrança sai junto; sem assinatura paga, a equipe segue parada, agora pela parada sem assinatura
+    // (W3, parte 4c; D-A7-108), que não é ligada a assinatura nenhuma.
+    expect((await paradas()).filter((x) => x.deactivated_at === null)).toEqual([expect.objectContaining({ level: 'brand', brand_id: e.brandId, activated_by: null, subscription_id: null })]);
 
     // V119: a parada da cobrança é da marca e da rotina; uma viva por assinatura.
     const inserir = (nivel: string, por: string | null) =>
@@ -385,7 +387,16 @@ describe.skipIf(!hasDb)('Plano e cobrança: os planos, a assinatura e a vida del
     expect(await assinatura(e)).toMatchObject({ status: 'encerrada', end_reason: 'cancelada' });
     expect((await faturas(e)).filter((f) => f.status === 'aberta')).toHaveLength(0);
     const eventos = await ownerQuery<{ action: string }>(`select action from liame.audit_event where tenant_id = $1 and action like 'cobranca.%' order by chain_seq`, [e.tenantId]);
-    expect(eventos.map((x) => x.action)).toEqual(['cobranca.assinar', 'cobranca.pagamento', 'cobranca.cancelar', 'cobranca.manter', 'cobranca.cancelar', 'cobranca.encerrar']);
+    // No fim, sem assinatura paga, a equipe para (W3, parte 4c; D-A7-108): a parada entra dentro do `encerrar`.
+    expect(eventos.map((x) => x.action)).toEqual([
+      'cobranca.assinar',
+      'cobranca.pagamento',
+      'cobranca.cancelar',
+      'cobranca.manter',
+      'cobranca.cancelar',
+      'cobranca.parar_acoes',
+      'cobranca.encerrar',
+    ]);
   }, 90_000);
 
   it('cancelar com a mensalidade em atraso termina agora, e o que está em aberto não é cobrado (D-A7-25)', async () => {

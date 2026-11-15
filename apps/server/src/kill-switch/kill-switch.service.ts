@@ -33,9 +33,11 @@ type Row = {
   deactivated_at: Date | string | null;
   /** A assinatura que causou a parada da cobrança (A7, W3; migration 0094), ou nulo. */
   subscription_id: string | null;
+  /** A parada da marca sem assinatura paga (A7, W3, parte 4c; migration 0162). */
+  no_paid_subscription: boolean;
 };
 
-const COLUNAS = sql`id, level, provider, brand_id, account_id, tool, reason, activated_at, deactivated_at, subscription_id`;
+const COLUNAS = sql`id, level, provider, brand_id, account_id, tool, reason, activated_at, deactivated_at, subscription_id, no_paid_subscription`;
 
 // Ordem de checagem: do mais amplo ao mais estreito (a mensagem cita a trava mais ampla).
 const ORDER: KillSwitchLevel[] = ['global', 'provider', 'tenant', 'brand', 'account', 'tool'];
@@ -94,21 +96,26 @@ export class KillSwitchService {
   async deactivate(auth: AuthContext, id: string): Promise<void> {
     const tx = currentTx();
     const tenantId = tenantOf(auth);
-    // A parada da cobrança (A7, W3; D-A7-38) não sai pela mão de uma pessoa: quem a tira é o pagamento.
+    // A parada da cobrança (A7, W3; D-A7-38) não sai pela mão de uma pessoa: quem a tira é o pagamento. A da marca sem
+    // assinatura paga (W3, parte 4c; D-A7-108) também não: quem a tira é o primeiro pagamento.
     const r = await tx.execute<Row>(sql`
       update liame.kill_switch set deactivated_at = now(), deactivated_by = ${auth.userId}
-       where id = ${id} and tenant_id = ${tenantId} and deactivated_at is null and subscription_id is null
+       where id = ${id} and tenant_id = ${tenantId} and deactivated_at is null and subscription_id is null and not no_paid_subscription
        returning ${COLUNAS}`);
     const row = r.rows[0];
     if (!row) {
-      const daCobranca = await tx.execute(sql`
-        select 1 from liame.kill_switch where id = ${id} and tenant_id = ${tenantId} and deactivated_at is null and subscription_id is not null`);
-      if (daCobranca.rows[0]) {
+      const daCobranca = await tx.execute<{ sem_assinatura: boolean }>(sql`
+        select no_paid_subscription as sem_assinatura from liame.kill_switch
+         where id = ${id} and tenant_id = ${tenantId} and deactivated_at is null and (subscription_id is not null or no_paid_subscription)`);
+      const cobranca = daCobranca.rows[0];
+      if (cobranca) {
         throw new AppProblem(
           409,
           'parada-da-cobranca',
           'Esta parada é da cobrança',
-          'As ações desta marca param pelo atraso da mensalidade e voltam sozinhas assim que ela for paga, em Plano e cobrança.',
+          cobranca.sem_assinatura
+            ? 'As ações desta marca estão paradas porque ela não tem assinatura paga. Elas voltam sozinhas assim que a primeira mensalidade for paga, em Plano e cobrança.'
+            : 'As ações desta marca param pelo atraso da mensalidade e voltam sozinhas assim que ela for paga, em Plano e cobrança.',
         );
       }
       throw new AppProblem(404, 'nao-encontrado', 'Não encontramos', 'Trava ativa não encontrada nesta empresa.');
@@ -147,6 +154,6 @@ function toResponse(r: Row): KillSwitchResponse {
     reason: r.reason,
     activated_at: new Date(r.activated_at).toISOString(),
     deactivated_at: r.deactivated_at === null ? null : new Date(r.deactivated_at).toISOString(),
-    by_billing: r.subscription_id !== null,
+    by_billing: r.subscription_id !== null || r.no_paid_subscription,
   };
 }
