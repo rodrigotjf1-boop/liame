@@ -10,6 +10,7 @@ import { DATABASE } from '../database/database.module.js';
 import { FlagService } from '../flags/flag.service.js';
 import { KillSwitchService } from '../kill-switch/kill-switch.service.js';
 import { FLAG_DA_ESCOLHA_DE_MODELO } from './escolha-de-modelo.js';
+import { paraGuardar, problemaDasImagens } from './imagens.js';
 import { type Esforco, ModelosIa } from './modelos.js';
 import { custoMicros, type LinhaDoPreco, type PrecoModelo, precoDaLinha, type TokensUsados, tokensDe } from './precos.js';
 import { limparJson, limparTexto } from './sanitizar.js';
@@ -58,10 +59,21 @@ export class AiError extends Error {
   }
 }
 
+/**
+ * Uma parte da mensagem: texto, ou uma imagem JPEG (só nas tarefas de `TAREFAS_COM_IMAGEM`, só na mensagem da pessoa). As
+ * medidas são lidas do próprio JPEG; a imagem nunca vai para o registro de uso nem para o log.
+ */
+export type AiPart = { tipo: 'texto'; texto: string } | { tipo: 'imagem'; jpeg: Uint8Array };
+
 export interface AiMessage {
   role: 'user' | 'assistant';
-  content: string;
+  /** O texto, ou as partes (texto e imagem) quando a tarefa manda imagem. */
+  content: string | AiPart[];
 }
+
+/** O texto de uma mensagem (as partes de texto juntas), para o tamanho e para a limpeza. */
+const textoDa = (m: AiMessage): string => (typeof m.content === 'string' ? m.content : m.content.flatMap((p) => (p.tipo === 'texto' ? [p.texto] : [])).join('\n'));
+const imagensDa = (m: AiMessage): Array<Extract<AiPart, { tipo: 'imagem' }>> => (typeof m.content === 'string' ? [] : m.content.flatMap((p) => (p.tipo === 'imagem' ? [p] : [])));
 
 export interface GenerateRequest {
   tenantId: string;
@@ -278,7 +290,17 @@ export class AiGateway {
     if (!(await this.flags.isEnabled('ia', this.flags.context({ ...contexto, brandId: req.brandId ?? null })))) {
       throw new AiError('desligada', 'ia: desligada para esta empresa');
     }
-    const tamanho = req.instructions.length + (req.context?.length ?? 0) + req.messages.reduce((n, m) => n + m.content.length, 0);
+    const tamanho = req.instructions.length + (req.context?.length ?? 0) + req.messages.reduce((n, m) => n + textoDa(m).length, 0);
+    // A imagem: só nas tarefas da lista, só na mensagem da pessoa, só JPEG e dentro dos tetos (D-A6-82). O log diz a
+    // quantidade, nunca a imagem. Não há reserva de custo antes da chamada (o teto confere o gasto já feito): o custo das
+    // imagens entra pelo uso que o fornecedor devolve, como o do texto, e os tetos daqui (16 imagens de até 768 px)
+    // limitam o que um pedido pode custar.
+    const imagens = req.messages.flatMap(imagensDa);
+    const semImagem = req.messages.some((m) => m.role === 'assistant' && imagensDa(m).length > 0) ? 'imagem na mensagem do modelo' : problemaDasImagens(req.task, imagens);
+    if (semImagem) {
+      this.logger.warn(`ia: ${req.task} (${req.workflow}) com ${imagens.length} imagens recusadas: ${semImagem}`);
+      throw new AiError('entrada-grande', `ia: ${semImagem}`);
+    }
     if (tamanho > ENTRADA_MAXIMA) {
       this.logger.warn(`ia: ${req.task} (${req.workflow}) com entrada de ${tamanho} caracteres, acima do máximo de ${ENTRADA_MAXIMA}`);
       throw new AiError('entrada-grande', 'ia: entrada grande demais');
@@ -292,12 +314,26 @@ export class AiGateway {
 
     const instrucoes = limparTexto(req.instructions);
     const contextoDoPedido = req.context ? limparTexto(req.context) : null;
-    const mensagens = req.messages.map((m) => ({ role: m.role, ...limparTexto(m.content) }));
-    const removidos = instrucoes.removidos + (contextoDoPedido?.removidos ?? 0) + mensagens.reduce((n, m) => n + m.removidos, 0);
+    // O texto passa pela limpeza de sempre, parte por parte; a imagem vai como parte `image` da AI SDK, como chegou.
+    let removidosNasMensagens = 0;
+    const limpo = (t: string): string => {
+      const l = limparTexto(t);
+      removidosNasMensagens += l.removidos;
+      return l.texto;
+    };
+    const mensagens: ModelMessage[] = req.messages.map((m): ModelMessage => {
+      if (typeof m.content === 'string') return { role: m.role, content: limpo(m.content) };
+      if (m.role === 'assistant') return { role: 'assistant', content: limpo(textoDa(m)) };
+      return {
+        role: 'user',
+        content: m.content.map((p) => (p.tipo === 'texto' ? { type: 'text' as const, text: limpo(p.texto) } : { type: 'image' as const, image: p.jpeg, mediaType: 'image/jpeg' })),
+      };
+    });
+    const removidos = instrucoes.removidos + (contextoDoPedido?.removidos ?? 0) + removidosNasMensagens;
     const enviado = {
       instructions: instrucoes.texto,
       ...(contextoDoPedido ? { context: contextoDoPedido.texto } : {}),
-      messages: mensagens.map((m) => ({ role: m.role, content: m.texto })),
+      messages: mensagens,
     };
 
     const tentativas: Tentativa[] = [];
@@ -368,7 +404,7 @@ export class AiGateway {
         // O conteúdo (já sem dado pessoal) fica 30 dias, para investigar erro e abuso; depois, só a linha de uso.
         await tx.execute(sql`
           insert into liame.ai_exchange (usage_id, tenant_id, request, response)
-          values (${ultima.id}, ${req.tenantId}, ${JSON.stringify(enviado)}::jsonb, ${guardado === null ? null : JSON.stringify(guardado)}::jsonb)`);
+          values (${ultima.id}, ${req.tenantId}, ${JSON.stringify(paraGuardar(enviado))}::jsonb, ${guardado === null ? null : JSON.stringify(guardado)}::jsonb)`);
       });
     } catch (err) {
       // Resposta sem registro de custo furaria o teto: não é entregue. O log leva os números para a conferência.
