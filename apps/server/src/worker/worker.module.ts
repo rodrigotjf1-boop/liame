@@ -29,6 +29,7 @@ import { MeioAsaas } from '../cobranca/meio-asaas.js';
 import { AssinaturasLoop } from './assinaturas-loop.js';
 import { AvisosDeAtrasoService } from './avisos-de-atraso.service.js';
 import { AvisosDoApagamentoService } from './avisos-do-apagamento.service.js';
+import { ParadasSemAssinaturaService } from './paradas-sem-assinatura.service.js';
 import { AvisosDosTermosService } from './avisos-dos-termos.service.js';
 import { AuditAnchorService } from './audit-anchor.service.js';
 import { CobrancasDoMesService } from './cobrancas-do-mes.service.js';
@@ -291,6 +292,8 @@ import { WebhookDeliverer } from './webhook-deliverer.js';
     AvisosDeAtrasoService,
     // O aviso do apagamento por e-mail a quem paga (A7, W3, parte 4b): 7 dias antes e na véspera. Só com a `cobranca`.
     AvisosDoApagamentoService,
+    // A equipe parada sem assinatura paga (A7, W3, parte 4c). Só com a função `cobranca` ligada.
+    ParadasSemAssinaturaService,
     // Os e-mails dos Termos novos (A7, W14, parte 14c): o aviso, o lembrete e a retirada. Só com a função `termos_novos`.
     AvisosDosTermosService,
     // A cobrança do mês por e-mail, com o código do PIX (A7; D-A7-44). Só com a função ligada e o Asaas configurado.

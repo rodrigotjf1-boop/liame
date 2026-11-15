@@ -143,8 +143,9 @@ export class EquipeService {
             activated_by: string | null;
             name: string | null;
             subscription_id: string | null;
+            no_paid_subscription: boolean;
           }>(sql`
-            select k.id, k.level, k.reason, k.activated_at, k.tenant_id, k.activated_by, u.name, k.subscription_id
+            select k.id, k.level, k.reason, k.activated_at, k.tenant_id, k.activated_by, u.name, k.subscription_id, k.no_paid_subscription
               from liame.kill_switch k left join liame.app_user u on u.id = k.activated_by
              where k.id = ${trava.id}`)
         ).rows[0]
@@ -225,8 +226,9 @@ export class EquipeService {
             reason: parada.reason,
             // Quem acionou a parada da distribuição não aparece para a empresa.
             by: parada.tenant_id !== null ? quem(parada.activated_by, parada.name) : null,
-            // A parada da cobrança (A7, W3) sai sozinha quando a mensalidade é paga: a tela não oferece "retomar".
-            by_billing: parada.subscription_id !== null,
+            // A parada da cobrança (A7, W3) sai sozinha quando a mensalidade é paga: a tela não oferece "retomar". A da marca
+            // sem assinatura paga (W3, parte 4c), também: sai com o primeiro pagamento.
+            by_billing: parada.subscription_id !== null || parada.no_paid_subscription,
           }
         : null,
       members: membros,
