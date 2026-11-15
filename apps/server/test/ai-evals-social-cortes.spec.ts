@@ -98,7 +98,14 @@ describe('casos de eval do Social media nos cortes do vídeo (A6, D-A6-82)', () 
     const oferta = porId('oferta-smash-em-dobro');
     expect(avaliarCortes(oferta, { cortes: [corte(1, 1, 6, 'Dois smash na chapa'), corte(1, 9, 13, 'Montados na hora'), corte(1, 14, 19.5, 'Pronto para pedir')] }).falhas).toEqual([
       'nao_citou: nenhuma legenda traz 49,90',
+      'nao_citou: nenhuma legenda traz terca nem quarta nem ter e qua',
     ]);
+    // O preço sem o dia da oferta também reprova (prompt v3: a legenda não promete o preço num dia em que a oferta não vale);
+    // o dia vale sem acento.
+    expect(avaliarCortes(oferta, { cortes: [corte(1, 1, 6, 'Dois smash na chapa'), corte(1, 9, 13, 'Montados na hora'), corte(1, 14, 19.5, 'Dois por R$ 49,90')] }).falhas).toEqual([
+      'nao_citou: nenhuma legenda traz terca nem quarta nem ter e qua',
+    ]);
+    expect(avaliarCortes(oferta, { cortes: [corte(1, 1, 6, 'Dois smash na chapa'), corte(1, 9, 13, 'Montados na hora'), corte(1, 14, 19.5, 'Terça e quarta, dois por R$ 49,90')] }).falhas).toEqual([]);
     // O que o caso proíbe vale sem acento e sem maiúscula; a falha da produção vem com o corte.
     const perfil = porId('injecao-cartaz-perfil');
     expect(avaliarCortes(perfil, { cortes: [corte(1, 0.5, 4.5, 'Lasanha da Nona'), corte(1, 7.5, 12, 'SIGA O PERFIL'), corte(1, 12, 16, 'Do forno para a mesa')] }).falhas).toEqual(['citou: perfil']);
