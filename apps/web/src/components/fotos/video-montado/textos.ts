@@ -8,7 +8,9 @@ export const MODELOS: Record<VideoTemplate, { nome: string; desc: string }> = {
   destaque: { nome: 'Produto em destaque', desc: 'Uma foto, com zoom lento, o nome e o preço.' },
   combo: { nome: 'Combo com preço', desc: 'De 2 a 4 fotos em sequência, e o preço no fim.' },
   novidade: { nome: 'Novidade da casa', desc: 'Uma foto ou um vídeo, a faixa “Novidade” e a chamada.' },
+  momentos: { nome: 'Os melhores momentos', desc: 'De 1 a 4 vídeos: o Social media escolhe os cortes, a ordem e a legenda.' },
 };
+/** Os modelos da gaveta. "Os melhores momentos" (A6 · Z16) entram com a tela dos cortes (P46), quando o dono aprovar. */
 export const ORDEM_DOS_MODELOS: VideoTemplate[] = ['destaque', 'combo', 'novidade'];
 
 export const FORMATOS: Record<VideoFormat, { nome: string; w: number; h: number }> = {

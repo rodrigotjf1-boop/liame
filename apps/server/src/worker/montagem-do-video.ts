@@ -1,7 +1,7 @@
 import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { BRAND_VIDEO_LIMITS, type VideoRenderProps } from '@liame/contracts';
+import { BRAND_VIDEO_LIMITS, type VideoCut, type VideoRenderProps } from '@liame/contracts';
 import { type Database, uuidv7, withSystem } from '@liame/database';
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import { sql } from 'drizzle-orm';
@@ -45,6 +45,8 @@ type Pedido = {
   title: string;
   price_line: string | null;
   cta: string;
+  /** Os cortes dos "Melhores momentos" (A6 · Z16), já conferidos no pedido; nulo nos outros modelos. */
+  cuts: VideoCut[] | null;
   with_logo: boolean;
   sound: VideoRenderProps['sound'];
   requested_by: string | null;
@@ -104,7 +106,7 @@ export class MontagemDoVideo {
         update liame.video_montage v
            set status = 'montando', progress = 0, started_at = clock_timestamp(), updated_at = now()
           from proximo where v.id = proximo.id
-        returning v.id, v.tenant_id, v.brand_id, v.template, v.format, v.duration_s, v.media_ids, v.title, v.price_line, v.cta,
+        returning v.id, v.tenant_id, v.brand_id, v.template, v.format, v.duration_s, v.media_ids, v.title, v.price_line, v.cta, v.cuts,
                   v.with_logo, v.sound, v.requested_by, v.started_at::text as vez`),
     );
     return r.rows[0] ?? null;
@@ -148,6 +150,9 @@ export class MontagemDoVideo {
     const ordem = p.media_ids.map((id) => porId.get(id));
     if (ordem.some((m) => !m)) return { motivo: MOTIVO.foto };
     if (p.with_logo && !lido.logo) return { motivo: MOTIVO.logo };
+    // Os cortes dos "Melhores momentos": o vídeo de cada um pela posição na lista do pedido (o modelo lê `media[n]`).
+    const cortes = p.cuts?.map((c) => ({ media: p.media_ids.indexOf(c.media_id), start_ms: c.start_ms, end_ms: c.end_ms, caption: c.caption })) ?? null;
+    if (cortes?.some((c) => c.media < 0 || ordem[c.media]?.kind !== 'video')) return { motivo: MOTIVO.foto };
     const media = await Promise.all(
       ordem.map(async (m) => ({ url: await this.armazem.enderecoDeLeitura(m!.object_key, VALIDADE_DOS_ENDERECOS_S), kind: m!.kind === 'video' ? ('video' as const) : ('foto' as const) })),
     );
@@ -163,6 +168,7 @@ export class MontagemDoVideo {
         cta: p.cta,
         logo_url: logoUrl,
         sound: p.sound,
+        ...(cortes ? { cuts: cortes } : {}),
       },
     };
   }

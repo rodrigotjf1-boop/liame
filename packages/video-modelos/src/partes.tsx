@@ -114,6 +114,36 @@ export function Chamada({ s, estilo, altura, children }: Base & { altura: number
   );
 }
 
+/**
+ * A legenda de um corte dos "Melhores momentos" (P46, `.p46-v-leg`): a faixa escura embaixo, centralizada, um pouco
+ * acima da chamada dos outros modelos (aos 9%) e com a letra um pouco maior.
+ */
+export function Legenda({ s, estilo, altura, children }: Base & { altura: number; children: ReactNode }) {
+  return (
+    <div
+      style={{
+        position: 'absolute',
+        left: '7%',
+        right: '7%',
+        bottom: Math.max(altura * 0.09, 38 * s),
+        padding: `${6 * s}px ${10 * s}px`,
+        borderRadius: 8 * s,
+        background: COR.tinta,
+        color: COR.claro,
+        fontFamily: FONTE.texto,
+        fontSize: 14 * s,
+        fontWeight: 600,
+        lineHeight: 1.25,
+        textAlign: 'center',
+        overflowWrap: 'anywhere',
+        ...estilo,
+      }}
+    >
+      {children}
+    </div>
+  );
+}
+
 /** A logo de Minha marca no selo redondo claro, no canto de cima. */
 export function Logo({ s, url, topo }: { s: number; url: string; topo: string }) {
   const lado = 34 * s;

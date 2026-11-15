@@ -83,6 +83,8 @@ const MODELO: Record<VideoTemplate, string> = {
   destaque: '"Produto em destaque": uma foto, com o título em cima, a linha do preço e a chamada embaixo',
   combo: '"Combo com preço": de 2 a 4 fotos, uma de cada vez, com o título; no fim, o preço no centro e a chamada',
   novidade: '"Novidade da casa": uma foto ou um vídeo, com a faixa "Novidade", o título e a chamada; sem preço',
+  // Os "Melhores momentos" não pedem textos aqui (a rota recusa antes); os cortes e as legendas são a tarefa `social_cortes`.
+  momentos: '"Os melhores momentos": os cortes de 1 a 4 vídeos em sequência, com a legenda de cada um; sem título nem chamada',
 };
 
 /** Sem os sinais que poderiam fechar as marcas da mensagem antes da hora, e numa linha só. */
