@@ -3,14 +3,17 @@ import { DatabaseModule } from '../database/database.module.js';
 import { ArmazemModule } from '../imagens/armazem.module.js';
 import { TelemetryLifecycle } from '../telemetry.lifecycle.js';
 import { configDoMontador, MONTADOR, MontadorRemotion } from '../video/montador.js';
+import { quadrosDoVideo } from '../video/quadros.js';
 import { REDUTOR, RedutorFfmpeg } from '../video/redutor.js';
 import { MontagemDoVideo } from '../worker/montagem-do-video.js';
+import { QuadrosDosCortes, TIRAR_QUADROS } from '../worker/quadros-dos-cortes.js';
 import { ReducaoDoVideo } from '../worker/reducao-do-video.js';
 
-// O serviço de montagem do vídeo (`liame-render`, A6 · Z15 parte 2b; D-A6-139): a fila do vídeo montado e, desde a Z10
-// parte 3b (D-A6-149), a da cópia do vídeo para o Instagram, num processo à parte da API e do worker, com 2 núcleos e
-// 3 GB no EasyPanel. Um vídeo por vez, o montado primeiro (a pessoa espera na gaveta); com as duas filas vazias, olha de
-// novo em 5 segundos (as consultas usam os índices parciais das filas).
+// O serviço de montagem do vídeo (`liame-render`, A6 · Z15 parte 2b; D-A6-139): a fila do vídeo montado; desde a Z10
+// parte 3b (D-A6-149), a da cópia do vídeo para o Instagram; e, desde a Z16 (D-A6-151), a dos quadros do pedido dos
+// cortes; num processo à parte da API e do worker, com 2 núcleos e 3 GB no EasyPanel. Um por vez: o montado primeiro (a
+// pessoa espera na gaveta), depois os quadros dos cortes (a pessoa também espera, mas é mais rápido) e por fim a cópia
+// para o Instagram; com as filas vazias, olha de novo em 5 segundos (as consultas usam os índices parciais das filas).
 
 /** Com a fila vazia, a próxima olhada. */
 const ESPERA_DA_FILA_MS = 5_000;
@@ -27,6 +30,7 @@ export class LacoDaMontagem implements OnApplicationBootstrap, BeforeApplication
   constructor(
     private readonly montagem: MontagemDoVideo,
     private readonly reducao: ReducaoDoVideo,
+    private readonly quadros: QuadrosDosCortes,
   ) {}
 
   onApplicationBootstrap(): void {
@@ -54,11 +58,17 @@ export class LacoDaMontagem implements OnApplicationBootstrap, BeforeApplication
         if (Date.now() - soltou >= SOLTAR_PARADOS_MS) {
           soltou = Date.now();
           await this.montagem.soltarParados();
+          await this.quadros.soltarParados();
           await this.reducao.soltarParados();
         }
         const vez = await this.montagem.vez();
         if (vez) {
           this.logger.log(`vídeo ${vez.id}: ${vez.situacao}`);
+          continue;
+        }
+        const cortes = await this.quadros.vez();
+        if (cortes) {
+          this.logger.log(`pedido dos cortes ${cortes.id}: ${cortes.situacao} (${cortes.quadros} quadros)`);
           continue;
         }
         const copia = await this.reducao.vez();
@@ -79,6 +89,7 @@ export class LacoDaMontagem implements OnApplicationBootstrap, BeforeApplication
     this.parar = true;
     this.acordar?.();
     await this.montagem.devolverAtual().catch((err: unknown) => this.logger.error(`não deu para devolver o pedido à fila (${err instanceof Error ? err.message : String(err)})`));
+    await this.quadros.devolverAtual().catch((err: unknown) => this.logger.error(`não deu para devolver o pedido dos cortes à fila (${err instanceof Error ? err.message : String(err)})`));
     await this.reducao.devolverAtual().catch((err: unknown) => this.logger.error(`não deu para devolver a cópia à fila (${err instanceof Error ? err.message : String(err)})`));
   }
 
@@ -94,7 +105,9 @@ export class LacoDaMontagem implements OnApplicationBootstrap, BeforeApplication
     TelemetryLifecycle,
     { provide: MONTADOR, useFactory: () => new MontadorRemotion(configDoMontador()) },
     { provide: REDUTOR, useFactory: () => new RedutorFfmpeg() },
+    { provide: TIRAR_QUADROS, useValue: (arquivo: string, opcoes: { quantos: number; duracaoMs: number }) => quadrosDoVideo(arquivo, opcoes) },
     MontagemDoVideo,
+    QuadrosDosCortes,
     ReducaoDoVideo,
     LacoDaMontagem,
   ],
