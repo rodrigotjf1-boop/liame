@@ -5,6 +5,7 @@ import { useSearchParams } from 'next/navigation';
 import { type ReactNode, useCallback, useEffect, useRef, useState } from 'react';
 import { useAvisar } from '@/components/ui/avisos';
 import { Estado } from '@/components/ui/estado';
+import { Icone } from '@/components/ui/icone';
 import { api, chamar, mensagemDe, type Problema } from '@/lib/api';
 import { disparar } from '@/lib/disparar';
 import { useSessao } from '@/lib/sessao';
@@ -12,7 +13,7 @@ import { CartaoFases, CartaoFaturas, CartaoForma, CartaoPlano, CartaoSituacao, P
 import { DialogoAssinar } from './dialogo-assinar';
 import { DialogoPix } from './dialogo-pix';
 import { DialogoCancelar, DialogoDesistir, DialogoTrocarPlano } from './dialogos-do-contrato';
-import { diaMesDe, emAberto, fases, momentoDa, reaisDeCentavos, situacao, textoDoFim, ultimaPaga, valorDaDesistencia } from './textos';
+import { diaMesDe, emAberto, fases, momentoDa, reaisDeCentavos, situacao, textoDoApagamento, textoDoFim, ultimaPaga, valorDaDesistencia } from './textos';
 
 // Plano e cobrança (A7 · W5, parte 2; protótipo P26, aprovado em 22/10/2026; `plano-a7.md` D-A7-13 a D-A7-19, D-A7-41).
 // Para o Dono e o Administrador com a cobrança liberada (`cobranca.ver`): a situação da assinatura da marca, com a ação
@@ -260,6 +261,20 @@ export function CobrancaTela() {
                 {m === 'terminou' ? 'A assinatura terminou' : 'Escolha um plano para a equipe começar'}
               </h2>
               {m === 'terminou' && r.subscription && <p className="sit-frase">{textoDoFim(r.subscription, r.invoices)}</p>}
+              {/* O dia do apagamento (W3, parte 4b; D-A7-107): até lá, o Dono exporta os dados, como na conta suspensa. */}
+              {m === 'terminou' && r.subscription?.purge_on && (
+                <>
+                  <p className="sit-frase">{textoDoApagamento(r.subscription.purge_on, souDono)}</p>
+                  {souDono && (
+                    <div className="sit-acoes">
+                      <button className="btn btn--ghost" type="button" onClick={() => disparar(exportar(r.today))} disabled={exportando} aria-busy={exportando}>
+                        <Icone nome="download" />
+                        {exportando ? 'Exportando…' : 'Exportar os dados'}
+                      </button>
+                    </div>
+                  )}
+                </>
+              )}
               <p className="sit-nota">Sem fidelidade: você cancela quando quiser, sem multa. Na primeira contratação, pode desistir em até 7 dias e receber tudo de volta.</p>
               {planos === null ? (
                 <p className="pix-espera" role="status">

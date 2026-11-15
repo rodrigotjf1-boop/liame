@@ -15,20 +15,22 @@ import { type JobScope, tenantFilter } from './outbox-publisher.js';
 // segue viva; a empresa inteira (o expurgo que já existe, com a chave destruída e o certificado ao Dono), quando todas
 // estão na mesma situação. Com a função `cobranca` desligada para a marca, nada sai. O relógio vem de quem chama (V34).
 
+// Os três trechos valem também para o aviso do apagamento (W3, parte 4b): a mesma régua no aviso e no dia.
+
 /** A cobrança a cancelar ou a devolução em andamento no meio de pagamento, nas faturas da marca. */
-const PENDENTE_NO_MEIO = (marca: SQL) => sql`exists (
+export const PENDENTE_NO_MEIO = (marca: SQL) => sql`exists (
   select 1 from liame.billing_invoice i
    where i.brand_id = ${marca}
      and ((i.status in ('aberta', 'cancelada') and i.charge_next_at is not null)
           or (i.refund_requested_at is not null and i.refunded_at is null)))`;
 
 /** O dia do apagamento da última assinatura paga da marca. */
-const APAGAR_EM = (marca: SQL) => sql`(
+export const APAGAR_EM = (marca: SQL) => sql`(
   select s.purge_on from liame.subscription s
    where s.brand_id = ${marca} and s.first_paid_at is not null
    order by s.first_paid_at desc limit 1)`;
 
-const VIVA = (marca: SQL) => sql`exists (select 1 from liame.subscription v where v.brand_id = ${marca} and v.status <> 'encerrada')`;
+export const VIVA = (marca: SQL) => sql`exists (select 1 from liame.subscription v where v.brand_id = ${marca} and v.status <> 'encerrada')`;
 
 type Devida = { tenant_id: string; brand_id: string; timezone: string; apagar_em: string };
 type Outra = { id: string; viva: boolean; apagar_em: string | null; pendente: boolean };

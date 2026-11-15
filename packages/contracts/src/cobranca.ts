@@ -100,6 +100,12 @@ export const BrandSubscription = z.strictObject({
    * mesmo da auditoria e do e-mail de confirmação. Nulo nos outros casos.
    */
   withdraw_protocol: z.string().nullable(),
+  /**
+   * O dia em que os dados da marca são apagados (Termos 11.2; D-A7-106 e D-A7-107), na assinatura paga que terminou,
+   * enquanto ele não passou: até lá, o Dono exporta os dados ou assina de novo. Nulo nos outros casos. Opcional: a
+   * resposta de antes de 14/11/2026 não traz.
+   */
+  purge_on: Dia.nullable().optional(),
 });
 export type BrandSubscription = z.infer<typeof BrandSubscription>;
 
