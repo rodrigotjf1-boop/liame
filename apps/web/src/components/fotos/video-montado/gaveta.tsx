@@ -7,12 +7,12 @@ import { useDialogo } from '@/components/ui/use-dialogo';
 import { api, chamar, mensagemDe, type Problema } from '@/lib/api';
 import { disparar } from '@/lib/disparar';
 import { nomeDoProduto } from '../textos';
+import { BlocoDosCortes } from './cortes';
+import { type CorteNaTela, conferirNaTela, curtoDemais, pisoMs, segundosTxt, semChave, videosAceitos } from './momentos';
 import { PreviaDoVideo } from './previa';
 import {
   aceitas,
   contagem,
-  type Duracao,
-  DURACOES,
   duracaoTxt,
   FORMATOS,
   MAX,
@@ -28,10 +28,11 @@ import {
 // "Montar um vídeo" (A6 · Z15, parte 4; P43 aprovado em 11/11/2026): a gaveta com o modelo, as fotos ou o vídeo de
 // Fotos (na ordem), o formato, os textos com o "Pedir ao Social media", a logo, a duração, o som e a prévia. Pedir põe o
 // vídeo na fila (`POST /v1/video-montages`, conferido pelo servidor, com o Compliance); a gaveta passa a mostrar a fila,
-// o andamento e o pronto, e a pessoa pode fechar: o vídeo aparece em Fotos.
+// o andamento e o pronto, e a pessoa pode fechar: o vídeo aparece em Fotos. "Os melhores momentos" (A6 · Z16; P46), com a
+// função `video_momentos`: os vídeos, a duração de 10, 15 ou 20 s e os cortes do Social media no lugar dos textos.
 
-type Campo = 'midia' | 'titulo' | 'preco' | 'chamada' | 'dur' | 'som' | 'logo' | 'geral';
-const CAMPO_DO_CAMINHO: Record<string, Campo> = { media_ids: 'midia', title: 'titulo', price_line: 'preco', cta: 'chamada', duration_s: 'dur', sound: 'som', with_logo: 'logo' };
+type Campo = 'midia' | 'titulo' | 'preco' | 'chamada' | 'dur' | 'som' | 'logo' | 'cortes' | 'geral';
+const CAMPO_DO_CAMINHO: Record<string, Campo> = { media_ids: 'midia', title: 'titulo', price_line: 'preco', cta: 'chamada', duration_s: 'dur', sound: 'som', with_logo: 'logo', cuts: 'cortes' };
 
 type Props = {
   brandId: string;
@@ -39,6 +40,8 @@ type Props = {
   iniciais: string;
   fotos: readonly BrandPhoto[];
   temLogo: boolean;
+  /** A função `video_momentos` ligada: "Os melhores momentos" entram como o 4º modelo. */
+  momentos: boolean;
   hoje: { used: number; limit: number };
   /** O pedido aberto pelo cartão da fila em Fotos: a gaveta mostra o andamento dele; nulo, a gaveta de um pedido novo. */
   pedido: VideoMontageResponse | null;
@@ -58,7 +61,11 @@ export function GavetaMontarVideo(p: Props) {
   const [modelo, setModelo] = useState<VideoTemplate>('destaque');
   const [midias, setMidias] = useState<string[]>([]);
   const [formato, setFormato] = useState<VideoFormat>('9x16');
-  const [dur, setDur] = useState<Duracao>(10);
+  const [dur, setDur] = useState<number>(10);
+  const [cortes, setCortes] = useState<CorteNaTela[]>([]);
+  const [cortesUsados, setCortesUsados] = useState(false);
+  const [recebeuCortes, setRecebeuCortes] = useState(false);
+  const [errosDasLegendas, setErrosDasLegendas] = useState<Record<string, string>>({});
   const [textos, setTextos] = useState({ titulo: '', preco: '', chamada: '' });
   const [logo, setLogo] = useState(false);
   const [som, setSom] = useState<'sem' | 'original'>('sem');
@@ -71,10 +78,25 @@ export function GavetaMontarVideo(p: Props) {
   aoPedir.current = p.aoPedir;
 
   const regra = VIDEO_TEMPLATE_RULES[modelo];
-  const lista = aceitas(p.fotos, modelo);
+  const momentos = modelo === 'momentos';
+  const modelos: VideoTemplate[] = p.momentos ? [...ORDEM_DOS_MODELOS, 'momentos'] : ORDEM_DOS_MODELOS;
+  const lista = momentos ? videosAceitos(p.fotos) : aceitas(p.fotos, modelo);
   const escolhidas = midias.map((id) => p.fotos.find((f) => f.id === id)).filter((f): f is BrandPhoto => Boolean(f));
   const comVideo = escolhidas.some((f) => f.kind === 'video');
   const cheio = p.hoje.used >= p.hoje.limit;
+
+  /** Os cortes valem para estes vídeos e esta duração: mudar um dos dois pede os cortes de novo. */
+  function limparCortes() {
+    setCortes([]);
+    setCortesUsados(false);
+    setRecebeuCortes(false);
+    setErrosDasLegendas({});
+    setErros((e) => ({ ...e, cortes: undefined }));
+  }
+  function trocarDuracao(s: number) {
+    setDur(s);
+    if (momentos) limparCortes();
+  }
 
   // Na fila ou montando, a gaveta lê o andamento a cada 3 segundos (só enquanto está aberta).
   const emCurso = job !== null && (job.status === 'na_fila' || job.status === 'montando');
@@ -99,17 +121,28 @@ export function GavetaMontarVideo(p: Props) {
     const r = VIDEO_TEMPLATE_RULES[m];
     setModelo(m);
     // Fica o que o modelo novo aceita, até o máximo dele.
-    setMidias((atual) => atual.filter((id) => aceitas(p.fotos, m).some((f) => f.id === id)).slice(0, r.max));
+    const aceitasDoModelo = m === 'momentos' ? videosAceitos(p.fotos).filter((f) => !curtoDemais(f)) : aceitas(p.fotos, m);
+    setMidias((atual) => atual.filter((id) => aceitasDoModelo.some((f) => f.id === id)).slice(0, r.max));
     if (!r.price) setTextos((t) => ({ ...t, preco: '' }));
     if (!r.video) setSom('sem');
+    // A duração que o modelo novo não tem vai para a do meio dele.
+    if (!r.durations.includes(dur)) setDur(r.durations[1] ?? r.durations[0]!);
     setErros({});
     setAviso('');
     setSocial(null);
+    limparCortes();
   }
 
   function escolher(f: BrandPhoto) {
     setErros((e) => ({ ...e, midia: undefined }));
     setAviso('');
+    if (momentos) {
+      if (!midias.includes(f.id) && curtoDemais(f)) {
+        setAviso(`Este vídeo tem ${segundosTxt(f.video?.duration_ms ?? 0)} s: os cortes pedem vídeos de 3 segundos ou mais.`);
+        return;
+      }
+      limparCortes();
+    }
     setMidias((atual) => {
       if (atual.includes(f.id)) {
         const sem = atual.filter((id) => id !== f.id);
@@ -118,7 +151,7 @@ export function GavetaMontarVideo(p: Props) {
       }
       if (regra.max === 1) return [f.id];
       if (atual.length >= regra.max) {
-        setAviso(`Já são ${regra.max} fotos: tire uma para pôr outra.`);
+        setAviso(momentos ? `Já são ${regra.max} vídeos: tire um para pôr outro.` : `Já são ${regra.max} fotos: tire uma para pôr outra.`);
         return atual;
       }
       return [...atual, f.id];
@@ -151,6 +184,13 @@ export function GavetaMontarVideo(p: Props) {
   function conferir(): Partial<Record<Campo, string>> {
     const e: Partial<Record<Campo, string>> = {};
     if (escolhidas.length < regra.min || escolhidas.length > regra.max) e.midia = `Este modelo leva ${quantasLeva(modelo)}.`;
+    if (momentos) {
+      const c = conferirNaTela(cortes, dur, recebeuCortes);
+      setErrosDasLegendas(c.legendas);
+      if (c.cortes) e.cortes = c.cortes;
+      else if (Object.keys(c.legendas).length) e.cortes = 'Acerte as legendas marcadas.';
+      return e;
+    }
     const titulo = textos.titulo.trim();
     if (!titulo) e.titulo = 'Escreva o título: ele aparece no começo do vídeo.';
     else if ([...titulo].length > MAX.titulo) e.titulo = `O título tem ${[...titulo].length} caracteres: o máximo é ${MAX.titulo}.`;
@@ -168,25 +208,36 @@ export function GavetaMontarVideo(p: Props) {
     setErros(e);
     if (Object.values(e).some(Boolean)) return;
     setEnviando(true);
+    const duracao = dur as 6 | 10 | 15 | 20;
     const r = await chamar(() =>
       api.POST('/v1/video-montages', {
-        body: {
-          brand_id: p.brandId,
-          template: modelo,
-          format: formato,
-          duration_s: dur,
-          media_ids: midias,
-          title: textos.titulo.trim(),
-          ...(regra.price && textos.preco.trim() ? { price_line: textos.preco.trim() } : {}),
-          cta: textos.chamada.trim(),
-          with_logo: logo,
-          sound: som,
-        },
+        body: momentos
+          ? { brand_id: p.brandId, template: modelo, format: formato, duration_s: duracao, media_ids: midias, cuts: semChave(cortes), with_logo: logo, sound: som }
+          : {
+              brand_id: p.brandId,
+              template: modelo,
+              format: formato,
+              duration_s: duracao,
+              media_ids: midias,
+              title: textos.titulo.trim(),
+              ...(regra.price && textos.preco.trim() ? { price_line: textos.preco.trim() } : {}),
+              cta: textos.chamada.trim(),
+              with_logo: logo,
+              sound: som,
+            },
       }),
     );
     setEnviando(false);
     if (!r.ok) {
       setErros(errosDoProblema(r.problema));
+      // A recusa da régua dos cortes diz o corte (`cuts.N.caption`): o erro vai para a legenda dele.
+      const legendas: Record<string, string> = {};
+      for (const x of r.problema.errors ?? []) {
+        const m = /^cuts\.(\d+)\./.exec(x.path);
+        const c = m ? cortes[Number(m[1])] : undefined;
+        if (c) legendas[c.chave] = x.message;
+      }
+      setErrosDasLegendas(legendas);
       return;
     }
     setJob(r.data);
@@ -196,6 +247,17 @@ export function GavetaMontarVideo(p: Props) {
 
   const fase = job ? textoDaFase(job) : null;
   const pronto = job?.status === 'pronto' && job.photo_id;
+  const campoDuracao = (
+    <Segmentos
+      id={`${ids}-dur`}
+      rotulo={momentos ? 'Duração total' : 'Duração'}
+      opcoes={regra.durations.map((s) => [String(s), duracaoTxt(s)])}
+      atual={String(dur)}
+      aoEscolher={(v) => trocarDuracao(Number(v))}
+      dica={momentos ? `O vídeo dura a soma dos cortes: de ${segundosTxt(pisoMs(dur))} a ${dur} segundos.` : comVideo ? 'Do vídeo da loja, entra o começo, até a duração escolhida.' : ''}
+      erro={erros.dur}
+    />
+  );
   return (
     <dialog
       ref={ref}
@@ -266,7 +328,7 @@ export function GavetaMontarVideo(p: Props) {
                     Modelo
                   </span>
                   <div className="vm-modelos" role="group" aria-labelledby={`${ids}-modelo-t`}>
-                    {ORDEM_DOS_MODELOS.map((m) => (
+                    {modelos.map((m) => (
                       <button key={m} className="vm-modelo" type="button" aria-pressed={modelo === m} onClick={() => trocarModelo(m)}>
                         <span className={`vm-mini vm-mini--${m}`} aria-hidden="true" />
                         <span>
@@ -279,10 +341,12 @@ export function GavetaMontarVideo(p: Props) {
                 </div>
                 <div className="campo">
                   <span className="rotulo" id={`${ids}-midia-t`}>
-                    As fotos e os vídeos <span className="campo-dica">({quantasLeva(modelo)})</span>
+                    {momentos ? 'Os vídeos' : 'As fotos e os vídeos'} <span className="campo-dica">({quantasLeva(modelo)})</span>
                   </span>
                   <span className="campo-dica" id={`${ids}-midia-d`}>
-                    {regra.video ? 'As fotos e os vídeos de verdade de Fotos, como a loja enviou.' : 'Este modelo usa só fotos; o vídeo da loja entra no modelo Novidade da casa.'} O número em cada um é a ordem.
+                    {momentos
+                      ? 'Só os vídeos de Fotos, como a loja gravou. Foto não entra, e o vídeo montado pelo Liame também não. O número é o do “Vídeo 1”, “Vídeo 2” nos cortes.'
+                      : `${regra.video ? 'As fotos e os vídeos de verdade de Fotos, como a loja enviou.' : 'Este modelo usa só fotos; o vídeo da loja entra no modelo Novidade da casa.'} O número em cada um é a ordem.`}
                   </span>
                   {lista.length ? (
                     <div className="vm-midias" role="group" aria-labelledby={`${ids}-midia-t`}>
@@ -316,7 +380,7 @@ export function GavetaMontarVideo(p: Props) {
                       })}
                     </div>
                   ) : (
-                    <p className="campo-dica">Nenhuma foto de Fotos serve para este modelo ainda.</p>
+                    <p className="campo-dica">{momentos ? 'Nenhum vídeo da loja em Fotos ainda: envie um vídeo em Fotos para usar este modelo.' : 'Nenhuma foto de Fotos serve para este modelo ainda.'}</p>
                   )}
                   {aviso && (
                     <span className="campo-dica" role="status">
@@ -337,6 +401,31 @@ export function GavetaMontarVideo(p: Props) {
                   aoEscolher={(v) => setFormato(v as VideoFormat)}
                   dica="Reels e Story, em pé; Feed, o post no perfil; Quadrado, para os dois."
                 />
+                {momentos && campoDuracao}
+                {momentos ? (
+                  <BlocoDosCortes
+                    key={`${midias.join(',')}-${dur}`}
+                    brandId={p.brandId}
+                    videos={escolhidas.map((f) => ({ id: f.id, produto: nomeDoProduto(f.product), capa: f.thumbnail_url }))}
+                    dur={dur}
+                    cortes={cortes}
+                    usados={cortesUsados}
+                    erro={erros.cortes}
+                    errosDasLegendas={errosDasLegendas}
+                    aoReceber={(c) => {
+                      setCortes(c);
+                      setCortesUsados(false);
+                      setRecebeuCortes(true);
+                      setErrosDasLegendas({});
+                      setErros((e) => ({ ...e, cortes: undefined }));
+                    }}
+                    aoMudar={(c) => {
+                      setCortes(c);
+                      setErros((e) => ({ ...e, cortes: undefined }));
+                    }}
+                    aoUsar={() => setCortesUsados(true)}
+                  />
+                ) : (
                 <fieldset className="campo">
                   <legend className="rotulo">Os textos</legend>
                   <div className="vm-textos-cab">
@@ -367,6 +456,7 @@ export function GavetaMontarVideo(p: Props) {
                   )}
                   <CampoTexto id={`${ids}-chamada`} rotulo="Chamada" dica="Aparece no fim, embaixo: o que a pessoa faz agora." valor={textos.chamada} max={MAX.chamada} erro={erros.chamada} aoMudar={(v) => setTextos((t) => ({ ...t, chamada: v }))} />
                 </fieldset>
+                )}
                 <div className="campo">
                   <span className="rotulo">A logo</span>
                   <label className="check vm-switch">
@@ -381,25 +471,23 @@ export function GavetaMontarVideo(p: Props) {
                     </span>
                   )}
                 </div>
-                <Segmentos
-                  id={`${ids}-dur`}
-                  rotulo="Duração"
-                  opcoes={DURACOES.map((s) => [String(s), duracaoTxt(s)])}
-                  atual={String(dur)}
-                  aoEscolher={(v) => setDur(Number(v) as Duracao)}
-                  dica={comVideo ? 'Do vídeo da loja, entra o começo, até a duração escolhida.' : ''}
-                  erro={erros.dur}
-                />
+                {!momentos && campoDuracao}
                 <Segmentos
                   id={`${ids}-som`}
                   rotulo="Som"
                   opcoes={[
                     ['sem', 'Sem música'],
-                    ['original', 'O som do vídeo original', !comVideo],
+                    ['original', momentos ? 'O som original de cada corte' : 'O som do vídeo original', !comVideo],
                   ]}
                   atual={som}
                   aoEscolher={(v) => setSom(v as 'sem' | 'original')}
-                  dica={comVideo ? 'O som do vídeo que a loja gravou (a chapa, a fritadeira). Música de biblioteca fica de fora por enquanto, por causa dos direitos.' : 'O som do vídeo original só vale com um vídeo. Música de biblioteca fica de fora por enquanto, por causa dos direitos.'}
+                  dica={
+                    momentos
+                      ? 'O som que a loja gravou em cada pedaço (a chapa, a fritadeira), emendado como foi gravado: o Social media não ouve o som, então uma fala pode ficar cortada. Música de biblioteca fica de fora, como nos outros modelos.'
+                      : comVideo
+                        ? 'O som do vídeo que a loja gravou (a chapa, a fritadeira). Música de biblioteca fica de fora por enquanto, por causa dos direitos.'
+                        : 'O som do vídeo original só vale com um vídeo. Música de biblioteca fica de fora por enquanto, por causa dos direitos.'
+                  }
                   erro={erros.som}
                 />
               </div>
@@ -408,7 +496,8 @@ export function GavetaMontarVideo(p: Props) {
                 modelo={modelo}
                 formato={formato}
                 dur={dur}
-                midias={escolhidas.map((f) => ({ id: f.id, url: f.kind === 'video' ? f.url : f.thumbnail_url, video: f.kind === 'video', produto: nomeDoProduto(f.product) }))}
+                cortes={momentos ? cortes.map((c) => ({ media: midias.indexOf(c.media_id), start_ms: c.start_ms, end_ms: c.end_ms, caption: c.caption })) : undefined}
+                midias={escolhidas.map((f) => ({ id: f.id, url: f.kind === 'video' && !momentos ? f.url : f.thumbnail_url, video: f.kind === 'video' && !momentos, produto: nomeDoProduto(f.product) }))}
                 titulo={textos.titulo}
                 preco={textos.preco}
                 chamada={textos.chamada}
@@ -456,7 +545,12 @@ export function GavetaMontarVideo(p: Props) {
 function errosDoProblema(pr: Problema): Partial<Record<Campo, string>> {
   const e: Partial<Record<Campo, string>> = {};
   for (const x of pr.errors ?? []) {
-    const campo = CAMPO_DO_CAMINHO[x.path] ?? 'geral';
+    // A legenda de um corte (`cuts.N.caption`) mostra o erro nela; o bloco dos cortes só aponta.
+    if (/^cuts\.\d+\.caption$/.test(x.path)) {
+      e.cortes = 'Acerte as legendas marcadas.';
+      continue;
+    }
+    const campo = x.path.startsWith('cuts') ? 'cortes' : (CAMPO_DO_CAMINHO[x.path] ?? 'geral');
     e[campo] = e[campo] ? `${e[campo]} ${x.message}` : x.message;
   }
   if (!Object.keys(e).length) e.geral = mensagemDe(pr);

@@ -118,6 +118,8 @@ export type VideoMontageListQuery = z.infer<typeof VideoMontageListQuery>;
 export const VideoMontageListResponse = z.strictObject({
   /** A função `video_montado` ligada para a marca. */
   enabled: z.boolean(),
+  /** A função `video_momentos` ligada para a marca: "Os melhores momentos" aparecem na gaveta (A6 · Z16). */
+  moments_enabled: z.boolean(),
   /** Os vídeos de hoje que contam no limite, o limite e quando ele volta (meia-noite no fuso da empresa). */
   today: z.strictObject({ used: z.int().min(0), limit: z.int().min(1), resets_at: z.iso.datetime({ offset: true }) }),
   /** Minha marca tem a logo do restaurante: a opção da logo fica disponível. */

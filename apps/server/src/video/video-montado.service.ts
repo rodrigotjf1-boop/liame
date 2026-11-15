@@ -164,6 +164,10 @@ export class VideoMontadoService {
     return this.flags.isEnabled(FLAG_DO_VIDEO_MONTADO, this.flags.context({ tenantId: quem.tenantId, userId: quem.userId, brandId }));
   }
 
+  private momentosLigados(quem: Quem, brandId: string): Promise<boolean> {
+    return this.flags.isEnabled(FLAG_DOS_MELHORES_MOMENTOS, this.flags.context({ tenantId: quem.tenantId, userId: quem.userId, brandId }));
+  }
+
   /** Os vídeos de hoje que contam no limite (o que não deu não conta) e quando o limite volta, no fuso da empresa. */
   private async hoje(quem: Quem, brandId: string): Promise<{ used: number; resets_at: string }> {
     const r = await currentTx().execute<{ usados: number; volta: Date | string }>(sql`
@@ -217,8 +221,10 @@ export class VideoMontadoService {
     const frente = await this.naFrente(linhas);
     const logo = await tx.execute(sql`select 1 from liame.brand where id = ${brandId} and logo_id is not null`);
     const hoje = await this.hoje(quem, brandId);
+    const enabled = await this.ligada(quem, brandId);
     return {
-      enabled: await this.ligada(quem, brandId),
+      enabled,
+      moments_enabled: enabled && (await this.momentosLigados(quem, brandId)),
       today: { used: hoje.used, limit: VIDEO_MONTAGE_LIMITS.perDay, resets_at: hoje.resets_at },
       has_logo: Boolean(logo.rows[0]),
       items: linhas.map((l) => this.resposta(l, frente)),
@@ -240,7 +246,7 @@ export class VideoMontadoService {
     await this.marca(quem, body.brand_id);
     if (!(await this.ligada(quem, body.brand_id))) throw conflito('funcao-desligada', 'Função desligada', 'O vídeo montado não está ligado para esta empresa.');
     const momentos = body.template === 'momentos';
-    if (momentos && !(await this.flags.isEnabled(FLAG_DOS_MELHORES_MOMENTOS, this.flags.context({ tenantId: quem.tenantId, userId: quem.userId, brandId: body.brand_id })))) {
+    if (momentos && !(await this.momentosLigados(quem, body.brand_id))) {
       throw conflito('funcao-desligada', 'Função desligada', '"Os melhores momentos" não estão ligados para esta empresa.');
     }
 
