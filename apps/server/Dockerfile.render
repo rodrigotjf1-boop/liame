@@ -1,6 +1,8 @@
 # syntax=docker/dockerfile:1.7
 # Imagem do serviço de montagem do vídeo (`liame-render`, A6 · Z15 parte 2b; D-A6-139): o mesmo código da API e do
-# worker (ADR-002), com o Chrome Headless Shell do Remotion e os modelos empacotados (`packages/video-modelos`).
+# worker (ADR-002), com o Chrome Headless Shell do Remotion e os modelos empacotados (`packages/video-modelos`). O mesmo
+# serviço faz a cópia do vídeo para o Instagram (A6 · Z10 parte 3b; D-A6-149) com o ffmpeg que vem com o Remotion (o
+# pacote `@remotion/compositor-linux-x64-gnu`, que o `pnpm install` já traz): nada a instalar a mais.
 # Contexto: raiz do repositório.
 #   docker build -f apps/server/Dockerfile.render -t liame-render --build-arg APP_VERSION=$(git rev-parse --short HEAD) .
 #   docker run liame-render   (o /health responde no 127.0.0.1 do contêiner, como o worker)

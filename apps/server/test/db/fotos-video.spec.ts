@@ -137,7 +137,7 @@ describe.skipIf(!hasDb)('O vídeo nas Fotos: o envio direto, a conferência, a c
       narrow_for_instagram: false,
       instagram_crop: 'nenhum',
       uploaded_by: { name: 'Pessoa de Teste' },
-      video: { duration_ms: 30_000, media_type: 'video/mp4', has_audio: true, has_cover: false },
+      video: { duration_ms: 30_000, media_type: 'video/mp4', has_audio: true, has_cover: false, instagram_version: 'como_esta' },
     });
     // Sem a capa, a grade mostra o próprio vídeo.
     expect(video.url).toBe(`memoria://imagens/${chave}?valido=300`);
@@ -158,13 +158,21 @@ describe.skipIf(!hasDb)('O vídeo nas Fotos: o envio direto, a conferência, a c
     expect(mov.resposta.status, JSON.stringify(mov.resposta.body)).toBe(200);
     expect(mov.chave.endsWith('.mov')).toBe(true);
     expect(mov.resposta.body).toMatchObject({ video: { duration_ms: 8_000, media_type: 'video/quicktime', has_audio: false } });
-    // O 4K do celular entra (D-A6-68): no topo, as medidas com que ele vai ao Reels (reduzido a 1.920 px no lado maior,
-    // o que a parte 3 faz antes de mandar à Meta); no bloco do vídeo, as que a loja gravou (e a linha guarda essas).
+    // O 4K do celular entra (D-A6-68): no topo, as medidas com que ele vai ao Reels (reduzido a 1.920 px no lado maior);
+    // no bloco do vídeo, as que a loja gravou (e a linha guarda essas). Ele entra na fila da cópia para o Instagram (parte
+    // 3b; D-A6-149): a lista diz `preparando` até o serviço de montagem terminar a cópia.
     const quatroK = await enviarVideo(e, videoDeMentira({ largura: 2160, altura: 3840 }));
     expect(quatroK.resposta.status, JSON.stringify(quatroK.resposta.body)).toBe(200);
-    expect(BrandPhoto.parse(quatroK.resposta.body)).toMatchObject({ width: 1080, height: 1920, orientation: 'vertical', video: { width: 2160, height: 3840 } });
-    const [gravado] = await ownerQuery<{ width: number; height: number }>(`select width, height from liame.brand_photo where id = $1`, [quatroK.id]);
-    expect(gravado).toEqual({ width: 2160, height: 3840 });
+    expect(BrandPhoto.parse(quatroK.resposta.body)).toMatchObject({
+      width: 1080,
+      height: 1920,
+      orientation: 'vertical',
+      video: { width: 2160, height: 3840, instagram_version: 'preparando' },
+    });
+    const [gravado] = await ownerQuery<{ width: number; height: number; instagram_status: string | null }>(`select width, height, instagram_status from liame.brand_photo where id = $1`, [quatroK.id]);
+    expect(gravado).toEqual({ width: 2160, height: 3840, instagram_status: 'na_fila' });
+    // O que cabe não entra na fila.
+    expect((await ownerQuery<{ instagram_status: string | null }>(`select instagram_status from liame.brand_photo where id = $1`, [pedido.id]))[0]).toEqual({ instagram_status: null });
   }, 60_000);
 
   it('a capa: um quadro do vídeo vira a miniatura, com auditoria; só no vídeo pronto; apagar leva o vídeo e a capa', async () => {

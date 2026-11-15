@@ -108960,6 +108960,15 @@
                               },
                               "has_cover": {
                                 "type": "boolean"
+                              },
+                              "instagram_version": {
+                                "type": "string",
+                                "enum": [
+                                  "como_esta",
+                                  "preparando",
+                                  "reduzida",
+                                  "nao_deu"
+                                ]
                               }
                             },
                             "required": [
@@ -109449,6 +109458,15 @@
                         },
                         "has_cover": {
                           "type": "boolean"
+                        },
+                        "instagram_version": {
+                          "type": "string",
+                          "enum": [
+                            "como_esta",
+                            "preparando",
+                            "reduzida",
+                            "nao_deu"
+                          ]
                         }
                       },
                       "required": [
@@ -110995,6 +111013,15 @@
                         },
                         "has_cover": {
                           "type": "boolean"
+                        },
+                        "instagram_version": {
+                          "type": "string",
+                          "enum": [
+                            "como_esta",
+                            "preparando",
+                            "reduzida",
+                            "nao_deu"
+                          ]
                         }
                       },
                       "required": [
@@ -111603,6 +111630,15 @@
                         },
                         "has_cover": {
                           "type": "boolean"
+                        },
+                        "instagram_version": {
+                          "type": "string",
+                          "enum": [
+                            "como_esta",
+                            "preparando",
+                            "reduzida",
+                            "nao_deu"
+                          ]
                         }
                       },
                       "required": [
@@ -112340,6 +112376,15 @@
                         },
                         "has_cover": {
                           "type": "boolean"
+                        },
+                        "instagram_version": {
+                          "type": "string",
+                          "enum": [
+                            "como_esta",
+                            "preparando",
+                            "reduzida",
+                            "nao_deu"
+                          ]
                         }
                       },
                       "required": [

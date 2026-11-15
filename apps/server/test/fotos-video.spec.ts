@@ -1,6 +1,11 @@
+import { mkdtemp, readFile, rm, stat } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { Readable } from 'node:stream';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { lerCabecalhoDoVideo, VideoIlegivel } from '../src/fotos/cabecalho-do-video.js';
 import { chaveDaFoto, chaveDaMiniatura, chaveDoVideo, conferirVideo, medidasNoReels, RECUSAS_DO_VIDEO } from '../src/fotos/conferencia.js';
+import { chaveDaVersaoDoInstagram } from '../src/fotos/versao-do-instagram.js';
 import { ArmazemFechado, ArmazemIndisponivel, ArmazemNaMemoria, ArmazemNoDisco, ArmazemS3, criarArmazem, type SdkDoS3 } from '../src/imagens/armazem.js';
 import { caixa, faixa, ftyp, leitorDe, mdat64, videoDeMentira } from './helpers/video-de-mentira.js';
 
@@ -174,6 +179,52 @@ describe('o envio direto no S3 de verdade (o SDK e a assinatura, sem rede)', () 
     expect(url.pathname).toBe(`/${BUCKET}/${chave}`);
     expect(url.searchParams.get('X-Amz-SignedHeaders')).toBe('content-length;content-type;host');
     expect(new URL(await a.enderecoDeLeitura(chave, 300)).origin).toBe('http://127.0.0.1:5005');
+  });
+
+  it('baixar o vídeo para o disco (parte 3b): o corpo do S3 vai direto ao arquivo; o maior que o teto é recusado antes ou no meio, sem deixar o arquivo pela metade', async () => {
+    const pasta = await mkdtemp(join(tmpdir(), 'liame-baixar-'));
+    try {
+      const chave = chaveDoVideo(E, M, ID, 'video/mp4');
+      const sdk = { GetObjectCommand: class {} } as unknown as SdkDoS3;
+      const assinar = async () => 'https://s3.exemplo/assinado';
+      const s3 = (pedacos: Buffer[], tamanho?: number) =>
+        new ArmazemS3(sdk, { send: async () => ({ Body: Readable.from(pedacos), ...(tamanho === undefined ? {} : { ContentLength: tamanho }) }) }, assinar, 'liame-imagens-teste');
+      const destino = join(pasta, 'inteiro.mp4');
+      expect(await s3([Buffer.from('abc'), Buffer.from('defg')], 7).baixarParaArquivo(chave, destino, 10)).toBe(7);
+      expect((await readFile(destino)).toString()).toBe('abcdefg');
+      // O tamanho declarado acima do teto: nem começa.
+      await expect(s3([Buffer.from('x')], 11).baixarParaArquivo(chave, join(pasta, 'grande.mp4'), 10)).rejects.toThrow('passa do tamanho');
+      // Sem o tamanho declarado, o que vem a mais interrompe a cópia e apaga o arquivo pela metade.
+      const meio = join(pasta, 'meio.mp4');
+      await expect(s3([Buffer.alloc(6), Buffer.alloc(6)]).baixarParaArquivo(chave, meio, 10)).rejects.toThrow('passa do tamanho');
+      await expect(stat(meio)).rejects.toThrow();
+      // O objeto que não existe diz que o arquivo sumiu.
+      const naoExiste = new ArmazemS3(
+        sdk,
+        {
+          send: async () => {
+            throw Object.assign(new Error('não existe'), { name: 'NoSuchKey' });
+          },
+        },
+        assinar,
+        'liame-imagens-teste',
+      );
+      await expect(naoExiste.baixarParaArquivo(chave, join(pasta, 'nada.mp4'), 10)).rejects.toMatchObject({ semArquivo: true });
+      // A memória e o disco com a mesma regra; a chave da cópia para o Instagram está no desenho; fechado, indisponível.
+      const m = new ArmazemNaMemoria();
+      m.chegou(chave, Buffer.from('0123456789ab'));
+      await expect(m.baixarParaArquivo(chave, join(pasta, 'm.mp4'), 10)).rejects.toThrow('passa do tamanho');
+      expect(await m.baixarParaArquivo(chave, join(pasta, 'm.mp4'), 20)).toBe(12);
+      await m.gravar(chaveDaVersaoDoInstagram(chave), Buffer.from('copia'), 'video/mp4');
+      expect(m.objetos.get(chaveDaVersaoDoInstagram(chave))?.toString()).toBe('copia');
+      const d = new ArmazemNoDisco(join(pasta, 'disco'));
+      await d.gravar(chave, Buffer.from('disco'));
+      expect(await d.baixarParaArquivo(chave, join(pasta, 'd.mp4'), 10)).toBe(5);
+      await expect(d.baixarParaArquivo(chave, join(pasta, 'd2.mp4'), 4)).rejects.toThrow('passa do tamanho');
+      await expect(new ArmazemFechado().baixarParaArquivo()).rejects.toBeInstanceOf(ArmazemIndisponivel);
+    } finally {
+      await rm(pasta, { recursive: true, force: true });
+    }
   });
 
   it('sem o assinador do envio (o S3 montado de outro jeito) e no disco do desenvolvimento, não há envio direto; fechado, indisponível', async () => {

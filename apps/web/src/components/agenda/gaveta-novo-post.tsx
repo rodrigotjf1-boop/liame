@@ -268,7 +268,7 @@ export function GavetaNovoPost({ marca, fotos: midias, videosLigados = false, st
   const caixaDoCanal = (c: string) => {
     const { conta, fora } = contas[c] ?? { conta: null, fora: null };
     // O vídeo (A6, Z10): o canal diz o formato (Reels; na Página, o vídeo comum; no YouTube, o deitado não é Shorts), e o
-    // Instagram não leva o vídeo maior que o Reels aceita como está.
+    // Instagram não leva o vídeo maior que o Reels aceita como está enquanto a cópia reduzida não fica pronta (Z10, 3b).
     const noStory = story ? canalNoStory(c, escolhida) : null;
     const noVideo = midia === 'video' && !story ? canalNoVideo(c, video) : null;
     const semVideo = noStory ? Boolean(noStory.fora) : midia === 'video' && c === 'instagram' && video !== null && !cabeNoInstagram(video);

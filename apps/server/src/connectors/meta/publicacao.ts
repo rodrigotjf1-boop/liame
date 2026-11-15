@@ -354,8 +354,9 @@ export function fotoJaNaPagina(resposta: unknown, legenda: string, desde: Date, 
 
 /**
  * O que o Reels do Instagram aceita do arquivo: até 1.920 colunas (a largura, em px) e até 25 Mbps. O vídeo que passa disso
- * (o 4K do celular) é reduzido pelo servidor antes de sair (D-A6-68), o que ainda não existe: até lá, o post com ele no
- * Instagram é recusado ao montar. Os números moram nos contratos: a tela confere com a mesma conta (V74).
+ * (o 4K do celular) vai ao Instagram pela cópia reduzida que o serviço de montagem faz (D-A6-68 e D-A6-149, Z10 parte
+ * 3b; `fotos/versao-do-instagram.ts`): sem ela pronta, o post com ele no Instagram é recusado ao montar. Os números moram
+ * nos contratos: a tela confere com a mesma conta (V74).
  */
 export const REELS_DO_INSTAGRAM = { maiorLargura: REELS_LIMITS.instagramMaxWidth, maiorTaxaBps: REELS_LIMITS.instagramMaxBitrate } as const;
 

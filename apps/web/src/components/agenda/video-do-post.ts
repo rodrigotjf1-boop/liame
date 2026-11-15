@@ -1,4 +1,4 @@
-import { type BrandPhoto, fitsInstagramReels, type PostResponse, pageVideoFormat } from '@liame/contracts';
+import { type BrandPhoto, fitsInstagramReels, type InstagramVideoVersion, instagramVideoReady, type PostResponse, pageVideoFormat } from '@liame/contracts';
 import { deitado, duracaoCurta, duracaoPorExtenso } from '@/components/fotos/textos';
 
 // O vídeo no novo post (A6, Z10, parte 4a; P37, parte B, aprovado pelo dono em 04/11/2026; D-A6-68 a D-A6-70). Funções
@@ -16,8 +16,32 @@ export const ehVideoPronto = (f: BrandPhoto): f is VideoDasFotos => f.kind === '
 /** As medidas como a loja gravou (as que o Reels confere; as de `width`/`height` são as do Reels, já reduzidas). */
 const gravado = (v: VideoDasFotos) => ({ width: v.video.width, height: v.video.height });
 
-/** O vídeo vai ao Reels do Instagram como está (até 1.920 px de largura e 25 Mbps; a redução do maior ainda não existe)? */
-export const cabeNoInstagram = (v: VideoDasFotos): boolean => fitsInstagramReels(v.video.width, v.bytes, v.video.duration_ms);
+/**
+ * Como o vídeo vai ao Instagram (A6, Z10, parte 3b; D-A6-149): a situação que o servidor decidiu (como está, preparando a
+ * cópia reduzida, a cópia pronta, ou não deu); na resposta antiga, sem ela, pelas medidas, como antes.
+ */
+export const versaoNoInstagram = (v: VideoDasFotos): InstagramVideoVersion =>
+  v.video.instagram_version ?? (fitsInstagramReels(v.video.width, v.bytes, v.video.duration_ms) ? 'como_esta' : 'nao_deu');
+
+/** O vídeo pode ir ao Instagram agora (como está, até 1.920 px de largura e 25 Mbps, ou pela cópia reduzida pronta)? */
+export const cabeNoInstagram = (v: VideoDasFotos): boolean => instagramVideoReady(versaoNoInstagram(v));
+
+/** Por que o vídeo ainda não vai ao Instagram (a cópia sendo feita, ou que não deu), ou nulo (P37 com a parte 3b). */
+export function foraDoInstagram(v: VideoDasFotos): string | null {
+  const versao = versaoNoInstagram(v);
+  if (versao === 'preparando') return INSTAGRAM_PREPARANDO;
+  if (versao === 'nao_deu') return INSTAGRAM_NAO_DEU;
+  return null;
+}
+
+/** O vídeo grande enquanto o Liame faz a cópia reduzida (A6, Z10, parte 3b). */
+export const INSTAGRAM_PREPARANDO =
+  'Este vídeo passa do que o Instagram aceita como está (até 1.920 px de largura), e o Liame está preparando uma versão reduzida dele, o que leva alguns minutos. Abra o novo post de novo daqui a pouco para incluir o Instagram, ou publique só na Página.';
+/** A cópia reduzida que não saiu (A6, Z10, parte 3b): o vídeo segue só na Página, como antes. */
+export const INSTAGRAM_NAO_DEU =
+  'Este vídeo passa do que o Instagram aceita (até 1.920 px de largura), e não deu para preparar a versão reduzida dele. Ele sai só na Página; para o Instagram, grave em 1080p e envie de novo.';
+/** O vídeo que vai ao Instagram pela cópia reduzida (A6, Z10, parte 3b). */
+export const INSTAGRAM_REDUZIDO = 'Vai a versão reduzida deste vídeo (até 1.920 px), feita pelo Liame: o Instagram não aceita o 4K. Pode aparecer no Feed e na aba Reels.';
 
 /** Como o vídeo sai na Página: `reels` (em pé, a partir de 540 × 960) ou `video` (o vídeo comum). */
 export const comoSaiNaPagina = (v: VideoDasFotos): 'reels' | 'video' => pageVideoFormat(v.video.width, v.video.height);
@@ -86,12 +110,9 @@ export const AVISO_DO_DEITADO =
 /** O nome e a dica de cada canal do Liame no post com vídeo (P37). */
 export function canalNoVideo(canal: string, v: VideoDasFotos | null): { nome: string; dica: string } | null {
   if (canal === 'instagram') {
-    if (v && !cabeNoInstagram(v)) {
-      return {
-        nome: 'Instagram, como Reels',
-        dica: 'Este vídeo passa do que o Reels do Instagram aceita como está (até 1.920 px de largura). Por enquanto, ele sai só na Página: o Liame ainda não reduz o vídeo.',
-      };
-    }
+    const fora = v ? foraDoInstagram(v) : null;
+    if (fora) return { nome: 'Instagram, como Reels', dica: fora };
+    if (v && versaoNoInstagram(v) === 'reduzida') return { nome: 'Instagram, como Reels', dica: INSTAGRAM_REDUZIDO };
     return { nome: 'Instagram, como Reels', dica: 'Pode aparecer no Feed e na aba Reels.' };
   }
   if (canal === 'facebook') {

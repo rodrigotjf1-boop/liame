@@ -1,5 +1,6 @@
 import type { BrandPhoto } from '@liame/contracts';
 import { describe, expect, it } from 'vitest';
+import { foraDoStory } from '../src/components/agenda/story-do-post';
 import { campoDaRecusa } from '../src/components/agenda/textos';
 import {
   cabeNoInstagram,
@@ -8,10 +9,15 @@ import {
   capaNoPedido,
   comoSaiNaPagina,
   ehVideoPronto,
+  foraDoInstagram,
+  INSTAGRAM_NAO_DEU,
+  INSTAGRAM_PREPARANDO,
+  INSTAGRAM_REDUZIDO,
   QUADRO_DO_MEIO,
   rotuloDoVideoNoPost,
   temposDosQuadros,
   type VideoDasFotos,
+  versaoNoInstagram,
   videoNoTempo,
 } from '../src/components/agenda/video-do-post';
 
@@ -96,6 +102,31 @@ describe('o vídeo no novo post (A6 · Z10, parte 4a)', () => {
     });
     expect(canalNoVideo('tiktok', video())).toBeNull();
     expect(rotuloDoVideoNoPost(video())).toBe('Smash duplo: A chapa e o queijo derretendo, 24 segundos, em pé');
+  });
+
+  it('o 4K pela cópia para o Instagram (parte 3b; D-A6-149): a situação do servidor manda; preparando e não deu ficam fora, com a frase', () => {
+    const quatroK = { width: 2160, height: 3840 };
+    // A situação que o servidor decidiu vence a conta das medidas.
+    expect(versaoNoInstagram(video({ gravado: { ...quatroK, instagram_version: 'reduzida' } }))).toBe('reduzida');
+    expect(cabeNoInstagram(video({ gravado: { ...quatroK, instagram_version: 'reduzida' } }))).toBe(true);
+    expect(cabeNoInstagram(video({ gravado: { ...quatroK, instagram_version: 'preparando' } }))).toBe(false);
+    expect(cabeNoInstagram(video({ gravado: { ...quatroK, instagram_version: 'nao_deu' } }))).toBe(false);
+    expect(cabeNoInstagram(video({ gravado: { instagram_version: 'como_esta' } }))).toBe(true);
+    // Sem a situação (a resposta de antes), pelas medidas, como antes.
+    expect(versaoNoInstagram(video({ gravado: quatroK }))).toBe('nao_deu');
+    expect(versaoNoInstagram(video())).toBe('como_esta');
+    // As frases do canal.
+    expect(foraDoInstagram(video({ gravado: { ...quatroK, instagram_version: 'preparando' } }))).toBe(INSTAGRAM_PREPARANDO);
+    expect(canalNoVideo('instagram', video({ gravado: { ...quatroK, instagram_version: 'preparando' } }))?.dica).toBe(INSTAGRAM_PREPARANDO);
+    expect(canalNoVideo('instagram', video({ gravado: { ...quatroK, instagram_version: 'nao_deu' } }))?.dica).toBe(INSTAGRAM_NAO_DEU);
+    expect(canalNoVideo('instagram', video({ gravado: { ...quatroK, instagram_version: 'reduzida' } }))).toEqual({ nome: 'Instagram, como Reels', dica: INSTAGRAM_REDUZIDO });
+    expect(foraDoInstagram(video({ gravado: { ...quatroK, instagram_version: 'reduzida' } }))).toBeNull();
+    // O Story do Instagram segue a mesma situação; com a cópia pronta, o tamanho do original não conta (a cópia de até 60 s
+    // fica abaixo dos 100 MB, e o servidor confere o tamanho dela).
+    expect(foraDoStory('instagram', video({ gravado: { ...quatroK, instagram_version: 'preparando' } }))).toBe(INSTAGRAM_PREPARANDO);
+    expect(foraDoStory('instagram', video({ bytes: 200_000_000, gravado: { ...quatroK, instagram_version: 'reduzida' } }))).toBeNull();
+    expect(foraDoStory('instagram', video({ bytes: 200_000_000, gravado: { instagram_version: 'como_esta' } }))).toContain('100 MB');
+    expect(campoDaRecusa('video-preparando-para-o-instagram')).toBe('foto');
   });
 
   it('as recusas novas do servidor vão ao campo certo: o vídeo, a capa e o quadro', () => {

@@ -1,5 +1,8 @@
-import { mkdir, open, readdir, readFile, rm, stat, unlink, writeFile } from 'node:fs/promises';
+import { createWriteStream } from 'node:fs';
+import { copyFile, mkdir, open, readdir, readFile, rm, stat, unlink, writeFile } from 'node:fs/promises';
 import { dirname, join, resolve, sep } from 'node:path';
+import { Readable, Transform } from 'node:stream';
+import { pipeline } from 'node:stream/promises';
 import { z } from 'zod';
 
 // O armazenamento de imagens (ADR-021): o S3 em São Paulo, privado, em produção; um disco (pasta fora do git) no
@@ -43,6 +46,11 @@ export interface ArmazemDeImagens {
   tamanho(chave: string): Promise<number | null>;
   /** Os bytes de `inicio` a `fim` (inclusive) do objeto: a leitura do cabeçalho do vídeo, aos pedaços. */
   lerTrecho(chave: string, inicio: number, fim: number): Promise<Buffer>;
+  /**
+   * Grava o objeto inteiro no arquivo `destino`, sem passar pela memória de uma vez (o vídeo de até 300 MB, para a cópia do
+   * Instagram: A6 · Z10, parte 3b), e devolve o tamanho. O objeto maior que `maximo` é recusado, antes ou no meio.
+   */
+  baixarParaArquivo(chave: string, destino: string, maximo: number): Promise<number>;
 }
 
 /** O maior trecho que o servidor lê de uma vez (o cabeçalho do vídeo de 90 s cabe com folga). */
@@ -90,8 +98,8 @@ export const MAIOR_LEITURA_BYTES = 20 * 1024 * 1024;
 
 // As chaves que o Liame grava e os prefixos que apaga. A foto das Fotos (`t/{empresa}/b/{marca}/foto_produto/{id}.jpg`)
 // e a miniatura dela; o vídeo das Fotos (`t/{empresa}/b/{marca}/video/{id}.mp4` ou `.mov`, A6 · Z10) e a capa dele
-// (`{id}-mini.jpg`); o recorte do post do Instagram (`t/{empresa}/b/{marca}/post/{post}-instagram.jpg`, A6 · Z5b); o
-// logo da agência (`t/{agência}/agencia/logo/{id}.jpg`, A7 · W7, parte 3). Conferidas parte por parte antes de qualquer
+// (`{id}-mini.jpg`) e a cópia reduzida para o Instagram (`{id}-instagram.mp4`, A6 · Z10, parte 3b); o recorte do post
+// do Instagram (`t/{empresa}/b/{marca}/post/{post}-instagram.jpg`, A6 · Z5b); o logo da agência (`t/{agência}/agencia/logo/{id}.jpg`, A7 · W7, parte 3). Conferidas parte por parte antes de qualquer
 // gravação, leitura ou apagamento: nada fora do desenho chega ao disco ou ao bucket.
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 
@@ -115,7 +123,7 @@ function chaveValida(chave: string): boolean {
     p[4] === 'foto_produto'
       ? semFinal(arquivo, ['-mini.jpg', '.jpg'])
       : p[4] === 'video'
-        ? semFinal(arquivo, ['-mini.jpg', '.mp4', '.mov'])
+        ? semFinal(arquivo, ['-mini.jpg', '-instagram.mp4', '.mp4', '.mov'])
         : p[4] === 'post'
           ? semFinal(arquivo, ['-instagram.jpg'])
           : // A logo do restaurante em Minha marca (A6 · Z15, parte 1) e a cópia da miniatura do anúncio (A3 · I14).
@@ -217,6 +225,16 @@ export class ArmazemNaMemoria implements ArmazemDeImagens {
     if (!bytes) throw new FalhaDoArmazem('memória: a chave não tem arquivo', true);
     return Buffer.from(bytes.subarray(inicio, fim + 1));
   }
+
+  async baixarParaArquivo(chave: string, destino: string, maximo: number): Promise<number> {
+    exigirChave(chave);
+    if (this.falhar.ler) throw new FalhaDoArmazem('memória: falha simulada ao ler');
+    const bytes = this.objetos.get(chave);
+    if (!bytes) throw new FalhaDoArmazem('memória: a chave não tem arquivo', true);
+    if (bytes.length > maximo) throw new FalhaDoArmazem('memória: o arquivo passa do tamanho que o servidor baixa');
+    await writeFile(destino, bytes);
+    return bytes.length;
+  }
 }
 
 /** No desenvolvimento: uma pasta fora do git. O endereço de leitura é a própria imagem (`data:`), sem rota nova. */
@@ -304,6 +322,15 @@ export class ArmazemNoDisco implements ArmazemDeImagens {
       await arquivo.close();
     }
   }
+
+  async baixarParaArquivo(chave: string, destino: string, maximo: number): Promise<number> {
+    exigirChave(chave);
+    const tamanho = await this.tamanho(chave);
+    if (tamanho === null) throw new FalhaDoArmazem('disco: ENOENT', true);
+    if (tamanho > maximo) throw new FalhaDoArmazem('disco: o arquivo passa do tamanho que o servidor baixa');
+    await copyFile(this.caminho(chave), destino);
+    return tamanho;
+  }
 }
 
 /** Em produção sem o bucket: indisponível. */
@@ -332,6 +359,9 @@ export class ArmazemFechado implements ArmazemDeImagens {
     return Promise.reject(new ArmazemIndisponivel());
   }
   lerTrecho(): Promise<Buffer> {
+    return Promise.reject(new ArmazemIndisponivel());
+  }
+  baixarParaArquivo(): Promise<number> {
     return Promise.reject(new ArmazemIndisponivel());
   }
 }
@@ -534,6 +564,40 @@ export class ArmazemS3 implements ArmazemDeImagens {
     }
     if (bytes.byteLength > MAIOR_TRECHO_BYTES) throw new FalhaDoArmazem('S3: o trecho passa do que o servidor lê');
     return Buffer.from(bytes);
+  }
+
+  /**
+   * O objeto inteiro direto para o disco (o corpo do SDK no Node é um stream): o tamanho conferido antes, pelo
+   * `ContentLength`, e no meio, contando o que passa (o que vem a mais interrompe a cópia e apaga o arquivo pela metade).
+   */
+  async baixarParaArquivo(chave: string, destino: string, maximo: number): Promise<number> {
+    exigirChave(chave);
+    let r: { Body?: unknown; ContentLength?: number } | undefined;
+    try {
+      r = (await this.cliente.send(new this.sdk.GetObjectCommand({ Bucket: this.bucket, Key: chave }))) as typeof r;
+    } catch (e) {
+      const nome = nomeDoErro(e);
+      throw new FalhaDoArmazem(`S3: ${nome}`, nome.startsWith('NoSuchKey'));
+    }
+    if (typeof r?.ContentLength === 'number' && r.ContentLength > maximo) throw new FalhaDoArmazem('S3: o arquivo passa do tamanho que o servidor baixa');
+    const corpo = r?.Body;
+    if (!(corpo instanceof Readable)) throw new FalhaDoArmazem('S3: a resposta veio sem o arquivo');
+    let total = 0;
+    const contar = new Transform({
+      transform(pedaco: Buffer, _codificacao, pronto) {
+        total += pedaco.length;
+        if (total > maximo) pronto(new FalhaDoArmazem('S3: o arquivo passa do tamanho que o servidor baixa'));
+        else pronto(null, pedaco);
+      },
+    });
+    try {
+      await pipeline(corpo, contar, createWriteStream(destino));
+    } catch (e) {
+      await rm(destino, { force: true }).catch(() => undefined);
+      if (e instanceof FalhaDoArmazem) throw e;
+      throw new FalhaDoArmazem(`S3: ${nomeDoErro(e)}`);
+    }
+    return total;
   }
 }
 

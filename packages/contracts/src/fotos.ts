@@ -28,8 +28,9 @@ export const BRAND_PHOTO_LIMITS = {
 /**
  * Os limites do vídeo das Fotos (A6 · Z10; D-A6-68, aprovada pelo dono em 04/11/2026): MP4 ou MOV, de 3 a 90 segundos
  * (os 90 s são o máximo do Reels da Página: um arquivo só serve para os dois Reels, o TikTok e o YouTube Shorts), até
- * 300 MB. O 4K do celular entra (até 4.096 px no lado maior): a redução para os 1.920 px do Reels é feita quando o
- * vídeo vai à Meta (parte 3). O vídeo vai como a loja gravou: em H.264 ou HEVC, com o áudio em AAC.
+ * 300 MB. O 4K do celular entra (até 4.096 px no lado maior): para o Instagram, o servidor faz uma cópia reduzida aos
+ * 1.920 px do Reels (parte 3b; D-A6-149). Nos outros lugares, o vídeo vai como a loja gravou: em H.264 ou HEVC, com o
+ * áudio em AAC.
  */
 export const BRAND_VIDEO_LIMITS = {
   maxBytes: 300 * 1024 * 1024,
@@ -45,7 +46,7 @@ export const BRAND_VIDEO_LIMITS = {
 
 /**
  * O vídeo no post (A6, Z10; as especificações da Meta, conferidas em 06/11/2026): o Reels do Instagram aceita o arquivo
- * com até 1.920 px de largura e até 25 Mbps (o maior, o servidor ainda não reduz: vai só na Página); o Reels da Página, em
+ * com até 1.920 px de largura e até 25 Mbps (o maior leva a cópia reduzida: `instagram_version`); o Reels da Página, em
  * pé a partir de 540 × 960 (deitado, ou menor, sai como vídeo comum). As mesmas contas no servidor e na tela (V74).
  */
 export const REELS_LIMITS = { instagramMaxWidth: 1920, instagramMaxBitrate: 25_000_000, pageMinWidth: 540, pageMinHeight: 960 } as const;
@@ -59,6 +60,19 @@ export function reelsBitrate(bytes: number, durationMs: number): number {
 /** O vídeo vai ao Reels do Instagram como está (a largura gravada e a taxa no limite)? */
 export function fitsInstagramReels(width: number, bytes: number, durationMs: number): boolean {
   return width > 0 && width <= REELS_LIMITS.instagramMaxWidth && reelsBitrate(bytes, durationMs) <= REELS_LIMITS.instagramMaxBitrate;
+}
+
+/**
+ * O vídeo no Instagram (A6, Z10, parte 3b; D-A6-149): `como_esta` (cabe no Reels e no Story como a loja gravou);
+ * `preparando` (não cabe, e o servidor está fazendo a cópia reduzida: alguns minutos); `reduzida` (a cópia está pronta:
+ * o Instagram leva ela); `nao_deu` (a cópia não saiu: o vídeo vai só na Página, como antes).
+ */
+export const INSTAGRAM_VIDEO_VERSIONS = ['como_esta', 'preparando', 'reduzida', 'nao_deu'] as const;
+export type InstagramVideoVersion = (typeof INSTAGRAM_VIDEO_VERSIONS)[number];
+
+/** O vídeo pode ir ao Instagram agora: como está, ou pela cópia reduzida já pronta. */
+export function instagramVideoReady(version: InstagramVideoVersion): boolean {
+  return version === 'como_esta' || version === 'reduzida';
 }
 
 /** Como o vídeo sai na Página: `reels` (em pé, a partir de 540 × 960) ou `video` (o vídeo comum: deitado ou menor). */
@@ -152,6 +166,11 @@ export const BrandPhoto = z.strictObject({
       media_type: z.string().min(1),
       has_audio: z.boolean(),
       has_cover: z.boolean(),
+      /**
+       * Como o vídeo vai ao Instagram (A6, Z10, parte 3b; D-A6-149): `como_esta`, `preparando`, `reduzida` ou `nao_deu`.
+       * Opcional: a resposta de antes de 14/11/2026 não traz (a tela confere pelas medidas, como antes).
+       */
+      instagram_version: z.enum(INSTAGRAM_VIDEO_VERSIONS).optional(),
     })
     .nullable()
     .optional(),

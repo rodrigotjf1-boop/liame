@@ -3,11 +3,14 @@ import { DatabaseModule } from '../database/database.module.js';
 import { ArmazemModule } from '../imagens/armazem.module.js';
 import { TelemetryLifecycle } from '../telemetry.lifecycle.js';
 import { configDoMontador, MONTADOR, MontadorRemotion } from '../video/montador.js';
+import { REDUTOR, RedutorFfmpeg } from '../video/redutor.js';
 import { MontagemDoVideo } from '../worker/montagem-do-video.js';
+import { ReducaoDoVideo } from '../worker/reducao-do-video.js';
 
-// O serviço de montagem do vídeo (`liame-render`, A6 · Z15 parte 2b; D-A6-139): só a fila do vídeo montado, num
-// processo à parte da API e do worker, com 2 núcleos e 3 GB no EasyPanel. Um vídeo por vez; com a fila vazia, olha de
-// novo em 5 segundos (a consulta usa o índice parcial da fila).
+// O serviço de montagem do vídeo (`liame-render`, A6 · Z15 parte 2b; D-A6-139): a fila do vídeo montado e, desde a Z10
+// parte 3b (D-A6-149), a da cópia do vídeo para o Instagram, num processo à parte da API e do worker, com 2 núcleos e
+// 3 GB no EasyPanel. Um vídeo por vez, o montado primeiro (a pessoa espera na gaveta); com as duas filas vazias, olha de
+// novo em 5 segundos (as consultas usam os índices parciais das filas).
 
 /** Com a fila vazia, a próxima olhada. */
 const ESPERA_DA_FILA_MS = 5_000;
@@ -21,7 +24,10 @@ export class LacoDaMontagem implements OnApplicationBootstrap, BeforeApplication
   private acordar: (() => void) | null = null;
   private rodando: Promise<void> | null = null;
 
-  constructor(private readonly montagem: MontagemDoVideo) {}
+  constructor(
+    private readonly montagem: MontagemDoVideo,
+    private readonly reducao: ReducaoDoVideo,
+  ) {}
 
   onApplicationBootstrap(): void {
     this.rodando = this.rodar();
@@ -48,10 +54,16 @@ export class LacoDaMontagem implements OnApplicationBootstrap, BeforeApplication
         if (Date.now() - soltou >= SOLTAR_PARADOS_MS) {
           soltou = Date.now();
           await this.montagem.soltarParados();
+          await this.reducao.soltarParados();
         }
         const vez = await this.montagem.vez();
         if (vez) {
           this.logger.log(`vídeo ${vez.id}: ${vez.situacao}`);
+          continue;
+        }
+        const copia = await this.reducao.vez();
+        if (copia) {
+          this.logger.log(`vídeo ${copia.id}: cópia para o Instagram ${copia.situacao}`);
           continue;
         }
       } catch (err) {
@@ -67,6 +79,7 @@ export class LacoDaMontagem implements OnApplicationBootstrap, BeforeApplication
     this.parar = true;
     this.acordar?.();
     await this.montagem.devolverAtual().catch((err: unknown) => this.logger.error(`não deu para devolver o pedido à fila (${err instanceof Error ? err.message : String(err)})`));
+    await this.reducao.devolverAtual().catch((err: unknown) => this.logger.error(`não deu para devolver a cópia à fila (${err instanceof Error ? err.message : String(err)})`));
   }
 
   /** Para os testes: espera o laço terminar. */
@@ -77,6 +90,13 @@ export class LacoDaMontagem implements OnApplicationBootstrap, BeforeApplication
 
 @Module({
   imports: [DatabaseModule, ArmazemModule],
-  providers: [TelemetryLifecycle, { provide: MONTADOR, useFactory: () => new MontadorRemotion(configDoMontador()) }, MontagemDoVideo, LacoDaMontagem],
+  providers: [
+    TelemetryLifecycle,
+    { provide: MONTADOR, useFactory: () => new MontadorRemotion(configDoMontador()) },
+    { provide: REDUTOR, useFactory: () => new RedutorFfmpeg() },
+    MontagemDoVideo,
+    ReducaoDoVideo,
+    LacoDaMontagem,
+  ],
 })
 export class RenderModule {}

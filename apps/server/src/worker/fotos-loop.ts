@@ -3,6 +3,7 @@ import { Inject, Injectable, Logger } from '@nestjs/common';
 import { sql } from 'drizzle-orm';
 import { DATABASE } from '../database/database.module.js';
 import { chaveDaMiniatura } from '../fotos/conferencia.js';
+import { chaveDaVersaoDoInstagram } from '../fotos/versao-do-instagram.js';
 import { ARMAZEM_DE_IMAGENS, type ArmazemDeImagens } from '../imagens/armazem.js';
 import { type JobScope, tenantFilter } from './outbox-publisher.js';
 
@@ -39,8 +40,8 @@ export class FotosLoop {
     const abandonado = new Date(agora.getTime() - ENVIO_ABANDONADO_MIN * 60_000).toISOString();
     const videoAbandonado = new Date(agora.getTime() - ENVIO_DO_VIDEO_ABANDONADO_MIN * 60_000).toISOString();
     const devidas = await withSystem(db, (tx) =>
-      tx.execute<{ id: string; object_key: string }>(sql`
-        select id, object_key from liame.brand_photo
+      tx.execute<{ id: string; object_key: string; kind: string }>(sql`
+        select id, object_key, kind from liame.brand_photo
          where (removed_at is not null
                 or (status = 'enviando' and created_at < case when kind = 'video' then ${videoAbandonado}::timestamptz else ${abandonado}::timestamptz end))
            ${tenantFilter(scope, sql`tenant_id`)}
@@ -50,7 +51,10 @@ export class FotosLoop {
     const saiu: string[] = [];
     for (const f of devidas.rows) {
       try {
-        await this.armazem.apagar([f.object_key, chaveDaMiniatura(f.object_key)]);
+        // O vídeo leva junto a cópia para o Instagram (A6, Z10, parte 3b), se ela existir.
+        const chaves = [f.object_key, chaveDaMiniatura(f.object_key)];
+        if (f.kind === 'video') chaves.push(chaveDaVersaoDoInstagram(f.object_key));
+        await this.armazem.apagar(chaves);
       } catch (err) {
         this.logger.warn(`foto ${f.id}: o armazenamento não apagou o arquivo; fica para a volta seguinte (${mensagem(err)})`);
         await withSystem(db, (tx) => tx.execute(sql`update liame.brand_photo set updated_at = ${agora.toISOString()} where id = ${f.id}`));
