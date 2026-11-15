@@ -95,6 +95,20 @@ describe('a conta de uma conta de anúncio', () => {
     expect(linhaDaConta(c, mes)).toMatchObject({ gasto: 2_700n * REAL, ritmo: 100n * REAL, previsto: 3_000n * REAL, diasPrevistos: 3, lidoAte: '2026-09-27', atrasada: true });
   });
 
+  it('de madrugada, antes da leitura do dia: o gasto até anteontem é o esperado, e só vira atraso quando a leitura falta', () => {
+    // Lida ontem às 05:24 (UTC 08:24) até o dia 27; hoje é 29.
+    const c = conta({ lidoAte: '2026-09-27', lidoEm: new Date('2026-09-28T08:24:00Z'), gastoPorDia: gastos('2026-09-01', '2026-09-27', 100n * REAL) });
+    // Às 03:44 de hoje (UTC 06:44), 22 horas depois: não é atraso; a conta é a mesma (o dia 28 entra pelo ritmo).
+    const madrugada = linhaDaConta(c, mes, new Date('2026-09-29T06:44:00Z'));
+    expect(madrugada).toMatchObject({ atrasada: false, gasto: 2_700n * REAL, diasPrevistos: 3, lidoAte: '2026-09-27' });
+    // Às 10:30 (UTC 13:30), 29 horas depois e sem a leitura de hoje: atraso.
+    expect(linhaDaConta(c, mes, new Date('2026-09-29T13:30:00Z')).atrasada).toBe(true);
+    // Mais de um dia atrás, mesmo com uma leitura recente: atraso.
+    expect(linhaDaConta(conta({ lidoAte: '2026-09-26', lidoEm: new Date('2026-09-29T05:00:00Z') }), mes, new Date('2026-09-29T06:00:00Z')).atrasada).toBe(true);
+    // Nunca lida segue atrasada, com ou sem a hora.
+    expect(linhaDaConta(conta({ lidoAte: null, lidoEm: null }), mes, new Date('2026-09-29T06:00:00Z')).atrasada).toBe(true);
+  });
+
   it('parada desde antes do mês: nada lido neste mês, e o mês inteiro é previsão pelo último ritmo', () => {
     const c = conta({ lidoAte: '2026-08-25', gastoPorDia: gastos('2026-08-01', '2026-08-25', 50n * REAL) });
     expect(linhaDaConta(c, mes)).toMatchObject({ gasto: 0n, ritmo: 50n * REAL, previsto: 1_500n * REAL, diasPrevistos: 30, atrasada: true });

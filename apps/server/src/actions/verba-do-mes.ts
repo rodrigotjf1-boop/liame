@@ -76,12 +76,22 @@ export interface LinhaDaConta extends LinhaDeGasto {
   lidoEm: Date | null;
   /** Os dias que entram pelo ritmo: do dia seguinte ao último lido até o fim do mês. */
   diasPrevistos: number;
-  /** A leitura de hoje ainda não chegou (ou a conta nunca foi lida): o gasto vale até `lidoAte`. */
+  /** A leitura que devia ter vindo não veio (ou a conta nunca foi lida): o gasto vale até `lidoAte`. */
   atrasada: boolean;
 }
 
-/** A conta de uma conta de anúncio no mês. Só vale o que a leitura cobre, e nunca além de ontem. */
-export function linhaDaConta(c: ContaDeAnuncio, mes: MesCorrente): LinhaDaConta {
+/**
+ * A leitura do gasto roda uma vez por dia, de manhã cedo, e traz até ontem. Antes dela (de madrugada), o gasto que vai
+ * até anteontem é o esperado: só conta como atraso quando a última leitura com sucesso passa deste tempo (o dia e uma
+ * folga de 2 horas) ou o gasto fica mais de um dia atrás.
+ */
+export const LEITURA_DO_GASTO_VALE_H = 26;
+
+/**
+ * A conta de uma conta de anúncio no mês. Só vale o que a leitura cobre, e nunca além de ontem. Sem `agora`, o gasto até
+ * anteontem já conta como atraso (a regra de antes, para quem não sabe a hora).
+ */
+export function linhaDaConta(c: ContaDeAnuncio, mes: MesCorrente, agora?: Date): LinhaDaConta {
   const ate = c.lidoAte === null ? null : c.lidoAte < mes.ontem ? c.lidoAte : mes.ontem;
   let gasto = 0n;
   let seteDias = 0n;
@@ -107,7 +117,10 @@ export function linhaDaConta(c: ContaDeAnuncio, mes: MesCorrente): LinhaDaConta 
     ritmo,
     previsto: lido + ritmo * BigInt(diasPrevistos),
     diasPrevistos,
-    atrasada: ate === null || ate < mes.ontem,
+    atrasada:
+      ate === null ||
+      ate < menosDias(mes.ontem, 1) ||
+      (ate < mes.ontem && (agora === undefined || c.lidoEm === null || agora.getTime() - c.lidoEm.getTime() > LEITURA_DO_GASTO_VALE_H * 3_600_000)),
   };
 }
 
@@ -202,9 +215,9 @@ export interface ContaDoMes extends LinhaDeGasto {
  * A conta do mês. `pesamPorDia`: a soma do que cada aumento ou retomada pedido (esperando aprovação ou execução) ou
  * executado hoje acrescenta por dia. O que foi executado antes de hoje já aparece, em parte, no ritmo.
  */
-export function contaDoMes(e: { hoje: string; contas: readonly ContaDeAnuncio[]; pesamPorDia: bigint; teto: bigint | null }): ContaDoMes {
+export function contaDoMes(e: { hoje: string; contas: readonly ContaDeAnuncio[]; pesamPorDia: bigint; teto: bigint | null; agora?: Date }): ContaDoMes {
   const mes = mesDe(e.hoje);
-  const linhas = e.contas.map((c) => linhaDaConta(c, mes));
+  const linhas = e.contas.map((c) => linhaDaConta(c, mes, e.agora));
   const provedores = [...new Set(linhas.map((l) => l.provider))].sort(naOrdem);
   const plataformas = provedores.map((p) => linhaDaPlataforma(p, linhas.filter((l) => l.provider === p)));
   const previsto = plataformas.reduce((s, p) => s + p.previsto, 0n);

@@ -4,7 +4,7 @@ import { BudgetMonthResponse } from '@liame/contracts';
 import { type Database, runMigrations } from '@liame/database';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { BudgetService } from '../../src/actions/budget.service.js';
-import { aoCentavo, diasEntre, mesDe } from '../../src/actions/verba-do-mes.js';
+import { aoCentavo, diasEntre, LEITURA_DO_GASTO_VALE_H, mesDe } from '../../src/actions/verba-do-mes.js';
 import { currentStep, totpCode } from '../../src/auth/totp.js';
 import { DATABASE } from '../../src/database/database.module.js';
 import { FlagService } from '../../src/flags/flag.service.js';
@@ -365,7 +365,18 @@ describe.skipIf(!hasDb)('a verba do mês: o teto conta o gasto inteiro (A4 · X4
     const previstos = diasEntre([anteontem, menosDias(mes.inicio, 1)].sort()[1]!, mes.fim);
     const metaNoMes = META_POR_DIA * diasNoMes(2);
     const v = await verba();
-    expect(v.platforms[0]).toMatchObject({ provider: 'meta_ads', spend_micros: metaNoMes, daily_micros: META_POR_DIA, forecast_micros: metaNoMes + META_POR_DIA * previstos, read_through: anteontem, forecast_days: previstos, stale: true });
+    // O aviso de atraso depende da idade da leitura (ERR-245: antes de 26 horas, o gasto até anteontem é o esperado, de
+    // madrugada antes da leitura do dia); a regra com os horários fixos está em `test/verba-do-mes.spec.ts`.
+    const idade = Date.now() - new Date(v.platforms[0]!.last_success_at!).getTime();
+    expect(v.platforms[0]).toMatchObject({
+      provider: 'meta_ads',
+      spend_micros: metaNoMes,
+      daily_micros: META_POR_DIA,
+      forecast_micros: metaNoMes + META_POR_DIA * previstos,
+      read_through: anteontem,
+      forecast_days: previstos,
+      stale: idade > LEITURA_DO_GASTO_VALE_H * 3_600_000,
+    });
     // O Google foi lido hoje: os dias previstos deixam de ser um número só.
     expect([v.platforms[1]!.stale, v.platforms[1]!.forecast_days, v.forecast_days]).toEqual([false, dias, previstos === dias ? dias : null]);
     expect(v.forecast_micros).toBe(v.platforms[0]!.forecast_micros + v.platforms[1]!.forecast_micros);

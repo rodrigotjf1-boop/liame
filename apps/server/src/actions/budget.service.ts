@@ -637,7 +637,7 @@ export class BudgetService {
       const porId = new Map(contas.map((c) => [c.id, c]));
       for (const g of await this.gastoDosDias(tx, contas.map((c) => c.id), desde < piso ? piso : desde, hoje)) porId.get(g.conta)?.gastoPorDia.set(g.dia, BigInt(g.micros));
     }
-    return contaDoMes({ hoje, contas: contas satisfies ContaDeAnuncio[], pesamPorDia: await this.pesamHoje(tx, { ...e, hoje }), teto: e.teto });
+    return contaDoMes({ hoje, contas: contas satisfies ContaDeAnuncio[], pesamPorDia: await this.pesamHoje(tx, { ...e, hoje }), teto: e.teto, agora: e.agora });
   }
 
   /**
