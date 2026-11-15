@@ -146098,6 +146098,9 @@
                     "enabled": {
                       "type": "boolean"
                     },
+                    "moments_enabled": {
+                      "type": "boolean"
+                    },
                     "today": {
                       "type": "object",
                       "properties": {
@@ -146317,6 +146320,7 @@
                   },
                   "required": [
                     "enabled",
+                    "moments_enabled",
                     "today",
                     "has_logo",
                     "items"

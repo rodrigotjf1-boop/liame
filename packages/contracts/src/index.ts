@@ -775,7 +775,6 @@ export {
   VIDEO_TEMPLATE_RULES,
   VIDEO_TEXTS_NO_AI_REASONS,
   VIDEO_TEMPLATES,
-  VideoCut,
   VideoFormat,
   VideoMontageListQuery,
   VideoMontageListResponse,

@@ -35,6 +35,7 @@ import { marcaDoCriativo } from '../criativo/base.js';
 import { DATABASE } from '../database/database.module.js';
 import { AppProblem } from '../errors/problems.js';
 import { FlagService } from '../flags/flag.service.js';
+import { FLAG_DOS_MELHORES_MOMENTOS } from './cortes-do-social.service.js';
 import { normalizar, REGRAS_DE_TEXTO_VERSAO } from '../policy/texto.js';
 import { contarNaFrente } from '../worker/fila-do-video.js';
 
@@ -46,8 +47,8 @@ import { contarNaFrente } from '../worker/fila-do-video.js';
 // diz). A tabela é a fila: o serviço de montagem (`liame-render`, parte 2b) pega o mais antigo, um por vez.
 
 export const FLAG_DO_VIDEO_MONTADO = 'video_montado';
-/** "Os melhores momentos" (A6 · Z16; D-A6-154): por cima do vídeo montado, desligada; sem ela, o modelo é recusado. */
-export const FLAG_DOS_MELHORES_MOMENTOS = 'video_momentos';
+// "Os melhores momentos" (A6 · Z16; D-A6-154): a função `video_momentos` (`FLAG_DOS_MELHORES_MOMENTOS`, do pedido dos
+// cortes), por cima do vídeo montado, desligada; sem ela, o modelo é recusado.
 
 type Quem = { tenantId: string; userId: string };
 

@@ -827,6 +827,7 @@ export function FotosTela() {
           iniciais={iniciais}
           fotos={fotos}
           temLogo={montagens.has_logo}
+          momentos={montagens.moments_enabled}
           hoje={montagens.today}
           pedido={montar.pedido}
           reserva={titulo}

@@ -248,18 +248,7 @@ export const VIDEO_CUTS_FAIL_REASONS = [
 ] as const;
 export type VideoCutsFailReason = (typeof VIDEO_CUTS_FAIL_REASONS)[number];
 
-/**
- * Um corte dos "Melhores momentos" (A6 · Z16; D-A6-150 e D-A6-152): o vídeo de Fotos (um dos `media_ids`), o começo e o
- * fim em milissegundos e a legenda (até 40 letras). A ordem da lista é a ordem do vídeo; o servidor confere cada corte
- * dentro do vídeo, de 1,5 a 8 segundos, sem repetir pedaço, o total perto da duração e as legendas pelo Compliance.
- */
-export const VideoCut = z.strictObject({
-  media_id: z.uuid(),
-  start_ms: z.int().min(0),
-  end_ms: z.int().min(1),
-  caption: z.string().trim().min(1).max(40),
-});
-export type VideoCut = z.infer<typeof VideoCut>;
+// O `VideoCut` (um corte: o vídeo, o começo, o fim e a legenda) é o mesmo do pedido de montagem, definido lá em cima.
 
 export const VideoCutsResponse = z.strictObject({
   id: z.uuid(),
