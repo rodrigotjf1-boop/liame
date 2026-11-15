@@ -64,7 +64,7 @@ export function DetalheTesteDeRegiao({ acao, grupo, agora, podeDecidir, temApp, 
           <b>{cab.quem}</b> {cab.verbo}
         </span>
         <span>· {cab.quando}</span>
-        <span>· em Minha marca › Região › Sua região: “Testar um bairro sem anúncio”</span>
+        <span>· em Minha marca › Região › Sua região, no bairro dos pedidos: “Testar sem anúncio”</span>
       </div>
       <h2 className="det-titulo" id="ap-det-titulo" ref={titulo} tabIndex={-1}>
         {tituloDoTesteDeRegiao(lido.estado === 'ok' ? lido.t.name : null)}

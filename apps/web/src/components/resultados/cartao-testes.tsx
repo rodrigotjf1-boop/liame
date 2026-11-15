@@ -11,7 +11,7 @@ import { type TesteNaLista, testesDaMarca } from './testes';
 // mais novo ao mais antigo. "Ver o teste" abre o teste em Aprovações, onde ele é acompanhado. Sem teste, o cartão diz onde
 // se pede; sem teste e sem a função do teste ligada, ele não aparece.
 
-type Carga = { tipo: 'carregando' } | { tipo: 'ok'; itens: TesteNaLista[]; ligado: boolean } | { tipo: 'erro'; problema: Problema };
+type Carga = { tipo: 'carregando' } | { tipo: 'ok'; itens: TesteNaLista[]; criativo: boolean; regiao: boolean } | { tipo: 'erro'; problema: Problema };
 
 type Props = { brandId: string; hoje: string };
 
@@ -28,11 +28,12 @@ export function CartaoTestes({ brandId, hoje }: Props) {
         chamar(() => api.GET('/v1/creative-tests', { params: { query } })),
         chamar(() => api.GET('/v1/region-tests', { params: { query } })),
         chamar(() => api.GET('/v1/creative-tests/options', { params: { query } })),
-      ]).then(([c, r, o]) => {
+        chamar(() => api.GET('/v1/region-tests/options', { params: { query } })),
+      ]).then(([c, r, o, or]) => {
         if (!vivo) return;
         if (!c.ok) return setCarga({ tipo: 'erro', problema: c.problema });
         if (!r.ok) return setCarga({ tipo: 'erro', problema: r.problema });
-        setCarga({ tipo: 'ok', itens: testesDaMarca(c.data.items, r.data.items, hoje), ligado: o.ok && o.data.enabled });
+        setCarga({ tipo: 'ok', itens: testesDaMarca(c.data.items, r.data.items, hoje), criativo: o.ok && o.data.enabled, regiao: or.ok && or.data.enabled });
       }),
     );
     return () => {
@@ -41,7 +42,7 @@ export function CartaoTestes({ brandId, hoje }: Props) {
   }, [brandId, hoje, tentativa]);
 
   if (carga.tipo === 'carregando') return null;
-  if (carga.tipo === 'ok' && !carga.itens.length && !carga.ligado) return null;
+  if (carga.tipo === 'ok' && !carga.itens.length && !carga.criativo && !carga.regiao) return null;
 
   return (
     <section className="card r8t-card" id="card-testes" aria-labelledby="t-testes">
@@ -70,7 +71,14 @@ export function CartaoTestes({ brandId, hoje }: Props) {
               <Icone nome="chart" />
             </div>
             <h3>Nenhum teste ainda</h3>
-            <p className="campo-dica">O teste de criativo se pede em Criativos, na peça aprovada (“Testar contra outra peça”).</p>
+            <p className="campo-dica">
+              {[
+                carga.criativo ? 'O teste de criativo se pede em Criativos, na peça aprovada (“Testar contra outra peça”).' : null,
+                carga.regiao ? 'O teste de região, em Minha marca › Região › Sua região, no bairro dos pedidos (“Testar sem anúncio”).' : null,
+              ]
+                .filter(Boolean)
+                .join(' ')}
+            </p>
           </div>
         ) : (
           <ul className="r8t-lista">
