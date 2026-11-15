@@ -1,4 +1,4 @@
-import { randomBytes, randomUUID } from 'node:crypto';
+import { randomUUID } from 'node:crypto';
 import { resolve } from 'node:path';
 import { type Database, runMigrations } from '@liame/database';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
@@ -12,7 +12,7 @@ import { FlagService } from '../../src/flags/flag.service.js';
 import { ARMAZEM_DE_IMAGENS, type ArmazemNaMemoria, chaveDoQuadroDosCortes, QUADROS_DOS_CORTES_MAXIMOS } from '../../src/imagens/armazem.js';
 import { CortesDoSocialLoop } from '../../src/worker/cortes-do-social.js';
 import { enableMfa, ownerQuery, resetIpRateLimits, signupAndLogin, startApi, type TestApi } from '../helpers/api.js';
-import { ligarIa, modeloComPreco, ModelosDeTeste, responde } from '../helpers/ia.js';
+import { ligarIa, ModelosDeTeste, responde, rotaCompartilhada } from '../helpers/ia.js';
 import { ligarFlagDaEmpresa } from '../helpers/meta-de-mentira.js';
 import { fotoGuardada, videoGuardado } from '../helpers/posts-semeados.js';
 import { hasDb, OWNER_URL } from './env.js';
@@ -42,14 +42,13 @@ const jpegDe = (largura: number, altura: number): Buffer =>
 const QUADRO = jpegDe(768, 432);
 
 describe.skipIf(!hasDb)('os melhores momentos: o pedido dos cortes e a leitura pelo Social media (Z16, parte 3)', () => {
-  const RODADA = `teste_${randomBytes(4).toString('hex')}`;
   let api: TestApi;
   let database: Database;
   let armazem: ArmazemNaMemoria;
   let flags: FlagService;
   let modelos: ModelosDeTeste;
   let loop: CortesDoSocialLoop;
-  let alvo: Awaited<ReturnType<typeof modeloComPreco>>;
+  let alvo: Awaited<ReturnType<typeof rotaCompartilhada>>;
 
   beforeAll(async () => {
     await runMigrations({ connectionString: OWNER_URL, dir: resolve(process.cwd(), '../../packages/database/migrations') });
@@ -59,31 +58,22 @@ describe.skipIf(!hasDb)('os melhores momentos: o pedido dos cortes e a leitura p
     flags = api.app.get(FlagService);
     modelos = new ModelosDeTeste(api.app.get(APP_CONFIG));
     api.app.get(ModelosIa).modelo = (provider, model) => modelos.modelo(provider, model);
-    alvo = await modeloComPreco(modelos, RODADA, responde('{}'));
+    // A rota da tarefa é compartilhada com o caso D-A6-82 do `ia-gateway.spec.ts`: o mesmo nome de modelo, e ninguém
+    // aposenta a do outro (no CI os arquivos rodam juntos).
+    alvo = await rotaCompartilhada(modelos, TAREFA_SOCIAL_CORTES, responde('{}'));
     loop = new CortesDoSocialLoop(database, armazem, api.app.get(AiGateway));
   }, 120_000);
   beforeEach(resetIpRateLimits);
   afterAll(async () => {
-    await ownerQuery(`update liame.ai_model_route set status = 'aposentada' where task = $1 and status = 'ativa' and model like $2`, [TAREFA_SOCIAL_CORTES, `${RODADA}%`]);
-    await ownerQuery(`delete from liame.ai_model_price where model like $1`, [`${RODADA}%`]);
     await api?.close();
   });
 
   /**
-   * A rota da tarefa `social_cortes` com o modelo simulado deste arquivo, como no caso D-A6-82 do gateway: a ativa
-   * aposentada e a próxima versão (o banco local guarda as rodadas de antes). Chamada logo antes de cada leitura, e só
-   * mexe quando a ativa não é a deste arquivo.
+   * A rota compartilhada da tarefa `social_cortes` de novo, logo antes de cada leitura, com o modelo simulado que o
+   * `responder` acabou de ligar (a rota compartilhada não troca de dono: ninguém a aposenta).
    */
   async function garantirRota(): Promise<void> {
-    const [ativa] = await ownerQuery<{ model: string }>(`select model from liame.ai_model_route where task = $1 and status = 'ativa'`, [TAREFA_SOCIAL_CORTES]);
-    if (ativa?.model === alvo.model) return;
-    await ownerQuery(`update liame.ai_model_route set status = 'aposentada' where task = $1 and status = 'ativa'`, [TAREFA_SOCIAL_CORTES]);
-    const [versao] = await ownerQuery<{ v: number }>(`select coalesce(max(version), 0)::int + 1 as v from liame.ai_model_route where task = $1`, [TAREFA_SOCIAL_CORTES]);
-    await ownerQuery(
-      `insert into liame.ai_model_route (id, task, version, status, purpose, provider, model, max_output_tokens, timeout_ms, max_cost_usd_micros, fallback, created_by, deployed_at)
-       values (gen_random_uuid(), $1, $2, 'ativa', 'analise', $3, $4, 4000, 30000, 200000, '[]'::jsonb, 'testes', now())`,
-      [TAREFA_SOCIAL_CORTES, versao!.v, alvo.provider, alvo.model],
-    );
+    await rotaCompartilhada(modelos, TAREFA_SOCIAL_CORTES, modelos.porChave.get(`${alvo.provider}/${alvo.model}`)!);
   }
 
   async function empresa(nome: string, o: { momentos?: boolean; ia?: boolean } = {}): Promise<Empresa> {

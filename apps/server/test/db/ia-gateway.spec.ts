@@ -19,7 +19,7 @@ import { Mailer } from '../../src/mail/mailer.js';
 import { VaultService } from '../../src/vault/vault.service.js';
 import { LifecyclePurgeService } from '../../src/worker/lifecycle-purge.service.js';
 import { enableMfa, ownerQuery, resetIpRateLimits, signupAndLogin, startApi, type TestApi } from '../helpers/api.js';
-import { ligarIa, ModelosDeTeste, modeloComPreco, recusa, type RefDeModelo, responde, rotaAtiva, uso } from '../helpers/ia.js';
+import { ligarIa, ModelosDeTeste, modeloComPreco, recusa, type RefDeModelo, responde, rotaAtiva, rotaCompartilhada, uso } from '../helpers/ia.js';
 import { hasDb, OWNER_URL } from './env.js';
 
 // Os spans do gateway caem aqui: o teste confere que só levam dado técnico (A3-3).
@@ -652,15 +652,10 @@ describe.skipIf(!hasDb)('AI Gateway: custo, teto, limpeza de dado pessoal e func
     await expect(gateway().generate(comImagens(outra))).rejects.toMatchObject({ code: 'entrada-grande' });
     expect(m.mock.doGenerateCalls).toHaveLength(0);
     // A tarefa da lista: a imagem chega ao modelo como JPEG, e o texto ao lado dela passa pela limpeza.
-    // A rota da tarefa da lista: a anterior aposentada e a próxima versão livre (o banco local guarda as rodadas de antes).
+    // A rota da tarefa da lista é compartilhada com a spec dos cortes (`rotaCompartilhada`): o mesmo nome de modelo, e
+    // nenhum arquivo aposenta a do outro (no CI os arquivos rodam juntos); aqui o nome aponta para o simulado deste caso.
     const task = 'social_cortes';
-    await ownerQuery(`update liame.ai_model_route set status = 'aposentada' where task = $1 and status = 'ativa'`, [task]);
-    const [versao] = await ownerQuery<{ v: number }>(`select coalesce(max(version), 0)::int + 1 as v from liame.ai_model_route where task = $1`, [task]);
-    await ownerQuery(
-      `insert into liame.ai_model_route (id, task, version, status, purpose, provider, model, max_output_tokens, timeout_ms, max_cost_usd_micros, fallback, created_by, deployed_at)
-       values (gen_random_uuid(), $1, $2, 'ativa', 'analise', $3, $4, 4000, 30000, 200000, '[]'::jsonb, 'testes', now())`,
-      [task, versao!.v, m.provider, m.model],
-    );
+    await rotaCompartilhada(modelos, task, m.mock);
     const r = await gateway().generate(comImagens(task));
     const enviado = JSON.stringify(m.mock.doGenerateCalls[0]!.prompt);
     expect(enviado).toContain('image/jpeg');
