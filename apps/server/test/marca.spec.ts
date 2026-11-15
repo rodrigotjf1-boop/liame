@@ -1,6 +1,6 @@
-import { BrandDossierContent } from '@liame/contracts';
+import { BrandDossierContent, cleanSearchTerm, searchTermProblem, searchThemesStart } from '@liame/contracts';
 import { describe, expect, it } from 'vitest';
-import { arrumarDossie, camposComDadoPessoal, DOSSIE_VAZIO, hashDoTexto, MAX_MUDANCAS, mudancas, provaDePedidos, situacaoDasSecoes, textoDoDossie } from '../src/marca/dossie.js';
+import { arrumarDossie, camposComDadoPessoal, DOSSIE_VAZIO, hashDoTexto, MAX_MUDANCAS, mudancas, provaDePedidos, situacaoDasSecoes, termosRecusados, textoDoDossie } from '../src/marca/dossie.js';
 import { aplicarItens, recusados, sugerirOfertas, sugerirProdutos } from '../src/marca/sugestoes.js';
 
 // A3 · I8, sem banco: as regras do dossiê da marca (arrumar, recusar dado pessoal, o que mudou, o texto que a
@@ -172,5 +172,61 @@ describe('sugestões do sistema (sem IA)', () => {
         { op: 'trocar', text: 'Smash triplo', before: 'Smash duplo', why: '' },
       ]),
     ).toEqual(['Smash triplo', 'Onion rings']);
+  });
+});
+
+// R9 (D-RG-98 a D-RG-101): os termos de busca da loja na Identidade. A regra do contrato é a mesma da tela.
+describe('os termos de busca da loja', () => {
+  const comTermos = (termos: string[]) => {
+    const d = dossie();
+    return { ...d, identity: { ...d.identity, search_terms: termos } };
+  };
+
+  it('o contrato: tira "perto de mim" e "delivery", confere tamanho, repetido, categoria e concorrente (palavra inteira), e o começo dos temas', () => {
+    expect(cleanSearchTerm('  smash   burger perto de mim ')).toEqual({ term: 'smash burger', stripped: true });
+    expect(cleanSearchTerm('delivery de hambúrguer')).toEqual({ term: 'hambúrguer', stripped: true });
+    expect(cleanSearchTerm('hambúrguer delivery perto de mim')).toEqual({ term: 'hambúrguer', stripped: true });
+    expect(cleanSearchTerm('delivery')).toEqual({ term: '', stripped: true });
+    expect(cleanSearchTerm('lanche')).toEqual({ term: 'lanche', stripped: false });
+
+    const ctx = { others: ['Hambúrguer'], competitors: ['Brasa Burger'], category: 'hamburgueria' };
+    expect(searchTermProblem('', ctx)).toMatch(/^Escreva o que a loja vende/);
+    expect(searchTermProblem('a'.repeat(41), ctx)).toMatch(/tem 41 letras; o máximo é 40/);
+    expect(searchTermProblem('HAMBURGUER', ctx)).toBe('“HAMBURGUER” já está na lista.');
+    expect(searchTermProblem('Hamburgueria', ctx)).toBe('“Hamburgueria” já vem da categoria do Perfil da Empresa no Google.');
+    expect(searchTermProblem('brasa burger artesanal', ctx)).toMatch(/nome de um concorrente \(Brasa Burger\)/);
+    expect(searchTermProblem('bobs na chapa', ctx)).toMatch(/concorrente \(Bob's\)/);
+    expect(searchTermProblem('kebobs', ctx)).toBeNull();
+    expect(searchTermProblem('smash burger', ctx)).toBeNull();
+
+    expect(searchThemesStart([])).toEqual([]);
+    expect(searchThemesStart(['hambúrguer'])).toEqual(['hambúrguer perto de mim', 'hambúrguer delivery']);
+    expect(searchThemesStart(['hambúrguer', 'smash burger'])).toEqual(['hambúrguer perto de mim', 'smash burger perto de mim', 'smash burger delivery']);
+  });
+
+  it('arrumar tira o sufixo e o repetido; a Identidade só com termos não está vazia; o que mudou numa linha só', () => {
+    expect(arrumarDossie(comTermos(['smash burger perto de mim', 'Smash Burger', 'lanche'])).identity.search_terms).toEqual(['smash burger', 'lanche']);
+    const soTermos = { ...DOSSIE_VAZIO, identity: { ...DOSSIE_VAZIO.identity, search_terms: ['lanche'] } };
+    expect(situacaoDasSecoes(soTermos, new Set()).find((x) => x.section === 'identidade')!.status).toBe('confirmada');
+    expect(mudancas(comTermos(['hambúrguer', 'smash burger']), comTermos(['hambúrguer', 'lanche']))).toEqual(['Termos de busca: + lanche; − smash burger']);
+  });
+
+  it('o texto que os funcionários de IA leem não leva os termos (D-RG-101): o mesmo texto e o mesmo hash', () => {
+    const sem = textoDoDossie('Casa do Smash', dossie(), []);
+    const com = textoDoDossie('Casa do Smash', comTermos(['hambúrguer', 'smash burger']), []);
+    expect(com).toBe(sem);
+    expect(hashDoTexto(com)).toBe(hashDoTexto(sem));
+  });
+
+  it('ao salvar, recusa o termo NOVO com concorrente, marca de rede, o que a marca não diz ou regra da Liame; o que já estava passa', () => {
+    const recusados = termosRecusados(comTermos(['hambúrguer', 'brasa burger', 'smash gourmet', 'burger king', 'lucro garantido']), null);
+    expect(recusados.map((r) => r.path)).toEqual(['content.identity.search_terms[1]', 'content.identity.search_terms[2]', 'content.identity.search_terms[3]', 'content.identity.search_terms[4]']);
+    expect(recusados[0]!.message).toMatch(/concorrente \(Brasa Burger\)/);
+    expect(recusados[1]!.message).toBe('“smash gourmet” bate no que a marca não diz (“gourmet”).');
+    expect(recusados[2]!.message).toMatch(/concorrente \(Burger King\)/);
+    expect(recusados[3]!.message).toBe('“lucro garantido” bate numa regra da Liame (Promessa de resultado).');
+    // A versão anterior já tinha "smash gourmet": a regra nova do que a marca não diz não derruba o salvar de outra parte.
+    expect(termosRecusados(comTermos(['hambúrguer', 'smash gourmet']), comTermos(['smash gourmet']))).toEqual([]);
+    expect(camposComDadoPessoal(comTermos(['lanche 21 99999-0000'])).map((e) => e.path)).toEqual(['content.identity.search_terms[0]']);
   });
 });

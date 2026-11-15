@@ -123,6 +123,21 @@ export function ResumoDaParte({ secao, conteudo: c, provas, nomeDaMarca }: { sec
               {c.identity.since ? `${c.identity.differentiator ? ' ' : ''}Desde ${c.identity.since}.` : ''}
             </p>
           )}
+          <p>
+            <span className="rot">Termos de busca da loja</span>
+          </p>
+          {c.identity.search_terms.length > 0 ? (
+            <>
+              <ul className="mk-tags" aria-label="Termos de busca da loja">
+                {c.identity.search_terms.map((t) => (
+                  <li key={t}>{t}</li>
+                ))}
+              </ul>
+              <p className="campo-dica">Viram os temas de busca da campanha do Google, com “perto de mim”, “delivery” e os bairros de quem vê.</p>
+            </>
+          ) : (
+            <p className="mk-vazia-txt">Nenhum termo ainda. Os temas de busca da campanha do Google começam só com a categoria do Perfil da Empresa no Google, quando o perfil está ligado.</p>
+          )}
         </>
       );
     case 'voz':

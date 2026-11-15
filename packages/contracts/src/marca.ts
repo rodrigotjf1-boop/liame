@@ -35,8 +35,13 @@ export const BrandDossierContent = z.strictObject({
       differentiator: Texto(240).default(''),
       /** Desde quando existe (ano), ou vazio. */
       since: z.union([z.string().regex(/^(19|20)\d{2}$/), z.literal('')]).default(''),
+      /**
+       * Os termos de busca da loja (R9, D-RG-98): como alguém procura uma casa como esta no Google ("hambúrguer"). Viram os
+       * temas de busca da campanha do Google; não entram no texto dos funcionários de IA (D-RG-101).
+       */
+      search_terms: z.array(z.string().trim().min(1).max(40)).max(3).default([]),
     })
-    .default({ summary: '', audience: '', differentiator: '', since: '' }),
+    .default({ summary: '', audience: '', differentiator: '', since: '', search_terms: [] }),
   voice: z
     .strictObject({
       /** Até quatro jeitos de falar ("Descontraída", "Direta"). */
@@ -66,6 +71,91 @@ export const BrandDossierContent = z.strictObject({
   seasonality: z.strictObject({ items: z.array(Item).max(12).default([]) }).default({ items: [] }),
 });
 export type BrandDossierContent = z.infer<typeof BrandDossierContent>;
+
+// ---------------------------------------------------------------- os termos de busca da loja (R9; D-RG-98 e D-RG-99)
+// A mesma regra na tela (ao pôr o termo) e no servidor (ao salvar): a tela não deixa pôr, o servidor recusa de novo.
+
+/** Até 3 termos de até 40 letras: com o nome do bairro, o tema fica dentro dos 80 caracteres do Google. */
+export const BRAND_SEARCH_TERMS = { max: 3, maxLength: 40 } as const;
+
+/** Marcas de rede que nenhum termo usa, além dos concorrentes de Minha marca: anúncio do Liame não usa marca de concorrente. */
+export const KNOWN_CHAIN_BRANDS = [
+  'Burger King',
+  "McDonald's",
+  "Bob's",
+  "Habib's",
+  'Giraffas',
+  'Subway',
+  'KFC',
+  'Popeyes',
+  'Pizza Hut',
+  "Domino's",
+  'Spoleto',
+  'China in Box',
+  'Outback',
+  'Madero',
+] as const;
+
+/** Para comparar: sem acento, sem apóstrofo, minúsculas e só letras e números separados por um espaço. */
+const comparavel = (t: string): string =>
+  t
+    .normalize('NFD')
+    .replace(/\p{M}/gu, '')
+    .toLowerCase()
+    .replace(/['’`´]/g, '')
+    .replace(/[^\p{L}\p{N}]+/gu, ' ')
+    .trim();
+
+/** O nome aparece no termo como palavra inteira ("Bob's" em "bobs burger", não em "kebobs"). */
+const temONome = (termo: string, nome: string): boolean => {
+  const n = comparavel(nome);
+  return n.length >= 2 && ` ${comparavel(termo)} `.includes(` ${n} `);
+};
+
+/**
+ * "perto de mim" e "delivery" o Liame já põe nos temas (D-RG-99): escritos no termo, saem, e `stripped` diz para a tela
+ * avisar. O termo que era só isso fica vazio.
+ */
+export function cleanSearchTerm(raw: string): { term: string; stripped: boolean } {
+  const original = raw.replace(/\s+/g, ' ').trim();
+  let term = original;
+  for (;;) {
+    const next = term
+      .replace(/(^|\s+)(perto de mim|delivery)$/i, '')
+      .replace(/^delivery(\s+de)?(\s+|$)/i, '')
+      .trim();
+    if (next === term) break;
+    term = next;
+  }
+  return { term, stripped: term !== original };
+}
+
+/**
+ * O que impede um termo já limpo (D-RG-99), ou nulo: vazio, comprido, repetido (com os outros termos e com a categoria do
+ * Perfil da Empresa no Google, quando se sabe), com o nome de um concorrente de Minha marca ou de uma marca de rede. As
+ * regras de texto (as da Liame e o que a marca não diz) o servidor confere junto, e a tela pelo teste de frase.
+ */
+export function searchTermProblem(term: string, ctx: { others: readonly string[]; competitors: readonly string[]; category?: string | null }): string | null {
+  if (!term) return 'Escreva o que a loja vende, como “hambúrguer”: “perto de mim” e “delivery” o Liame já põe.';
+  const letras = [...term].length;
+  if (letras > BRAND_SEARCH_TERMS.maxLength) return `“${term}” tem ${letras} letras; o máximo é ${BRAND_SEARCH_TERMS.maxLength}, para o tema com o nome do bairro caber no Google.`;
+  const k = comparavel(term);
+  if (ctx.category && comparavel(ctx.category) === k) return `“${term}” já vem da categoria do Perfil da Empresa no Google.`;
+  if (ctx.others.some((o) => comparavel(o) === k)) return `“${term}” já está na lista.`;
+  const concorrente = [...ctx.competitors, ...KNOWN_CHAIN_BRANDS].find((c) => temONome(term, c));
+  if (concorrente) return `“${term}” tem o nome de um concorrente (${concorrente}): anúncio do Liame não usa a marca de concorrente.`;
+  return null;
+}
+
+/**
+ * O começo dos temas de busca da campanha do Google, pela regra do servidor (D-RG-85): cada termo com "perto de mim" e o
+ * segundo (ou o único) com "delivery". Os bairros de quem vê entram depois, ao criar a campanha. Sem termo, nada.
+ */
+export function searchThemesStart(terms: readonly string[]): string[] {
+  if (!terms.length) return [];
+  const b = terms[1] ?? terms[0]!;
+  return [...terms.map((t) => `${t} perto de mim`), `${b} delivery`];
+}
 
 export const DossierVersionSource = z.enum(['pessoa', 'sugestao', 'restaurada', 'mesclada']);
 export type DossierVersionSource = z.infer<typeof DossierVersionSource>;

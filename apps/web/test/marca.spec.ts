@@ -34,7 +34,7 @@ const uuid = (n: number) => `a0000000-0000-4000-8000-${String(n).padStart(12, '0
 
 function dossie(): BrandDossierContent {
   return {
-    identity: { summary: 'Hamburgueria de bairro no Centro, com smash burger e combos para dividir.', audience: 'Famílias e jovens do bairro.', differentiator: 'Pão de fermentação natural.', since: '2019' },
+    identity: { summary: 'Hamburgueria de bairro no Centro, com smash burger e combos para dividir.', audience: 'Famílias e jovens do bairro.', differentiator: 'Pão de fermentação natural.', since: '2019', search_terms: ['hambúrguer', 'smash burger'] },
     voice: { traits: ['Descontraída', 'Direta', 'Calorosa'], rules: ['Frases curtas.', 'Trate o cliente por "você".'], do_example: 'Sexta é dia de combo. Já escolheu o seu?', dont_example: 'PROMOÇÃO IMPERDÍVEL!!!' },
     products: { items: ['Smash duplo', 'Combo sexta', 'Hambúrguer vegano'] },
     offers: { items: ['Combo sexta, com o cupom SEXTA10'] },
@@ -73,7 +73,7 @@ describe('Minha marca: as nove partes', () => {
   it('na ordem do contrato, e o que conta como preenchido em cada uma', () => {
     expect(SECOES.map((s) => s.id)).toEqual(['identidade', 'voz', 'produtos', 'ofertas', 'provas', 'proibido', 'concorrentes', 'regiao', 'datas']);
     const d = dossie();
-    expect(itensDe('identidade', d)).toHaveLength(4);
+    expect(itensDe('identidade', d)).toHaveLength(6);
     expect(itensDe('voz', d)).toHaveLength(7);
     expect(itensDe('provas', d, PROVAS)).toEqual(['Mais de 500 pedidos por semana', 'Nota 4,8 no iFood']);
     expect(parteVazia('regiao', d)).toBe(true);
@@ -131,7 +131,8 @@ describe('Minha marca: versões', () => {
     depois.forbidden.items.push({ text: 'gourmet', why: '' });
     depois.identity.summary = 'Hamburgueria do Centro.';
     depois.region.pickup = true;
-    expect(mudancasEntre(antes, depois)).toEqual(['Identidade: texto alterado', 'Produtos: + Onion rings; − Hambúrguer vegano', 'O que não pode dizer: + gourmet', 'Região: texto alterado']);
+    depois.identity.search_terms = ['hambúrguer', 'lanche'];
+    expect(mudancasEntre(antes, depois)).toEqual(['Identidade: texto alterado', 'Termos de busca: + lanche; − smash burger', 'Produtos: + Onion rings; − Hambúrguer vegano', 'O que não pode dizer: + gourmet', 'Região: texto alterado']);
     expect(mudancasEntre(antes, dossie())).toEqual([]);
     expect(partesQueMudaram(antes, depois)).toEqual(['identidade', 'produtos', 'proibido', 'regiao']);
   });
@@ -213,6 +214,16 @@ describe('Minha marca: cada parte na página', () => {
     expect(html).toContain('“o melhor hambúrguer do Rio”');
     expect(html).toContain('mk-secao--largo');
     expect(desenhar('proibido', 'confirmada', conteudoVazio())).toContain('Nenhuma regra própria ainda.');
+  });
+
+  it('a Identidade com os termos de busca da loja (R9) e sem eles', () => {
+    const html = desenhar('identidade', 'confirmada');
+    expect(html).toContain('Termos de busca da loja');
+    expect(html).toContain('<li>smash burger</li>');
+    expect(html).toContain('Viram os temas de busca da campanha do Google');
+    const sem = dossie();
+    sem.identity.search_terms = [];
+    expect(desenhar('identidade', 'confirmada', sem)).toContain('Nenhum termo ainda.');
   });
 
   it('parte vazia diz o que falta; com sugestão, o cartão avisa', () => {

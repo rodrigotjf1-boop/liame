@@ -49,7 +49,7 @@ export const REGRAS_LIAME: Array<{ texto: string; motivo: string }> = [
 
 export function conteudoVazio(): BrandDossierContent {
   return {
-    identity: { summary: '', audience: '', differentiator: '', since: '' },
+    identity: { summary: '', audience: '', differentiator: '', since: '', search_terms: [] },
     voice: { traits: [], rules: [], do_example: '', dont_example: '' },
     products: { items: [] },
     offers: { items: [] },
@@ -74,7 +74,7 @@ export function chave(texto: string): string {
 export function itensDe(id: DossierSection, c: BrandDossierContent, provas: SystemProof[] = []): string[] {
   switch (id) {
     case 'identidade':
-      return [c.identity.summary, c.identity.audience, c.identity.differentiator, c.identity.since].filter(Boolean);
+      return [c.identity.summary, c.identity.audience, c.identity.differentiator, c.identity.since, ...c.identity.search_terms].filter(Boolean);
     case 'voz':
       return [...c.voice.traits, ...c.voice.rules, c.voice.do_example, c.voice.dont_example].filter(Boolean);
     case 'produtos':
@@ -112,7 +112,14 @@ export function mudancasEntre(antes: BrandDossierContent, depois: BrandDossierCo
     }
     const a = itensDe(s.id, antes);
     const b = itensDe(s.id, depois);
-    if (s.id === 'identidade' || s.id === 'regiao') {
+    if (s.id === 'identidade') {
+      // O texto da Identidade e os termos de busca à parte, como o servidor ("Termos de busca: + lanche").
+      const textoDa = (c: BrandDossierContent) => [c.identity.summary, c.identity.audience, c.identity.differentiator, c.identity.since].filter(Boolean).map(chave).join('|');
+      if (textoDa(antes) !== textoDa(depois)) out.push(`${s.titulo}: texto alterado`);
+      lista(out, 'Termos de busca', antes.identity.search_terms, depois.identity.search_terms);
+      continue;
+    }
+    if (s.id === 'regiao') {
       if (a.map(chave).join('|') !== b.map(chave).join('|')) out.push(`${s.titulo}: texto alterado`);
       continue;
     }
@@ -139,7 +146,7 @@ export function partesQueMudaram(antes: BrandDossierContent, depois: BrandDossie
 export function parteDe(id: DossierSection, c: BrandDossierContent): unknown {
   switch (id) {
     case 'identidade':
-      return [c.identity.summary, c.identity.audience, c.identity.differentiator, c.identity.since];
+      return [c.identity.summary, c.identity.audience, c.identity.differentiator, c.identity.since, c.identity.search_terms];
     case 'voz':
       return [c.voice.traits, c.voice.rules, c.voice.do_example, c.voice.dont_example];
     case 'produtos':

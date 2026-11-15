@@ -122,6 +122,11 @@
 .mk-aviso .ic { flex: none; margin-top: 2px; color: var(--warning); }
 .mk-info { display: flex; gap: var(--sp-2); padding: var(--sp-3); border-radius: var(--radius); background: var(--primary-soft); font-size: var(--text-sm); line-height: 1.5; }
 .mk-info .ic { flex: none; margin-top: 2px; color: var(--link); }
+/* Os termos de busca da loja na Identidade (R9): a lista cheia e a prévia dos temas da campanha do Google. */
+.mk-termos-cheio { margin: 0; font-size: var(--text-sm); color: var(--text-muted); }
+.mk-termos-previa { display: grid; gap: 6px; padding: var(--sp-2) var(--sp-3); border-radius: var(--radius); background: var(--bg-subtle); font-size: var(--text-sm); overflow-wrap: anywhere; }
+.mk-termos-previa ul { display: flex; flex-wrap: wrap; gap: 6px; margin: 0; padding: 0; list-style: none; }
+.mk-termos-previa li { max-width: 100%; padding: 2px 10px; border: 1px solid var(--border); border-radius: var(--radius-full); background: var(--surface); font-size: var(--text-xs); overflow-wrap: anywhere; }
 
 /* Testar uma frase nas regras */
 .mk-teste { display: grid; gap: var(--sp-2); padding: var(--sp-3) var(--sp-4); border: 1px dashed var(--border-strong); border-radius: var(--radius); }
