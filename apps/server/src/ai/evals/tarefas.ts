@@ -28,8 +28,10 @@ import { responderTextosDoVideo } from './responder-social-video.js';
 import { avaliarTextosDoVideo, type CasoDoVideo, carregarCasosDoVideo } from './social-video.js';
 import { responderSugestoesDoDirect } from './responder-social-direct.js';
 import { avaliarSugestoesDoDirect, type CasoDoDirect, carregarCasosDoDirect } from './social-direct.js';
+import { responderCortes } from './responder-social-cortes.js';
+import { avaliarCortes, type CasoDosCortes, carregarCasosDosCortes } from './social-cortes.js';
 
-// As tarefas com eval (A3, I3, I9, I10c, I11c e I12b; A4, X6; A5, Y6 e Y9, os textos do Google; A6, Z6, as respostas e os posts; A6, Z11, os comentários): como ler os casos, qual é a saída gravada (a boa ou a primeira ruim), como
+// As tarefas com eval (A3, I3, I9, I10c, I11c e I12b; A4, X6; A5, Y6 e Y9, os textos do Google; A6, Z6, as respostas e os posts; A6, Z11, os comentários; A6, os cortes do vídeo): como ler os casos, qual é a saída gravada (a boa ou a primeira ruim), como
 // avaliar e como chamar um modelo de verdade. Os arquivos do promptfoo (`evals/apoio`) escolhem pelo nome da tarefa.
 
 export interface TarefaDeEval<C extends { id: string; grupo: string }> {
@@ -144,6 +146,13 @@ const socialDirect: TarefaDeEval<CasoDoDirect> = {
   responder: responderSugestoesDoDirect,
 };
 
+const socialCortes: TarefaDeEval<CasoDosCortes> = {
+  carregar: carregarCasosDosCortes,
+  gravada: (caso, qual) => (qual === 'ruim' ? (caso.gravadas.ruins[0]?.resposta ?? caso.gravadas.boa) : caso.gravadas.boa),
+  avaliar: avaliarCortes,
+  responder: responderCortes,
+};
+
 export const TAREFAS: Record<string, TarefaDeEval<{ id: string; grupo: string }>> = {
   explicar_resultados: explicar as unknown as TarefaDeEval<{ id: string; grupo: string }>,
   conversa_lia: conversa as unknown as TarefaDeEval<{ id: string; grupo: string }>,
@@ -159,4 +168,5 @@ export const TAREFAS: Record<string, TarefaDeEval<{ id: string; grupo: string }>
   social_comentario: socialComentario as unknown as TarefaDeEval<{ id: string; grupo: string }>,
   social_comentario_tipo: socialComentarioTipo as unknown as TarefaDeEval<{ id: string; grupo: string }>,
   social_direct: socialDirect as unknown as TarefaDeEval<{ id: string; grupo: string }>,
+  social_cortes: socialCortes as unknown as TarefaDeEval<{ id: string; grupo: string }>,
 };
