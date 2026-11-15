@@ -1,3 +1,4 @@
+import { REGION_TEST_MIN_OTHER_DISTRICTS, REGION_TEST_MIN_WEEKLY_ORDERS } from '@liame/contracts';
 import type { BairroDaCampanha } from './bairros-da-campanha.js';
 
 // As contas do teste de região (plano da região, R8; D-RG-81 e D-RG-82). Um bairro da área de entrega fica 14 dias sem
@@ -12,8 +13,8 @@ import type { BairroDaCampanha } from './bairros-da-campanha.js';
 export const DIAS_DO_TESTE_DE_REGIAO = 14;
 export const SEMANAS_DE_ANTES = 4;
 /** O mínimo de pedidos por semana do bairro e de outros bairros para comparar (D-RG-82; de partida, ajustados pelo piloto). */
-export const PEDIDOS_POR_SEMANA_MINIMOS = 15;
-export const OUTROS_BAIRROS_MINIMOS = 3;
+export const PEDIDOS_POR_SEMANA_MINIMOS = REGION_TEST_MIN_WEEKLY_ORDERS;
+export const OUTROS_BAIRROS_MINIMOS = REGION_TEST_MIN_OTHER_DISTRICTS;
 
 /** Os pedidos de entrega de um bairro no período de antes (as 4 semanas). */
 export type PedidosDoBairro = { nome: string; pedidos: number };

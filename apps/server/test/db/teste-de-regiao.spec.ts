@@ -216,7 +216,15 @@ describe.skipIf(!hasDb)('o pedido do teste de região (plano da região, R8)', (
 
   it('o pedido certo: o teste com cada conjunto do Liame no bairro e o público de antes; um teste por vez; aprovar só marca como pronto', async () => {
     const e = await cenario('Brasa Teste Região');
+    // As opções da tela (Sua região): a função e o teste vivo da marca.
+    const opcoes = async () => {
+      const o = await api.call('GET', `/v1/region-tests/options?brand_id=${e.brandId}`, { cookie: e.cookie });
+      expect(o.status, JSON.stringify(o.body)).toBe(200);
+      return o.body as { enabled: boolean; live: { id: string; kind: string; status: string } | null };
+    };
+    expect(await opcoes()).toEqual({ enabled: false, live: null });
     await ligarFuncao(e.tenantId);
+    expect(await opcoes()).toEqual({ enabled: true, live: null });
     await campanhaDoLiame(e, '120210000000000001');
     const raio = circulo(LOJA, 3);
     graph.conjuntos = [
@@ -228,6 +236,7 @@ describe.skipIf(!hasDb)('o pedido do teste de região (plano da região, R8)', (
     ];
     const r = await pedir(e, 'Lapa Teste');
     expect(r.status, JSON.stringify(r.body)).toBe(201);
+    expect((await opcoes()).live).toMatchObject({ id: r.body.id, kind: 'regiao', status: 'pedido' });
     expect(r.body).toMatchObject({
       name: 'Lapa Teste sem anúncio por 14 dias',
       status: 'pedido',

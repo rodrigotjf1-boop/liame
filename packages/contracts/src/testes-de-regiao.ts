@@ -9,6 +9,9 @@ import { CreativeTestStatus } from './testes-de-criativo.js';
 /** Os dias do teste de região e as semanas de antes que entram na conta (D-RG-81). */
 export const REGION_TEST_DAYS = 14;
 export const REGION_TEST_WEEKS_BEFORE = 4;
+/** O bairro do teste precisa de pelo menos estes pedidos por semana, e de pelo menos estes outros bairros para comparar (D-RG-82). */
+export const REGION_TEST_MIN_WEEKLY_ORDERS = 15;
+export const REGION_TEST_MIN_OTHER_DISTRICTS = 3;
 
 export const CreateRegionTestRequest = z.strictObject({
   brand_id: z.uuid(),
@@ -56,3 +59,13 @@ export type RegionTestListQuery = z.infer<typeof RegionTestListQuery>;
 /** Os testes de região da marca, do mais novo para o mais antigo (até 50): o que cada um mostrou fica guardado (D-RG-83, D-RG-97). */
 export const RegionTestListResponse = z.strictObject({ items: z.array(RegionTestResponse) });
 export type RegionTestListResponse = z.infer<typeof RegionTestListResponse>;
+
+export const RegionTestOptionsQuery = z.strictObject({ brand_id: z.uuid() });
+export type RegionTestOptionsQuery = z.infer<typeof RegionTestOptionsQuery>;
+
+/** O que a tela precisa para oferecer o teste (R8): a função `teste_de_regiao` ligada e o teste vivo da marca (um por vez). */
+export const RegionTestOptionsResponse = z.strictObject({
+  enabled: z.boolean(),
+  live: z.strictObject({ id: z.uuid(), kind: z.enum(['criativo', 'regiao']), name: z.string(), status: z.string() }).nullable(),
+});
+export type RegionTestOptionsResponse = z.infer<typeof RegionTestOptionsResponse>;

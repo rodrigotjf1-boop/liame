@@ -453,9 +453,9 @@ describe('Sua região (R2, parte 2)', () => {
       read_at: '2026-11-12T09:00:00.000Z',
       comparable: true,
       districts: [
-        { name: 'Praça da Bandeira', orders: 30, population: 8662, per_1000: 3.5, role: 'defender', in_delivery_area: true },
-        { name: 'Vila Isabel', orders: null, population: 86018, per_1000: 0, role: 'atacar', in_delivery_area: true },
-        { name: 'Tijuca', orders: 42, population: 142909, per_1000: 0.3, role: 'manter', in_delivery_area: true },
+        { name: 'Praça da Bandeira', code: '3304557017', orders: 30, population: 8662, per_1000: 3.5, role: 'defender', in_delivery_area: true },
+        { name: 'Vila Isabel', code: '3304557035', orders: null, population: 86018, per_1000: 0, role: 'atacar', in_delivery_area: true },
+        { name: 'Tijuca', code: null, orders: 42, population: 142909, per_1000: 0.3, role: 'manter', in_delivery_area: true },
       ],
       others: { districts: 3, orders: 7 },
       without_district: 4,

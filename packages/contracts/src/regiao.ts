@@ -435,6 +435,8 @@ export const RegionOverviewResponse = z.strictObject({
       districts: z.array(
         z.strictObject({
           name: z.string(),
+          /** O código do IBGE do bairro, quando o nome casou com o Censo: o pedido do teste de região vai por ele (R8). */
+          code: z.string().nullable(),
           orders: z.number().int().nullable(),
           population: z.number().int().nullable(),
           per_1000: z.number().nullable(),
