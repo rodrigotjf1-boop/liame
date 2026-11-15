@@ -65,11 +65,13 @@ export type LinhaDaAssinatura = {
   end_reason: string | null;
   created_at: Date | string;
   timezone: string;
+  /** O dia do apagamento (W3, parte 4a), só na assinatura paga que terminou. */
+  purge_on: string | null;
 };
 
 const COLUNAS_DA_ASSINATURA = sql`s.id, s.tenant_id, s.brand_id, s.plan_id, s.next_plan_id, s.status, s.method, s.anchor_day,
   s.period_start::text as period_start, s.period_end::text as period_end, s.first_paid_at, s.withdraw_until::text as withdraw_until,
-  s.cancel_at_period_end, s.ended_at, s.end_reason, s.created_at, o.timezone`;
+  s.cancel_at_period_end, s.ended_at, s.end_reason, s.created_at, o.timezone, s.purge_on::text as purge_on`;
 
 const iso = (v: Date | string): string => (v instanceof Date ? v : new Date(v)).toISOString();
 const isoOuNulo = (v: Date | string | null): string | null => (v === null ? null : iso(v));
@@ -667,5 +669,7 @@ async function paraATela(tx: Tx, s: LinhaDaAssinatura, hoje: string): Promise<Br
     ended_at: isoOuNulo(s.ended_at),
     end_reason: s.end_reason,
     withdraw_protocol: s.end_reason === 'desistencia' && s.ended_at ? protocoloDaDesistencia(s.id, new Date(iso(s.ended_at))) : null,
+    // O dia do apagamento (W3, partes 4a e 4b): na assinatura que terminou, enquanto ele não passou.
+    purge_on: !viva && s.purge_on && diasEntre(hoje, s.purge_on) >= 0 ? s.purge_on : null,
   };
 }

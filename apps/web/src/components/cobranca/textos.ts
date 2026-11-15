@@ -376,6 +376,15 @@ export function textoDoFim(s: BrandSubscription, invoices: BillingInvoice[]): st
   return `A assinatura terminou${em}.`;
 }
 
+/**
+ * O dia do apagamento na assinatura que terminou (Termos 11.2; D-A7-106 e D-A7-107; o P26 no cancelamento: "você ainda
+ * entra para ver e exportar os dados até…"). O mesmo dia dos e-mails de 7 dias antes e da véspera.
+ */
+export function textoDoApagamento(dia: string, souDono: boolean): string {
+  const quem = souDono ? 'você pode' : 'o Dono pode';
+  return `Em ${dataDe(dia)}, os dados desta marca são apagados de vez. Até lá, ${quem} exportar os dados ou assinar de novo: com a assinatura nova paga, nada é apagado.`;
+}
+
 /** Uma linha do "Se a mensalidade atrasar" (P26), com o dia quando há atraso. */
 export type Fase = { quando: string; dia: string | null; oQue: string; agora: boolean };
 

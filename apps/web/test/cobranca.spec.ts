@@ -19,6 +19,7 @@ import {
   reaisDeCentavos,
   situacao,
   somarDias,
+  textoDoApagamento,
   textoDoFim,
   ultimaPaga,
   valorDaDesistencia,
@@ -175,6 +176,13 @@ describe('Plano e cobrança: o que a situação diz (P26, só o que o servidor f
     expect(textoDoFim(assinatura({ ...fim, end_reason: 'desistencia' }), [{ ...devolvendo, status: 'devolvida' }])).toContain('voltaram para a conta que pagou o PIX');
     expect(textoDoFim(assinatura({ ...fim, end_reason: 'nao_paga' }), [])).toBe('O pedido de assinatura terminou em 25/10: a primeira mensalidade não foi paga em 7 dias.');
     expect(textoDoFim(assinatura({ ...fim, end_reason: 'cancelada' }), [])).toBe('A assinatura terminou em 25/10, depois do cancelamento.');
+  });
+
+  it('o dia do apagamento na assinatura que terminou (W3, parte 4b): o dia, exportar e assinar de novo, para o Dono e para quem não é', () => {
+    expect(textoDoApagamento('2026-11-24', true)).toBe(
+      'Em 24/11/2026, os dados desta marca são apagados de vez. Até lá, você pode exportar os dados ou assinar de novo: com a assinatura nova paga, nada é apagado.',
+    );
+    expect(textoDoApagamento('2026-11-24', false)).toContain('Até lá, o Dono pode exportar os dados');
   });
 });
 
