@@ -185,6 +185,7 @@ export class CobrancaService {
         days: Math.max(1, diasEntre(m.venc, diaNoFuso(new Date(), m.fuso))),
         actions_stop_on: passos.acoesParamEm,
         suspends_on: passos.suspendeEm,
+        purges_on: passos.apagaEm,
         amount_cents: paga ? m.valor : null,
         invoice_id: paga ? m.fatura : null,
       });

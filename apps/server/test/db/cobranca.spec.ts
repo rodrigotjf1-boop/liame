@@ -371,13 +371,15 @@ describe.skipIf(!hasDb)('Plano e cobrança: os planos, a assinatura e a vida del
 
     const c = await comCodigo(e, 'cancel');
     expect(c.status, JSON.stringify(c.body)).toBe(200);
-    expect(BillingResponse.parse(c.body).subscription).toMatchObject({ status: 'ativa', cancel_at_period_end: true });
+    // O dia projetado do apagamento (W3, parte 4d): o fim do período + 30, a mesma conta do `encerrar`.
+    expect(BillingResponse.parse(c.body).subscription).toMatchObject({ status: 'ativa', cancel_at_period_end: true, purge_on: somarDias(s0.period_end!, 30) });
     expect((await faturas(e)).map((f) => f.status)).toEqual(['paga', 'cancelada']);
 
     // Manter: a fatura do período seguinte nasce de novo na próxima vez da rotina.
     const m = await api.call('POST', '/v1/billing/subscription/keep', { cookie: e.cookie, body: { brand_id: e.brandId } });
     expect(m.status, JSON.stringify(m.body)).toBe(200);
     expect(BillingResponse.parse(m.body).subscription!.cancel_at_period_end).toBe(false);
+    expect(BillingResponse.parse(m.body).subscription!.purge_on).toBeNull();
     await rotinaEm(e, meioDia(somarDias(s0.period_end!, -4)));
     expect((await faturas(e)).map((f) => f.status)).toEqual(['paga', 'cancelada', 'aberta']);
 

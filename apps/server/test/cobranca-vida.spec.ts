@@ -66,8 +66,9 @@ describe('A vida da assinatura: as contas (A7 · W1)', () => {
     expect(situacaoPeloAtraso(venc, somarDias(venc, 90))).toBe('suspensa');
   });
 
-  it('as datas dos passos do atraso são as do P26: com o vencimento em 21/10/2026, as ações param em 31/10 e a conta é suspensa em 20/11', () => {
-    expect(passosDoAtraso('2026-10-21')).toEqual({ acoesParamEm: '2026-10-31', suspendeEm: '2026-11-20' });
+  it('as datas dos passos do atraso são as do P26: com o vencimento em 21/10/2026, as ações param em 31/10, a conta é suspensa em 20/11 e os dados saem em 20/12', () => {
+    // O 60º dia (W3, partes 4a e 4d): a assinatura termina e os dados são apagados, se nada for pago.
+    expect(passosDoAtraso('2026-10-21')).toEqual({ acoesParamEm: '2026-10-31', suspendeEm: '2026-11-20', apagaEm: '2026-12-20' });
   });
 
   it('a diferença da troca: a do P26 (R$ 200 a mais, 30 dos 31 dias) é R$ 193,55; descer, o último dia e o período inteiro', () => {

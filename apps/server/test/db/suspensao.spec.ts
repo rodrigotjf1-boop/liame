@@ -112,6 +112,8 @@ describe.skipIf(!hasDb)('A conta suspensa no 30º dia de atraso: só o Dono entr
       days: expect.any(Number),
       actions_stop_on: '2026-12-02',
       suspends_on: '2026-12-22',
+      // O 60º dia, em que os dados são apagados se nada for pago (W3, parte 4d).
+      purges_on: '2027-01-21',
       amount_cents: comValor ? '24900' : null,
       invoice_id: comValor ? aberta!.id : null,
     });

@@ -78,7 +78,8 @@ export const BrandSubscription = z.strictObject({
   first_payment_until: Dia.nullable(),
   /**
    * A mensalidade em atraso, quando há: o vencimento, os dias de atraso e as datas dos próximos passos (Termos 10.4):
-   * o dia em que as ações dos funcionários param e o da suspensão.
+   * o dia em que as ações dos funcionários param, o da suspensão e o 60º dia, em que a assinatura termina e os dados são
+   * apagados, se nada for pago (Termos 11.2; W3, parte 4d; opcional: a resposta de antes de 15/11/2026 não traz).
    */
   overdue: z
     .strictObject({
@@ -86,6 +87,7 @@ export const BrandSubscription = z.strictObject({
       days: z.int().min(1),
       actions_stop_on: Dia,
       suspends_on: Dia,
+      purges_on: Dia.optional(),
     })
     .nullable(),
   /** O Dono cancelou: a assinatura termina no fim do período pago (`period_end`). */
@@ -102,8 +104,9 @@ export const BrandSubscription = z.strictObject({
   withdraw_protocol: z.string().nullable(),
   /**
    * O dia em que os dados da marca são apagados (Termos 11.2; D-A7-106 e D-A7-107), na assinatura paga que terminou,
-   * enquanto ele não passou: até lá, o Dono exporta os dados ou assina de novo. Nulo nos outros casos. Opcional: a
-   * resposta de antes de 14/11/2026 não traz.
+   * enquanto ele não passou: até lá, o Dono exporta os dados ou assina de novo. Na cancelada que ainda não terminou, o dia
+   * projetado (o fim do período + 30, ou o 60º dia de atraso, se vier antes; W3, parte 4d). Nulo nos outros casos.
+   * Opcional: a resposta de antes de 14/11/2026 não traz.
    */
   purge_on: Dia.nullable().optional(),
 });
@@ -152,6 +155,8 @@ export const BillingOverdue = z.strictObject({
   days: z.int().min(1),
   actions_stop_on: Dia,
   suspends_on: Dia,
+  /** O 60º dia: a assinatura termina e os dados são apagados, se nada for pago (W3, parte 4d). Opcional, como acima. */
+  purges_on: Dia.optional(),
   /** Só para quem paga: o valor e a fatura em aberto (o PIX dela abre da faixa). */
   amount_cents: Centavos.nullable(),
   invoice_id: z.uuid().nullable(),

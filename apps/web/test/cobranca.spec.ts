@@ -66,7 +66,7 @@ const assinatura = (o: Partial<BrandSubscription> = {}): BrandSubscription => ({
 const resposta = (o: Partial<BillingResponse> = {}): BillingResponse =>
   BillingResponse.parse({ brand_id: MARCA, enabled: true, can_manage: true, can_pay: true, today: '2026-11-10', subscription: assinatura(), invoices: [], ...o });
 const PAGA_OUT = fatura({ id: '01a40000-0000-7000-8000-000000000f00', period_start: '2026-10-22', period_end: '2026-11-22', due_date: '2026-10-21', status: 'paga', paid_at: '2026-10-22T15:00:00.000Z', paid_method: 'pix' });
-const atraso = (dias: number) => ({ due_date: '2026-11-22', days: dias, actions_stop_on: '2026-12-02', suspends_on: '2026-12-22' });
+const atraso = (dias: number) => ({ due_date: '2026-11-22', days: dias, actions_stop_on: '2026-12-02', suspends_on: '2026-12-22', purges_on: '2027-01-21' });
 const texto = (el: ReturnType<typeof createElement>) => renderToStaticMarkup(el).replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
 
 describe('Plano e cobrança: o momento da assinatura (P26)', () => {
@@ -137,8 +137,15 @@ describe('Plano e cobrança: o que a situação diz (P26, só o que o servidor f
     expect(s.titulo).toBe('A conta está suspensa');
     expect(s.frase).toContain('Desde 22/12, só você entra, para pagar ou exportar os dados.');
     expect(s.pagar && s.exportar).toBe(true);
-    // O que acontece com os dados depois (W3, parte 4) ainda não está na tela (V39).
-    expect(JSON.stringify(s)).not.toMatch(/apagad/);
+    // O 60º dia (W3, partes 4a e 4d): o apagamento existe no servidor desde a 4a, e a tela diz o dia (V39).
+    expect(s.degraus).toEqual([{ dia: '2027-01-21', oQue: 'os dados são apagados de vez, se nada for pago', tom: 'perigo' }]);
+    // A resposta de antes, sem o dia: nada sobre apagar.
+    const antiga = situacao('atraso-30', resposta({ today: '2026-12-22', subscription: assinatura({ status: 'suspensa', overdue: { ...atraso(30), purges_on: undefined } }), invoices: [fatura()] }), {
+      aberta: fatura(),
+      paga: null,
+      souDono: true,
+    });
+    expect(JSON.stringify(antiga)).not.toMatch(/apagad/);
   });
 
   it('esperando o primeiro pagamento, em dia, na primeira contratação e cancelada', () => {
@@ -165,6 +172,11 @@ describe('Plano e cobrança: o que a situação diz (P26, só o que o servidor f
     expect(cancelada.titulo).toBe('A assinatura termina em 22/11');
     expect(cancelada.frase).toBe('A assinatura foi cancelada. Até 22/11, tudo funciona como hoje, e a mensalidade seguinte não é cobrada.');
     expect(cancelada.nota).toBe('Só o Dono pode manter a assinatura.');
+    // Com o dia projetado do apagamento (W3, parte 4d; P26): o prazo para exportar depois do fim.
+    const comDia = situacao('cancelada', resposta({ subscription: assinatura({ cancel_at_period_end: true, purge_on: '2026-12-22' }) }), { aberta: null, paga: PAGA_OUT, souDono: true });
+    expect(comDia.frase).toBe(
+      'A assinatura foi cancelada. Até 22/11, tudo funciona como hoje, e a mensalidade seguinte não é cobrada. Depois, os funcionários param, e há até 22/12 para exportar os dados.',
+    );
   });
 
   it('a assinatura que terminou diz o motivo: a desistência com a devolução, o pedido sem pagamento e o cancelamento', () => {
@@ -274,13 +286,16 @@ describe('Plano e cobrança: a faixa do atraso nas outras telas (W5, parte 4; D-
     expect(equipe.pagar).toBe(false);
   });
 
-  it('suspensa: o Dono paga ou exporta; quem não é o Dono vê que só o Dono entra (e nada sobre apagar, V39)', () => {
+  it('suspensa: o Dono paga ou exporta e vê o dia do apagamento; quem não é o Dono vê que só o Dono entra (e nada sobre apagar)', () => {
     const dono = faixaDoAtraso(od({ status: 'suspensa', days: 30 }), { paga: true, souDono: true, resolve })!;
     expect(dono).toMatchObject({ titulo: 'A conta da Mister Burgers está suspensa desde 22/12', texto: 'Só você entra, para pagar ou exportar os dados.', pagar: true });
-    const outro = faixaDoAtraso(od({ status: 'suspensa', days: 30 }), { paga: true, souDono: false, resolve })!;
+    // Com o 60º dia (W3, parte 4d; P26): "Se nada for pago, os dados são apagados em …".
+    const comDia = faixaDoAtraso(od({ status: 'suspensa', days: 30, purges_on: '2027-01-21' }), { paga: true, souDono: true, resolve })!;
+    expect(comDia.texto).toBe('Só você entra, para pagar ou exportar os dados. Se nada for pago, os dados são apagados em 21/01.');
+    const outro = faixaDoAtraso(od({ status: 'suspensa', days: 30, purges_on: '2027-01-21' }), { paga: true, souDono: false, resolve })!;
     expect(outro.texto).toBe(`Por uma mensalidade em aberto, só o Dono entra nela. Quem resolve: ${resolve}.`);
     expect(outro.pagar).toBe(false);
-    expect(JSON.stringify([dono, outro])).not.toMatch(/apagad/);
+    expect(JSON.stringify(outro)).not.toMatch(/apagad/);
   });
 
   it('a fatura da faixa é a do PIX: a mensalidade em aberto, com o plano e o vencimento', () => {
@@ -301,15 +316,17 @@ describe('Plano e cobrança: as faturas e as fases', () => {
     expect(linhaDaFatura(fatura({ status: 'cancelada' }), '2026-11-25').selo).toBe('Cancelada');
   });
 
-  it('as fases do atraso: com as datas só quando há atraso, o momento marcado como agora, e sem o 60º dia (V39)', () => {
+  it('as fases do atraso: com as datas só quando há atraso, o momento marcado como agora, e o 60º dia (W3, partes 4a e 4d; V39)', () => {
     const semAtraso = fases('em-dia', assinatura());
-    expect(semAtraso.map((f) => f.quando)).toEqual(['No vencimento', '1º dia de atraso', '10º dia', '30º dia']);
+    expect(semAtraso.map((f) => f.quando)).toEqual(['No vencimento', '1º dia de atraso', '10º dia', '30º dia', '60º dia']);
+    // O certificado só na empresa inteira (o apagamento só da marca não manda certificado).
+    expect(semAtraso[4]!.oQue).toBe('A assinatura termina, e os dados da marca são apagados de vez. Se ela for a última marca da empresa, o Dono recebe o certificado da exclusão.');
     expect(semAtraso.every((f) => f.dia === null && !f.agora)).toBe(true);
     // O e-mail com o código do PIX existe desde a D-A7-44 (`worker/cobrancas-do-mes.service.ts`).
     expect(semAtraso[0]!.oQue).toBe('A fatura vence. No PIX, ela aparece aqui cinco dias antes, com o QR Code, e o código vai por e-mail a quem paga.');
     const dez = fases('atraso-10', assinatura({ status: 'acoes_paradas', overdue: atraso(11) }));
-    expect(dez.map((f) => f.dia)).toEqual(['2026-11-22', '2026-11-23', '2026-12-02', '2026-12-22']);
-    expect(dez.map((f) => f.agora)).toEqual([false, false, true, false]);
+    expect(dez.map((f) => f.dia)).toEqual(['2026-11-22', '2026-11-23', '2026-12-02', '2026-12-22', '2027-01-21']);
+    expect(dez.map((f) => f.agora)).toEqual([false, false, true, false, false]);
     // O 1º dia: o e-mail (W3, parte 2) e a faixa no alto das telas (W5, parte 4).
     expect(dez[1]!.oQue).toBe('Quem paga recebe um aviso por e-mail e no alto das telas.');
   });
