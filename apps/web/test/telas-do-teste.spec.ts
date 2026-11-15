@@ -176,7 +176,7 @@ describe('"Testes" em Resultados (D-RG-97)', () => {
     expect(l).toMatchObject({ tipo: 'Teste de criativo', situacao: { rotulo: 'O criativo B venceu', tom: 'concluido' }, quando: '14/09 a 27/09 · 14 dias', pedido: OUTRA });
     expect(l.veredito).toBe('O criativo B venceu: 45 pedidos no caixa contra 9, com a mesma verba (menos de 0,1% de chance de ser acaso).');
     expect(l.numeros).toEqual([`Gasto R$${NBSP}560,00`, `Receita R$${NBSP}2.268,00`, `Custo por pedido R$${NBSP}10,37`, `Verba R$${NBSP}40,00/dia`]);
-    const rodando = linhaDoTesteDeCriativo({ ...TESTE, status: 'rodando', ended_on: null, started_on: '2026-11-06', result: { ...TESTE.result!, verdict: 'ainda_nao', winner: null, looks: [{ day: 7, orders_a: 11, orders_b: 7, chance: 0.4 }], arms: [{ ...TESTE.result!.arms[0], orders: 11 }, { ...TESTE.result!.arms[1], orders: 7 }] } }, '2026-11-14');
+    const rodando = linhaDoTesteDeCriativo({ ...TESTE, status: 'rodando', ended_on: null, started_on: '2026-11-06', result: { ...TESTE.result!, verdict: 'ainda_nao', winner: null, looks: [{ day: 7, orders_a: 11, orders_b: 7, chance: 0.4 }], arms: [{ ...TESTE.result!.arms[0]!, orders: 11 }, { ...TESTE.result!.arms[1]!, orders: 7 }] } }, '2026-11-14');
     expect(rodando.quando).toBe('desde 06/11 · dia 9 de 28');
     expect(rodando.veredito).toBe('Ainda não dá para dizer: 11 pedidos do criativo A contra 7 do B na olhada do dia 7. A próxima olhada é a do dia 14.');
     expect(linhaDoTesteDeCriativo({ ...TESTE, status: 'pedido', started_on: null, ended_on: null, result: null }, '2026-11-14')).toMatchObject({ quando: 'pedido em 13/09', veredito: 'O teste ainda não começou.' });
