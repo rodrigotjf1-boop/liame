@@ -133,44 +133,65 @@ export type ConferenciaDosCortes = { ok: true; cortes: CorteConferido[]; totalMs
 const decimo = (s: number) => Math.round(s * 10) * 100;
 
 /**
- * A conferência dos cortes, antes de a pessoa ver (e de novo ao pedir o vídeo): de 2 a 6 cortes; cada um num vídeo da lista,
- * dentro da duração dele, de 1,5 a 8 segundos; nenhum pedaço repetido; o total entre 80% da duração pedida e meio segundo
- * acima; cada legenda cheia, no limite, sem emoji, sem hashtag e sem dado pessoal (o ponto final sai); e o Compliance das peças nas legendas (o preço só o de uma oferta
- * em vigor, as regras do Liame e o que a marca não diz). O primeiro problema basta; `corte` diz qual (a partir de 0).
+ * A régua dos cortes (D-A6-152), numa fonte só: a da proposta do Social media (`cortesDaResposta`) e a do pedido de montagem
+ * (com as legendas que a pessoa pode ter mudado). De 2 a 6 cortes; cada um num vídeo da lista (`video` é a posição, a partir
+ * de 0), dentro da duração dele, de 1,5 a 8 segundos; nenhum pedaço repetido; o total entre 80% da duração pedida e meio
+ * segundo acima; cada legenda cheia, no limite, sem emoji, sem hashtag e sem dado pessoal (o ponto final sai); e o Compliance
+ * das peças nas legendas (o preço só o de uma oferta em vigor, as regras do Liame e o que a marca não diz; com o autor
+ * `pessoa`, a regra dos números em geral não roda, como nas peças). O primeiro problema basta; `corte` diz qual.
+ */
+export function conferirCortes(
+  entrada: ReadonlyArray<{ video: number; inicioMs: number; fimMs: number; legenda: string }>,
+  p: { duracaoS: number; ofertas: readonly string[]; videos: ReadonlyArray<{ duracaoMs: number }> },
+  marca: { fatos: string; proibidas: string[]; concorrentes: string[] },
+  autor: 'ia' | 'pessoa' = 'ia',
+): ConferenciaDosCortes {
+  const recusa = (motivo: MotivoDaRecusaDosCortes, corte: number | null = null, achados: AchadoDaPeca[] = []): ConferenciaDosCortes => ({ ok: false, motivo, corte, achados });
+  if (entrada.length < LIMITES_DOS_CORTES.minimo || entrada.length > LIMITES_DOS_CORTES.maximo) return recusa('quantidade');
+  const cortes: CorteConferido[] = [];
+  for (const [i, c] of entrada.entries()) {
+    const v = Number.isInteger(c.video) ? p.videos[c.video] : undefined;
+    if (!v) return recusa('video_fora', i);
+    const { inicioMs, fimMs } = c;
+    if (!Number.isFinite(inicioMs) || !Number.isFinite(fimMs) || inicioMs < 0 || fimMs > v.duracaoMs + 50 || fimMs <= inicioMs) return recusa('tempo_fora', i);
+    const tamanho = fimMs - inicioMs;
+    if (tamanho < LIMITES_DOS_CORTES.corteMinimoS * 1000) return recusa('corte_curto', i);
+    if (tamanho > LIMITES_DOS_CORTES.corteMaximoS * 1000) return recusa('corte_longo', i);
+    const repete = cortes.some((o) => o.video === c.video && Math.min(o.fimMs, fimMs) - Math.max(o.inicioMs, inicioMs) > SOBREPOSICAO_MAXIMA_S * 1000);
+    if (repete) return recusa('repetido', i);
+    // O ponto final sai (a legenda é curta e fica poucos segundos na tela); emoji e hashtag o prompt proíbe e a régua recusa.
+    const legenda = c.legenda.replace(/\s+/g, ' ').trim().replace(/\.+$/, '').trim();
+    if (!legenda) return recusa('vazio', i);
+    if ([...legenda].length > LIMITES_DOS_CORTES.legenda) return recusa('longo', i);
+    if (/\p{Extended_Pictographic}/u.test(legenda) || legenda.includes('#')) return recusa('emoji_ou_hashtag', i);
+    if (temDadoPessoal(legenda)) return recusa('dado_pessoal', i);
+    cortes.push({ video: c.video, inicioMs, fimMs: Math.min(fimMs, v.duracaoMs), legenda });
+  }
+  const totalMs = cortes.reduce((t, c) => t + (c.fimMs - c.inicioMs), 0);
+  if (totalMs < p.duracaoS * 1000 * TOTAL_DOS_CORTES.minimoDaDuracao || totalMs > (p.duracaoS + TOTAL_DOS_CORTES.folgaS) * 1000) return recusa('total_fora');
+  // O Compliance das peças sobre as legendas, juntas (o tamanho é da Meta e não vale aqui).
+  const base = { oferta: p.ofertas.join('; '), fatos: marca.fatos, proibidas: marca.proibidas, concorrentes: marca.concorrentes, instrucao: null };
+  const conferencia = conferirPeca({ titulo: '', texto: cortes.map((c) => c.legenda).join(' · ') }, base, autor);
+  const barrados = conferencia.itens.filter((i) => i.item !== 'tamanho' && i.situacao === 'barrou').flatMap((i) => i.achados);
+  if (barrados.length) return recusa('compliance', null, barrados);
+  return { ok: true, cortes, totalMs };
+}
+
+/**
+ * A proposta do Social media pela régua (`conferirCortes`, com o autor `ia`), antes de a pessoa ver: o modelo devolve o
+ * vídeo pelo número (a partir de 1) e os segundos com uma casa; aqui eles viram a posição e milissegundos.
  */
 export function cortesDaResposta(
   r: RespostaDosCortes,
   p: Pick<PedidoDeCortes, 'duracaoS' | 'ofertas' | 'videos'>,
   marca: { fatos: string; proibidas: string[]; concorrentes: string[] },
 ): ConferenciaDosCortes {
-  const recusa = (motivo: MotivoDaRecusaDosCortes, corte: number | null = null, achados: AchadoDaPeca[] = []): ConferenciaDosCortes => ({ ok: false, motivo, corte, achados });
-  if (r.cortes.length < LIMITES_DOS_CORTES.minimo || r.cortes.length > LIMITES_DOS_CORTES.maximo) return recusa('quantidade');
-  const cortes: CorteConferido[] = [];
-  for (const [i, c] of r.cortes.entries()) {
-    const v = p.videos[c.video - 1];
-    if (!Number.isInteger(c.video) || !v) return recusa('video_fora', i);
-    const inicioMs = decimo(c.inicio);
-    const fimMs = decimo(c.fim);
-    if (!Number.isFinite(c.inicio) || !Number.isFinite(c.fim) || inicioMs < 0 || fimMs > v.duracaoMs + 50 || fimMs <= inicioMs) return recusa('tempo_fora', i);
-    const tamanho = fimMs - inicioMs;
-    if (tamanho < LIMITES_DOS_CORTES.corteMinimoS * 1000) return recusa('corte_curto', i);
-    if (tamanho > LIMITES_DOS_CORTES.corteMaximoS * 1000) return recusa('corte_longo', i);
-    const repete = cortes.some((o) => o.video === c.video - 1 && Math.min(o.fimMs, fimMs) - Math.max(o.inicioMs, inicioMs) > SOBREPOSICAO_MAXIMA_S * 1000);
-    if (repete) return recusa('repetido', i);
-    // O ponto final sai (a legenda é curta e fica poucos segundos na tela); emoji e hashtag o prompt proíbe e a conferência recusa.
-    const legenda = c.legenda.replace(/\s+/g, ' ').trim().replace(/\.+$/, '').trim();
-    if (!legenda) return recusa('vazio', i);
-    if ([...legenda].length > LIMITES_DOS_CORTES.legenda) return recusa('longo', i);
-    if (/\p{Extended_Pictographic}/u.test(legenda) || legenda.includes('#')) return recusa('emoji_ou_hashtag', i);
-    if (temDadoPessoal(legenda)) return recusa('dado_pessoal', i);
-    cortes.push({ video: c.video - 1, inicioMs, fimMs: Math.min(fimMs, v.duracaoMs), legenda });
-  }
-  const totalMs = cortes.reduce((t, c) => t + (c.fimMs - c.inicioMs), 0);
-  if (totalMs < p.duracaoS * 1000 * TOTAL_DOS_CORTES.minimoDaDuracao || totalMs > (p.duracaoS + TOTAL_DOS_CORTES.folgaS) * 1000) return recusa('total_fora');
-  // O Compliance das peças sobre as legendas, juntas (o tamanho é da Meta e não vale aqui).
-  const base = { oferta: p.ofertas.join('; '), fatos: marca.fatos, proibidas: marca.proibidas, concorrentes: marca.concorrentes, instrucao: null };
-  const conferencia = conferirPeca({ titulo: '', texto: cortes.map((c) => c.legenda).join(' · ') }, base, 'ia');
-  const barrados = conferencia.itens.filter((i) => i.item !== 'tamanho' && i.situacao === 'barrou').flatMap((i) => i.achados);
-  if (barrados.length) return recusa('compliance', null, barrados);
-  return { ok: true, cortes, totalMs };
+  if (r.cortes.length < LIMITES_DOS_CORTES.minimo || r.cortes.length > LIMITES_DOS_CORTES.maximo) return { ok: false, motivo: 'quantidade', corte: null, achados: [] };
+  const lidos = r.cortes.map((c) => ({
+    video: Number.isInteger(c.video) ? c.video - 1 : -1,
+    inicioMs: Number.isFinite(c.inicio) ? decimo(c.inicio) : Number.NaN,
+    fimMs: Number.isFinite(c.fim) ? decimo(c.fim) : Number.NaN,
+    legenda: c.legenda,
+  }));
+  return conferirCortes(lidos, p, marca, 'ia');
 }

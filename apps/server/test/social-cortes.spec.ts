@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { IMAGENS_POR_PEDIDO_MAXIMAS, TAREFAS_COM_IMAGEM } from '../src/ai/imagens.js';
 import { conferirRegistro, FUNCIONARIOS, PROMPTS, registroAtual } from '../src/ai/registro/definicoes.js';
-import { contextoDosCortes, cortesDaResposta, mensagemDosCortes, type PedidoDeCortes, PROMPT_SOCIAL_CORTES, type RespostaDosCortes, TAREFA_SOCIAL_CORTES } from '../src/ai/social/cortes.js';
+import { conferirCortes, contextoDosCortes, cortesDaResposta, mensagemDosCortes, type PedidoDeCortes, PROMPT_SOCIAL_CORTES, type RespostaDosCortes, TAREFA_SOCIAL_CORTES } from '../src/ai/social/cortes.js';
 import { SOCIAL } from '../src/ai/social/prompt.js';
 
 // Os cortes do vídeo com os vídeos da loja (A6, o item 7 do dono de 07/11/2026; D-A6-82; P44), sem rede e sem modelo: o
@@ -98,5 +98,15 @@ describe('a tarefa dos cortes do Social media', () => {
     expect(motivo('Peça no 21 99876-5432')).toBe('dado_pessoal');
     expect(motivo('Só hoje por R$ 9,90')).toBe('compliance');
     expect(motivo('O smash gourmet da casa')).toBe('compliance');
+  });
+
+  it('o pedido de montagem usa a mesma régua, já em milissegundos; a legenda que a pessoa escreveu não passa pela regra dos números do modelo', () => {
+    const cortes = [
+      { video: 0, inicioMs: 0, fimMs: 7500, legenda: 'Smash na chapa' },
+      { video: 1, inicioMs: 0, fimMs: 7000, legenda: 'Feito em 3 minutos' },
+    ];
+    expect(conferirCortes(cortes, PEDIDO, MARCA, 'pessoa')).toMatchObject({ ok: true, totalMs: 14_500 });
+    expect(conferirCortes(cortes, PEDIDO, MARCA, 'ia')).toMatchObject({ ok: false, motivo: 'compliance' });
+    expect(conferirCortes([cortes[0]!, { ...cortes[1]!, video: 2 }], PEDIDO, MARCA, 'pessoa')).toMatchObject({ ok: false, motivo: 'video_fora', corte: 1 });
   });
 });
