@@ -122,7 +122,7 @@ export function mensagemDosCortes(p: PedidoDeCortes): AiPart[] {
   return partes;
 }
 
-export type MotivoDaRecusaDosCortes = 'quantidade' | 'video_fora' | 'tempo_fora' | 'corte_curto' | 'corte_longo' | 'repetido' | 'total_fora' | 'vazio' | 'longo' | 'dado_pessoal' | 'compliance';
+export type MotivoDaRecusaDosCortes = 'quantidade' | 'video_fora' | 'tempo_fora' | 'corte_curto' | 'corte_longo' | 'repetido' | 'total_fora' | 'vazio' | 'longo' | 'emoji_ou_hashtag' | 'dado_pessoal' | 'compliance';
 
 /** Um corte conferido: o vídeo (a posição na lista do pedido, a partir de 0), o início e o fim em milissegundos e a legenda. */
 export type CorteConferido = { video: number; inicioMs: number; fimMs: number; legenda: string };
@@ -135,7 +135,7 @@ const decimo = (s: number) => Math.round(s * 10) * 100;
 /**
  * A conferência dos cortes, antes de a pessoa ver (e de novo ao pedir o vídeo): de 2 a 6 cortes; cada um num vídeo da lista,
  * dentro da duração dele, de 1,5 a 8 segundos; nenhum pedaço repetido; o total entre 80% da duração pedida e meio segundo
- * acima; cada legenda cheia, no limite, sem dado pessoal; e o Compliance das peças nas legendas (o preço só o de uma oferta
+ * acima; cada legenda cheia, no limite, sem emoji, sem hashtag e sem dado pessoal (o ponto final sai); e o Compliance das peças nas legendas (o preço só o de uma oferta
  * em vigor, as regras do Liame e o que a marca não diz). O primeiro problema basta; `corte` diz qual (a partir de 0).
  */
 export function cortesDaResposta(
@@ -157,9 +157,11 @@ export function cortesDaResposta(
     if (tamanho > LIMITES_DOS_CORTES.corteMaximoS * 1000) return recusa('corte_longo', i);
     const repete = cortes.some((o) => o.video === c.video - 1 && Math.min(o.fimMs, fimMs) - Math.max(o.inicioMs, inicioMs) > SOBREPOSICAO_MAXIMA_S * 1000);
     if (repete) return recusa('repetido', i);
-    const legenda = c.legenda.replace(/\s+/g, ' ').trim();
+    // O ponto final sai (a legenda é curta e fica poucos segundos na tela); emoji e hashtag o prompt proíbe e a conferência recusa.
+    const legenda = c.legenda.replace(/\s+/g, ' ').trim().replace(/\.+$/, '').trim();
     if (!legenda) return recusa('vazio', i);
     if ([...legenda].length > LIMITES_DOS_CORTES.legenda) return recusa('longo', i);
+    if (/\p{Extended_Pictographic}/u.test(legenda) || legenda.includes('#')) return recusa('emoji_ou_hashtag', i);
     if (temDadoPessoal(legenda)) return recusa('dado_pessoal', i);
     cortes.push({ video: c.video - 1, inicioMs, fimMs: Math.min(fimMs, v.duracaoMs), legenda });
   }

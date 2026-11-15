@@ -91,6 +91,10 @@ describe('a tarefa dos cortes do Social media', () => {
     expect(motivo('Smash em dobro, 2 por R$ 49,90')).toBe('ok');
     expect(motivo('   ')).toBe('vazio');
     expect(motivo('a'.repeat(41))).toBe('longo');
+    expect(motivo('Smash na chapa 🔥')).toBe('emoji_ou_hashtag');
+    expect(motivo('Smash na chapa #sexta')).toBe('emoji_ou_hashtag');
+    const comPonto = conferir([corte(1, 0, 7.5), corte(2, 0, 7, 'Smash na chapa.')]);
+    expect(comPonto.ok && comPonto.cortes[1]!.legenda).toBe('Smash na chapa');
     expect(motivo('Peça no 21 99876-5432')).toBe('dado_pessoal');
     expect(motivo('Só hoje por R$ 9,90')).toBe('compliance');
     expect(motivo('O smash gourmet da casa')).toBe('compliance');
