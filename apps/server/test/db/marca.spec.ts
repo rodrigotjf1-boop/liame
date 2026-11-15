@@ -148,6 +148,21 @@ describe.skipIf(!hasDb)('dossiê da marca (A3 · I8)', () => {
     expect(r.body.errors.map((e: { path: string }) => e.path)).toEqual(['content.competitors.items[0].why']);
   });
 
+  it('os termos de busca (R9): o sufixo sai ao salvar, o que mudou numa linha, o texto da IA não muda, e o termo novo que não passa é recusado com o campo', async () => {
+    const atual = (await ler()).body;
+    const comTermos = (termos: string[]) => ({ ...atual.content, identity: { ...atual.content.identity, search_terms: termos } });
+    const ok = await salvar(atual.version.version, comTermos(['hambúrguer perto de mim', 'smash burger']));
+    expect(ok.status).toBe(200);
+    expect(ok.body.content.identity.search_terms).toEqual(['hambúrguer', 'smash burger']);
+    expect(ok.body.version.changes).toEqual(['Termos de busca: + hambúrguer; + smash burger']);
+    // Os termos não entram no texto dos funcionários de IA (D-RG-101): o texto e o hash são os de antes.
+    const semTermos = await salvar(ok.body.version.version, comTermos([]));
+    expect(semTermos.body.model_text_hash).toBe(ok.body.model_text_hash);
+    const r = await salvar(semTermos.body.version.version, comTermos(['hambúrguer', 'smash gourmet']));
+    expect(r.status).toBe(400);
+    expect(r.body.errors).toEqual([{ path: 'content.identity.search_terms[1]', message: '“smash gourmet” bate no que a marca não diz (“gourmet”).' }]);
+  });
+
   it('as versões, uma versão e voltar a uma anterior (que vira a versão seguinte)', async () => {
     const lista = (await api.call('GET', `/v1/brand-dossier/versions?brand_id=${brandId}`, { cookie })).body.items as Array<{ version: number }>;
     const atual = lista[0]!.version;

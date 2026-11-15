@@ -24,10 +24,25 @@ import { Injectable } from '@nestjs/common';
 import { sql } from 'drizzle-orm';
 import { type AuthContext, auditDetail, currentTx } from '../context/request-context.js';
 import { AppProblem, ValidationProblem } from '../errors/problems.js';
-import { conferirTexto, type RegraDeTexto } from '../policy/texto.js';
+import { conferirTexto } from '../policy/texto.js';
 import { diaNoFuso, menosDias } from '../results/fora-do-normal.js';
 import { ResultsService } from '../results/results.service.js';
-import { arrumarDossie, camposComDadoPessoal, chave, DOSSIE_VAZIO, fatosDoDossie, hashDoTexto, mudancas, proibidasDoDossie, provaDePedidos, ROTULO_DA_SECAO, situacaoDasSecoes, textoDoDossie } from './dossie.js';
+import {
+  arrumarDossie,
+  camposComDadoPessoal,
+  chave,
+  DOSSIE_VAZIO,
+  fatosDoDossie,
+  hashDoTexto,
+  mudancas,
+  proibidasDoDossie,
+  provaDePedidos,
+  REGRAS_DA_LIAME,
+  ROTULO_DA_SECAO,
+  situacaoDasSecoes,
+  termosRecusados,
+  textoDoDossie,
+} from './dossie.js';
 import { aplicarItens, DIAS_DA_RECUSA, DIAS_DAS_VENDAS, recusados, SECOES_DO_SISTEMA, sugerirOfertas, sugerirProdutos } from './sugestoes.js';
 
 // Minha marca (A3, I8): o dossiê da marca, as versões, o teste de frase e as sugestões do sistema. Tudo na
@@ -39,15 +54,6 @@ const DIA_MS = 86_400_000;
 const naoEncontrado = (detail: string) => new AppProblem(404, 'nao-encontrado', 'Não encontramos', detail);
 const versaoMudou = (atual: number) =>
   new AppProblem(409, 'versao-mudou', 'Outra pessoa salvou antes', `O dossiê mudou depois que você abriu (agora está na versão ${atual}). Confira a versão nova e junte as suas mudanças.`);
-
-/** As regras da Liame no teste de frase, como a tela de Minha marca mostra (protótipo P6). */
-const REGRAS_DA_LIAME: Record<Exclude<RegraDeTexto, 'regra_da_marca'>, [string, string]> = {
-  politico_eleitoral: ['Conteúdo político ou eleitoral', 'proibido em campanha, texto e conversa (Termos da Liame)'],
-  promessa_de_resultado: ['Promessa de resultado', 'ninguém garante venda nem lucro (CDC e CONAR)'],
-  categoria_proibida: ['Categoria que as plataformas proíbem', 'armas, cigarro e vape, apostas, drogas'],
-  dado_pessoal: ['Dado pessoal de cliente', 'telefone, e-mail e documento não entram em texto feito por IA'],
-  texto_longo: ['Texto longo demais', 'passa do tamanho que dá para conferir'],
-};
 
 type LinhaVersao = {
   id: string;
@@ -178,6 +184,8 @@ export class MarcaService {
     const atual = await this.versaoAtual(body.brand_id);
     const numero = atual?.meta.version ?? 0;
     if (body.base_version !== numero) throw versaoMudou(numero);
+    const recusados = termosRecusados(conteudo, atual?.content ?? null);
+    if (recusados.length) throw new ValidationProblem(recusados);
     const mudou = mudancas(atual?.content ?? null, conteudo);
     if (mudou.length) {
       const id = await this.gravar(auth, marca, numero + 1, conteudo, mudou, body.merged ? 'mesclada' : 'pessoa', null);

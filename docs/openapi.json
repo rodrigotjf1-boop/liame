@@ -62148,7 +62148,8 @@
                             "summary": "",
                             "audience": "",
                             "differentiator": "",
-                            "since": ""
+                            "since": "",
+                            "search_terms": []
                           },
                           "type": "object",
                           "properties": {
@@ -62181,13 +62182,24 @@
                                   ]
                                 }
                               ]
+                            },
+                            "search_terms": {
+                              "default": [],
+                              "maxItems": 3,
+                              "type": "array",
+                              "items": {
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 40
+                              }
                             }
                           },
                           "required": [
                             "summary",
                             "audience",
                             "differentiator",
-                            "since"
+                            "since",
+                            "search_terms"
                           ],
                           "additionalProperties": false
                         },
@@ -62772,7 +62784,8 @@
                           "summary": "",
                           "audience": "",
                           "differentiator": "",
-                          "since": ""
+                          "since": "",
+                          "search_terms": []
                         },
                         "type": "object",
                         "properties": {
@@ -62805,6 +62818,16 @@
                                 ]
                               }
                             ]
+                          },
+                          "search_terms": {
+                            "default": [],
+                            "maxItems": 3,
+                            "type": "array",
+                            "items": {
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 40
+                            }
                           }
                         },
                         "additionalProperties": false
@@ -63138,7 +63161,8 @@
                             "summary": "",
                             "audience": "",
                             "differentiator": "",
-                            "since": ""
+                            "since": "",
+                            "search_terms": []
                           },
                           "type": "object",
                           "properties": {
@@ -63171,13 +63195,24 @@
                                   ]
                                 }
                               ]
+                            },
+                            "search_terms": {
+                              "default": [],
+                              "maxItems": 3,
+                              "type": "array",
+                              "items": {
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 40
+                              }
                             }
                           },
                           "required": [
                             "summary",
                             "audience",
                             "differentiator",
-                            "since"
+                            "since",
+                            "search_terms"
                           ],
                           "additionalProperties": false
                         },
@@ -64216,7 +64251,8 @@
                             "summary": "",
                             "audience": "",
                             "differentiator": "",
-                            "since": ""
+                            "since": "",
+                            "search_terms": []
                           },
                           "type": "object",
                           "properties": {
@@ -64249,13 +64285,24 @@
                                   ]
                                 }
                               ]
+                            },
+                            "search_terms": {
+                              "default": [],
+                              "maxItems": 3,
+                              "type": "array",
+                              "items": {
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 40
+                              }
                             }
                           },
                           "required": [
                             "summary",
                             "audience",
                             "differentiator",
-                            "since"
+                            "since",
+                            "search_terms"
                           ],
                           "additionalProperties": false
                         },
@@ -64868,7 +64915,8 @@
                             "summary": "",
                             "audience": "",
                             "differentiator": "",
-                            "since": ""
+                            "since": "",
+                            "search_terms": []
                           },
                           "type": "object",
                           "properties": {
@@ -64901,13 +64949,24 @@
                                   ]
                                 }
                               ]
+                            },
+                            "search_terms": {
+                              "default": [],
+                              "maxItems": 3,
+                              "type": "array",
+                              "items": {
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 40
+                              }
                             }
                           },
                           "required": [
                             "summary",
                             "audience",
                             "differentiator",
-                            "since"
+                            "since",
+                            "search_terms"
                           ],
                           "additionalProperties": false
                         },
@@ -66366,7 +66425,8 @@
                             "summary": "",
                             "audience": "",
                             "differentiator": "",
-                            "since": ""
+                            "since": "",
+                            "search_terms": []
                           },
                           "type": "object",
                           "properties": {
@@ -66399,13 +66459,24 @@
                                   ]
                                 }
                               ]
+                            },
+                            "search_terms": {
+                              "default": [],
+                              "maxItems": 3,
+                              "type": "array",
+                              "items": {
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 40
+                              }
                             }
                           },
                           "required": [
                             "summary",
                             "audience",
                             "differentiator",
-                            "since"
+                            "since",
+                            "search_terms"
                           ],
                           "additionalProperties": false
                         },

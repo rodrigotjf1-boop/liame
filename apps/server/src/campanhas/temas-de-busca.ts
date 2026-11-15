@@ -1,3 +1,4 @@
+import { searchThemesStart } from '@liame/contracts';
 import type { BaseDaPeca } from '../ai/criativo/peca.js';
 import { conferirPeca } from '../ai/criativo/peca.js';
 import { mensagemDoAchado } from '../criativo/base.js';
@@ -77,8 +78,8 @@ export function montarTemas(termos: readonly TermoDaLoja[], bairros: readonly st
     temas.push(tema);
     return 'ok';
   };
-  for (const t of termos) por(`${t.termo} perto de mim`);
-  por(`${b} delivery`);
+  // O começo é o mesmo da prévia de Minha marca (contrato): cada termo com "perto de mim", o segundo com "delivery".
+  for (const tema of searchThemesStart(termos.map((t) => t.termo))) por(tema);
   const nomes = [...new Set(bairros.map((n) => n.replace(/\s+/g, ' ').trim()).filter(Boolean))];
   for (const n of nomes) {
     const r = por(`${a} ${n}`);

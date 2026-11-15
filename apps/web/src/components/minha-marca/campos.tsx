@@ -6,6 +6,7 @@ import { useAvisar } from '@/components/ui/avisos';
 import { Icone } from '@/components/ui/icone';
 import { api, chamar } from '@/lib/api';
 import { disparar } from '@/lib/disparar';
+import { TermosDeBusca } from './termos-de-busca';
 import { acrescentar, alternarJeito, type ChaveDeLista, itensDaLista, JEITOS, MAX_JEITOS, REGRAS_LIAME, resultadoFalado, tirar } from './textos';
 
 // Os campos de cada parte da marca (protótipo P6): os mesmos no editor (gaveta) e no preenchimento guiado.
@@ -25,7 +26,7 @@ type Props = {
 export function CamposDaSecao({ secao, conteudo, mudar, provas, marca, anunciar }: Props) {
   const c = conteudo;
   const proibidas = c.forbidden.items.map((i) => i.text);
-  const texto = (campo: keyof BrandDossierContent['identity'] | 'do_example' | 'dont_example', valor: string) => {
+  const texto = (campo: 'summary' | 'audience' | 'differentiator' | 'since' | 'do_example' | 'dont_example', valor: string) => {
     const n = structuredClone(c);
     if (campo === 'do_example' || campo === 'dont_example') n.voice[campo] = valor;
     else n.identity[campo] = valor;
@@ -40,6 +41,7 @@ export function CamposDaSecao({ secao, conteudo, mudar, provas, marca, anunciar 
           <CampoTexto rotulo="Para quem" dica="Quem mais pede. Sem nome de cliente." valor={c.identity.audience} max={240} aoMudar={(v) => texto('audience', v)} />
           <CampoTexto rotulo="O que tem de diferente" valor={c.identity.differentiator} max={240} aoMudar={(v) => texto('differentiator', v)} />
           <CampoAno valor={c.identity.since} aoMudar={(v) => texto('since', v)} />
+          <TermosDeBusca conteudo={c} mudar={mudar} marca={marca} anunciar={anunciar} />
         </div>
       );
     case 'voz':

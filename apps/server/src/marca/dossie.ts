@@ -1,7 +1,8 @@
 import { createHash } from 'node:crypto';
-import { BrandDossierContent, DOSSIER_SECTIONS, type DossierSection, type SystemProof } from '@liame/contracts';
+import { BrandDossierContent, cleanSearchTerm, DOSSIER_SECTIONS, type DossierSection, searchTermProblem, type SystemProof } from '@liame/contracts';
 import { limparTexto } from '../ai/sanitizar.js';
 import type { FieldError } from '../errors/problems.js';
+import { conferirTexto, type RegraDeTexto } from '../policy/texto.js';
 
 // O dossiê da marca (A3, I8; `ai-architecture.md` §5): o que a marca é, como fala, o que vende, o que pode
 // provar e o que nunca diz. Aqui ficam as regras puras: arrumar o que a pessoa mandou, recusar dado pessoal,
@@ -23,6 +24,15 @@ export const ROTULO_DA_SECAO: Record<DossierSection, string> = {
   datas: 'Datas e sazonalidade',
 };
 
+/** As regras da Liame como a tela de Minha marca mostra (protótipo P6): o nome e o porquê. */
+export const REGRAS_DA_LIAME: Record<Exclude<RegraDeTexto, 'regra_da_marca'>, [string, string]> = {
+  politico_eleitoral: ['Conteúdo político ou eleitoral', 'proibido em campanha, texto e conversa (Termos da Liame)'],
+  promessa_de_resultado: ['Promessa de resultado', 'ninguém garante venda nem lucro (CDC e CONAR)'],
+  categoria_proibida: ['Categoria que as plataformas proíbem', 'armas, cigarro e vape, apostas, drogas'],
+  dado_pessoal: ['Dado pessoal de cliente', 'telefone, e-mail e documento não entram em texto feito por IA'],
+  texto_longo: ['Texto longo demais', 'passa do tamanho que dá para conferir'],
+};
+
 /** Para comparar textos: sem acento, minúsculas e espaços simples. */
 export function chave(texto: string): string {
   return texto.normalize('NFD').replace(/\p{M}/gu, '').toLowerCase().replace(/\s+/g, ' ').trim();
@@ -40,10 +50,13 @@ function semRepetir<T>(itens: T[], texto: (item: T) => string): T[] {
 const proprio = (t: string) => t;
 const doTexto = (i: { text: string }) => i.text;
 
-/** Tira itens repetidos (sem olhar acento nem maiúscula), mantendo a ordem em que a pessoa escreveu. */
+/**
+ * Tira itens repetidos (sem olhar acento nem maiúscula), mantendo a ordem em que a pessoa escreveu. Dos termos de busca
+ * sai o "perto de mim" e o "delivery" que o Liame já põe nos temas (a tela avisa ao pôr), e o termo que era só isso.
+ */
 export function arrumarDossie(c: BrandDossierContent): BrandDossierContent {
   return {
-    identity: { ...c.identity },
+    identity: { ...c.identity, search_terms: semRepetir(c.identity.search_terms.map((t) => cleanSearchTerm(t).term).filter(Boolean), proprio) },
     voice: { ...c.voice, traits: semRepetir(c.voice.traits, proprio), rules: semRepetir(c.voice.rules, proprio) },
     products: { items: semRepetir(c.products.items, proprio) },
     offers: { items: semRepetir(c.offers.items, proprio) },
@@ -68,6 +81,7 @@ function textosComCaminho(c: BrandDossierContent): Array<[string, string]> {
   um('content.identity.summary', c.identity.summary);
   um('content.identity.audience', c.identity.audience);
   um('content.identity.differentiator', c.identity.differentiator);
+  lista('content.identity.search_terms', c.identity.search_terms);
   lista('content.voice.traits', c.voice.traits);
   lista('content.voice.rules', c.voice.rules);
   um('content.voice.do_example', c.voice.do_example);
@@ -96,7 +110,7 @@ export function camposComDadoPessoal(c: BrandDossierContent): FieldError[] {
 export function secaoVazia(c: BrandDossierContent, s: DossierSection): boolean {
   switch (s) {
     case 'identidade':
-      return !c.identity.summary && !c.identity.audience && !c.identity.differentiator && !c.identity.since;
+      return !c.identity.summary && !c.identity.audience && !c.identity.differentiator && !c.identity.since && !c.identity.search_terms.length;
     case 'voz':
       return !c.voice.traits.length && !c.voice.rules.length && !c.voice.do_example && !c.voice.dont_example;
     case 'produtos':
@@ -149,6 +163,11 @@ export function mudancas(antes: BrandDossierContent | null, depois: BrandDossier
   campo('identidade', 'para quem', a.identity.audience, depois.identity.audience);
   campo('identidade', 'o que diferencia', a.identity.differentiator, depois.identity.differentiator);
   campo('identidade', 'desde quando', a.identity.since, depois.identity.since);
+  // Os termos numa linha só, como o protótipo ("Termos de busca: + lanche; − smash burger").
+  const termosAntes = new Set(a.identity.search_terms.map(chave));
+  const termosDepois = new Set(depois.identity.search_terms.map(chave));
+  const termos = [...depois.identity.search_terms.filter((t) => !termosAntes.has(chave(t))).map((t) => `+ ${t}`), ...a.identity.search_terms.filter((t) => !termosDepois.has(chave(t))).map((t) => `− ${t}`)];
+  if (termos.length) out.push(`Termos de busca: ${termos.join('; ')}`);
   lista('voz', a.voice.traits, depois.voice.traits);
   lista('voz', a.voice.rules, depois.voice.rules);
   campo('voz', 'o exemplo de como sim', a.voice.do_example, depois.voice.do_example);
@@ -164,6 +183,29 @@ export function mudancas(antes: BrandDossierContent | null, depois: BrandDossier
   if (out.length <= MAX_MUDANCAS) return out;
   const resto = out.length - (MAX_MUDANCAS - 1);
   return [...out.slice(0, MAX_MUDANCAS - 1), `e mais ${resto} mudanças`];
+}
+
+/**
+ * Os termos de busca NOVOS que não passam (D-RG-99), com o caminho de cada um: a regra do contrato (vazio, tamanho,
+ * repetido, concorrente de Minha marca ou marca de rede) e as regras de texto do teste de frase (as da Liame e o que a
+ * marca não diz, da versão que está sendo salva). O termo que já estava na versão anterior não é recusado de novo: a
+ * campanha do Google confere cada tema antes de pedir (D-RG-86). Vazio = pode salvar.
+ */
+export function termosRecusados(c: BrandDossierContent, antes: BrandDossierContent | null): FieldError[] {
+  const jaEstavam = new Set((antes ?? DOSSIE_VAZIO).identity.search_terms.map(chave));
+  const termos = c.identity.search_terms;
+  const out: FieldError[] = [];
+  termos.forEach((termo, i) => {
+    if (jaEstavam.has(chave(termo))) return;
+    const outros = termos.filter((_, j) => j !== i);
+    let motivo = searchTermProblem(termo, { others: outros, competitors: concorrentesDoDossie(c) });
+    if (!motivo) {
+      const achado = conferirTexto(termo, { daMarca: proibidasDoDossie(c) })[0];
+      if (achado) motivo = achado.regra === 'regra_da_marca' ? `“${termo}” bate no que a marca não diz (“${achado.trecho}”).` : `“${termo}” bate numa regra da Liame (${REGRAS_DA_LIAME[achado.regra][0]}).`;
+    }
+    if (motivo) out.push({ path: `content.identity.search_terms[${i}]`, message: motivo });
+  });
+  return out;
 }
 
 /** O que a marca nunca diz: a lista que o Compliance confere junto com as regras da Liame. */
