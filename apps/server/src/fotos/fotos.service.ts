@@ -34,6 +34,7 @@ import {
   recorteDoInstagram,
 } from './conferencia.js';
 import { type FotoProcessada, processarCapa, processarFoto, RecusaDaFoto, SemSharp } from './processar.js';
+import { copiaAoEntrar, versaoDoInstagram } from './versao-do-instagram.js';
 
 // Fotos dos produtos (A6, Z4; ADR-021; protótipo P20, aprovado em 21/10/2026; D-A6-19). A empresa envia as fotos de
 // verdade dos produtos, para os posts. O Liame guarda uma cópia regravada (JPEG, o lado maior em até 2.048 px, sem os
@@ -77,10 +78,16 @@ type LinhaDaFoto = {
   has_audio: boolean | null;
   has_cover: boolean;
   montage_id: string | null;
+  // A cópia para o Instagram (A6, Z10, parte 3b; D-A6-149).
+  instagram_status: string | null;
+  instagram_bytes: number | string | null;
+  instagram_width: number | null;
+  instagram_height: number | null;
 };
 
 const COLUNAS = sql`p.id, p.brand_id, p.product, p.description, p.width, p.height, p.bytes, p.object_key, p.created_at,
-  p.uploaded_by, u.name as uploaded_by_name, p.kind, p.duration_ms, p.media_type, p.has_audio, p.has_cover, p.montage_id`;
+  p.uploaded_by, u.name as uploaded_by_name, p.kind, p.duration_ms, p.media_type, p.has_audio, p.has_cover, p.montage_id,
+  p.instagram_status, p.instagram_bytes, p.instagram_width, p.instagram_height`;
 
 export function quemPede(auth: AuthContext): Quem {
   if (!auth.tenantId) throw new AppProblem(403, 'sem-empresa-ativa', 'Escolha uma empresa', 'Selecione uma empresa com acesso ativo.');
@@ -202,6 +209,7 @@ export class FotosService {
               media_type: l.media_type,
               has_audio: l.has_audio === true,
               has_cover: l.has_cover,
+              instagram_version: versaoDoInstagram(l),
             }
           : null,
       montage_id: l.montage_id,
@@ -443,12 +451,14 @@ export class FotosService {
 
     const c = cabecalho;
     const bytes = tamanho;
+    // O vídeo que não cabe no Instagram como está entra na fila da cópia reduzida (A6, Z10, parte 3b; D-A6-149).
+    const copia = copiaAoEntrar({ width: c.largura, bytes, duration_ms: c.duracaoMs });
     return naTransacaoDaEmpresa(database, quem, async () => {
       const tx = currentTx();
       const r = await tx.execute<{ id: string; brand_id: string }>(sql`
         update liame.brand_photo
            set status = 'pronta', bytes = ${bytes}, width = ${c.largura}, height = ${c.altura}, duration_ms = ${c.duracaoMs},
-               has_audio = ${c.temAudio}, updated_at = now()
+               has_audio = ${c.temAudio}, instagram_status = ${copia}, updated_at = now()
          where id = ${id} and kind = 'video' and status = 'enviando' and removed_at is null
         returning id, brand_id`);
       const pronta = r.rows[0];

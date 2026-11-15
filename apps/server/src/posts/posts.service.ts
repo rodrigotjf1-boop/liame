@@ -13,12 +13,13 @@ import { type SQL, sql } from 'drizzle-orm';
 import { ActionService, PREFIXO_RECUSA } from '../actions/action.service.js';
 import { naoTerminouDePreparar, pedeUmPostNovo } from '../actions/post-publicacao.js';
 import { contaConectada } from '../connections/conectada.js';
-import { CAPA_DO_REELS_BYTES, cabeNoReelsDoInstagram, FLAG_DOS_POSTS, FLAG_DOS_STORIES, STORY_DA_PAGINA, STORY_DO_INSTAGRAM } from '../connectors/meta/publicacao.js';
+import { CAPA_DO_REELS_BYTES, FLAG_DOS_POSTS, FLAG_DOS_STORIES, STORY_DA_PAGINA, STORY_DO_INSTAGRAM } from '../connectors/meta/publicacao.js';
 import { type AuthContext, auditDetail, currentTx } from '../context/request-context.js';
 import { AppProblem } from '../errors/problems.js';
 import { FlagService } from '../flags/flag.service.js';
 import { recorteDoInstagram } from '../fotos/conferencia.js';
 import { FLAG_VIDEOS } from '../fotos/fotos.service.js';
+import { arquivoDoInstagram, SEM_VERSAO_DO_INSTAGRAM, type VideoComCopia, versaoDoInstagram } from '../fotos/versao-do-instagram.js';
 import { ARMAZEM_DE_IMAGENS, type ArmazemDeImagens, ArmazemIndisponivel, FalhaDoArmazem } from '../imagens/armazem.js';
 import { palavrasProibidasNoTexto } from '../policy/engine.js';
 import { carregarPoliticas } from '../policy/policy.service.js';
@@ -87,6 +88,9 @@ type Quem = { tenantId: string; userId: string };
 type Capa = { fotoId: string | null; sha256: string | null; versao: number | null; quadroMs: number | null };
 const SEM_CAPA: Capa = { fotoId: null, sha256: null, versao: null, quadroMs: null };
 
+/** A foto ou o vídeo do post, como o "Novo post" lê de Fotos (no vídeo, com a cópia para o Instagram: Z10, parte 3b). */
+type MidiaDoPost = VideoComCopia & { id: string; kind: string; sha256: string | null; has_cover: boolean; cover_version: number };
+
 function desligada(): AppProblem {
   return new AppProblem(409, 'funcao-desligada', 'Função desligada', 'Os posts não estão ligados para esta empresa.');
 }
@@ -97,13 +101,16 @@ function recusa(code: string, title: string, detail: string, path?: string): App
 
 /**
  * A mídia cabe no Story de cada canal escolhido (A6, Z13; D-A6-128)? No Instagram, a foto até 8 MB e o vídeo até 60
- * segundos e 100 MB; na Página, a foto até 10 MB e o vídeo até 90 segundos. A frase de por que não, ou nula.
+ * segundos e 100 MB; na Página, a foto até 10 MB e o vídeo até 90 segundos. No Instagram, o vídeo que não cabe como está
+ * vai pela cópia reduzida (A6, Z10, parte 3b; D-A6-149), e os limites valem para ela. A frase de por que não, ou nula.
  */
-function conferirOStory(midia: { kind: string; bytes: string | number; duration_ms: number | null }, canais: readonly string[]): string | null {
+function conferirOStory(midia: MidiaDoPost, canais: readonly string[]): string | null {
   const bytes = Number(midia.bytes);
   const duracao = midia.duration_ms ?? 0;
   if (midia.kind === 'video') {
-    if (canais.includes('instagram') && (duracao > STORY_DO_INSTAGRAM.videoMs || bytes > STORY_DO_INSTAGRAM.videoBytes)) {
+    const noInstagram = canais.includes('instagram') ? arquivoDoInstagram(midia) : null;
+    if (canais.includes('instagram') && !noInstagram) return SEM_VERSAO_DO_INSTAGRAM[versaoDoInstagram(midia) === 'preparando' ? 'preparando' : 'nao_deu'];
+    if (noInstagram && (duracao > STORY_DO_INSTAGRAM.videoMs || noInstagram.bytes > STORY_DO_INSTAGRAM.videoBytes)) {
       return 'O Story do Instagram aceita o vídeo de até 60 segundos e 100 MB. Escolha outro vídeo, ou publique o Story só na Página do Facebook (até 90 segundos).';
     }
     if (canais.includes('facebook') && duracao > STORY_DA_PAGINA.videoMs) return 'O Story da Página do Facebook aceita o vídeo de até 90 segundos. Escolha outro vídeo.';
@@ -187,7 +194,8 @@ export class PostsService {
 
   /**
    * O post com vídeo (A6, Z10, parte 3a; D-A6-68 a D-A6-70): sem o recorte (o vídeo vai inteiro) e, no Instagram, o vídeo
-   * que cabe no Reels como está (até 1.920 px de largura e 25 Mbps; a redução ainda não existe). A capa que fica presa no
+   * que cabe no Reels como está (até 1.920 px de largura e 25 Mbps) ou, o maior, com a cópia reduzida já pronta (A6, Z10,
+   * parte 3b; D-A6-149: enquanto ela é feita, ou se não deu, o vídeo vai só na Página). A capa que fica presa no
    * pedido: uma das Fotos (com o resumo do arquivo, JPEG até 8 MB) ou a do próprio vídeo (pela versão); sem nenhuma, o
    * quadro do meio. O pacote do TikTok e do YouTube leva o mesmo vídeo (A6, Z10, parte 4c; D-A6-79), sem capa: a capa é a
    * do Reels, e no pacote quem escolhe é a pessoa, na rede. Só com o pacote, a capa escolhida é recusada.
@@ -195,7 +203,7 @@ export class PostsService {
   private async conferirOVideo(
     quem: Quem,
     body: CreatePostRequest,
-    video: { width: number; bytes: string | number; duration_ms: number | null; has_cover: boolean; cover_version: number },
+    video: MidiaDoPost,
     canais: readonly string[],
   ): Promise<Capa> {
     if (body.crop_pos !== undefined) throw recusa('recorte-so-na-foto', 'Recorte só na foto', 'O vídeo vai inteiro: o recorte vale só para a foto.', 'crop_pos');
@@ -210,13 +218,10 @@ export class PostsService {
       }
       return SEM_CAPA;
     }
-    if (canais.includes('instagram') && !cabeNoReelsDoInstagram(video.width, Number(video.bytes), video.duration_ms ?? 0)) {
-      throw recusa(
-        'video-grande-para-o-reels',
-        'Vídeo grande para o Reels',
-        'O Instagram aceita o Reels com até 1.920 px de largura e até 25 Mbps, e o Liame ainda não reduz o vídeo. Grave em 1080p e envie de novo, ou publique só na Página do Facebook.',
-        'photo_id',
-      );
+    if (canais.includes('instagram') && !arquivoDoInstagram(video)) {
+      throw versaoDoInstagram(video) === 'preparando'
+        ? recusa('video-preparando-para-o-instagram', 'Preparando o vídeo para o Instagram', SEM_VERSAO_DO_INSTAGRAM.preparando, 'photo_id')
+        : recusa('video-grande-para-o-reels', 'Vídeo grande para o Reels', SEM_VERSAO_DO_INSTAGRAM.nao_deu, 'photo_id');
     }
     if (body.cover_photo_id && body.cover_offset_ms !== undefined) {
       throw recusa('capa-repetida', 'Uma capa só', 'Escolha uma capa só: um quadro do vídeo ou uma das Fotos.', 'cover_offset_ms');
@@ -337,8 +342,10 @@ export class PostsService {
     }
 
     // A foto, ou (A6, Z10; D-A6-69) o vídeo pronto, com a função `videos` ligada: sem ela, o vídeo é recusado como antes.
-    const f = await tx.execute<{ id: string; kind: string; sha256: string | null; width: number; height: number; bytes: string | number; duration_ms: number | null; has_cover: boolean; cover_version: number }>(sql`
-      select id, kind, sha256, width, height, bytes, duration_ms, has_cover, cover_version from liame.brand_photo
+    const f = await tx.execute<MidiaDoPost>(sql`
+      select id, kind, sha256, width, height, bytes, duration_ms, has_cover, cover_version, object_key,
+             instagram_status, instagram_bytes, instagram_width, instagram_height
+        from liame.brand_photo
        where id = ${body.photo_id} and tenant_id = ${quem.tenantId} and brand_id = ${body.brand_id} and status = 'pronta' and removed_at is null
          and kind in ('foto_produto', 'video')`);
     const midia = f.rows[0];

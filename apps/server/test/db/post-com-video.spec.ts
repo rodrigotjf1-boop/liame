@@ -230,6 +230,76 @@ describe.skipIf(!hasDb)('o post com vídeo (A6 · Z10, parte 3a)', () => {
 
   // ---- O pacote com vídeo (parte 4c) -------------------------------------------------------------------------------
 
+  it('o 4K pela cópia para o Instagram (parte 3b; D-A6-149): preparando ou não deu, recusado com o motivo; pronta, o Reels leva a cópia e a Página o vídeo como a loja gravou', async () => {
+    const e = await empresa('Brasa Video Copia');
+    const quatroK = { largura: 2160, altura: 3840 };
+    const recusa = async (midia: string, canais?: Array<{ channel: string; text: string }>) => {
+      const r = await novoPost(e, midia, canais ? { canais } : {});
+      expect(r.status, JSON.stringify(r.body)).toBe(422);
+      return { code: r.body.code as string, detail: r.body.detail as string };
+    };
+    // A cópia sendo feita: o Reels e o Story do Instagram esperam; só na Página, vai.
+    const preparando = await videoGuardado(e, armazem, { ...quatroK, copia: 'na_fila' });
+    expect(await recusa(preparando.id)).toMatchObject({ code: 'video-preparando-para-o-instagram', detail: expect.stringContaining('preparando a versão reduzida') });
+    expect((await novoPost(e, preparando.id, { canais: [{ channel: 'facebook', text: NA_PAGINA }] })).status).toBe(201);
+    const reduzindo = await videoGuardado(e, armazem, { ...quatroK, copia: 'reduzindo' });
+    expect((await recusa(reduzindo.id)).code).toBe('video-preparando-para-o-instagram');
+    // A cópia que não deu: como antes da parte 3b.
+    const naoDeu = await videoGuardado(e, armazem, { ...quatroK, copia: 'nao_deu' });
+    expect(await recusa(naoDeu.id)).toMatchObject({ code: 'video-grande-para-o-reels', detail: expect.stringContaining('não deu para preparar') });
+
+    // A cópia pronta: a lista diz `reduzida`, e o post sai nos dois canais.
+    const pronta = await videoGuardado(e, armazem, { ...quatroK, copia: 'pronta' });
+    await ligarFlagDaEmpresa(api, 'fotos', e.tenantId, true);
+    const lista = await api.call('GET', `/v1/brand-photos?brand_id=${e.brandId}`, { cookie: e.cookie });
+    expect(lista.status, JSON.stringify(lista.body)).toBe(200);
+    const versoes = Object.fromEntries((lista.body.items as Array<{ id: string; video: { instagram_version: string } }>).map((i) => [i.id, i.video.instagram_version]));
+    expect(versoes).toMatchObject({ [preparando.id]: 'preparando', [reduzindo.id]: 'preparando', [naoDeu.id]: 'nao_deu', [pronta.id]: 'reduzida' });
+    const { post, pedido } = await postAprovado(e, pronta.id, { canais: [{ channel: 'instagram', text: 'O smash em 4K, pela cópia.' }, { channel: 'facebook', text: NA_PAGINA }] });
+    // O estado do pedido não muda com a cópia: o vídeo é o mesmo (a cópia sai dele).
+    expect((await pedidoDe(pedido)).before_state.video).toEqual({ id: pronta.id, capa: 'capa:1' });
+    expect(await executar(e)).toBe(1);
+    expect(await pedidoDe(pedido)).toMatchObject({ status: 'executada', status_reason: null });
+    const [publicado] = ig.postsDe(e.instagram!.externo);
+    const c = ig.conteineres.get(publicado!.conteiner)!;
+    expect(c).toMatchObject({ tipo: 'REELS', endereco: `memoria://imagens/${pronta.copia}?valido=590` });
+    expect(c.imagem?.equals(armazem.objetos.get(pronta.copia!)!)).toBe(true);
+    const [v] = ig.videosDe(e.pagina!.externo);
+    expect(v!.arquivo?.equals(armazem.objetos.get(pronta.chave)!)).toBe(true);
+    expect(await canalDe(post)).toMatchObject({ status: 'publicado', error: null });
+    expect((await canalDe(post, 'facebook')).status).toBe('publicado');
+    expect(ig.defeitos).toEqual([]);
+  });
+
+  it('na hora de sair, o 4K sem a cópia pronta não vai ao Instagram (a Página sai), e o Story do Instagram leva a cópia', async () => {
+    const e = await empresa('Brasa Video Copia Sumiu');
+    const pronta = await videoGuardado(e, armazem, { largura: 2160, altura: 3840, copia: 'pronta' });
+    const { post, pedido } = await postAprovado(e, pronta.id, { canais: [{ channel: 'instagram', text: 'O smash em 4K.' }, { channel: 'facebook', text: NA_PAGINA }] });
+    // A cópia deixou de estar pronta depois da aprovação (o caso que a tela não deixa nascer): o Instagram não sai, com a
+    // frase; a Página sai com o vídeo como a loja gravou.
+    await ownerQuery(`update liame.brand_photo set instagram_status = 'nao_deu', instagram_bytes = null, instagram_width = null, instagram_height = null where id = $1`, [pronta.id]);
+    await executar(e);
+    expect(await canalDe(post)).toMatchObject({ status: 'falhou', error: expect.stringContaining('a versão reduzida dele não está pronta') });
+    expect((await canalDe(post, 'facebook')).status).toBe('publicado');
+    expect(ig.postsDe(e.instagram!.externo)).toHaveLength(0);
+    expect((await pedidoDe(pedido)).status).not.toBe('pendente');
+
+    // O Story do Instagram com o 4K: a cópia, com o limite de 100 MB conferido nela.
+    await ligarFlagDaEmpresa(api, 'stories', e.tenantId, true);
+    const outro = await videoGuardado(e, armazem, { largura: 2160, altura: 3840, bytes: 200_000_000, duracaoMs: 30_000, copia: 'pronta' });
+    const story = await api.call('POST', '/v1/posts', {
+      cookie: e.cookie,
+      body: { brand_id: e.brandId, photo_id: outro.id, format: 'story', publish_at: `${diaEmSaoPaulo(1)}T19:00:00-03:00`, channels: [{ channel: 'instagram' }] },
+    });
+    expect(story.status, JSON.stringify(story.body)).toBe(201);
+    const semCopia = await videoGuardado(e, armazem, { largura: 2160, altura: 3840, duracaoMs: 30_000, copia: 'na_fila' });
+    const recusado = await api.call('POST', '/v1/posts', {
+      cookie: e.cookie,
+      body: { brand_id: e.brandId, photo_id: semCopia.id, format: 'story', publish_at: `${diaEmSaoPaulo(1)}T19:00:00-03:00`, channels: [{ channel: 'instagram' }] },
+    });
+    expect({ status: recusado.status, code: recusado.body.code }).toEqual({ status: 422, code: 'story-fora-do-limite' });
+  });
+
   it('o pacote com vídeo (parte 4c; D-A6-79): o mesmo vídeo, sem capa nem resumo; a capa só vale para o Reels; o 4K vai no pacote', async () => {
     const e = await empresa('Brasa Video Pacote');
     const video = await videoGuardado(e, armazem);

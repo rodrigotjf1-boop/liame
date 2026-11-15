@@ -1,6 +1,6 @@
 import type { BrandPhoto, PostResponse } from '@liame/contracts';
 import { duracaoCurta } from '@/components/fotos/textos';
-import { ehVideoPronto, type VideoDasFotos } from './video-do-post';
+import { ehVideoPronto, foraDoInstagram, type VideoDasFotos, versaoNoInstagram } from './video-do-post';
 
 // O Story (P41, aprovado pelo dono em 11/11/2026; A6, Z13, parte 2; D-A6-126 a D-A6-129): no novo post, o formato "Post ou
 // Story"; o Story leva a foto ou o vídeo das Fotos, sai no Instagram e na Página, sem texto, sem link e sem figurinha, e
@@ -39,7 +39,12 @@ export function foraDoStory(canal: string, m: BrandPhoto | null): string | null 
   if (!m) return null;
   const video: VideoDasFotos | null = ehVideoPronto(m) ? m : null;
   if (canal === 'instagram') {
-    if (video && (video.video.duration_ms > STORY_DO_INSTAGRAM.videoMs || video.bytes > STORY_DO_INSTAGRAM.videoBytes)) {
+    // O vídeo que não cabe como está vai pela cópia reduzida (A6, Z10, parte 3b): até ela ficar pronta, não vai. A cópia de
+    // até 60 s fica abaixo dos 100 MB (o teto de 12 Mbps), e o servidor confere o tamanho dela.
+    const fora = video ? foraDoInstagram(video) : null;
+    if (fora) return fora;
+    const tamanho = video && versaoNoInstagram(video) === 'reduzida' ? 0 : (video?.bytes ?? 0);
+    if (video && (video.video.duration_ms > STORY_DO_INSTAGRAM.videoMs || tamanho > STORY_DO_INSTAGRAM.videoBytes)) {
       return `Este vídeo tem ${duracaoCurta(video.video.duration_ms)}: o Story do Instagram vai até 60 segundos e 100 MB.`;
     }
     if (!video && m.bytes > STORY_DO_INSTAGRAM.fotoBytes) return 'Esta foto passa de 8 MB, o limite do Story do Instagram.';

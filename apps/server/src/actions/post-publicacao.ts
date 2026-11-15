@@ -38,6 +38,7 @@ import {
   videoJaNaPagina,
 } from '../connectors/meta/publicacao.js';
 import { chaveDaMiniatura, chaveDoRecorteDoPost, recorteDoInstagram } from '../fotos/conferencia.js';
+import { type ArquivoDoInstagram, arquivoDoInstagram } from '../fotos/versao-do-instagram.js';
 import { VALIDADE_DO_ENDERECO_S } from '../fotos/fotos.service.js';
 import { type ArmazemDeImagens, FalhaDoArmazem } from '../imagens/armazem.js';
 import {
@@ -199,6 +200,8 @@ const STORY_GRANDE: Record<CanalDoPost, string> = {
   facebook: `O Story da Página aceita a foto até 10 MB e o vídeo de até 90 segundos. ${NAO_SAIU.facebook} Faça um Story novo com outra mídia.`,
 };
 const VIDEO_SUMIU = (c: CanalDoPost) => `O arquivo do vídeo deste post não está mais guardado no Liame. ${NAO_SAIU[c]} Faça um post novo.`;
+/** O vídeo maior que o Instagram aceita sem a cópia reduzida pronta (A6, Z10, parte 3b; D-A6-149). */
+const SEM_COPIA_DO_INSTAGRAM = `Este vídeo passa do que o Instagram aceita (até 1.920 px de largura e 25 Mbps), e a versão reduzida dele não está pronta. ${NAO_SAIU.instagram} Faça um post novo quando ela estiver pronta, ou publique só na Página.`;
 /**
  * A Meta não terminou o vídeo em 5 minutos (D-A6-69). No Instagram, nada saiu (o Liame só publica o contêiner pronto); na
  * Página, a Meta já recebeu o vídeo e pode publicá-lo sozinha depois: "Tentar de novo" confere antes de mandar de novo.
@@ -259,6 +262,11 @@ type LinhaDoPost = {
   capa_foto_chave: string | null;
   // O Story (A6, Z13): `post` ou `story`.
   format: string;
+  // A cópia do vídeo para o Instagram (A6, Z10, parte 3b).
+  instagram_status: string | null;
+  instagram_bytes: number | string | null;
+  instagram_width: number | null;
+  instagram_height: number | null;
 };
 type LinhaDoCanal = { channel: string; conta: string | null; body: string; status: string };
 
@@ -266,7 +274,19 @@ type LinhaDoCanal = { channel: string; conta: string | null; body: string; statu
  * O vídeo do post como a execução o usa (A6, Z10): o arquivo, as medidas, a duração e a capa (o arquivo da capa presa no
  * pedido, ou o tempo do quadro, em milissegundos, para o Instagram tirar do vídeo: o escolhido no novo post ou o do meio).
  */
-export type VideoLido = { chave: string; largura: number; altura: number; bytes: number; duracaoMs: number; capa: { chave: string } | { quadroMs: number } };
+export type VideoLido = {
+  chave: string;
+  largura: number;
+  altura: number;
+  bytes: number;
+  duracaoMs: number;
+  capa: { chave: string } | { quadroMs: number };
+  /**
+   * O arquivo que vai ao Instagram (A6, Z10, parte 3b; D-A6-149): o próprio vídeo, se cabe como está, ou a cópia reduzida
+   * pronta; nulo enquanto ela não fica pronta (ou se não deu). A Página e o pacote seguem com o vídeo como a loja gravou.
+   */
+  instagram: ArquivoDoInstagram | null;
+};
 
 /** O post como o trilho o vê, com o que só a execução usa (o arquivo da foto, ou do vídeo, e quando o post nasceu). */
 export type PostLido = {
@@ -294,7 +314,7 @@ export async function lerEstadoDoPost(tx: Tx, tenantId: string, resourceId: stri
            p.media, (f.kind = 'video' and f.status = 'pronta' and f.removed_at is null) as video_pronto, f.duration_ms as video_duracao,
            f.has_cover as video_tem_capa, f.cover_version as video_capa_versao, p.cover_photo_id, p.cover_sha256, p.cover_version, p.cover_offset_ms,
            (cf.status = 'pronta' and cf.removed_at is null and cf.sha256 = p.cover_sha256) as capa_foto_pronta, cf.object_key as capa_foto_chave,
-           p.format
+           p.format, f.instagram_status, f.instagram_bytes, f.instagram_width, f.instagram_height
       from liame.social_post p
       join liame.organization o on o.id = p.tenant_id
       left join liame.brand_photo f on f.id = p.photo_id
@@ -350,7 +370,18 @@ export async function lerEstadoDoPost(tx: Tx, tenantId: string, resourceId: stri
  */
 function videoDoPost(post: LinhaDoPost): { capaNoEstado: string | null; lido: VideoLido | null } | null {
   if (!post.photo_id || !post.video_pronto || !post.foto_chave || !post.foto_largura || !post.foto_altura || !post.video_duracao) return null;
-  const base = { chave: post.foto_chave, largura: post.foto_largura, altura: post.foto_altura, bytes: Number(post.foto_bytes ?? 0), duracaoMs: post.video_duracao };
+  const instagram = arquivoDoInstagram({
+    object_key: post.foto_chave,
+    width: post.foto_largura,
+    height: post.foto_altura,
+    bytes: Number(post.foto_bytes ?? 0),
+    duration_ms: post.video_duracao,
+    instagram_status: post.instagram_status,
+    instagram_bytes: post.instagram_bytes,
+    instagram_width: post.instagram_width,
+    instagram_height: post.instagram_height,
+  });
+  const base = { chave: post.foto_chave, largura: post.foto_largura, altura: post.foto_altura, bytes: Number(post.foto_bytes ?? 0), duracaoMs: post.video_duracao, instagram };
   if (post.cover_sha256) {
     // A foto da capa (a coluna do id fica nula quando a foto é apagada; o resumo fica, e a capa conta como mudada).
     if (!post.cover_photo_id || !post.capa_foto_pronta || !post.capa_foto_chave) return { capaNoEstado: null, lido: null };
@@ -696,15 +727,17 @@ export class PostPublicacaoConnector implements Connector {
 
   /**
    * O contêiner do Reels (A6, Z10, parte 3a; a referência de `/{ig-user-id}/media`, conferida em 06/11/2026): o vídeo
-   * como a loja gravou (`video_url`, o endereço assinado que a Meta busca), a legenda, no Feed e na aba Reels
+   * como a loja gravou ou, o maior que o Instagram aceita, a cópia reduzida (parte 3b; `video_url`, o endereço assinado
+   * que a Meta busca; sem a cópia pronta, o canal não sai), a legenda, no Feed e na aba Reels
    * (`share_to_feed`), e a capa presa no pedido: a imagem (`cover_url`, JPEG) ou o quadro escolhido, ou o do meio (`thumb_offset`, em
    * milissegundos).
    */
   private async reelsDoInstagram(video: VideoLido, legenda: string, deps: DependenciasDoPost): Promise<Record<string, string>> {
+    if (!video.instagram) throw new CanalNaoSaiu(SEM_COPIA_DO_INSTAGRAM);
     try {
       const corpo: Record<string, string> = {
         media_type: 'REELS',
-        video_url: await deps.armazem.enderecoDeLeitura(video.chave, VALIDADE_DO_VIDEO_S),
+        video_url: await deps.armazem.enderecoDeLeitura(video.instagram.chave, VALIDADE_DO_VIDEO_S),
         caption: legenda,
         share_to_feed: 'true',
       };
@@ -725,9 +758,12 @@ export class PostPublicacaoConnector implements Connector {
    */
   private async storyDoInstagram(post: PostLido, deps: DependenciasDoPost): Promise<Record<string, string>> {
     if (post.video) {
-      if (post.video.duracaoMs > STORY_DO_INSTAGRAM.videoMs || post.video.bytes > STORY_DO_INSTAGRAM.videoBytes) throw new CanalNaoSaiu(STORY_GRANDE.instagram);
+      // No Instagram, o vídeo que não cabe como está vai pela cópia reduzida (A6, Z10, parte 3b), e os limites valem para ela.
+      const noInstagram = post.video.instagram;
+      if (!noInstagram) throw new CanalNaoSaiu(SEM_COPIA_DO_INSTAGRAM);
+      if (post.video.duracaoMs > STORY_DO_INSTAGRAM.videoMs || noInstagram.bytes > STORY_DO_INSTAGRAM.videoBytes) throw new CanalNaoSaiu(STORY_GRANDE.instagram);
       try {
-        return { media_type: 'STORIES', video_url: await deps.armazem.enderecoDeLeitura(post.video.chave, VALIDADE_DO_VIDEO_S) };
+        return { media_type: 'STORIES', video_url: await deps.armazem.enderecoDeLeitura(noInstagram.chave, VALIDADE_DO_VIDEO_S) };
       } catch (err) {
         if (err instanceof FalhaDoArmazem && err.semArquivo) throw new CanalNaoSaiu(VIDEO_SUMIU('instagram'));
         throw err;
