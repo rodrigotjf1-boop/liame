@@ -48,7 +48,15 @@ create table if not exists liame.video_cut_request (
   constraint video_cut_request_videos check (cardinality(media_ids) between 1 and 4),
   constraint video_cut_request_duracao check (duration_s in (10, 15, 20)),
   constraint video_cut_request_quadros check (frames is null or frames between 1 and 16),
-  constraint video_cut_request_indice check ((frame_index is null) = (frames is null) and (frame_index is null or (jsonb_typeof(frame_index) = 'array' and jsonb_array_length(frame_index) = frames))),
+  -- O tamanho so se mede de uma lista: o `and` do SQL nao garante a ordem, e `jsonb_array_length` de outra coisa da erro
+  -- em vez da recusa.
+  constraint video_cut_request_indice check (
+    case
+      when frame_index is null then frames is null
+      when jsonb_typeof(frame_index) = 'array' then frames is not null and jsonb_array_length(frame_index) = frames
+      else false
+    end
+  ),
   constraint video_cut_request_tentativas check (attempts between 0 and 10),
   constraint video_cut_request_proposta check (proposal is null or jsonb_typeof(proposal) = 'object'),
   constraint video_cut_request_pronta check ((status = 'pronta') = (proposal is not null)),
