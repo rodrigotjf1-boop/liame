@@ -6,6 +6,7 @@ import {
   conferirNaTela,
   corteNoTempo,
   curtoDemais,
+  momentosDoVideo,
   motivoDosCortesTxt,
   mover,
   outrosTxt,
@@ -122,6 +123,27 @@ describe('os melhores momentos: a prévia e os vídeos', () => {
     expect([curtoDemais(video('v2', 2_500)), curtoDemais(video('v3', 3_000))]).toEqual([true, false]);
     expect(quantasLeva('momentos')).toBe('de 1 a 4 vídeos, na ordem em que entram no vídeo');
     expect(quantasLeva('combo')).toBe('de 2 a 4 fotos, na ordem em que entram no vídeo');
+  });
+
+  it('o vídeo pronto em Fotos: os cortes do pedido de onde ele saiu, com a capa e a posição de cada vídeo', () => {
+    const v1 = video('v1', 12_000);
+    const v2 = video('v2', 9_000);
+    const pedido = {
+      id: 'm1', brand_id: 'b', template: 'momentos' as const, format: '9x16' as const, duration_s: 10, media_ids: ['v1', 'v2'], title: 'Os melhores momentos', price_line: null, cta: '',
+      cuts: [{ media_id: 'v2', start_ms: 1_000, end_ms: 5_500, caption: 'O queijo' }, { media_id: 'v1', start_ms: 0, end_ms: 4_000, caption: 'A chapa' }],
+      with_logo: false, sound: 'sem' as const, status: 'pronto' as const, progress: 100, error: null, queue_ahead: null, photo_id: 'p1', created_at: '2026-11-15T09:00:00.000Z', started_at: null, finished_at: null,
+    };
+    expect(momentosDoVideo({ montage_id: 'm1' }, [pedido], [v1])).toEqual({
+      videos: 2,
+      cortes: [
+        { capa: null, video: 1, start_ms: 1_000, end_ms: 5_500, caption: 'O queijo' },
+        { capa: v1.thumbnail_url, video: 0, start_ms: 0, end_ms: 4_000, caption: 'A chapa' },
+      ],
+    });
+    // A foto da loja, o pedido fora da lista e os outros modelos: nada.
+    expect(momentosDoVideo({ montage_id: null }, [pedido], [v1])).toBeNull();
+    expect(momentosDoVideo({ montage_id: 'm9' }, [pedido], [v1])).toBeNull();
+    expect(momentosDoVideo({ montage_id: 'm1' }, [{ ...pedido, template: 'combo', cuts: null }], [v1])).toBeNull();
   });
 
   it('o rótulo da prévia com os cortes, e a faixa "Novidade" só na Novidade', () => {

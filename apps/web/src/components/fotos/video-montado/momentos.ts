@@ -1,4 +1,4 @@
-import type { BrandPhoto, VideoCut } from '@liame/contracts';
+import type { BrandPhoto, VideoCut, VideoMontageResponse } from '@liame/contracts';
 
 // "Os melhores momentos" na gaveta "Montar um vídeo" (A6 · Z16; P46): as contas e as frases dos cortes, sem React. A
 // régua é a mesma do servidor (a tarefa `social_cortes`, D-A6-152): de 2 a 6 cortes, a legenda até 40 caracteres e o
@@ -153,4 +153,21 @@ export function corteNoTempo(cortes: readonly Pick<VideoCut, 'start_ms' | 'end_m
     desde += dura;
   }
   return { k: cortes.length - 1, legenda: true, x: 1 };
+}
+
+/** Um corte no detalhe do vídeo pronto: a capa do vídeo de origem (nula se ele saiu de Fotos), a posição dele e a legenda. */
+export type CorteDoDetalhe = { capa: string | null; video: number; start_ms: number; end_ms: number; caption: string };
+
+/**
+ * Os cortes do vídeo pronto dos "Melhores momentos" (P46, a gaveta do vídeo em Fotos): o pedido de onde ele saiu, entre os
+ * mais recentes da marca; nulo para os outros modelos, para a foto da loja ou para o pedido que já saiu da lista.
+ */
+export function momentosDoVideo(foto: Pick<BrandPhoto, 'montage_id'>, montagens: readonly VideoMontageResponse[], fotos: readonly BrandPhoto[]): { videos: number; cortes: CorteDoDetalhe[] } | null {
+  if (!foto.montage_id) return null;
+  const m = montagens.find((x) => x.id === foto.montage_id);
+  if (!m || m.template !== 'momentos' || !m.cuts?.length) return null;
+  return {
+    videos: m.media_ids.length,
+    cortes: m.cuts.map((c) => ({ capa: fotos.find((f) => f.id === c.media_id)?.thumbnail_url ?? null, video: m.media_ids.indexOf(c.media_id), start_ms: c.start_ms, end_ms: c.end_ms, caption: c.caption })),
+  };
 }
