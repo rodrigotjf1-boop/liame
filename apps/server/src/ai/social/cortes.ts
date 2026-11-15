@@ -286,9 +286,19 @@ export function conferirCortes(
 }
 
 /**
+ * O corte de rascunho (D-A6-155; na rodada paga do v5, um corte de 1 s com a legenda "x"): a legenda sem palavra de verdade,
+ * com até 2 letras ou algarismos. É sobra do modelo, não proposta.
+ */
+function corteDeRascunho(c: CorteLido): boolean {
+  return (c.legenda.match(/[\p{L}\p{N}]/gu) ?? []).length <= 2;
+}
+
+/**
  * A proposta do Social media pela régua (`conferirCortes`, com o autor `ia`), antes de a pessoa ver: o modelo devolve o
  * vídeo pelo número (a partir de 1) e os segundos com uma casa; aqui eles viram a posição e milissegundos, e o total
- * passa pelo ajuste (`ajustarOTotal`, D-A6-155) antes da régua.
+ * passa pelo ajuste (`ajustarOTotal`, D-A6-155) antes da régua. Recusada a proposta, os cortes de rascunho saem e o resto
+ * passa de novo pela régua; vale só se sobrarem pelo menos 2 cortes e tudo passar. Senão, fica a recusa de antes. Corte com
+ * legenda de verdade e tempo errado não sai: a régua o recusa, e o eval segue medindo o erro.
  */
 export function cortesDaResposta(
   r: RespostaDosCortes,
@@ -302,5 +312,10 @@ export function cortesDaResposta(
     fimMs: Number.isFinite(c.fim) ? decimo(c.fim) : Number.NaN,
     legenda: c.legenda,
   }));
-  return conferirCortes(ajustarOTotal(lidos, p), p, marca, 'ia');
+  const conferida = conferirCortes(ajustarOTotal(lidos, p), p, marca, 'ia');
+  if (conferida.ok) return conferida;
+  const semRascunho = lidos.filter((c) => !corteDeRascunho(c));
+  if (semRascunho.length === lidos.length || semRascunho.length < LIMITES_DOS_CORTES.minimo) return conferida;
+  const deNovo = conferirCortes(ajustarOTotal(semRascunho, p), p, marca, 'ia');
+  return deNovo.ok ? deNovo : conferida;
 }
