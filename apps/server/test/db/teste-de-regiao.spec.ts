@@ -266,6 +266,10 @@ describe.skipIf(!hasDb)('o pedido do teste de região (plano da região, R8)', (
     const lido = await api.call('GET', `/v1/region-tests/${r.body.id}`, { cookie: e.cookie });
     expect(lido.status, JSON.stringify(lido.body)).toBe(200);
     expect(lido.body).toMatchObject({ status: 'pronto', action_id: r.body.action_id });
+    // A lista da marca, para "Testes" em Resultados (D-RG-97): o mesmo teste, como a leitura dele.
+    const lista = await api.call('GET', `/v1/region-tests?brand_id=${e.brandId}`, { cookie: e.cookie });
+    expect(lista.status, JSON.stringify(lista.body)).toBe(200);
+    expect(lista.body.items).toEqual([lido.body]);
     expect(graph.escritas).toBe(0);
   }, 120_000);
 });

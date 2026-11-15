@@ -1,4 +1,4 @@
-import type { CreateRegionTestRequest, RegionTestResponse } from '@liame/contracts';
+import type { CreateRegionTestRequest, RegionTestListQuery, RegionTestListResponse, RegionTestResponse } from '@liame/contracts';
 import { uuidv7 } from '@liame/database';
 import { Injectable } from '@nestjs/common';
 import { sql } from 'drizzle-orm';
@@ -219,6 +219,21 @@ export class TestesDeRegiaoService {
     await tx.execute(sql`update liame.campaign_test set action_id = ${pedido}, updated_at = now() where id = ${id} and tenant_id = ${quem.tenantId}`);
     auditDetail({ resourceId: id, before: null, after: { bairro: bairro.codigo, conjuntos: alvos.length, action_id: pedido } });
     return this.obter(auth, id);
+  }
+
+  /** Os testes de região da marca, do mais novo para o mais antigo (até 50), para "Testes" em Resultados (D-RG-97). */
+  async listar(auth: AuthContext, query: RegionTestListQuery): Promise<RegionTestListResponse> {
+    const quem = this.quem(auth);
+    const tx = currentTx();
+    const marca = await tx.execute(sql`select 1 from liame.brand where id = ${query.brand_id} and tenant_id = ${quem.tenantId} and archived_at is null`);
+    if (!marca.rows[0]) throw new AppProblem(404, 'nao-encontrado', 'Não encontramos', 'Marca não encontrada nesta empresa.');
+    const ids = (
+      await tx.execute<{ id: string }>(sql`
+        select id from liame.campaign_test where tenant_id = ${quem.tenantId} and brand_id = ${query.brand_id} and kind = 'regiao' order by created_at desc, id desc limit 50`)
+    ).rows;
+    const items: RegionTestResponse[] = [];
+    for (const { id } of ids) items.push(await this.obter(auth, id));
+    return { items };
   }
 
   async obter(auth: AuthContext, id: string): Promise<RegionTestResponse> {

@@ -725,11 +725,23 @@ export {
   CreativeTestDiscount,
   CreativeTestListQuery,
   CreativeTestListResponse,
+  CREATIVE_TEST_COUPON_READINESS,
+  creativeTestCouponLine,
+  CreativeTestOptionsQuery,
+  CreativeTestOptionsResponse,
   CreativeTestResponse,
   CreativeTestResult,
   CreativeTestStatus,
 } from './testes-de-criativo.js';
-export { CreateRegionTestRequest, REGION_TEST_DAYS, REGION_TEST_WEEKS_BEFORE, RegionTestAdSetStatus, RegionTestResponse } from './testes-de-regiao.js';
+export {
+  CreateRegionTestRequest,
+  REGION_TEST_DAYS,
+  REGION_TEST_WEEKS_BEFORE,
+  RegionTestAdSetStatus,
+  RegionTestListQuery,
+  RegionTestListResponse,
+  RegionTestResponse,
+} from './testes-de-regiao.js';
 export {
   CreateGoogleCampaignRequest,
   GOOGLE_TEXTS_NO_AI_REASONS,

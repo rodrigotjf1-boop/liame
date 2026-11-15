@@ -49,3 +49,10 @@ export const RegionTestResponse = z.strictObject({
   created_at: z.iso.datetime(),
 });
 export type RegionTestResponse = z.infer<typeof RegionTestResponse>;
+
+export const RegionTestListQuery = z.strictObject({ brand_id: z.uuid() });
+export type RegionTestListQuery = z.infer<typeof RegionTestListQuery>;
+
+/** Os testes de região da marca, do mais novo para o mais antigo (até 50): o que cada um mostrou fica guardado (D-RG-83, D-RG-97). */
+export const RegionTestListResponse = z.strictObject({ items: z.array(RegionTestResponse) });
+export type RegionTestListResponse = z.infer<typeof RegionTestListResponse>;

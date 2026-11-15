@@ -1,7 +1,7 @@
-import type { CreateCreativeTestRequest, CreativeTestListQuery, CreativeTestListResponse, CreativeTestResponse } from '@liame/contracts';
+import type { CreateCreativeTestRequest, CreativeTestListQuery, CreativeTestListResponse, CreativeTestOptionsQuery, CreativeTestOptionsResponse, CreativeTestResponse } from '@liame/contracts';
 import { uuidv7 } from '@liame/database';
 import { Injectable } from '@nestjs/common';
-import { sql } from 'drizzle-orm';
+import { type SQL, sql } from 'drizzle-orm';
 import { ActionService } from '../actions/action.service.js';
 import { baseDoPedido } from '../ai/criativo/contexto.js';
 import { conferirPeca } from '../ai/criativo/peca.js';
@@ -106,6 +106,16 @@ type LinhaDoBraco = {
   meta_adset_id: string | null;
   meta_ad_id: string | null;
 };
+
+/**
+ * A conta do Regem da loja que cria os dois cupons (a primeira ligada, pelo id) e se ela liberou criar cupom: a mesma no
+ * pedido e nas opções da gaveta. `unidade` é o id da loja (no pedido) ou a coluna dela (nas opções, por loja).
+ */
+const regemDaLoja = (tenantId: string, brandId: string, unidade: SQL) => sql`
+  select a.id, coalesce(a.provider_attributes -> 'escopos' @> '["cupons.criar"]'::jsonb, false) as pode_criar
+    from liame.connected_account a
+   where a.tenant_id = ${tenantId} and a.brand_id = ${brandId} and a.provider = 'regem' and a.unit_id = ${unidade} and ${contaConectada('a')}
+   order by a.id limit 1`;
 
 @Injectable()
 export class TestesDeCriativoService {
@@ -215,13 +225,7 @@ export class TestesDeCriativoService {
     }
 
     // Os dois cupons: a loja no Regem, com "criar cupom de campanha" liberado e a escrita ligada; os códigos, livres.
-    const regem = (
-      await tx.execute<{ id: string; pode_criar: boolean }>(sql`
-        select a.id, coalesce(a.provider_attributes -> 'escopos' @> '["cupons.criar"]'::jsonb, false) as pode_criar
-          from liame.connected_account a
-         where a.tenant_id = ${quem.tenantId} and a.brand_id = ${body.brand_id} and a.provider = 'regem' and a.unit_id = ${body.unit_id} and ${contaConectada('a')}
-         order by a.id limit 1`)
-    ).rows[0];
+    const regem = (await tx.execute<{ id: string; pode_criar: boolean }>(regemDaLoja(quem.tenantId, body.brand_id, sql`${body.unit_id}`))).rows[0];
     if (!regem) throw conflito('sem-regem', 'A loja não está ligada ao Regem', 'Cada criativo do teste tem um cupom, criado no Regem. Ligue o Regem da loja em Contas conectadas.');
     if (!regem.pode_criar) {
       throw conflito('regem-sem-cupom', 'A loja não liberou criar cupom', 'A loja não liberou "criar cupom de campanha" no Regem. Autorize de novo em Contas conectadas e ligue essa chave lá.');
@@ -467,6 +471,39 @@ export class TestesDeCriativoService {
     await this.actions.pedirPelaRota(auth, { tool: 'conjunto_pausar', brand_id: t.brand_id, provider: 'meta_ads', account_id: alvo.ad_account_id, resource_id: `conjunto:${alvo.meta_adset_id}`, params: {} });
     auditDetail({ resourceId: id, before: { perdeu, conjunto: 'ativo' }, after: { perdeu, conjunto: 'pausa pedida' } });
     return this.obter(auth, id);
+  }
+
+  /**
+   * As opções da gaveta do teste (D-RG-96): a função ligada, o teste vivo da marca (de criativo ou de região) e, em cada
+   * loja, se dá para criar os dois cupons, na ordem e com a consulta do pedido. Só leitura; o pedido confere tudo de novo.
+   */
+  async opcoes(auth: AuthContext, query: CreativeTestOptionsQuery): Promise<CreativeTestOptionsResponse> {
+    const quem = this.quem(auth);
+    const tx = currentTx();
+    const marca = await tx.execute(sql`select 1 from liame.brand where id = ${query.brand_id} and tenant_id = ${quem.tenantId} and archived_at is null`);
+    if (!marca.rows[0]) throw new AppProblem(404, 'nao-encontrado', 'Não encontramos', 'Marca não encontrada nesta empresa.');
+    const contexto = this.flags.context({ tenantId: quem.tenantId, userId: quem.userId, brandId: query.brand_id });
+    const enabled = await this.flags.isEnabled(FLAG_DO_TESTE_DE_CRIATIVO, contexto);
+    const escrita = await this.flags.isEnabled('regem_write', contexto);
+    const vivo = (
+      await tx.execute<{ id: string; kind: 'criativo' | 'regiao'; name: string; status: string }>(sql`
+        select id, kind, name, status from liame.campaign_test
+         where tenant_id = ${quem.tenantId} and brand_id = ${query.brand_id} and status in ('pedido', 'criando', 'pronto', 'rodando')
+         order by created_at desc, id desc limit 1`)
+    ).rows[0];
+    const lojas = (
+      await tx.execute<{ unit_id: string; regem_id: string | null; pode_criar: boolean | null }>(sql`
+        select u.id as unit_id, r.id as regem_id, r.pode_criar
+          from liame.unit u
+          left join lateral (${regemDaLoja(quem.tenantId, query.brand_id, sql`u.id`)}) r on true
+         where u.tenant_id = ${quem.tenantId} and u.brand_id = ${query.brand_id}
+         order by u.name, u.id`)
+    ).rows;
+    return {
+      enabled,
+      live: vivo ? { id: vivo.id, kind: vivo.kind, name: vivo.name, status: vivo.status } : null,
+      units: lojas.map((l) => ({ unit_id: l.unit_id, coupons: !l.regem_id ? 'sem_regem' : !l.pode_criar ? 'sem_permissao' : !escrita ? 'escrita_desligada' : 'pronto' })),
+    };
   }
 
   /** Os testes de criativo da marca, do mais novo para o mais antigo (D-RG-83: o que funcionou fica guardado por empresa). */

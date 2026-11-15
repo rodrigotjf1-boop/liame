@@ -77,6 +77,11 @@ interface Props {
     abrindo?: boolean;
     aoUsar: (p: AdPieceResponse) => void;
   } | null;
+  /**
+   * O teste de criativo (R8, D-RG-96): só com a função ligada, para quem opera campanhas e com outra peça aprovada na
+   * marca. O botão fica ao lado de "Usar numa campanha nova".
+   */
+  teste?: { abrindo?: boolean; aoTestar: (p: AdPieceResponse) => void } | null;
 }
 
 const iniciais = (nome: string) =>
@@ -196,10 +201,38 @@ export function PecaAberta(props: Props) {
 }
 
 /** A campanha nova a partir da peça aprovada (A4, X5; P42): o botão da gaveta, ou em que pé está a campanha desta peça. */
-function BlocoDaCampanha({ p, campanha }: { p: AdPieceResponse; campanha: NonNullable<Props['campanha']> }) {
-  const atual = campanha.atual;
+function BlocoDaCampanha({ p, campanha, teste }: { p: AdPieceResponse; campanha: NonNullable<Props['campanha']> | null; teste: Props['teste'] }) {
+  const atual = campanha?.atual ?? null;
   const andando = atual && (atual.status === 'pedida' || atual.status === 'criando');
   const situacao = atual ? situacaoDaCampanha(atual) : null;
+  // Sem a campanha nova ligada, o bloco fica só com o teste de criativo.
+  if (!campanha) {
+    return (
+      <div className="secao cn-na-peca">
+        <div className="card-cab">
+          <p className="rotulo-marca">Teste de criativo na Meta</p>
+        </div>
+        <p className="campo-dica">Esta peça contra outra aprovada, lado a lado, com a mesma verba e o mesmo público: cada uma com o seu cupom, e o caixa decide.</p>
+        <div className="vazio-acoes">
+          {teste && (
+            <button
+              className="btn btn--sm"
+              type="button"
+              aria-haspopup="dialog"
+              aria-busy={teste.abrindo || undefined}
+              aria-disabled={teste.abrindo || undefined}
+              onClick={() => {
+                if (!teste.abrindo) teste.aoTestar(p);
+              }}
+            >
+              <Icone nome="chart" pequeno />
+              {teste.abrindo ? 'Abrindo…' : 'Testar contra outra peça'}
+            </button>
+          )}
+        </div>
+      </div>
+    );
+  }
   return (
     <div className="secao cn-na-peca">
       <div className="card-cab">
@@ -230,6 +263,21 @@ function BlocoDaCampanha({ p, campanha }: { p: AdPieceResponse; campanha: NonNul
           >
             <Icone nome="megaphone" pequeno />
             {campanha.abrindo ? 'Abrindo…' : 'Usar numa campanha nova'}
+          </button>
+        )}
+        {teste && (
+          <button
+            className="btn btn--sm"
+            type="button"
+            aria-haspopup="dialog"
+            aria-busy={teste.abrindo || undefined}
+            aria-disabled={teste.abrindo || undefined}
+            onClick={() => {
+              if (!teste.abrindo) teste.aoTestar(p);
+            }}
+          >
+            <Icone nome="chart" pequeno />
+            {teste.abrindo ? 'Abrindo…' : 'Testar contra outra peça'}
           </button>
         )}
         {atual?.action_id && (
@@ -288,7 +336,7 @@ function BlocoDaCampanhaGoogle({ p, campanha }: { p: AdPieceResponse; campanha: 
   );
 }
 
-function Corpo({ p, pedido, opcoes, nomeDaMarca, pro, pode, agora, ocupado, campanha, campanhaGoogle, aoAprovar, aoRecusar, aoSalvar, aoPedirOutra, aoContestar, aoAvisar }: Props & { p: AdPieceResponse }) {
+function Corpo({ p, pedido, opcoes, nomeDaMarca, pro, pode, agora, ocupado, campanha, campanhaGoogle, teste, aoAprovar, aoRecusar, aoSalvar, aoPedirOutra, aoContestar, aoAvisar }: Props & { p: AdPieceResponse }) {
   const ids = useId();
   const versoes = p.versions ?? [p.current];
   const [vista, setVista] = useState<number | null>(null);
@@ -461,7 +509,7 @@ function Corpo({ p, pedido, opcoes, nomeDaMarca, pro, pode, agora, ocupado, camp
           </div>
         )}
 
-        {campanha && p.status === 'aprovada' && atual && <BlocoDaCampanha p={p} campanha={campanha} />}
+        {(campanha || teste) && p.status === 'aprovada' && atual && <BlocoDaCampanha p={p} campanha={campanha ?? null} teste={teste} />}
         {campanhaGoogle && p.status === 'aprovada' && atual && <BlocoDaCampanhaGoogle p={p} campanha={campanhaGoogle} />}
 
         <div className="secao">
