@@ -12,7 +12,11 @@ export const PAPEL: Record<string, { rotulo: string; classe: string }> = {
   manter: { rotulo: 'Manter', classe: 'st st--neutro' },
 };
 
-export function BairrosDosPedidos({ r, ids, mostraPro }: { r: RegionOverviewResponse; ids: string; mostraPro: boolean }) {
+/**
+ * `testar`: com a função do teste de região ligada e para quem opera campanhas, cada bairro com o código do IBGE ganha
+ * "Testar sem anúncio" (R8); nulo para os outros.
+ */
+export function BairrosDosPedidos({ r, ids, mostraPro, testar = null }: { r: RegionOverviewResponse; ids: string; mostraPro: boolean; testar?: ((b: { code: string; name: string }) => void) | null }) {
   if (r.order_districts_status === 'sem_endereco') return null;
   const b = r.order_districts;
   const titulo = `${ids}-bairros`;
@@ -81,6 +85,11 @@ export function BairrosDosPedidos({ r, ids, mostraPro }: { r: RegionOverviewResp
                   {d.per_1000 !== null && d.orders !== null && `, ${umaCasa(d.per_1000)} por mil moradores`}
                   {mostraPro && d.population !== null && ` · ${inteiro(d.population)} moradores (Censo 2022)`}
                 </span>
+                {testar && d.code && d.orders !== null && (
+                  <button className="btn btn--sm btn--ghost" type="button" aria-haspopup="dialog" onClick={() => testar({ code: d.code!, name: d.name })}>
+                    Testar sem anúncio<span className="sr-only">: {d.name}</span>
+                  </button>
+                )}
               </li>
             );
           })}

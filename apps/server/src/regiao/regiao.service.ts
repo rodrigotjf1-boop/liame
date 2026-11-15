@@ -1256,8 +1256,8 @@ export class RegiaoService {
     const chaves = [...new Set([...lidos.map((l) => nomeComparavel(l.district!)), ...daEntrega.keys()])];
     const gente = chaves.length
       ? (
-          await tx.execute<{ name_key: string; name: string; population: number | null }>(sql`
-            select distinct on (name_key) name_key, name, population from liame.region_district
+          await tx.execute<{ name_key: string; name: string; population: number | null; district_code: string }>(sql`
+            select distinct on (name_key) name_key, name, population, district_code from liame.region_district
              where city_code = ${cidade} and name_key = any(array(select jsonb_array_elements_text(${JSON.stringify(chaves)}::jsonb)))
              order by name_key, population desc nulls last, district_code`)
         ).rows
@@ -1285,6 +1285,7 @@ export class RegiaoService {
         comparable: comparados.some((b) => b.papel !== null),
         districts: comparados.slice(0, BAIRROS_NA_SECAO).map((b) => ({
           name: b.nome,
+          code: doCenso.get(nomeComparavel(b.nome))?.district_code ?? null,
           orders: b.pedidos,
           population: b.populacao,
           per_1000: b.porMil === null ? null : Math.round(b.porMil * 10) / 10,

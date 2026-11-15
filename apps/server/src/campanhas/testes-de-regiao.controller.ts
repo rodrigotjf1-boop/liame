@@ -1,4 +1,13 @@
-import { CreateRegionTestRequest, ProblemDetails, RegionTestListQuery, RegionTestListResponse, RegionTestResponse, ResourceId } from '@liame/contracts';
+import {
+  CreateRegionTestRequest,
+  ProblemDetails,
+  RegionTestListQuery,
+  RegionTestListResponse,
+  RegionTestOptionsQuery,
+  RegionTestOptionsResponse,
+  RegionTestResponse,
+  ResourceId,
+} from '@liame/contracts';
 import { Body, Controller, Get, HttpCode, Param, Post, Query } from '@nestjs/common';
 import {
   ApiBadRequestResponse,
@@ -59,6 +68,20 @@ export class TestesDeRegiaoController {
   @ApiNotFoundResponse({ standardSchema: ProblemDetails })
   listar(@Auth() auth: AuthContext, @Query({ schema: RegionTestListQuery }) query: RegionTestListQuery): Promise<RegionTestListResponse> {
     return this.testes.listar(auth, query);
+  }
+
+  @Get('options')
+  @Permissao('campanhas.ver')
+  @ApiOperation({
+    summary: 'As opções do teste de região',
+    description: 'Se a função `teste_de_regiao` está ligada para a empresa e a marca, e o teste vivo da marca (de região ou de criativo: um por vez). Só leitura: o pedido confere tudo de novo.',
+  })
+  @ApiOkResponse({ standardSchema: RegionTestOptionsResponse })
+  @ApiBadRequestResponse({ standardSchema: ProblemDetails })
+  @ApiForbiddenResponse({ standardSchema: ProblemDetails })
+  @ApiNotFoundResponse({ standardSchema: ProblemDetails })
+  opcoes(@Auth() auth: AuthContext, @Query({ schema: RegionTestOptionsQuery }) query: RegionTestOptionsQuery): Promise<RegionTestOptionsResponse> {
+    return this.testes.opcoes(auth, query);
   }
 
   @Get(':id')

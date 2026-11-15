@@ -736,10 +736,14 @@ export {
 export {
   CreateRegionTestRequest,
   REGION_TEST_DAYS,
+  REGION_TEST_MIN_OTHER_DISTRICTS,
+  REGION_TEST_MIN_WEEKLY_ORDERS,
   REGION_TEST_WEEKS_BEFORE,
   RegionTestAdSetStatus,
   RegionTestListQuery,
   RegionTestListResponse,
+  RegionTestOptionsQuery,
+  RegionTestOptionsResponse,
   RegionTestResponse,
 } from './testes-de-regiao.js';
 export {

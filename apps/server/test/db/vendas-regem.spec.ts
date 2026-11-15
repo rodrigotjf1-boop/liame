@@ -555,6 +555,12 @@ describe.skipIf(!hasDb)('conector do Regem: vendas da loja (A2.5 · F4)', () => 
       ['Tijuca', 12, true],
     ]);
     expect(JSON.stringify(b)).not.toMatch(/micros|receita|Niterói/);
+    // O código do IBGE do bairro (o pedido do teste de região vai por ele): o mesmo da tabela do Censo, ou nulo sem ela.
+    const [tijuca] = await ownerQuery<{ district_code: string }>(
+      `select district_code from liame.region_district where city_code = '3304557' and name_key = 'tijuca' order by population desc nulls last, district_code limit 1`,
+    );
+    expect(b.districts.find((d: { name: string }) => d.name === 'Tijuca').code).toBe(tijuca?.district_code ?? null);
+    expect(b.districts.find((d: { name: string }) => d.name === 'Grajaú')).toHaveProperty('code');
     await ligarFlagDaEmpresa(api, 'regiao', tenantId, false);
   });
 

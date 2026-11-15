@@ -1,4 +1,4 @@
-import type { CreateRegionTestRequest, RegionTestListQuery, RegionTestListResponse, RegionTestResponse } from '@liame/contracts';
+import type { CreateRegionTestRequest, RegionTestListQuery, RegionTestListResponse, RegionTestOptionsQuery, RegionTestOptionsResponse, RegionTestResponse } from '@liame/contracts';
 import { uuidv7 } from '@liame/database';
 import { Injectable } from '@nestjs/common';
 import { type SQL, sql } from 'drizzle-orm';
@@ -244,6 +244,22 @@ export class TestesDeRegiaoService {
     await tx.execute(sql`update liame.campaign_test set action_id = ${pedido}, updated_at = now() where id = ${id} and tenant_id = ${quem.tenantId}`);
     auditDetail({ resourceId: id, before: null, after: { bairro: bairro.codigo, conjuntos: alvos.length, action_id: pedido } });
     return this.obter(auth, id);
+  }
+
+  /** O que a tela precisa para oferecer o teste: a função ligada e o teste vivo da marca (de região ou de criativo). Só leitura. */
+  async opcoes(auth: AuthContext, query: RegionTestOptionsQuery): Promise<RegionTestOptionsResponse> {
+    const quem = this.quem(auth);
+    const tx = currentTx();
+    const marca = await tx.execute(sql`select 1 from liame.brand where id = ${query.brand_id} and tenant_id = ${quem.tenantId} and archived_at is null`);
+    if (!marca.rows[0]) throw new AppProblem(404, 'nao-encontrado', 'Não encontramos', 'Marca não encontrada nesta empresa.');
+    const enabled = await this.flags.isEnabled(FLAG_DO_TESTE_DE_REGIAO, this.flags.context({ tenantId: quem.tenantId, userId: quem.userId, brandId: query.brand_id }));
+    const vivo = (
+      await tx.execute<{ id: string; kind: 'criativo' | 'regiao'; name: string; status: string }>(sql`
+        select id, kind, name, status from liame.campaign_test
+         where tenant_id = ${quem.tenantId} and brand_id = ${query.brand_id} and status in ${VIVOS}
+         order by created_at desc, id desc limit 1`)
+    ).rows[0];
+    return { enabled, live: vivo ? { id: vivo.id, kind: vivo.kind, name: vivo.name, status: vivo.status } : null };
   }
 
   /** Os testes de região da marca, do mais novo para o mais antigo (até 50), para "Testes" em Resultados (D-RG-97). */

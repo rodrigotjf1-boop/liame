@@ -9,7 +9,9 @@ import { Icone } from '@/components/ui/icone';
 import { api, chamar, mensagemDe } from '@/lib/api';
 import { disparar } from '@/lib/disparar';
 import { useDetalhes } from '@/lib/modo';
+import { useSessao } from '@/lib/sessao';
 import { BairrosDosPedidos } from './bairros-dos-pedidos';
+import { DialogoTesteDeRegiao } from './dialogo-teste-de-regiao';
 import { DemandaDaLoja } from './demanda-da-loja';
 import { GavetaFontes } from './gaveta-fontes';
 import { MidiaNaRegiao } from './midia-na-regiao';
@@ -69,6 +71,24 @@ export function SuaRegiao({ brandId, lojas }: { brandId: string; lojas: StoreLoc
   const loja = noMapa.find((l) => l.unit_id === sel) ?? noMapa[0] ?? null;
   const lojaId = loja?.unit_id ?? null;
   const assinatura = loja ? JSON.stringify([loja.address, loja.delivery_areas]) : '';
+  // O teste de região (R8, D-RG-81): a função ligada para a marca e quem opera campanhas; o bairro escolhido abre o diálogo.
+  const { pode } = useSessao();
+  const podeOperar = pode('campanhas.operar');
+  const [testeLigado, setTesteLigado] = useState(false);
+  const [testando, setTestando] = useState<{ code: string; name: string } | null>(null);
+  useEffect(() => {
+    if (!podeOperar) return;
+    let vivo = true;
+    disparar(
+      chamar(() => api.GET('/v1/region-tests/options', { params: { query: { brand_id: brandId } } })).then((r) => {
+        // Sem resposta, o botão só não aparece: o pedido confere tudo de novo.
+        if (vivo) setTesteLigado(r.ok && r.data.enabled);
+      }),
+    );
+    return () => {
+      vivo = false;
+    };
+  }, [brandId, podeOperar]);
 
   // A leitura vale só para a loja de que veio (V64); a loja salva de novo (outro endereço) lê de novo.
   useEffect(() => {
@@ -471,7 +491,8 @@ export function SuaRegiao({ brandId, lojas }: { brandId: string; lojas: StoreLoc
           </section>
 
           <DemandaDaLoja r={r} lojaNome={loja.unit_name} ids={ids} mostraPro={mostraPro} />
-          <BairrosDosPedidos r={r} ids={ids} mostraPro={mostraPro} />
+          <BairrosDosPedidos r={r} ids={ids} mostraPro={mostraPro} testar={testeLigado ? setTestando : null} />
+          {testando && <DialogoTesteDeRegiao brandId={brandId} unitId={loja.unit_id} bairro={testando} reserva={titulo} aoFechar={() => setTestando(null)} />}
           <MidiaNaRegiao r={r} ids={ids} mostraPro={mostraPro} />
           <PublicoNasRedes r={r} ids={ids} mostraPro={mostraPro} />
 

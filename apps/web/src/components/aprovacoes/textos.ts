@@ -215,6 +215,19 @@ function testeDeCriativo(a: ActionResponse): PedidoApresentado {
   };
 }
 
+/** O teste de região (R8, D-RG-81): um bairro 14 dias sem anúncio. Por enquanto, aprovar só deixa o teste pronto. */
+function testeDeRegiao(a: ActionResponse): PedidoApresentado {
+  const conta = a.account_name ? ` em ${a.account_name}` : '';
+  return {
+    titulo: `Teste de região${conta}: um bairro sem anúncio`,
+    resumo: `${a.requested_by.name} pediu um teste de região: um bairro fica sem anúncio nas campanhas do Liame, e o caixa diz quanto o anúncio traz ali.`,
+    impacto: null,
+    mudancas: [['Teste de região', 'não existe', 'pronto']],
+    desfazer: 'Nada muda na Meta por enquanto: tirar o bairro dos anúncios entra numa próxima etapa do Liame.',
+    depoisDeAprovar: 'O Liame deixa o teste pronto. Nada muda na Meta por enquanto.',
+  };
+}
+
 const POR_FERRAMENTA: Record<string, (a: ActionResponse) => PedidoApresentado> = {
   ritmo_da_semana: ritmoDaSemana,
   regem_cupom_criar: cupom,
@@ -229,6 +242,7 @@ const POR_FERRAMENTA: Record<string, (a: ActionResponse) => PedidoApresentado> =
   teste_de_criativo_criar: testeDeCriativo,
   teste_de_criativo_ativar: testeDeCriativo,
   teste_de_criativo_pausar: testeDeCriativo,
+  teste_de_regiao: testeDeRegiao,
 };
 
 export function apresentar(a: ActionResponse): PedidoApresentado {

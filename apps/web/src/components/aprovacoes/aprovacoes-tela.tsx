@@ -29,7 +29,9 @@ import { DetalheCampanhaGoogle } from './detalhe-campanha-google';
 import { DetalheCampanhaNova } from './detalhe-campanha-nova';
 import { DetalheRitmo } from './detalhe-ritmo';
 import { DetalheTeste } from './detalhe-teste';
+import { DetalheTesteDeRegiao } from './detalhe-teste-de-regiao';
 import { ehPedidoDoRitmo } from './ritmo-textos';
+import { ehPedidoDoTesteDeRegiao } from './teste-de-regiao-textos';
 import { ehPedidoDoTeste } from './teste-textos';
 import { DetalheMensagem, type Feito } from './detalhe-mensagem';
 import { type AcaoDeMensagem, ehPedidoDeMensagem, etiquetaDaMensagem, mensagemApresentada } from './mensagem-textos';
@@ -1024,6 +1026,22 @@ export function AprovacoesTela() {
         aoPedirAtivar={pedirAtivarTeste}
         aoPedirPausa={pedirPausaDoPerdedor}
         aoAbrirPedido={abrirPedido}
+      />
+    );
+  } else if (aberta?.tipo === 'acao' && ehPedidoDoTesteDeRegiao(aberta.acao)) {
+    detalhe = (
+      <DetalheTesteDeRegiao
+        acao={aberta.acao}
+        grupo={grupoDe(aberta.acao, agora)}
+        agora={agora}
+        podeDecidir={podeDecidir}
+        temApp={temApp}
+        temChave={temChave}
+        titulo={tituloDoDetalhe}
+        campoCodigo={campoCodigo}
+        aoVoltar={voltarParaALista}
+        aoAprovar={aprovar}
+        aoRecusar={recusar}
       />
     );
   } else if (aberta?.tipo === 'acao' && ehPedidoDeCampanhaNova(aberta.acao)) {
