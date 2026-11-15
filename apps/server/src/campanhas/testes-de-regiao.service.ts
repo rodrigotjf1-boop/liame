@@ -1,7 +1,7 @@
 import type { CreateRegionTestRequest, RegionTestListQuery, RegionTestListResponse, RegionTestResponse } from '@liame/contracts';
 import { uuidv7 } from '@liame/database';
 import { Injectable } from '@nestjs/common';
-import { sql } from 'drizzle-orm';
+import { type SQL, sql } from 'drizzle-orm';
 import { ActionService } from '../actions/action.service.js';
 import { problemaDaLeitura } from '../actions/leitura-na-plataforma.js';
 import { contaConectada } from '../connections/conectada.js';
@@ -40,6 +40,31 @@ type Linha = {
   reason: string | null;
   created_at: Date;
 };
+
+type LinhaDoConjunto = { test_id: string; meta_campaign_id: string; meta_adset_id: string; name: string; status: RegionTestResponse['ad_sets'][number]['status'] };
+
+/** A resposta de um teste de região a partir da linha e dos conjuntos dele (a mesma no obter e na lista). */
+function respostaDoTesteDeRegiao(t: Linha, conjuntos: LinhaDoConjunto[]): RegionTestResponse {
+    const plano = t.plan as Omit<EstadoDoTesteDeRegiao, 'situacao'>;
+    const alvo = nomeComparavel(plano.bairro.nome);
+    return {
+      id: t.id,
+      brand_id: t.brand_id,
+      unit_id: t.unit_id,
+      name: t.name,
+      status: t.status,
+      district: { code: plano.bairro.codigo, name: plano.bairro.nome, meta: plano.bairro.meta !== null, radius_km: plano.bairro.raio_km },
+      days: plano.dias,
+      weeks: { from: plano.semanas.de, to: plano.semanas.ate, districts: plano.semanas.bairros.map((x) => ({ name: x.nome, orders: x.pedidos, target: nomeComparavel(x.nome) === alvo })) },
+      ad_sets: conjuntos.map((c) => ({ campaign_id: c.meta_campaign_id, ad_set_id: c.meta_adset_id, name: c.name, status: c.status })),
+      action_id: t.action_id,
+      started_on: t.started_on,
+      ended_on: t.ended_on,
+      error: t.error,
+      reason: t.reason,
+      created_at: new Date(t.created_at).toISOString(),
+    };
+}
 
 @Injectable()
 export class TestesDeRegiaoService {
@@ -227,46 +252,37 @@ export class TestesDeRegiaoService {
     const tx = currentTx();
     const marca = await tx.execute(sql`select 1 from liame.brand where id = ${query.brand_id} and tenant_id = ${quem.tenantId} and archived_at is null`);
     if (!marca.rows[0]) throw new AppProblem(404, 'nao-encontrado', 'Não encontramos', 'Marca não encontrada nesta empresa.');
-    const ids = (
-      await tx.execute<{ id: string }>(sql`
-        select id from liame.campaign_test where tenant_id = ${quem.tenantId} and brand_id = ${query.brand_id} and kind = 'regiao' order by created_at desc, id desc limit 50`)
-    ).rows;
-    const items: RegionTestResponse[] = [];
-    for (const { id } of ids) items.push(await this.obter(auth, id));
-    return { items };
+    // Uma consulta para os testes e uma para os conjuntos de todos: a lista não faz uma leitura por teste.
+    const linhas = await this.linhas(quem.tenantId, sql`brand_id = ${query.brand_id}`, sql`order by created_at desc, id desc limit 50`);
+    const conjuntos = await this.conjuntosDe(quem.tenantId, linhas.map((t) => t.id));
+    return { items: linhas.map((t) => respostaDoTesteDeRegiao(t, conjuntos.filter((c) => c.test_id === t.id))) };
   }
 
   async obter(auth: AuthContext, id: string): Promise<RegionTestResponse> {
     const quem = this.quem(auth);
-    const tx = currentTx();
-    const t = (
-      await tx.execute<Linha>(sql`
-        select id, brand_id, unit_id, name, status, plan, action_id, started_on::text as started_on, ended_on::text as ended_on, error, reason, created_at
-          from liame.campaign_test where id = ${id} and tenant_id = ${quem.tenantId} and kind = 'regiao'`)
-    ).rows[0];
+    const t = (await this.linhas(quem.tenantId, sql`id = ${id}`))[0];
     if (!t) throw new AppProblem(404, 'nao-encontrado', 'Não encontramos', 'Teste não encontrado nesta empresa.');
-    const conjuntos = (
-      await tx.execute<{ meta_campaign_id: string; meta_adset_id: string; name: string; status: RegionTestResponse['ad_sets'][number]['status'] }>(sql`
-        select meta_campaign_id, meta_adset_id, name, status from liame.campaign_test_target where test_id = ${id} and tenant_id = ${quem.tenantId} order by name, meta_adset_id`)
+    return respostaDoTesteDeRegiao(t, await this.conjuntosDe(quem.tenantId, [t.id]));
+  }
+
+  /** Os testes de região desta empresa que o filtro escolhe, numa consulta só; `fim` leva a ordem e o limite da lista. */
+  private async linhas(tenantId: string, filtro: SQL, fim: SQL = sql``): Promise<Linha[]> {
+    return (
+      await currentTx().execute<Linha>(sql`
+        select id, brand_id, unit_id, name, status, plan, action_id, started_on::text as started_on, ended_on::text as ended_on, error, reason, created_at
+          from liame.campaign_test where tenant_id = ${tenantId} and kind = 'regiao' and ${filtro}
+          ${fim}`)
     ).rows;
-    const plano = t.plan as Omit<EstadoDoTesteDeRegiao, 'situacao'>;
-    const alvo = nomeComparavel(plano.bairro.nome);
-    return {
-      id: t.id,
-      brand_id: t.brand_id,
-      unit_id: t.unit_id,
-      name: t.name,
-      status: t.status,
-      district: { code: plano.bairro.codigo, name: plano.bairro.nome, meta: plano.bairro.meta !== null, radius_km: plano.bairro.raio_km },
-      days: plano.dias,
-      weeks: { from: plano.semanas.de, to: plano.semanas.ate, districts: plano.semanas.bairros.map((x) => ({ name: x.nome, orders: x.pedidos, target: nomeComparavel(x.nome) === alvo })) },
-      ad_sets: conjuntos.map((c) => ({ campaign_id: c.meta_campaign_id, ad_set_id: c.meta_adset_id, name: c.name, status: c.status })),
-      action_id: t.action_id,
-      started_on: t.started_on,
-      ended_on: t.ended_on,
-      error: t.error,
-      reason: t.reason,
-      created_at: new Date(t.created_at).toISOString(),
-    };
+  }
+
+  /** Os conjuntos que o bairro deixa, de cada teste, numa consulta só (a lista não faz uma leitura por teste). */
+  private async conjuntosDe(tenantId: string, ids: string[]): Promise<LinhaDoConjunto[]> {
+    if (!ids.length) return [];
+    return (
+      await currentTx().execute<LinhaDoConjunto>(sql`
+        select test_id, meta_campaign_id, meta_adset_id, name, status from liame.campaign_test_target
+         where tenant_id = ${tenantId} and test_id in (${sql.join(ids.map((i) => sql`${i}`), sql`, `)})
+         order by test_id, name, meta_adset_id`)
+    ).rows;
   }
 }

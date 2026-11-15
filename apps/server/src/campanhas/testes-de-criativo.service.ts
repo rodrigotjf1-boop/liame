@@ -97,6 +97,7 @@ type Linha = {
 };
 
 type LinhaDoBraco = {
+  test_id: string;
   letter: LetraDoTeste;
   piece_id: string;
   piece_version: number;
@@ -106,6 +107,54 @@ type LinhaDoBraco = {
   meta_adset_id: string | null;
   meta_ad_id: string | null;
 };
+
+/** A resposta de um teste a partir da linha e dos dois braços dele (a mesma no obter e na lista). */
+function respostaDoTeste(t: Linha, bracos: LinhaDoBraco[]): CreativeTestResponse {
+    const plano = t.plan as Omit<EstadoDoTesteDeCriativo, 'situacao' | 'ativa'>;
+    const doPlano = (letra: LetraDoTeste) => plano.criativos[letra === 'A' ? 0 : 1];
+    return {
+      id: t.id,
+      brand_id: t.brand_id,
+      unit_id: t.unit_id,
+      name: t.name,
+      status: t.status,
+      active: t.active,
+      arms: bracos.map((b) => ({
+        letter: b.letter,
+        piece_id: b.piece_id,
+        piece_version: b.piece_version,
+        media_id: b.media_id,
+        title: doPlano(b.letter).peca.titulo,
+        ad_text: doPlano(b.letter).texto_do_anuncio,
+        coupon_code: b.coupon_code,
+        coupon_status: b.coupon_status,
+        meta: { adset_id: b.meta_adset_id, ad_id: b.meta_ad_id },
+      })),
+      discount: {
+        kind: plano.desconto.tipo,
+        percent: plano.desconto.tipo === 'percentual' ? plano.desconto.percentual : null,
+        value_cents: plano.desconto.tipo === 'valor' ? plano.desconto.valor_centavos : null,
+        min_order_cents: plano.desconto.pedido_minimo_centavos,
+        valid_until: plano.desconto.valido_ate,
+      },
+      radius_km: plano.raio_km,
+      districts: plano.bairros?.length ? plano.bairros.map((b) => ({ code: b.codigo, name: b.nome, meta: b.meta !== null, radius_km: b.raio_km })) : null,
+      daily_budget_micros: Number(t.daily_budget_micros),
+      min_days: t.min_days,
+      max_days: t.max_days,
+      link: plano.link,
+      action_id: t.action_id,
+      pending_action_id: t.pending_action_id,
+      loser_pause: t.loser_pause ? { action_id: t.loser_pause.action_id, status: t.loser_pause.status as NonNullable<CreativeTestResponse['loser_pause']>['status'] } : null,
+      started_on: t.started_on,
+      ended_on: t.ended_on,
+      error: t.error,
+      reason: t.reason,
+      result: resultadoDaResposta(t.result),
+      meta: { account_id: t.meta_account_id, campaign_id: t.meta_campaign_id },
+      created_at: new Date(t.created_at).toISOString(),
+    };
+}
 
 /**
  * A conta do Regem da loja que cria os dois cupons (a primeira ligada, pelo id) e se ela liberou criar cupom: a mesma no
@@ -512,75 +561,27 @@ export class TestesDeCriativoService {
     const tx = currentTx();
     const marca = await tx.execute(sql`select 1 from liame.brand where id = ${query.brand_id} and tenant_id = ${quem.tenantId} and archived_at is null`);
     if (!marca.rows[0]) throw new AppProblem(404, 'nao-encontrado', 'Não encontramos', 'Marca não encontrada nesta empresa.');
-    const ids = (
-      await tx.execute<{ id: string }>(sql`
-        select id from liame.campaign_test where tenant_id = ${quem.tenantId} and brand_id = ${query.brand_id} and kind = 'criativo' order by created_at desc, id desc limit 50`)
-    ).rows;
-    const items: CreativeTestResponse[] = [];
-    for (const { id } of ids) items.push(await this.obter(auth, id));
-    return { items };
+    // Uma consulta para os testes e uma para os braços de todos: a lista não faz uma leitura por teste.
+    const linhas = await this.linhas(quem.tenantId, sql`t.brand_id = ${query.brand_id}`, { fim: sql`order by t.created_at desc, t.id desc limit 50` });
+    const bracos = await this.bracosDe(quem.tenantId, linhas.map((t) => t.id));
+    return { items: linhas.map((t) => respostaDoTeste(t, bracos.filter((b) => b.test_id === t.id))) };
   }
 
   async obter(auth: AuthContext, id: string): Promise<CreativeTestResponse> {
     const quem = this.quem(auth);
     const t = await this.linha(quem.tenantId, id, false);
-    const bracos = (
-      await currentTx().execute<LinhaDoBraco>(sql`
-        select letter, piece_id, piece_version, media_id, coupon_code, coupon_status, meta_adset_id, meta_ad_id
-          from liame.campaign_test_arm where test_id = ${id} and tenant_id = ${quem.tenantId} order by letter`)
-    ).rows;
-    const plano = t.plan as Omit<EstadoDoTesteDeCriativo, 'situacao' | 'ativa'>;
-    const doPlano = (letra: LetraDoTeste) => plano.criativos[letra === 'A' ? 0 : 1];
-    return {
-      id: t.id,
-      brand_id: t.brand_id,
-      unit_id: t.unit_id,
-      name: t.name,
-      status: t.status,
-      active: t.active,
-      arms: bracos.map((b) => ({
-        letter: b.letter,
-        piece_id: b.piece_id,
-        piece_version: b.piece_version,
-        media_id: b.media_id,
-        title: doPlano(b.letter).peca.titulo,
-        ad_text: doPlano(b.letter).texto_do_anuncio,
-        coupon_code: b.coupon_code,
-        coupon_status: b.coupon_status,
-        meta: { adset_id: b.meta_adset_id, ad_id: b.meta_ad_id },
-      })),
-      discount: {
-        kind: plano.desconto.tipo,
-        percent: plano.desconto.tipo === 'percentual' ? plano.desconto.percentual : null,
-        value_cents: plano.desconto.tipo === 'valor' ? plano.desconto.valor_centavos : null,
-        min_order_cents: plano.desconto.pedido_minimo_centavos,
-        valid_until: plano.desconto.valido_ate,
-      },
-      radius_km: plano.raio_km,
-      districts: plano.bairros?.length ? plano.bairros.map((b) => ({ code: b.codigo, name: b.nome, meta: b.meta !== null, radius_km: b.raio_km })) : null,
-      daily_budget_micros: Number(t.daily_budget_micros),
-      min_days: t.min_days,
-      max_days: t.max_days,
-      link: plano.link,
-      action_id: t.action_id,
-      pending_action_id: t.pending_action_id,
-      loser_pause: t.loser_pause ? { action_id: t.loser_pause.action_id, status: t.loser_pause.status as NonNullable<CreativeTestResponse['loser_pause']>['status'] } : null,
-      started_on: t.started_on,
-      ended_on: t.ended_on,
-      error: t.error,
-      reason: t.reason,
-      result: resultadoDaResposta(t.result),
-      meta: { account_id: t.meta_account_id, campaign_id: t.meta_campaign_id },
-      created_at: new Date(t.created_at).toISOString(),
-    };
+    return respostaDoTeste(t, await this.bracosDe(quem.tenantId, [t.id]));
   }
 
-  /** O teste de criativo desta empresa, com o pedido de ativar que espera decisão; 404 quando não é dela. */
-  private async linha(tenantId: string, id: string, travar: boolean): Promise<Linha> {
+  /**
+   * Os testes de criativo desta empresa que o filtro escolhe, numa consulta só, com o pedido de ativar que espera decisão e
+   * o de pausar o criativo que perdeu. `fim` leva a ordem e o limite da lista.
+   */
+  private async linhas(tenantId: string, filtro: SQL, o: { travar?: boolean; fim?: SQL } = {}): Promise<Linha[]> {
     const r = await currentTx().execute<Linha>(sql`
       select t.id, t.brand_id, t.unit_id, t.name, t.status, t.active, t.daily_budget_micros::text, t.min_days, t.max_days, t.plan, t.action_id,
              (select p.id from liame.action_request p
-               where p.tenant_id = t.tenant_id and p.tool = 'teste_de_criativo_ativar' and p.resource_id = ${recursoDoTesteDeCriativo(id)} and p.status in ${EM_ABERTO}
+               where p.tenant_id = t.tenant_id and p.tool = 'teste_de_criativo_ativar' and p.resource_id = ${recursoDoTesteDeCriativo('')} || t.id::text and p.status in ${EM_ABERTO}
                order by p.created_at desc limit 1) as pending_action_id,
              (select json_build_object('action_id', p.id, 'status', p.status) from liame.action_request p
                 join liame.campaign_test_arm b on b.test_id = t.id and b.tenant_id = t.tenant_id and b.letter <> (t.result->>'vencedor')
@@ -590,9 +591,28 @@ export class TestesDeCriativoService {
              t.meta_campaign_id, a.external_id as meta_account_id, t.started_on::text as started_on, t.ended_on::text as ended_on, t.error, t.reason, t.result, t.created_at
         from liame.campaign_test t
         left join liame.connected_account a on a.id = t.ad_account_id and a.tenant_id = t.tenant_id
-       where t.id = ${id} and t.tenant_id = ${tenantId} and t.kind = 'criativo'
-       ${travar ? sql`for update of t` : sql``}`);
-    if (!r.rows[0]) throw new AppProblem(404, 'nao-encontrado', 'Não encontramos', 'Teste não encontrado nesta empresa.');
-    return r.rows[0];
+       where t.tenant_id = ${tenantId} and t.kind = 'criativo' and ${filtro}
+       ${o.fim ?? sql``}
+       ${o.travar ? sql`for update of t` : sql``}`);
+    return r.rows;
+  }
+
+  /** O teste de criativo desta empresa; 404 quando não é dela. */
+  private async linha(tenantId: string, id: string, travar: boolean): Promise<Linha> {
+    const t = (await this.linhas(tenantId, sql`t.id = ${id}`, { travar }))[0];
+    if (!t) throw new AppProblem(404, 'nao-encontrado', 'Não encontramos', 'Teste não encontrado nesta empresa.');
+    return t;
+  }
+
+  /** Os dois criativos de cada teste, numa consulta só (a lista não faz uma leitura por teste). */
+  private async bracosDe(tenantId: string, ids: string[]): Promise<LinhaDoBraco[]> {
+    if (!ids.length) return [];
+    return (
+      await currentTx().execute<LinhaDoBraco>(sql`
+        select test_id, letter, piece_id, piece_version, media_id, coupon_code, coupon_status, meta_adset_id, meta_ad_id
+          from liame.campaign_test_arm
+         where tenant_id = ${tenantId} and test_id in (${sql.join(ids.map((i) => sql`${i}`), sql`, `)})
+         order by test_id, letter`)
+    ).rows;
   }
 }
