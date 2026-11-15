@@ -111,6 +111,10 @@ export function motivoDosCortesTxt(codigo: string | null | undefined): string {
       return outrosTxt(0);
     case 'video-curto':
       return 'Um dos vídeos tem menos de 3 segundos: tire-o para pedir os cortes.';
+    case 'so-videos':
+      return 'Este modelo leva só vídeos de Fotos: tire a foto para pedir os cortes.';
+    case 'pedido-anterior-fora':
+      return 'O pedido de antes não é desta marca. Peça os cortes de novo.';
     case 'sem_quadros':
       return 'Não deu para ler estes vídeos agora. Escolha outros vídeos, ou peça de novo.';
     case 'parado':

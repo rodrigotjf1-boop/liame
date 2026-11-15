@@ -215,7 +215,7 @@ export function BlocoDosCortes(p: Props) {
 
   const mostraPedir = !ocupado && fase !== 'demorou' && !recebeu && !temCortes;
   return (
-    <fieldset className="campo" aria-describedby={descricao}>
+    <fieldset className="campo vm-cortes-bloco" aria-describedby={descricao}>
       <legend className="rotulo">Os cortes</legend>
       <div className="vm-textos-cab">
         <span className="campo-dica" id={`${ids}-d`}>

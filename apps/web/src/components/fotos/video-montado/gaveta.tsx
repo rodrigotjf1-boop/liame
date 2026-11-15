@@ -420,6 +420,15 @@ export function GavetaMontarVideo(p: Props) {
                       setErros((e) => ({ ...e, cortes: undefined }));
                     }}
                     aoMudar={(c) => {
+                      // O erro sai da legenda que mudou (ou do corte tirado); o das outras fica até a próxima conferência.
+                      setErrosDasLegendas((e) =>
+                        Object.fromEntries(
+                          Object.entries(e).filter(([chave]) => {
+                            const depois = c.find((x) => x.chave === chave);
+                            return depois !== undefined && cortes.find((x) => x.chave === chave)?.caption === depois.caption;
+                          }),
+                        ),
+                      );
                       setCortes(c);
                       setErros((e) => ({ ...e, cortes: undefined }));
                     }}
