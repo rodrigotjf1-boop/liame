@@ -80,7 +80,8 @@ export function andamentoDoTesteDeRegiao(t: RegionTestResponse): string | null {
 // ------------------------------------------------------------ o resultado (a medida, D-RG-102)
 
 /** Pedidos por semana com uma casa decimal, como a tela escreve ("12,5", "84,0"). */
-const umaCasa = (n: number): string => n.toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+/** Até uma casa decimal, só quando o número não é inteiro ("84", "123,4"), como a tabela das semanas de antes. */
+const umaCasa = (n: number): string => n.toLocaleString('pt-BR', { maximumFractionDigits: 1 });
 
 const sobraram = (n: number): string => (n === 0 ? 'não sobrou nenhum bairro' : n === 1 ? 'sobrou 1 bairro' : `sobraram ${n} bairros`);
 

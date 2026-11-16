@@ -143,15 +143,15 @@ describe('o resultado do teste de região (a medida, D-RG-102)', () => {
   const comMotivo = (reason: string, mais: Partial<Resultado> = {}): Resultado => ({ ...PROVOU, effect: null, reason, ...mais });
   const frase = (result: Resultado | null) => resultadoDoTesteDeRegiao({ ...TERMINADO, result });
 
-  it('com prova: o que o bairro fez, o que faria seguindo os outros e a faixa, com uma casa decimal', () => {
-    expect(frase(PROVOU)).toBe('Sem anúncio, o bairro fez 84,0 pedidos por semana; seguindo os outros bairros, faria 123,4. O anúncio traz de 24,0 a 52,5 pedidos por semana ali.');
-    expect(frase({ ...PROVOU, effect: { ...PROVOU.effect!, actual_per_week: 1234.56, expected_per_week: 1500 } })).toContain('o bairro fez 1.234,6 pedidos por semana; seguindo os outros bairros, faria 1.500,0.');
+  it('com prova: o que o bairro fez, o que faria seguindo os outros e a faixa, com até uma casa decimal', () => {
+    expect(frase(PROVOU)).toBe('Sem anúncio, o bairro fez 84 pedidos por semana; seguindo os outros bairros, faria 123,4. O anúncio traz de 24 a 52,5 pedidos por semana ali.');
+    expect(frase({ ...PROVOU, effect: { ...PROVOU.effect!, actual_per_week: 1234.56, expected_per_week: 1500 } })).toContain('o bairro fez 1.234,6 pedidos por semana; seguindo os outros bairros, faria 1.500.');
     expect(vereditoDoTesteDeRegiao({ ...TERMINADO, result: PROVOU })).toMatchObject({ titulo: 'O anúncio traz pedido no bairro', provou: true });
   });
 
   it('sem prova: a faixa começa em zero', () => {
     const naoProvou: Resultado = { ...PROVOU, effect: { expected_per_week: 30.84, actual_per_week: 21, brings_per_week: 9.84, range: { from: 0, to: 17.04 }, proven: false } };
-    expect(frase(naoProvou)).toBe('Não deu para provar que o anúncio traz pedido no bairro: a faixa vai de 0 a 17,0 por semana.');
+    expect(frase(naoProvou)).toBe('Não deu para provar que o anúncio traz pedido no bairro: a faixa vai de 0 a 17 por semana.');
     expect(vereditoDoTesteDeRegiao({ ...TERMINADO, result: naoProvou })).toMatchObject({ titulo: 'Não deu para provar', provou: false });
   });
 
@@ -161,7 +161,7 @@ describe('o resultado do teste de região (a medida, D-RG-102)', () => {
     expect(frase(comMotivo('poucos_bairros', { districts: PROVOU.districts.slice(0, 1) }))).toBe('Nos dias do teste, sobrou 1 bairro para comparar; a conta pede pelo menos 3.');
     expect(frase(comMotivo('poucos_bairros', { districts: [] }))).toBe('Nos dias do teste, não sobrou nenhum bairro para comparar; a conta pede pelo menos 3.');
     expect(frase(comMotivo('abaixo_do_minimo', { expected_per_week: 120, orders: { ...PROVOU.orders, target_during: null } }))).toBe(
-      'O bairro teve menos pedidos do que o mínimo que o Regem mostra por bairro (5 nos 14 dias); seguindo os outros bairros, faria 120,0 pedidos por semana.',
+      'O bairro teve menos pedidos do que o mínimo que o Regem mostra por bairro (5 nos 14 dias); seguindo os outros bairros, faria 120 pedidos por semana.',
     );
     expect(frase(comMotivo('sem_conta'))).toBe('Faltou pedido de um dos lados, antes ou durante o teste: não há conta.');
     expect(frase(comMotivo('sem_leitura', { regem_minimum: null }))).toBe('O Liame não conseguiu ler os pedidos do Regem dos 14 dias: sem eles, não há conta.');
@@ -181,7 +181,7 @@ describe('o resultado do teste de região (a medida, D-RG-102)', () => {
     expect(linhaDoTesteDeRegiao({ ...TERMINADO, result: PROVOU }, '2026-11-16')).toMatchObject({
       situacao: { rotulo: 'Terminado' },
       quando: '01/11 a 14/11 · 14 dias',
-      veredito: 'Sem anúncio, o bairro fez 84,0 pedidos por semana; seguindo os outros bairros, faria 123,4. O anúncio traz de 24,0 a 52,5 pedidos por semana ali.',
+      veredito: 'Sem anúncio, o bairro fez 84 pedidos por semana; seguindo os outros bairros, faria 123,4. O anúncio traz de 24 a 52,5 pedidos por semana ali.',
     });
     expect(linhaDoTesteDeRegiao({ ...TERMINADO, result: null }, '2026-11-15').veredito).toBe('O resultado sai depois que a leitura dos pedidos do Regem cobrir os 14 dias.');
     expect(linhaDoTesteDeRegiao({ ...TERMINADO, status: 'encerrado', ended_on: '2026-11-06', result: null }, '2026-11-15').veredito).toBe(
@@ -194,16 +194,16 @@ describe('o resultado do teste de região (a medida, D-RG-102)', () => {
 
   it('a régua da faixa: a frase para o leitor de tela, a faixa, o ponto mais provável e a escala de 0 a um número redondo acima da faixa', () => {
     const html = renderToStaticMarkup(createElement(ReguaDaFaixa, { resultado: PROVOU }));
-    expect(html).toContain('<div class="r8-faixa" role="img" aria-label="A conta fica entre 24,0 e 52,5 pedidos por semana; o ponto mais provável é 39,4.">');
+    expect(html).toContain('<div class="r8-faixa" role="img" aria-label="A conta fica entre 24 e 52,5 pedidos por semana; o ponto mais provável é 39,4.">');
     // 52,5 com folga vai a 65,6: o redondo seguinte é 80. A faixa de 30,05% a 65,63% da escala; o ponto em 49,2%.
     expect(html).toContain('<span class="r8-faixa-parte" style="left:30.05%;width:35.58%"></span><span class="r8-faixa-ponto" style="left:49.2%"></span>');
-    expect(html).toContain('<div class="r8-faixa-rot"><span>0</span><span>entre 24,0 e 52,5 por semana</span><span>80</span></div>');
+    expect(html).toContain('<div class="r8-faixa-rot"><span>0</span><span>entre 24 e 52,5 por semana</span><span>80</span></div>');
     expect(html).not.toContain('Meta');
     // Sem prova, a faixa começa em zero; o número grande leva o ponto do milhar.
     const naoProvou = reguaDaFaixa({ expected_per_week: 30.84, actual_per_week: 21, brings_per_week: 9.84, range: { from: 0, to: 17.04 }, proven: false });
-    expect(naoProvou).toMatchObject({ rotulo: 'A conta fica entre 0,0 e 17,0 pedidos por semana; o ponto mais provável é 9,8.', de: 0, meio: 'entre 0,0 e 17,0 por semana', fim: '25' });
+    expect(naoProvou).toMatchObject({ rotulo: 'A conta fica entre 0 e 17 pedidos por semana; o ponto mais provável é 9,8.', de: 0, meio: 'entre 0 e 17 por semana', fim: '25' });
     expect(reguaDaFaixa({ ...PROVOU.effect!, brings_per_week: 1310.4, range: { from: 1200.6, to: 1500 } })).toMatchObject({
-      rotulo: 'A conta fica entre 1.200,6 e 1.500,0 pedidos por semana; o ponto mais provável é 1.310,4.',
+      rotulo: 'A conta fica entre 1.200,6 e 1.500 pedidos por semana; o ponto mais provável é 1.310,4.',
       fim: '2.000',
     });
   });
@@ -222,17 +222,17 @@ describe('o resultado do teste de região (a medida, D-RG-102)', () => {
     }
   });
 
-  it('a tabela antes e no teste: o bairro do teste primeiro e marcado, os de comparar que ficaram e os outros somados, por semana com uma casa', () => {
+  it('a tabela antes e no teste: o bairro do teste primeiro e marcado, os de comparar que ficaram e os outros somados, por semana com até uma casa', () => {
     const t = { ...TERMINADO, result: PROVOU };
     // Antes = pedidos ÷ 4 semanas; no teste = pedidos ÷ 2 semanas.
     expect(bairrosAntesENoTeste(t)).toEqual({
       linhas: [
-        { nome: 'Lapa', alvo: true, antes: '120,0', noTeste: '84,0' },
-        { nome: 'Centro', alvo: false, antes: '250,0', noTeste: '260,0' },
-        { nome: 'Glória', alvo: false, antes: '103,0', noTeste: '105,0' },
-        { nome: 'Saúde', alvo: false, antes: '75,0', noTeste: '75,0' },
+        { nome: 'Lapa', alvo: true, antes: '120', noTeste: '84' },
+        { nome: 'Centro', alvo: false, antes: '250', noTeste: '260' },
+        { nome: 'Glória', alvo: false, antes: '103', noTeste: '105' },
+        { nome: 'Saúde', alvo: false, antes: '75', noTeste: '75' },
       ],
-      outros: { antes: '428,0', noTeste: '440,0' },
+      outros: { antes: '428', noTeste: '440' },
     });
     const html = renderToStaticMarkup(createElement(TabelaAntesENoTeste, { t }));
     expect(html).toContain('<table class="tabela r8-tabela r8-ab r8-bairros">');
@@ -240,18 +240,18 @@ describe('o resultado do teste de região (a medida, D-RG-102)', () => {
     expect(html).toContain('<th scope="col">Bairro</th><th scope="col" class="n">Antes (por semana)</th><th scope="col" class="n">No teste (por semana)</th>');
     expect([...html.matchAll(/<tr[^>]*><th scope="row"[^>]*>([^<]+)<small>/g)].map((m) => m[1])).toEqual(['Lapa', 'Centro', 'Glória', 'Saúde']);
     expect(html).toContain(
-      '<tbody><tr class="r8-frente"><th scope="row" class="r8-frente">Lapa<small>sem anúncio no teste</small></th><td class="n r8-frente" data-col="Antes (por semana)">120,0</td><td class="n r8-frente" data-col="No teste (por semana)">84,0</td></tr>',
+      '<tbody><tr class="r8-frente"><th scope="row" class="r8-frente">Lapa<small>sem anúncio no teste</small></th><td class="n r8-frente" data-col="Antes (por semana)">120</td><td class="n r8-frente" data-col="No teste (por semana)">84</td></tr>',
     );
-    expect(html).toContain('<tr><th scope="row">Centro<small>com anúncio, como sempre</small></th><td class="n" data-col="Antes (por semana)">250,0</td><td class="n" data-col="No teste (por semana)">260,0</td></tr>');
+    expect(html).toContain('<tr><th scope="row">Centro<small>com anúncio, como sempre</small></th><td class="n" data-col="Antes (por semana)">250</td><td class="n" data-col="No teste (por semana)">260</td></tr>');
     expect(html).toContain(
-      '<tfoot><tr><th scope="row">Os outros bairros, somados</th><td class="n" data-col="Antes (por semana)">428,0</td><td class="n" data-col="No teste (por semana)">440,0</td></tr></tfoot>',
+      '<tfoot><tr><th scope="row">Os outros bairros, somados</th><td class="n" data-col="Antes (por semana)">428</td><td class="n" data-col="No teste (por semana)">440</td></tr></tfoot>',
     );
     expect(periodosDoResultado(t)).toBe('as 4 semanas de antes (de 12/10 a 08/11) e os 14 dias do teste (de 01/11 a 14/11)');
   });
 
   it('abaixo do mínimo: o bairro do teste diz "menos de N" no teste (o mínimo do Regem), e não há régua', () => {
     const abaixo = { ...TERMINADO, result: comMotivo('abaixo_do_minimo', { expected_per_week: 120, orders: { ...PROVOU.orders, target_during: null } }) };
-    expect(bairrosAntesENoTeste(abaixo)?.linhas[0]).toEqual({ nome: 'Lapa', alvo: true, antes: '120,0', noTeste: 'menos de 5', obs: 'nos 14 dias' });
+    expect(bairrosAntesENoTeste(abaixo)?.linhas[0]).toEqual({ nome: 'Lapa', alvo: true, antes: '120', noTeste: 'menos de 5', obs: 'nos 14 dias' });
     const html = renderToStaticMarkup(createElement(TabelaAntesENoTeste, { t: abaixo }));
     expect(html).toContain('<td class="n r8-frente" data-col="No teste (por semana)">menos de 5<small>nos 14 dias</small></td>');
     expect([...html.matchAll(/<tr[^>]*><th scope="row"[^>]*>([^<]+)<small>/g)].map((m) => m[1])).toEqual(['Lapa', 'Centro', 'Glória', 'Saúde']);
