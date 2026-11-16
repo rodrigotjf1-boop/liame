@@ -60,7 +60,7 @@ function resultadoNaResposta(guardado: unknown): RegionTestResponse['result'] {
   return {
     window: { from: r.janela.de, to: r.janela.ate },
     orders: { target_before: r.pedidos.alvoAntes, others_before: r.pedidos.outrosAntes, target_during: r.pedidos.alvoDurante, others_during: r.pedidos.outrosDurante },
-    districts: r.bairros,
+    districts: r.bairros.map((b) => ({ name: b.nome, orders_before: b.antes, orders_during: b.durante })),
     effect: r.efeito
       ? {
           expected_per_week: r.efeito.esperadoPorSemana,

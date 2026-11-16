@@ -18,7 +18,8 @@ import { hasDb } from './env.js';
 // Plano da região, R8: a medida do teste de região (D-RG-81, D-RG-82 e D-RG-102), contra Postgres e um Regem de mentira
 // que devolve os pedidos de entrega por bairro (`GET {base}/pedidos/bairros`, o contrato da R3) de cada loja. O que se prova:
 //   - o teste `terminado`, sem resultado e com o fim antes de hoje, ganha o resultado pelos pedidos dos 14 dias (a janela
-//     pedida ao Regem), uma vez, e a API mostra; rodar de novo não lê o Regem nem muda o resultado;
+//     pedida ao Regem), uma vez, com os bairros que ficaram e os pedidos de cada um, antes e durante, e a API mostra;
+//     rodar de novo não lê o Regem nem muda o resultado;
 //   - o teste rodando, o interrompido, o que acabou hoje e o de outra empresa (fora do escopo) não são tocados;
 //   - a leitura que falha não grava e o teste volta depois da espera; passados 7 dias do fim, fica "sem leitura"; a empresa
 //     cujo Regem falha não para a outra.
@@ -216,7 +217,12 @@ describe.skipIf(!hasDb)('a medida do teste de região (plano da região, R8)', (
       janela: { de: dia(16), ate: dia(3) },
       // O Centro de Niterói e a Barra (que não estava antes) ficam de fora; "LAPA" e "Gloria" casam com a Lapa e a Glória.
       pedidos: { alvoAntes: 480, outrosAntes: 1712, alvoDurante: 168, outrosDurante: 880 },
-      bairros: ['Centro', 'Glória', 'Saúde'],
+      // Cada bairro que ficou, com o nome do pedido e os pedidos das 4 semanas de antes e dos 14 dias no Regem.
+      bairros: [
+        { nome: 'Centro', antes: 1000, durante: 520 },
+        { nome: 'Glória', antes: 412, durante: 210 },
+        { nome: 'Saúde', antes: 300, durante: 150 },
+      ],
       motivo: null,
       esperadoPorSemana: null,
       minimoDoRegem: 5,
@@ -232,7 +238,11 @@ describe.skipIf(!hasDb)('a medida do teste de região (plano da região, R8)', (
     expect(lido.body.result).toEqual({
       window: { from: dia(16), to: dia(3) },
       orders: { target_before: 480, others_before: 1712, target_during: 168, others_during: 880 },
-      districts: ['Centro', 'Glória', 'Saúde'],
+      districts: [
+        { name: 'Centro', orders_before: 1000, orders_during: 520 },
+        { name: 'Glória', orders_before: 412, orders_during: 210 },
+        { name: 'Saúde', orders_before: 300, orders_during: 150 },
+      ],
       effect: {
         expected_per_week: guardado.efeito!.esperadoPorSemana,
         actual_per_week: 84,
@@ -271,12 +281,27 @@ describe.skipIf(!hasDb)('a medida do teste de região (plano da região, R8)', (
     expect(ResultadoDoTesteDeRegiao.parse((await linhaDe(vencido)).result)).toMatchObject({
       janela: { de: dia(23), ate: dia(10) },
       pedidos: { alvoAntes: 480, outrosAntes: 1712, alvoDurante: null, outrosDurante: null },
+      // Sem a leitura, cada bairro vai só com os pedidos de antes.
+      bairros: [
+        { nome: 'Centro', antes: 1000, durante: null },
+        { nome: 'Glória', antes: 412, durante: null },
+        { nome: 'Saúde', antes: 300, durante: null },
+      ],
       efeito: null,
       motivo: 'sem_leitura',
       minimoDoRegem: null,
     });
     expect(ResultadoDoTesteDeRegiao.parse((await linhaDe(daA)).result)).toMatchObject({ janela: { de: dia(17), ate: dia(4) }, motivo: null });
-    expect((await api.call('GET', `/v1/region-tests/${vencido}`, { cookie: b.cookie })).body.result).toMatchObject({ reason: 'sem_leitura', effect: null, regem_minimum: null });
+    expect((await api.call('GET', `/v1/region-tests/${vencido}`, { cookie: b.cookie })).body.result).toMatchObject({
+      reason: 'sem_leitura',
+      effect: null,
+      regem_minimum: null,
+      districts: [
+        { name: 'Centro', orders_before: 1000, orders_during: null },
+        { name: 'Glória', orders_before: 412, orders_during: null },
+        { name: 'Saúde', orders_before: 300, orders_during: null },
+      ],
+    });
 
     // Logo depois, o teste que falhou espera a hora: nada é lido.
     const lidas = leituras.length;

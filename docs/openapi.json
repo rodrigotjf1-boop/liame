@@ -142745,7 +142745,31 @@
                         "districts": {
                           "type": "array",
                           "items": {
-                            "type": "string"
+                            "type": "object",
+                            "properties": {
+                              "name": {
+                                "type": "string"
+                              },
+                              "orders_before": {
+                                "type": "integer",
+                                "minimum": -9007199254740991,
+                                "maximum": 9007199254740991
+                              },
+                              "orders_during": {
+                                "type": [
+                                  "integer",
+                                  "null"
+                                ],
+                                "minimum": -9007199254740991,
+                                "maximum": 9007199254740991
+                              }
+                            },
+                            "required": [
+                              "name",
+                              "orders_before",
+                              "orders_during"
+                            ],
+                            "additionalProperties": false
                           }
                         },
                         "effect": {
@@ -143461,7 +143485,31 @@
                               "districts": {
                                 "type": "array",
                                 "items": {
-                                  "type": "string"
+                                  "type": "object",
+                                  "properties": {
+                                    "name": {
+                                      "type": "string"
+                                    },
+                                    "orders_before": {
+                                      "type": "integer",
+                                      "minimum": -9007199254740991,
+                                      "maximum": 9007199254740991
+                                    },
+                                    "orders_during": {
+                                      "type": [
+                                        "integer",
+                                        "null"
+                                      ],
+                                      "minimum": -9007199254740991,
+                                      "maximum": 9007199254740991
+                                    }
+                                  },
+                                  "required": [
+                                    "name",
+                                    "orders_before",
+                                    "orders_during"
+                                  ],
+                                  "additionalProperties": false
                                 }
                               },
                               "effect": {
@@ -144327,7 +144375,31 @@
                         "districts": {
                           "type": "array",
                           "items": {
-                            "type": "string"
+                            "type": "object",
+                            "properties": {
+                              "name": {
+                                "type": "string"
+                              },
+                              "orders_before": {
+                                "type": "integer",
+                                "minimum": -9007199254740991,
+                                "maximum": 9007199254740991
+                              },
+                              "orders_during": {
+                                "type": [
+                                  "integer",
+                                  "null"
+                                ],
+                                "minimum": -9007199254740991,
+                                "maximum": 9007199254740991
+                              }
+                            },
+                            "required": [
+                              "name",
+                              "orders_before",
+                              "orders_during"
+                            ],
+                            "additionalProperties": false
                           }
                         },
                         "effect": {

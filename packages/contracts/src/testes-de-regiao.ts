@@ -37,8 +37,12 @@ export const RegionTestResult = z.strictObject({
    * do teste são nulos sem a leitura deles; o do bairro também quando ele ficou abaixo do mínimo que o Regem mostra.
    */
   orders: z.strictObject({ target_before: z.int(), others_before: z.int(), target_during: z.int().nullable(), others_during: z.int().nullable() }),
-  /** Os bairros que ficaram na comparação: o bairro de comparar que, nos dias do teste, ficou abaixo do mínimo do Regem sai dos dois lados. */
-  districts: z.array(z.string()),
+  /**
+   * Os bairros que ficaram na comparação, com os pedidos de entrega de cada um: nas 4 semanas de antes (`orders_before`) e
+   * nos dias do teste (`orders_during`, nulo sem a leitura deles). O bairro de comparar que, nos dias do teste, ficou abaixo
+   * do mínimo do Regem sai dos dois lados e não aparece aqui. Somados, dão `others_before` e `others_during`.
+   */
+  districts: z.array(z.strictObject({ name: z.string(), orders_before: z.int(), orders_during: z.int().nullable() })),
   /**
    * A conta, por semana: o que o bairro teria feito seguindo os outros bairros (`expected_per_week`), o que ele fez sem
    * anúncio (`actual_per_week`), o que o anúncio traz ali (`brings_per_week`) e a faixa de 95% (`range`, nunca abaixo de

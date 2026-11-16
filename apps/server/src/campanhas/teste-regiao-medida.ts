@@ -70,7 +70,8 @@ const soma = (lista: readonly PedidosDoBairro[]) => lista.reduce((s, b) => s + b
  * O resultado do teste (D-RG-102). Os bairros de comparar são os das semanas de antes menos o do teste, com pedidos. O de
  * comparar que não veio pelo nome na leitura do teste (abaixo do mínimo do Regem, somado em "outros") sai dos dois lados,
  * para a conta não ficar torta. Sem conta, o motivo: o teste incompleto, sem a leitura, menos de 3 bairros de comparar,
- * o bairro do teste abaixo do mínimo do Regem (com o que ele faria seguindo os outros) ou uma contagem zero.
+ * o bairro do teste abaixo do mínimo do Regem (com o que ele faria seguindo os outros) ou uma contagem zero. Cada bairro
+ * que ficou vai com os pedidos dele, antes e durante (a tabela da tela); sem a leitura, o `durante` é nulo.
  */
 export function medidaDoTesteDeRegiao(e: EntradaDaMedida): ResultadoDoTesteDeRegiao {
   const alvo = nomeComparavel(e.bairro);
@@ -83,7 +84,7 @@ export function medidaDoTesteDeRegiao(e: EntradaDaMedida): ResultadoDoTesteDeReg
     return {
       ...base,
       pedidos: { alvoAntes, outrosAntes: soma(deComparar), alvoDurante: null, outrosDurante: null },
-      bairros: deComparar.map((b) => b.nome),
+      bairros: deComparar.map((b) => ({ nome: b.nome, antes: b.pedidos, durante: null })),
       efeito: null,
       motivo: e.janela.completa ? 'sem_leitura' : 'incompleto',
       esperadoPorSemana: null,
@@ -93,11 +94,14 @@ export function medidaDoTesteDeRegiao(e: EntradaDaMedida): ResultadoDoTesteDeReg
 
   const durante = new Map<string, number>();
   for (const b of e.leitura.bairros) durante.set(nomeComparavel(b.nome), (durante.get(nomeComparavel(b.nome)) ?? 0) + b.pedidos);
-  const ficaram = deComparar.filter((b) => durante.has(nomeComparavel(b.nome)));
-  const outrosAntes = soma(ficaram);
-  const outrosDurante = ficaram.reduce((s, b) => s + (durante.get(nomeComparavel(b.nome)) ?? 0), 0);
+  const ficaram = deComparar.flatMap((b) => {
+    const noTeste = durante.get(nomeComparavel(b.nome));
+    return noTeste === undefined ? [] : [{ nome: b.nome, antes: b.pedidos, durante: noTeste }];
+  });
+  const outrosAntes = ficaram.reduce((s, b) => s + b.antes, 0);
+  const outrosDurante = ficaram.reduce((s, b) => s + b.durante, 0);
   const alvoDurante = durante.get(alvo) ?? null;
-  const comum = { ...base, pedidos: { alvoAntes, outrosAntes, alvoDurante, outrosDurante }, bairros: ficaram.map((b) => b.nome), minimoDoRegem: e.leitura.minimo };
+  const comum = { ...base, pedidos: { alvoAntes, outrosAntes, alvoDurante, outrosDurante }, bairros: ficaram, minimoDoRegem: e.leitura.minimo };
 
   if (ficaram.length < OUTROS_BAIRROS_MINIMOS) return { ...comum, efeito: null, motivo: 'poucos_bairros', esperadoPorSemana: null };
   if (alvoDurante === null) {

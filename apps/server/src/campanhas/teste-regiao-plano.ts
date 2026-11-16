@@ -69,16 +69,23 @@ const Contagem = z.number().int().min(0);
 const PorSemana = z.number().min(0);
 
 /**
+ * Um bairro que ficou na comparação, com os pedidos dele: `antes`, nas 4 semanas de antes (como a pessoa viu no pedido);
+ * `durante`, nos 14 dias do teste, pela leitura do Regem. `durante` é nulo sem a leitura (`incompleto`, `sem_leitura`).
+ */
+export const BairroDaMedida = z.object({ nome: z.string().min(1).max(200), antes: Contagem, durante: Contagem.nullable() });
+export type BairroDaMedida = z.infer<typeof BairroDaMedida>;
+
+/**
  * O que o teste mostrou (`campaign_test.result`), gravado uma vez pela medida: a janela do teste, os pedidos do bairro e
- * dos de comparar antes e durante, os bairros que ficaram na comparação, a conta (ou o motivo de não haver conta), o
- * mínimo que o Regem usou e a hora da medida. São somas: nunca um pedido nem um cliente. `esperadoPorSemana` fica só no
- * `abaixo_do_minimo` (com a conta, o número está no efeito).
+ * dos de comparar antes e durante, os bairros que ficaram na comparação (com os pedidos de cada um), a conta (ou o motivo
+ * de não haver conta), o mínimo que o Regem usou e a hora da medida. São somas: nunca um pedido nem um cliente.
+ * `esperadoPorSemana` fica só no `abaixo_do_minimo` (com a conta, o número está no efeito).
  */
 export const ResultadoDoTesteDeRegiao = z
   .object({
     janela: z.object({ de: Dia, ate: Dia }),
     pedidos: z.object({ alvoAntes: Contagem, outrosAntes: Contagem, alvoDurante: Contagem.nullable(), outrosDurante: Contagem.nullable() }),
-    bairros: z.array(z.string().min(1).max(200)).max(200),
+    bairros: z.array(BairroDaMedida).max(200),
     efeito: z
       .object({ esperadoPorSemana: PorSemana, feitoPorSemana: PorSemana, trazPorSemana: PorSemana, faixa: z.object({ de: PorSemana, ate: PorSemana }), provou: z.boolean() })
       .nullable(),

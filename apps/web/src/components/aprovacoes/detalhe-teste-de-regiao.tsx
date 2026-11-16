@@ -8,11 +8,14 @@ import { api, chamar, mensagemDe, type Problema } from '@/lib/api';
 import type { Prova } from '@/lib/chave-de-acesso';
 import { disparar } from '@/lib/disparar';
 import { BarraDaDecisao, type Decisao } from './barra-da-decisao';
+import { ReguaDaFaixa, TabelaAntesENoTeste, TabelaDosBairros } from './teste-de-regiao-pecas';
 import {
   andamentoDoTesteDeRegiao,
+  bairrosAntesENoTeste,
   bairrosDoTeste,
   conjuntosDoTesteDeRegiao,
   idDoTesteDeRegiao,
+  periodosDoResultado,
   semanasDoTeste,
   situacaoDoTesteDeRegiao,
   tituloDoTesteDeRegiao,
@@ -22,7 +25,8 @@ import { cabecalhoDe, type Grupo, MOTIVOS_DA_RECUSA, resultadoDe, riscoDe, ROTUL
 
 // O teste de região em Aprovações (plano da região, R8; protótipo dos testes aprovado pelo dono em 13/11/2026; D-RG-81 e
 // D-RG-82): o pedido "um bairro 14 dias sem anúncio", com os pedidos por bairro das 4 semanas de antes, de onde o bairro sai
-// e o risco; a decisão com o código do app. Aprovar, por enquanto, só marca o teste como pronto (a tela diz).
+// e o risco; a decisão com o código do app. Aprovar, por enquanto, só marca o teste como pronto (a tela diz). Depois da
+// medida (D-RG-102): a frase do resultado, a régua da faixa e a tabela dos pedidos por bairro antes e no teste.
 
 type Props = {
   acao: ActionResponse;
@@ -131,6 +135,8 @@ export function DetalheTesteDeRegiao({ acao, grupo, agora, podeDecidir, temApp, 
   const perigo = t.status === 'interrompido' || t.status === 'cancelado';
   const bairros = bairrosDoTeste(t);
   const veredito = vereditoDoTesteDeRegiao(t);
+  // Com a leitura dos dias do teste, a tabela "antes e no teste" toma o lugar da tabela das semanas de antes.
+  const comNoTeste = bairrosAntesENoTeste(t) !== null;
 
   return (
     <>
@@ -176,40 +182,32 @@ export function DetalheTesteDeRegiao({ acao, grupo, agora, podeDecidir, temApp, 
               <span>{veredito.texto}</span>
             </div>
           )}
+          <ReguaDaFaixa resultado={t.result} />
         </div>
       )}
 
-      <div className="secao">
-        <p className="rotulo-marca">Os pedidos por bairro, nas {REGION_TEST_WEEKS_BEFORE} semanas de antes</p>
-        <div className="r8-envolve">
-          <table className="tabela r8-tabela r8-ab">
-            <caption className="sr-only">Os pedidos de entrega por semana no caixa, por bairro, nas {REGION_TEST_WEEKS_BEFORE} semanas antes do pedido</caption>
-            <thead>
-              <tr>
-                <th scope="col">Bairro</th>
-                <th scope="col" className="n">
-                  Antes (por semana)
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {bairros.map((b) => (
-                <tr key={b.nome}>
-                  <th scope="row" className={b.alvo ? 'r8-frente' : undefined}>
-                    {b.nome}
-                    <small>{b.alvo ? 'o bairro do teste' : 'segue com anúncio, para comparar'}</small>
-                  </th>
-                  <td className={b.alvo ? 'n r8-frente' : 'n'}>{b.porSemana}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+      {comNoTeste ? (
+        <div className="secao">
+          <p className="rotulo-marca">Os pedidos por bairro, antes e no teste</p>
+          <TabelaAntesENoTeste t={t} />
+          <p className="nota">
+            <Icone nome="info" pequeno />
+            <span>Do caixa da loja (o Regem), por bairro de entrega: {periodosDoResultado(t)}.</span>
+          </p>
         </div>
-        <p className="nota">
-          <Icone nome="info" pequeno />
-          <span>Do caixa da loja (o Regem), por bairro de entrega, {semanasDoTeste(t)}.</span>
-        </p>
-      </div>
+      ) : (
+        <div className="secao">
+          <p className="rotulo-marca">Os pedidos por bairro, nas {REGION_TEST_WEEKS_BEFORE} semanas de antes</p>
+          <TabelaDosBairros
+            legenda={`Os pedidos de entrega por semana no caixa, por bairro, nas ${REGION_TEST_WEEKS_BEFORE} semanas antes do pedido`}
+            linhas={bairros.map((b) => ({ nome: b.nome, alvo: b.alvo, antes: b.porSemana }))}
+          />
+          <p className="nota">
+            <Icone nome="info" pequeno />
+            <span>Do caixa da loja (o Regem), por bairro de entrega, {semanasDoTeste(t)}.</span>
+          </p>
+        </div>
+      )}
 
       {pendente && (
         <div className="secao">

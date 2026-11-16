@@ -5,8 +5,8 @@ import { ResultadoDoTesteDeRegiao } from '../src/campanhas/teste-regiao-plano.js
 
 // R8, a medida do teste de região (D-RG-81, D-RG-82 e D-RG-102), sem rede e sem banco: a janela dos 14 dias, a soma dos
 // pedidos por bairro (a mesma regra do pedido do teste) e o resultado: o que prova, o que não prova, o bairro de comparar
-// que some nos dias do teste (sai dos dois lados), poucos bairros, o bairro do teste abaixo do mínimo do Regem, uma
-// contagem zero e o teste incompleto.
+// que some nos dias do teste (sai dos dois lados e da lista), poucos bairros, o bairro do teste abaixo do mínimo do Regem,
+// uma contagem zero e o teste incompleto. Cada bairro que ficou vai com os pedidos de antes e dos dias do teste.
 
 const MEDIDO_EM = new Date('2026-11-16T09:00:00.000Z');
 const JANELA = janelaDoTesteDeRegiao('2026-11-01', '2026-11-14');
@@ -58,6 +58,12 @@ describe('os pedidos por bairro (a regra do pedido do teste)', () => {
 describe('o resultado do teste (D-RG-102)', () => {
   const medir = (durante: Array<{ nome: string; pedidos: number }> | null, antes = ANTES, janela = JANELA) =>
     ResultadoDoTesteDeRegiao.parse(medidaDoTesteDeRegiao({ bairro: 'Lapa', antes, janela, leitura: durante ? { minimo: 5, bairros: durante } : null, medidoEm: MEDIDO_EM }));
+  /** Os 3 bairros de comparar com os pedidos das 4 semanas de antes e dos 14 dias (a tabela "antes e no teste"). */
+  const OS_TRES = [
+    { nome: 'Centro', antes: 1000, durante: 520 },
+    { nome: 'Glória', antes: 412, durante: 210 },
+    { nome: 'Saúde', antes: 300, durante: 150 },
+  ];
 
   it('prova: a Lapa caiu sem anúncio enquanto os outros seguiram; a faixa fica acima de zero (os nomes casam sem acento e sem caixa)', () => {
     const r = medir([
@@ -71,7 +77,8 @@ describe('o resultado do teste (D-RG-102)', () => {
     expect(r).toEqual({
       janela: { de: '2026-11-01', ate: '2026-11-14' },
       pedidos: { alvoAntes: 480, outrosAntes: 1712, alvoDurante: 168, outrosDurante: 880 },
-      bairros: ['Centro', 'Glória', 'Saúde'],
+      // O nome como a pessoa viu no pedido (o do plano), com os pedidos dos dois lados; a Barra, que não estava antes, fica de fora.
+      bairros: OS_TRES,
       efeito: conta,
       motivo: null,
       esperadoPorSemana: null,
@@ -117,8 +124,24 @@ describe('o resultado do teste (D-RG-102)', () => {
     const r = medir(durante, antes);
     // Os 60 pedidos de antes do "Pouco" não entram: sem ele no teste, a conta comparava 4 bairros antes com 3 durante.
     expect(r.pedidos).toEqual({ alvoAntes: 480, outrosAntes: 1712, alvoDurante: 168, outrosDurante: 880 });
-    expect(r.bairros).toEqual(['Centro', 'Glória', 'Saúde']);
+    // Na lista, cada bairro que ficou com os pedidos dos dois lados; o "Pouco" não aparece, nem com zero.
+    expect(r.bairros).toEqual(OS_TRES);
+    expect(r.bairros.map((b) => b.nome)).not.toContain('Pouco');
+    // Somados, os bairros da lista dão os dos outros bairros (a linha de baixo da tabela).
+    expect(r.bairros.reduce((s, b) => s + b.antes, 0)).toBe(r.pedidos.outrosAntes);
+    expect(r.bairros.reduce((s, b) => s + (b.durante ?? 0), 0)).toBe(r.pedidos.outrosDurante);
     expect(r.efeito).toEqual(medir(durante).efeito);
+  });
+
+  it('os pedidos do teste de cada bairro somam as linhas que o Regem mandou com o mesmo nome comparável', () => {
+    const r = medir([
+      { nome: 'Centro', pedidos: 500 },
+      { nome: 'centro', pedidos: 20 },
+      { nome: 'Lapa', pedidos: 168 },
+      { nome: 'Glória', pedidos: 210 },
+      { nome: 'Saúde', pedidos: 150 },
+    ]);
+    expect(r.bairros).toEqual(OS_TRES);
   });
 
   it('poucos bairros: com menos de 3 bairros de comparar nos dois lados, não há conta', () => {
@@ -127,7 +150,7 @@ describe('o resultado do teste (D-RG-102)', () => {
       { nome: 'Lapa', pedidos: 168 },
       { nome: 'Glória', pedidos: 210 },
     ]);
-    expect(r).toMatchObject({ motivo: 'poucos_bairros', efeito: null, esperadoPorSemana: null, bairros: ['Centro', 'Glória'], minimoDoRegem: 5 });
+    expect(r).toMatchObject({ motivo: 'poucos_bairros', efeito: null, esperadoPorSemana: null, bairros: OS_TRES.slice(0, 2), minimoDoRegem: 5 });
     expect(r.pedidos).toEqual({ alvoAntes: 480, outrosAntes: 1412, alvoDurante: 168, outrosDurante: 730 });
   });
 
@@ -137,7 +160,8 @@ describe('o resultado do teste (D-RG-102)', () => {
       { nome: 'Glória', pedidos: 210 },
       { nome: 'Saúde', pedidos: 150 },
     ]);
-    expect(r).toMatchObject({ motivo: 'abaixo_do_minimo', efeito: null, minimoDoRegem: 5, bairros: ['Centro', 'Glória', 'Saúde'] });
+    expect(r).toMatchObject({ motivo: 'abaixo_do_minimo', efeito: null, minimoDoRegem: 5 });
+    expect(r.bairros).toEqual(OS_TRES);
     expect(r.pedidos).toEqual({ alvoAntes: 480, outrosAntes: 1712, alvoDurante: null, outrosDurante: 880 });
     // 480 × 880 / 1712 nos 14 dias, por semana.
     expect(r.esperadoPorSemana).toBeCloseTo((480 * 880) / 1712 / 2, 6);
@@ -164,7 +188,8 @@ describe('o resultado do teste (D-RG-102)', () => {
     expect(r).toEqual({
       janela: { de: '2026-11-01', ate: '2026-11-09' },
       pedidos: { alvoAntes: 480, outrosAntes: 1712, alvoDurante: null, outrosDurante: null },
-      bairros: ['Centro', 'Glória', 'Saúde'],
+      // Sem a leitura dos dias do teste, cada bairro vai só com os pedidos de antes.
+      bairros: OS_TRES.map((b) => ({ ...b, durante: null })),
       efeito: null,
       motivo: 'incompleto',
       esperadoPorSemana: null,
@@ -172,11 +197,14 @@ describe('o resultado do teste (D-RG-102)', () => {
       medido_em: '2026-11-16T09:00:00.000Z',
     });
     expect(medir(null)).toMatchObject({ motivo: 'sem_leitura', efeito: null, minimoDoRegem: null, pedidos: { alvoDurante: null, outrosDurante: null } });
+    expect(medir(null).bairros).toEqual(OS_TRES.map((b) => ({ ...b, durante: null })));
   });
 
-  it('o resultado guardado leva a conta ou o motivo, um dos dois', () => {
+  it('o resultado guardado leva a conta ou o motivo, um dos dois; os bairros vão com os números, nunca só o nome', () => {
     const r = medir(null);
     expect(ResultadoDoTesteDeRegiao.safeParse({ ...r, motivo: null }).success).toBe(false);
     expect(ResultadoDoTesteDeRegiao.safeParse({ ...r, motivo: 'outro' }).success).toBe(false);
+    expect(ResultadoDoTesteDeRegiao.safeParse({ ...r, bairros: ['Centro', 'Glória', 'Saúde'] }).success).toBe(false);
+    expect(ResultadoDoTesteDeRegiao.safeParse({ ...r, bairros: [{ nome: 'Centro', antes: -1, durante: null }] }).success).toBe(false);
   });
 });
