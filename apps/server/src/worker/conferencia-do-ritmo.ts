@@ -49,53 +49,74 @@ export class ConferenciaDoRitmo {
            -- Só com a leitura de hoje da conta: ela traz o gasto da véspera e a verba de agora.
            and (s.last_success_at at time zone coalesce(u.timezone, ${FUSO_PADRAO}))::date = x.hoje
            ${tenantFilter(scope, sql`b.tenant_id`)}
+           -- Fora: a linha de hoje calculada depois da última entrada, e a que falhou há menos de uma hora (ela fica fora
+           -- e não volta na frente de quem nunca foi conferido a cada rodada; V84).
            and not exists (
              select 1 from liame.budget_rhythm_check k
               where k.rhythm_id = b.id and k.checked_on = x.hoje
-                and k.computed_at >= greatest(
-                      b.updated_at,
-                      s.last_success_at,
-                      (select max(st.updated_at) from liame.budget_rhythm_step st where st.rhythm_id = b.id),
-                      (select max(c.last_seen_at) from liame.campaign c where c.connected_account_id = b.ad_account_id),
-                      (select max(g.last_seen_at) from liame.ad_group g where g.connected_account_id = b.ad_account_id)))
-         order by b.tenant_id, b.brand_id, b.id
+                and ((k.error is null and k.computed_at >= greatest(
+                        b.updated_at,
+                        s.last_success_at,
+                        (select max(st.updated_at) from liame.budget_rhythm_step st where st.rhythm_id = b.id),
+                        (select max(c.last_seen_at) from liame.campaign c where c.connected_account_id = b.ad_account_id),
+                        (select max(g.last_seen_at) from liame.ad_group g where g.connected_account_id = b.ad_account_id)))
+                     or (k.error is not null and k.computed_at >= ${instante}::timestamptz - interval '1 hour')))
+         -- Quem ainda não tem a linha de hoje primeiro; depois, a conferida há mais tempo.
+         order by (select k.computed_at from liame.budget_rhythm_check k where k.rhythm_id = b.id and k.checked_on = x.hoje) nulls first,
+                  b.tenant_id, b.brand_id, b.id
          limit ${limite}`),
     );
 
-    const porEmpresa = new Map<string, Pendente[]>();
-    for (const p of pendentes.rows) porEmpresa.set(p.tenant_id, [...(porEmpresa.get(p.tenant_id) ?? []), p]);
+    // Uma transação por marca (as contas da marca juntas, como antes): o erro de uma não deixa as outras sem a linha.
+    const porMarca = new Map<string, Pendente[]>();
+    for (const p of pendentes.rows) porMarca.set(`${p.tenant_id}|${p.brand_id}`, [...(porMarca.get(`${p.tenant_id}|${p.brand_id}`) ?? []), p]);
     const resultado: RitmoConferido[] = [];
-    for (const [tenantId, lista] of porEmpresa) {
+    for (const lista of porMarca.values()) {
+      const { tenant_id: tenantId, brand_id: marca } = lista[0]!;
       try {
         resultado.push(
           ...(await withTenant(db, tenantId, async (tx) => {
-            const feitos: RitmoConferido[] = [];
-            // Os avisos são calculados por marca (as contas da marca juntas, como antes); cada ritmo guarda os seus.
-            for (const marca of [...new Set(lista.map((p) => p.brand_id))]) {
-              const avisos = await avisosDoRitmoDasMarcas(tx, [marca], instante);
-              const linhas = lista
-                .filter((p) => p.brand_id === marca)
-                .map((p) => {
-                  const doRitmo = avisos.filter((a) => a.aviso.ritmo === p.id);
-                  feitos.push({ tenantId, marca, ritmo: p.id, dia: p.hoje, avisos: doRitmo.length });
-                  return { id: uuidv7(), rhythm_id: p.id, checked_on: p.hoje, warnings: avisosParaGuardar(doRitmo) };
-                });
-              await tx.execute(sql`
-                insert into liame.budget_rhythm_check (id, tenant_id, rhythm_id, brand_id, checked_on, warnings, computed_at)
-                select x.id, ${tenantId}, x.rhythm_id, ${marca}, x.checked_on, x.warnings, ${instante}::timestamptz
-                  from jsonb_to_recordset(${JSON.stringify(linhas)}::jsonb) as x (id uuid, rhythm_id uuid, checked_on date, warnings jsonb)
-                on conflict (rhythm_id, checked_on) do update set warnings = excluded.warnings, computed_at = excluded.computed_at`);
-            }
-            return feitos;
+            const avisos = await this.calcular(tx, [marca], instante);
+            const linhas = lista.map((p) => {
+              const doRitmo = avisos.filter((a) => a.aviso.ritmo === p.id);
+              return { id: uuidv7(), rhythm_id: p.id, checked_on: p.hoje, warnings: avisosParaGuardar(doRitmo), n: doRitmo.length };
+            });
+            await tx.execute(sql`
+              insert into liame.budget_rhythm_check (id, tenant_id, rhythm_id, brand_id, checked_on, warnings, computed_at, error)
+              select x.id, ${tenantId}, x.rhythm_id, ${marca}, x.checked_on, x.warnings, ${instante}::timestamptz, null
+                from jsonb_to_recordset(${JSON.stringify(linhas)}::jsonb) as x (id uuid, rhythm_id uuid, checked_on date, warnings jsonb)
+              on conflict (rhythm_id, checked_on) do update set warnings = excluded.warnings, computed_at = excluded.computed_at, error = null`);
+            return linhas.map((l): RitmoConferido => ({ tenantId, marca, ritmo: l.rhythm_id, dia: l.checked_on, avisos: l.n }));
           })),
         );
       } catch (err) {
-        // Falha numa empresa não para as outras; ela volta na próxima rodada (LIC-001).
-        this.logger.error(`empresa ${tenantId}: ${err instanceof Error ? err.message : String(err)}`);
+        // A causa no log; a linha de hoje guarda a tentativa com os avisos da conferência de antes (o aviso de dinheiro não
+        // some), e o ritmo volta depois de uma hora, atrás de quem espera (LIC-001; V84).
+        const motivo = err instanceof Error ? err.message : String(err);
+        this.logger.error(`marca ${marca}: ${motivo}`);
+        await this.marcarFalha(tenantId, marca, lista, instante, motivo).catch((e: unknown) => this.logger.error(`marca ${marca}: não deu para marcar a falha (${e instanceof Error ? e.message : String(e)})`));
       }
     }
     const comAviso = resultado.filter((r) => r.avisos > 0);
     if (comAviso.length) this.logger.log(`${resultado.length} ritmo(s) conferido(s), ${comAviso.length} com aviso`);
     return resultado;
+  }
+
+  /** A conta dos avisos de uma marca (as contas puras de `campanhas/ritmo-avisos.ts`); nos testes, uma que falha. */
+  calcular: typeof avisosDoRitmoDasMarcas = avisosDoRitmoDasMarcas;
+
+  /** A tentativa que falhou: a linha de hoje com o erro, e os avisos da conferência mais nova de antes (ou nenhum). */
+  private async marcarFalha(tenantId: string, marca: string, lista: readonly Pendente[], instante: string, motivo: string): Promise<void> {
+    if (!this.database) return;
+    const linhas = lista.map((p) => ({ id: uuidv7(), rhythm_id: p.id, checked_on: p.hoje }));
+    await withTenant(this.database.db, tenantId, (tx) =>
+      tx.execute(sql`
+        insert into liame.budget_rhythm_check (id, tenant_id, rhythm_id, brand_id, checked_on, warnings, computed_at, error)
+        select x.id, ${tenantId}, x.rhythm_id, ${marca}, x.checked_on,
+               coalesce((select k.warnings from liame.budget_rhythm_check k where k.rhythm_id = x.rhythm_id order by k.checked_on desc limit 1), '[]'::jsonb),
+               ${instante}::timestamptz, ${motivo.slice(0, 500)}
+          from jsonb_to_recordset(${JSON.stringify(linhas)}::jsonb) as x (id uuid, rhythm_id uuid, checked_on date)
+        on conflict (rhythm_id, checked_on) do update set computed_at = excluded.computed_at, error = excluded.error`),
+    );
   }
 }

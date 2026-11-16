@@ -1,6 +1,7 @@
 import type { Tx } from '@liame/database';
 import { sql } from 'drizzle-orm';
 import type { AvisoDoRitmo, AvisoDoRitmoDaMarca } from './ritmo-avisos.js';
+import { DIAS_DA_VOLTA } from './ritmo-passos.js';
 
 // A conferência do ritmo gravada (plano da região, R7; D-RG-75, "antes de ligar além do piloto"): a rotina do worker
 // (`worker/conferencia-do-ritmo.ts`) calcula os avisos de cada ritmo depois da leitura da manhã da conta e grava a linha
@@ -36,8 +37,9 @@ export function avisosDoGuardado(marca: string, guardado: unknown): AvisoDoRitmo
 
 /**
  * Os avisos gravados dos ritmos das marcas: a conferência mais nova de cada ritmo que ainda pode avisar (aprovado, parado
- * ou encerrado), de hoje ou de ontem no fuso da loja (antes da leitura da manhã, vale a de ontem). Na ordem dos ritmos
- * (a semana, quando nasceu), como o cálculo de antes. Sem conferência nenhuma, é uma consulta só.
+ * ou encerrado, na semana corrente ou nos 35 dias da volta, no fuso da loja). Vale a mais nova de qualquer dia da janela:
+ * a conta que não foi lida não cala o aviso de dinheiro (D-RG-94); ele fica até a próxima conferência dizer outra coisa.
+ * Na ordem dos ritmos (a semana, quando nasceu), como o cálculo de antes. Sem conferência nenhuma, é uma consulta só.
  */
 export async function avisosGravadosDoRitmo(tx: Tx, marcas: readonly string[], instante: string): Promise<AvisoDoRitmoDaMarca[]> {
   if (!marcas.length) return [];
@@ -48,8 +50,9 @@ export async function avisosGravadosDoRitmo(tx: Tx, marcas: readonly string[], i
           from liame.budget_rhythm_check k
           join liame.budget_rhythm b on b.id = k.rhythm_id
           join liame.unit u on u.id = b.unit_id and u.tenant_id = b.tenant_id
+          cross join lateral (select (${instante}::timestamptz at time zone coalesce(u.timezone, ${FUSO_PADRAO}))::date as hoje) x
          where k.brand_id in ${marcas} and b.status in ('aprovado', 'parado', 'encerrado')
-           and k.checked_on >= (${instante}::timestamptz at time zone coalesce(u.timezone, ${FUSO_PADRAO}))::date - 1
+           and b.week_start <= x.hoje and b.week_end >= x.hoje - ${DIAS_DA_VOLTA}::int
          order by k.rhythm_id, k.checked_on desc
       ) v
      order by v.week_start, v.created_at, v.id`);

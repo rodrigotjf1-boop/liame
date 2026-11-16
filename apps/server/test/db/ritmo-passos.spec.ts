@@ -17,6 +17,7 @@ import { diasDepois } from '../../src/regiao/semana.js';
 import { diaNoFuso } from '../../src/results/fora-do-normal.js';
 import { ActionExecutor } from '../../src/worker/action-executor.js';
 import { ConferenciaDoGasto } from '../../src/worker/conferencia-do-gasto.js';
+import { avisosDoRitmoDasMarcas } from '../../src/campanhas/ritmo-avisos.js';
 import { ConferenciaDoRitmo } from '../../src/worker/conferencia-do-ritmo.js';
 import { RitmoDaSemanaService } from '../../src/worker/ritmo-da-semana.service.js';
 import { ownerQuery, resetIpRateLimits, startApi, type TestApi } from '../helpers/api.js';
@@ -769,6 +770,61 @@ describe.skipIf(!hasDb)('o ritmo da semana: os passos do dia (R7, parte 1b-2)', 
     expect(await conferencia.executarLote(50, { tenantIds: [e.tenantId] })).toEqual([]);
     const r = await api.call('GET', `/v1/results/attention?brand_id=${e.brandId}`, { cookie: e.cookie });
     expect(ClosedLoopAttentionResponse.parse(r.body).items.filter((i) => i.kind.startsWith('ritmo_')).map((i) => i.kind)).toEqual(['ritmo_campanha_saiu']);
+  }, 120_000);
+
+  it('a conferência do ritmo (D-RG-75): a marca que falha não trava a fila nem cala o aviso, cada marca na sua transação', async () => {
+    const [a, b] = [await cenario('Brasa Conferencia A'), await cenario('Brasa Conferencia B')];
+    const ritmos = new Map<string, string>();
+    for (const e of [a, b]) {
+      const mexida = await objetoLido(meta, e, 'campanha', { name: 'Mexida por fora', daily_budget: '7000' });
+      const r = await ritmo(e, [{ recurso: mexida.recurso, nome: 'Mexida por fora', base: 60, dias: todosOsDias(66) }]);
+      ritmos.set(e.brandId, r);
+      await ownerQuery(
+        `insert into liame.budget_rhythm_step (id, tenant_id, rhythm_id, day, resource_id, kind, target_micros, expected_micros, status, reason)
+         values (gen_random_uuid(), $1, $2, $3::date, $4, 'ritmo', $5, $6, 'fora', 'a campanha não está como o Liame deixou')`,
+        [e.tenantId, r, HOJE, mexida.recurso, 66 * REAL, 60 * REAL],
+      );
+      await ownerQuery(
+        `insert into liame.sync_state (connected_account_id, dataset, tenant_id, expected_every_minutes, last_success_at) values ($1, 'metricas', $2, 1440, now())
+         on conflict (connected_account_id, dataset) do update set last_success_at = now()`,
+        [e.conta, e.tenantId],
+      );
+    }
+    const linha = async (e: EmpresaComMeta) =>
+      (await ownerQuery<{ error: string | null; n: number }>(`select error, jsonb_array_length(warnings)::int as n from liame.budget_rhythm_check where rhythm_id = $1`, [ritmos.get(e.brandId)]))[0];
+    const avisosDe = async (e: EmpresaComMeta & { cookie: string }) =>
+      ClosedLoopAttentionResponse.parse((await api.call('GET', `/v1/results/attention?brand_id=${e.brandId}`, { cookie: e.cookie })).body).items.filter((i) => i.kind.startsWith('ritmo_')).map((i) => i.kind);
+    const escopo = { tenantIds: [a.tenantId, b.tenantId] };
+    const conferencia = new ConferenciaDoRitmo(database);
+    conferencia.calcular = async (tx, marcas, instante) => {
+      if (marcas.includes(a.brandId)) throw new Error('falha de propósito');
+      return avisosDoRitmoDasMarcas(tx, marcas, instante);
+    };
+
+    // De um em um: a marca que falha fica com a tentativa marcada e não volta na frente; a outra é conferida na volta seguinte.
+    await conferencia.executarLote(1, escopo);
+    await conferencia.executarLote(1, escopo);
+    expect([await linha(a), await linha(b)]).toEqual([
+      { error: 'falha de propósito', n: 0 },
+      { error: null, n: 1 },
+    ]);
+    // Nada a fazer: a que falhou espera uma hora, e a outra está em dia.
+    expect(await conferencia.executarLote(50, escopo)).toEqual([]);
+    expect(await avisosDe(b)).toEqual(['ritmo_campanha_saiu']);
+
+    // A conta volta a dar certo (passada a hora): a linha é refeita, com o aviso.
+    conferencia.calcular = avisosDoRitmoDasMarcas;
+    await ownerQuery(`update liame.budget_rhythm_check set computed_at = computed_at - interval '2 hours' where rhythm_id = $1`, [ritmos.get(a.brandId)]);
+    expect((await conferencia.executarLote(50, escopo)).map((r) => [r.marca, r.avisos])).toEqual([[a.brandId, 1]]);
+    expect(await avisosDe(a)).toEqual(['ritmo_campanha_saiu']);
+    // E falha de novo depois de uma leitura nova: a tentativa marcada guarda os avisos de antes, e o aviso não some.
+    conferencia.calcular = async () => {
+      throw new Error('falha de propósito');
+    };
+    await ownerQuery(`update liame.sync_state set last_success_at = now() where connected_account_id = $1 and dataset = 'metricas'`, [a.conta]);
+    expect(await conferencia.executarLote(50, escopo)).toEqual([]);
+    expect(await linha(a)).toEqual({ error: 'falha de propósito', n: 1 });
+    expect(await avisosDe(a)).toEqual(['ritmo_campanha_saiu']);
   }, 120_000);
 
   it('a campanha de um teste de criativo que ainda roda fica fora do ritmo, com o motivo; terminado o teste, ela pode entrar (R8)', async () => {
