@@ -1,7 +1,9 @@
 import {
   type CreateVideoMontageRequest,
+  VIDEO_MOMENTS_TITLE,
   VIDEO_MONTAGE_LIMITS,
   VIDEO_TEMPLATE_RULES,
+  type VideoCut,
   type VideoMontageListResponse,
   type VideoMontageResponse,
   type VideoTextsRequest,
@@ -16,6 +18,7 @@ import { AiError, AiGateway } from '../ai/gateway.js';
 import { naTransacaoDaEmpresa } from '../ai/na-empresa.js';
 import { registrarRecusa } from '../ai/recusas.js';
 import { funcionarioAtivo } from '../ai/registro/ativacao.js';
+import { type ConferenciaDosCortes, conferirCortes, LIMITES_DOS_CORTES, TOTAL_DOS_CORTES } from '../ai/social/cortes.js';
 import { SOCIAL } from '../ai/social/prompt.js';
 import {
   contextoDosTextosDoVideo,
@@ -32,7 +35,8 @@ import { marcaDoCriativo } from '../criativo/base.js';
 import { DATABASE } from '../database/database.module.js';
 import { AppProblem } from '../errors/problems.js';
 import { FlagService } from '../flags/flag.service.js';
-import { REGRAS_DE_TEXTO_VERSAO } from '../policy/texto.js';
+import { FLAG_DOS_MELHORES_MOMENTOS } from './cortes-do-social.service.js';
+import { normalizar, REGRAS_DE_TEXTO_VERSAO } from '../policy/texto.js';
 import { contarNaFrente } from '../worker/fila-do-video.js';
 
 // O vídeo montado pelo Liame (A6 · Z15, parte 2a; P43 aprovado em 11/11/2026; D-A6-133 a D-A6-138): os pedidos e a
@@ -43,6 +47,8 @@ import { contarNaFrente } from '../worker/fila-do-video.js';
 // diz). A tabela é a fila: o serviço de montagem (`liame-render`, parte 2b) pega o mais antigo, um por vez.
 
 export const FLAG_DO_VIDEO_MONTADO = 'video_montado';
+// "Os melhores momentos" (A6 · Z16; D-A6-154): a função `video_momentos` (`FLAG_DOS_MELHORES_MOMENTOS`, do pedido dos
+// cortes), por cima do vídeo montado, desligada; sem ela, o modelo é recusado.
 
 type Quem = { tenantId: string; userId: string };
 
@@ -56,6 +62,7 @@ type Linha = {
   title: string;
   price_line: string | null;
   cta: string;
+  cuts: VideoCut[] | null;
   with_logo: boolean;
   sound: VideoMontageResponse['sound'];
   status: VideoMontageResponse['status'];
@@ -70,7 +77,7 @@ type Linha = {
 };
 
 const iso = (v: Date | string): string => (v instanceof Date ? v : new Date(v)).toISOString();
-const COLUNAS = sql`id, brand_id, template, format, duration_s, media_ids, title, price_line, cta, with_logo, sound, status, progress, error, photo_id, created_at, started_at, finished_at, created_at::text as chave_da_fila`;
+const COLUNAS = sql`id, brand_id, template, format, duration_s, media_ids, title, price_line, cta, cuts, with_logo, sound, status, progress, error, photo_id, created_at, started_at, finished_at, created_at::text as chave_da_fila`;
 
 function recusa(code: string, title: string, detail: string, path?: string, errors?: { path: string; message: string }[]): AppProblem {
   return new AppProblem(422, code, title, detail, {}, errors ?? (path ? [{ path, message: detail }] : undefined));
@@ -81,7 +88,59 @@ function conflito(code: string, title: string, detail: string): AppProblem {
 
 /** O texto do vídeo como o Compliance lê: o título como título; a linha do preço e a chamada como texto. */
 export function textoParaConferir(b: Pick<CreateVideoMontageRequest, 'title' | 'price_line' | 'cta'>): { titulo: string; texto: string } {
-  return { titulo: b.title, texto: [b.price_line, b.cta].filter(Boolean).join(' · ') };
+  return { titulo: b.title ?? '', texto: [b.price_line, b.cta].filter(Boolean).join(' · ') };
+}
+
+/** Os segundos com uma casa, como a pessoa lê ("1,5 s"). */
+const segundos = (ms: number): string => `${(Math.round(ms / 100) / 10).toLocaleString('pt-BR')} s`;
+
+/** O porquê da recusa da régua dos cortes no pedido de montagem, em palavras, e o campo (A6 · Z16; D-A6-152). */
+export function recusaDosCortes(
+  c: Extract<ConferenciaDosCortes, { ok: false }>,
+  cortes: readonly VideoCut[],
+  duracaoS: number,
+): { detail: string; errors: { path: string; message: string }[] } {
+  const n = c.corte === null ? 0 : c.corte + 1;
+  const campo = (sufixo: string) => (c.corte === null ? 'cuts' : `cuts.${c.corte}.${sufixo}`);
+  const um = (path: string, message: string) => ({ detail: message, errors: [{ path, message }] });
+  switch (c.motivo) {
+    case 'quantidade':
+      return um('cuts', `O vídeo leva de ${LIMITES_DOS_CORTES.minimo} a ${LIMITES_DOS_CORTES.maximo} cortes.`);
+    case 'video_fora':
+      return um(campo('media_id'), `O corte ${n} não está num dos vídeos escolhidos.`);
+    case 'tempo_fora':
+      return um(campo('end_ms'), `O corte ${n} passa do fim do vídeo.`);
+    case 'corte_curto':
+      return um(campo('end_ms'), `O corte ${n} tem menos de ${segundos(LIMITES_DOS_CORTES.corteMinimoS * 1000)}.`);
+    case 'corte_longo':
+      return um(campo('end_ms'), `O corte ${n} tem mais de ${segundos(LIMITES_DOS_CORTES.corteMaximoS * 1000)}.`);
+    case 'repetido':
+      return um(campo('start_ms'), `O corte ${n} repete um pedaço de outro corte do mesmo vídeo.`);
+    case 'total_fora': {
+      const total = cortes.reduce((t, k) => t + Math.max(0, k.end_ms - k.start_ms), 0);
+      const piso = duracaoS * TOTAL_DOS_CORTES.minimoDaDuracao * 1000;
+      return um('cuts', `Os cortes somam ${segundos(total)}: o vídeo de ${duracaoS} s leva de ${segundos(piso)} a ${duracaoS} s de cortes.`);
+    }
+    case 'vazio':
+      return um(campo('caption'), `Escreva a legenda do corte ${n}.`);
+    case 'longo':
+      return um(campo('caption'), `A legenda do corte ${n} passa de ${LIMITES_DOS_CORTES.legenda} letras.`);
+    case 'emoji_ou_hashtag':
+      return um(campo('caption'), `A legenda do corte ${n} tem emoji ou hashtag: tire para seguir.`);
+    case 'dado_pessoal':
+      return um(campo('caption'), `A legenda do corte ${n} tem um dado pessoal (telefone, e-mail ou documento): tire para seguir.`);
+    case 'compliance': {
+      const motivo = (tipo: string) =>
+        tipo === 'preco_fora' ? 'o preço não é o de uma oferta em vigor em Minha marca' : tipo === 'regra_da_marca' ? 'a marca não diz isso (Minha marca)' : 'uma regra do Liame barra este texto';
+      // O Compliance lê as legendas juntas: o trecho (sem acento e em minúsculas, como o Compliance compara) diz de qual
+      // corte veio.
+      const errors = c.achados.map((a) => {
+        const i = cortes.findIndex((k) => normalizar(k.caption).includes(normalizar(a.trecho)));
+        return { path: i >= 0 ? `cuts.${i}.caption` : 'cuts', message: `"${a.trecho}": ${motivo(a.tipo)}` };
+      });
+      return { detail: `O Compliance barrou: ${c.achados.map((a) => `"${a.trecho}" (${motivo(a.tipo)})`).join('; ')}.`, errors };
+    }
+  }
 }
 
 @Injectable()
@@ -104,6 +163,10 @@ export class VideoMontadoService {
 
   private ligada(quem: Quem, brandId: string): Promise<boolean> {
     return this.flags.isEnabled(FLAG_DO_VIDEO_MONTADO, this.flags.context({ tenantId: quem.tenantId, userId: quem.userId, brandId }));
+  }
+
+  private momentosLigados(quem: Quem, brandId: string): Promise<boolean> {
+    return this.flags.isEnabled(FLAG_DOS_MELHORES_MOMENTOS, this.flags.context({ tenantId: quem.tenantId, userId: quem.userId, brandId }));
   }
 
   /** Os vídeos de hoje que contam no limite (o que não deu não conta) e quando o limite volta, no fuso da empresa. */
@@ -136,6 +199,7 @@ export class VideoMontadoService {
       title: l.title,
       price_line: l.price_line,
       cta: l.cta,
+      cuts: l.cuts ?? null,
       with_logo: l.with_logo,
       sound: l.sound,
       status: l.status,
@@ -158,8 +222,10 @@ export class VideoMontadoService {
     const frente = await this.naFrente(linhas);
     const logo = await tx.execute(sql`select 1 from liame.brand where id = ${brandId} and logo_id is not null`);
     const hoje = await this.hoje(quem, brandId);
+    const enabled = await this.ligada(quem, brandId);
     return {
-      enabled: await this.ligada(quem, brandId),
+      enabled,
+      moments_enabled: enabled && (await this.momentosLigados(quem, brandId)),
       today: { used: hoje.used, limit: VIDEO_MONTAGE_LIMITS.perDay, resets_at: hoje.resets_at },
       has_logo: Boolean(logo.rows[0]),
       items: linhas.map((l) => this.resposta(l, frente)),
@@ -180,16 +246,32 @@ export class VideoMontadoService {
     const quem = this.quem(auth);
     await this.marca(quem, body.brand_id);
     if (!(await this.ligada(quem, body.brand_id))) throw conflito('funcao-desligada', 'Função desligada', 'O vídeo montado não está ligado para esta empresa.');
+    const momentos = body.template === 'momentos';
+    if (momentos && !(await this.momentosLigados(quem, body.brand_id))) {
+      throw conflito('funcao-desligada', 'Função desligada', '"Os melhores momentos" não estão ligados para esta empresa.');
+    }
 
-    // O modelo: quantas fotos ou vídeos, se aceita vídeo e a linha do preço.
+    // O modelo: quantas fotos ou vídeos, se aceita vídeo, a linha do preço, as durações, os textos e os cortes.
     const regra = VIDEO_TEMPLATE_RULES[body.template];
     const ids = [...new Set(body.media_ids)];
     if (ids.length !== body.media_ids.length) throw recusa('midia-repetida', 'Foto repetida', 'Cada foto entra uma vez só no vídeo.', 'media_ids');
     if (ids.length < regra.min || ids.length > regra.max) {
-      const quantas = regra.min === regra.max ? `${regra.min} foto${regra.video ? ' ou vídeo' : ''}` : `de ${regra.min} a ${regra.max} fotos`;
+      const coisa = regra.onlyVideo ? 'vídeos' : 'fotos';
+      const quantas = regra.min === regra.max ? `${regra.min} foto${regra.video ? ' ou vídeo' : ''}` : `de ${regra.min} a ${regra.max} ${coisa}`;
       throw recusa('midias-do-modelo', 'Quantidade de fotos', `Este modelo leva ${quantas}.`, 'media_ids');
     }
     if (body.price_line && !regra.price) throw recusa('preco-no-modelo', 'Sem linha do preço', 'Este modelo não leva a linha do preço.', 'price_line');
+    if (!regra.durations.includes(body.duration_s)) {
+      throw recusa('duracao-do-modelo', 'Duração', `Este modelo dura ${regra.durations.slice(0, -1).join(', ')} ou ${regra.durations.at(-1)} segundos.`, 'duration_s');
+    }
+    if (regra.texts) {
+      if (!body.title) throw recusa('falta-o-titulo', 'Falta o título', 'Escreva o título do vídeo.', 'title');
+      if (!body.cta) throw recusa('falta-a-chamada', 'Falta a chamada', 'Escreva a chamada do vídeo.', 'cta');
+    } else if (body.title || body.cta) {
+      throw recusa('texto-no-modelo', 'Sem título nem chamada', 'Este modelo leva a legenda de cada corte, sem título nem chamada.', body.title ? 'title' : 'cta');
+    }
+    if (momentos && !body.cuts) throw recusa('faltam-os-cortes', 'Faltam os cortes', 'Peça os cortes ao Social media, ou escolha os cortes, antes de montar.', 'cuts');
+    if (!momentos && body.cuts) throw recusa('cortes-no-modelo', 'Sem cortes', 'Só "Os melhores momentos" levam cortes.', 'cuts');
 
     // As fotos e o vídeo de Fotos: prontos, da marca; o vídeo montado não entra de novo.
     const midias = (
@@ -201,13 +283,18 @@ export class VideoMontadoService {
     if (midias.some((m) => m.montage_id)) throw recusa('midia-montada', 'Vídeo montado', 'Um vídeo montado pelo Liame não entra de novo numa montagem.', 'media_ids');
     const video = midias.find((m) => m.kind === 'video');
     if (video && !regra.video) throw recusa('video-no-modelo', 'Só fotos', 'Este modelo leva só fotos. Para usar um vídeo, escolha "Novidade da casa".', 'media_ids');
+    if (regra.onlyVideo && midias.some((m) => m.kind !== 'video')) throw recusa('so-videos', 'Só vídeos', 'Este modelo leva só vídeos de Fotos.', 'media_ids');
     if (body.sound === 'original' && !video) throw recusa('som-sem-video', 'Sem vídeo', 'O som original só vale quando o vídeo da loja entra no modelo.', 'sound');
-    // O vídeo da loja toca uma vez, do começo: ele precisa ter pelo menos a duração escolhida (parte 3).
-    if (video && (video.duration_ms ?? 0) < body.duration_s * 1000) {
+    // O vídeo da loja toca uma vez, do começo: ele precisa ter pelo menos a duração escolhida (parte 3). Nos "Melhores
+    // momentos", a régua dos cortes confere cada corte dentro do vídeo dele.
+    if (!momentos && video && (video.duration_ms ?? 0) < body.duration_s * 1000) {
       const tem = Math.floor((video.duration_ms ?? 0) / 1000);
       throw recusa('video-curto', 'Vídeo curto', `O vídeo tem ${tem} s: escolha uma duração de até ${tem} s, ou outro vídeo.`, 'duration_s');
     }
-    if (body.sound === 'original' && video && video.has_audio === false) throw recusa('video-sem-som', 'Vídeo sem som', 'Este vídeo não tem som: escolha "Sem música".', 'sound');
+    // O som original: nos "Melhores momentos", o de cada corte; recusado só quando nenhum dos vídeos tem som.
+    if (body.sound === 'original' && midias.filter((m) => m.kind === 'video').every((m) => m.has_audio === false)) {
+      throw recusa('video-sem-som', 'Vídeo sem som', momentos ? 'Nenhum destes vídeos tem som: escolha "Sem música".' : 'Este vídeo não tem som: escolha "Sem música".', 'sound');
+    }
 
     // A logo de Minha marca.
     if (body.with_logo) {
@@ -226,9 +313,33 @@ export class VideoMontadoService {
     const fuso = (await tx.execute<{ timezone: string | null }>(sql`select timezone from liame.organization where id = ${quem.tenantId}`)).rows[0]?.timezone ?? 'America/Sao_Paulo';
     const marca = await marcaDoCriativo(body.brand_id, fuso, new Date());
     const ofertas = marca?.conteudo.offers.items ?? [];
-    const base = baseDoPedido({ oferta: ofertas.join('; '), instrucao: null }, { fatos: marca?.fatos ?? '', proibidas: marca?.proibidas ?? [], concorrentes: marca?.concorrentes ?? [] });
-    const conferencia = conferirPeca(textoParaConferir(body), base, 'pessoa');
-    const barrados = conferencia.itens.filter((i) => i.item !== 'tamanho' && i.situacao === 'barrou').flatMap((i) => i.achados);
+    const daMarca = { fatos: marca?.fatos ?? '', proibidas: marca?.proibidas ?? [], concorrentes: marca?.concorrentes ?? [] };
+
+    // Os cortes dos "Melhores momentos" pela régua dos cortes (D-A6-152), a mesma da proposta do Social media, com o autor
+    // `pessoa` (a pessoa pode ter mudado as legendas): cada corte num dos vídeos escolhidos e dentro dele, o tamanho, sem
+    // pedaço repetido, o total perto da duração e as legendas pelo Compliance. O que fica gravado é o conferido.
+    let cortes: VideoCut[] | null = null;
+    if (momentos && body.cuts) {
+      const posicao = new Map(ids.map((id, i) => [id, i]));
+      const fora = body.cuts.findIndex((c) => !posicao.has(c.media_id));
+      if (fora >= 0) throw recusa('corte-fora-dos-videos', 'Corte fora dos vídeos', `O corte ${fora + 1} não está num dos vídeos escolhidos.`, `cuts.${fora}.media_id`);
+      const duracao = new Map(midias.map((m) => [m.id, m.duration_ms ?? 0]));
+      const c = conferirCortes(
+        body.cuts.map((k) => ({ video: posicao.get(k.media_id)!, inicioMs: k.start_ms, fimMs: k.end_ms, legenda: k.caption })),
+        { duracaoS: body.duration_s, ofertas, videos: ids.map((id) => ({ duracaoMs: duracao.get(id) ?? 0 })) },
+        daMarca,
+        'pessoa',
+      );
+      if (!c.ok) {
+        const r = recusaDosCortes(c, body.cuts, body.duration_s);
+        throw recusa(c.motivo === 'compliance' ? 'texto-barrado' : 'cortes-fora-da-regua', c.motivo === 'compliance' ? 'O Compliance barrou a legenda' : 'Os cortes', r.detail, undefined, r.errors);
+      }
+      cortes = c.cortes.map((k) => ({ media_id: ids[k.video]!, start_ms: k.inicioMs, end_ms: k.fimMs, caption: k.legenda }));
+    }
+
+    const base = baseDoPedido({ oferta: ofertas.join('; '), instrucao: null }, daMarca);
+    const conferencia = momentos ? null : conferirPeca(textoParaConferir(body), base, 'pessoa');
+    const barrados = (conferencia?.itens ?? []).filter((i) => i.item !== 'tamanho' && i.situacao === 'barrou').flatMap((i) => i.achados);
     if (barrados.length) {
       const motivo = (tipo: string) =>
         tipo === 'preco_fora' ? 'o preço não é o de uma oferta em vigor em Minha marca' : tipo === 'regra_da_marca' ? 'a marca não diz isso (Minha marca)' : 'uma regra do Liame barra este texto';
@@ -247,10 +358,15 @@ export class VideoMontadoService {
 
     const id = uuidv7();
     await tx.execute(sql`
-      insert into liame.video_montage (id, tenant_id, brand_id, template, format, duration_s, media_ids, title, price_line, cta, with_logo, sound, requested_by)
+      insert into liame.video_montage (id, tenant_id, brand_id, template, format, duration_s, media_ids, title, price_line, cta, cuts, with_logo, sound, requested_by)
       values (${id}, ${quem.tenantId}, ${body.brand_id}, ${body.template}, ${body.format}, ${body.duration_s}, ${`{${ids.join(',')}}`}::uuid[],
-              ${body.title}, ${body.price_line ?? null}, ${body.cta}, ${body.with_logo}, ${body.sound}, ${quem.userId})`);
-    auditDetail({ resourceId: id, before: null, after: { brand_id: body.brand_id, template: body.template, format: body.format, duration_s: body.duration_s, media: ids.length } });
+              ${momentos ? VIDEO_MOMENTS_TITLE : body.title}, ${body.price_line ?? null}, ${momentos ? '' : body.cta},
+              ${cortes ? JSON.stringify(cortes) : null}::jsonb, ${body.with_logo}, ${body.sound}, ${quem.userId})`);
+    auditDetail({
+      resourceId: id,
+      before: null,
+      after: { brand_id: body.brand_id, template: body.template, format: body.format, duration_s: body.duration_s, media: ids.length, ...(cortes ? { cuts: cortes.length } : {}) },
+    });
     return this.obter(auth, id);
   }
 
@@ -263,6 +379,10 @@ export class VideoMontadoService {
   async textos(auth: AuthContext, body: VideoTextsRequest): Promise<VideoTextsResponse> {
     const quem = this.quem(auth);
     if (!this.database) throw new AppProblem(503, 'sem-banco', 'Indisponível', 'Tente de novo em instantes.');
+    // Os "Melhores momentos" não levam título nem chamada: os cortes e as legendas vêm do pedido dos cortes (A6 · Z16).
+    if (!VIDEO_TEMPLATE_RULES[body.template].texts) {
+      throw recusa('texto-no-modelo', 'Sem título nem chamada', 'Este modelo leva a legenda de cada corte: peça os cortes ao Social media.', 'template');
+    }
     const database = this.database;
     const ids = [...new Set(body.media_ids)];
     const lido = await naTransacaoDaEmpresa(database, quem, async () => {

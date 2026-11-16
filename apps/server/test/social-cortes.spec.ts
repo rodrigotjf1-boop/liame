@@ -119,6 +119,13 @@ describe('a tarefa dos cortes do Social media', () => {
     ]);
     // Cruzamento maior é pedaço repetido de verdade: a régua recusa.
     expect(conferir([corte(1, 0, 6), corte(1, 5, 11), corte(2, 0, 3)])).toMatchObject({ ok: false, motivo: 'repetido', corte: 1 });
+    // O corte de rascunho (legenda sem palavra de verdade) sai quando o resto passa inteiro; senão, a recusa de antes fica.
+    const comRascunho = conferir([corte(1, 1, 6, 'Smash na chapa'), corte(1, 6.5, 7.5, 'x'), corte(2, 0, 5, 'Pronto para pedir'), corte(1, 8, 12, 'Saindo quente')]);
+    expect(comRascunho).toMatchObject({ ok: true, totalMs: 14_000 });
+    expect(comRascunho.ok && comRascunho.cortes.map((c) => c.legenda)).toEqual(['Smash na chapa', 'Pronto para pedir', 'Saindo quente']);
+    expect(conferir([corte(1, 1, 6, 'Smash na chapa'), corte(1, 6.5, 7.5, 'x')])).toMatchObject({ ok: false, motivo: 'corte_curto', corte: 1 });
+    // Corte curto com legenda de verdade não sai: a régua o recusa.
+    expect(conferir([corte(1, 1, 6), corte(1, 6.5, 7.5, 'Queijo derretendo'), corte(2, 0, 5)])).toMatchObject({ ok: false, motivo: 'corte_curto', corte: 1 });
     // O corte longo demais não é encurtado pelo ajuste, mesmo com o total acima: a régua o recusa.
     expect(conferir([corte(1, 0, 9), corte(2, 0, 7.5), corte(1, 9.5, 12)])).toMatchObject({ ok: false, motivo: 'corte_longo', corte: 0 });
     // No pedido de montagem (a pessoa), não há ajuste: a régua só recusa.

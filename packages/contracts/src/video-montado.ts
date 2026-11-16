@@ -4,8 +4,12 @@ import { z } from 'zod';
 // modelo, as fotos ou o vídeo de Fotos, o formato, os textos (conferidos pelo Compliance), a logo, a duração e o som; o
 // pedido entra na fila e o serviço de montagem (`liame-render`) monta um por vez. O vídeo pronto entra em Fotos.
 
-export const VIDEO_TEMPLATES = ['destaque', 'combo', 'novidade'] as const;
-/** `destaque` (uma foto, o nome e o preço), `combo` (de 2 a 4 fotos e o preço no fim), `novidade` (uma foto ou um vídeo, a faixa "Novidade" e a chamada). */
+export const VIDEO_TEMPLATES = ['destaque', 'combo', 'novidade', 'momentos'] as const;
+/**
+ * `destaque` (uma foto, o nome e o preço), `combo` (de 2 a 4 fotos e o preço no fim), `novidade` (uma foto ou um vídeo, a
+ * faixa "Novidade" e a chamada), `momentos` ("Os melhores momentos", A6 · Z16: de 1 a 4 vídeos, os cortes escolhidos pelo
+ * Social media em sequência, com a legenda de cada um; só com a função `video_momentos`).
+ */
 export const VideoTemplate = z.enum(VIDEO_TEMPLATES);
 export type VideoTemplate = z.infer<typeof VideoTemplate>;
 
@@ -22,24 +26,52 @@ export const VIDEO_MONTAGE_LIMITS = {
   perDay: 10,
 } as const;
 
-/** Quantas fotos ou vídeos cada modelo leva, e se aceita vídeo e a linha do preço. */
-export const VIDEO_TEMPLATE_RULES: Record<VideoTemplate, { min: number; max: number; video: boolean; price: boolean }> = {
-  destaque: { min: 1, max: 1, video: false, price: true },
-  combo: { min: 2, max: 4, video: false, price: true },
-  novidade: { min: 1, max: 1, video: true, price: false },
+/**
+ * Quantas fotos ou vídeos cada modelo leva, se aceita vídeo (`video`), se leva só vídeo (`onlyVideo`), a linha do preço,
+ * as durações e se leva o título e a chamada (os "Melhores momentos" levam a legenda de cada corte no lugar deles).
+ */
+export const VIDEO_TEMPLATE_RULES: Record<
+  VideoTemplate,
+  { min: number; max: number; video: boolean; onlyVideo: boolean; price: boolean; durations: readonly number[]; texts: boolean }
+> = {
+  destaque: { min: 1, max: 1, video: false, onlyVideo: false, price: true, durations: [6, 10, 15], texts: true },
+  combo: { min: 2, max: 4, video: false, onlyVideo: false, price: true, durations: [6, 10, 15], texts: true },
+  novidade: { min: 1, max: 1, video: true, onlyVideo: false, price: false, durations: [6, 10, 15], texts: true },
+  momentos: { min: 1, max: 4, video: true, onlyVideo: true, price: false, durations: [10, 15, 20], texts: false },
 };
+
+/** O título com que "Os melhores momentos" ficam na lista (o modelo não leva título; A6 · Z16). */
+export const VIDEO_MOMENTS_TITLE = 'Os melhores momentos';
+
+/**
+ * Um corte dos "Melhores momentos" (A6 · Z16; D-A6-150 e D-A6-152): o vídeo de Fotos (um dos `media_ids`), o começo e o
+ * fim em milissegundos e a legenda (até 40 letras). A ordem da lista é a ordem do vídeo; o servidor confere cada corte
+ * dentro do vídeo, de 1,5 a 8 segundos, sem repetir pedaço, o total perto da duração e as legendas pelo Compliance.
+ */
+export const VideoCut = z.strictObject({
+  media_id: z.uuid(),
+  start_ms: z.int().min(0),
+  end_ms: z.int().min(1),
+  caption: z.string().trim().min(1).max(40),
+});
+export type VideoCut = z.infer<typeof VideoCut>;
 
 export const CreateVideoMontageRequest = z.strictObject({
   brand_id: z.uuid(),
   template: VideoTemplate,
   format: VideoFormat,
-  duration_s: z.union([z.literal(6), z.literal(10), z.literal(15)]),
+  /** 6, 10 ou 15 segundos; nos "Melhores momentos", 10, 15 ou 20 (o vídeo dura a soma dos cortes). */
+  duration_s: z.union([z.literal(6), z.literal(10), z.literal(15), z.literal(20)]),
   /** As fotos ou o vídeo de Fotos, na ordem em que entram no vídeo. */
   media_ids: z.array(z.uuid()).min(1).max(4),
-  title: z.string().trim().min(1).max(VIDEO_MONTAGE_LIMITS.title),
+  /** O título (obrigatório nos modelos com texto; os "Melhores momentos" não levam). */
+  title: z.string().trim().min(1).max(VIDEO_MONTAGE_LIMITS.title).optional(),
   /** A linha do preço (só nos modelos com preço); o preço é o de uma oferta em vigor em Minha marca. */
   price_line: z.string().trim().min(1).max(VIDEO_MONTAGE_LIMITS.priceLine).optional(),
-  cta: z.string().trim().min(1).max(VIDEO_MONTAGE_LIMITS.cta),
+  /** A chamada (obrigatória nos modelos com texto; os "Melhores momentos" não levam). */
+  cta: z.string().trim().min(1).max(VIDEO_MONTAGE_LIMITS.cta).optional(),
+  /** Os cortes, na ordem do vídeo (só nos "Melhores momentos", e obrigatórios nele; de 2 a 6). */
+  cuts: z.array(VideoCut).min(2).max(6).optional(),
   /** A logo de Minha marca no selo (só com a logo guardada). */
   with_logo: z.boolean().default(false),
   /** `sem` (o padrão) ou `original` (o som do vídeo da loja, só na "Novidade" com vídeo). */
@@ -61,6 +93,8 @@ export const VideoMontageResponse = z.strictObject({
   title: z.string(),
   price_line: z.string().nullable(),
   cta: z.string(),
+  /** Os cortes dos "Melhores momentos", na ordem do vídeo; nulo nos outros modelos. */
+  cuts: z.array(VideoCut).nullable().optional(),
   with_logo: z.boolean(),
   sound: z.enum(['sem', 'original']),
   status: VideoMontageStatus,
@@ -84,6 +118,8 @@ export type VideoMontageListQuery = z.infer<typeof VideoMontageListQuery>;
 export const VideoMontageListResponse = z.strictObject({
   /** A função `video_montado` ligada para a marca. */
   enabled: z.boolean(),
+  /** A função `video_momentos` ligada para a marca: "Os melhores momentos" aparecem na gaveta (A6 · Z16). */
+  moments_enabled: z.boolean(),
   /** Os vídeos de hoje que contam no limite, o limite e quando ele volta (meia-noite no fuso da empresa). */
   today: z.strictObject({ used: z.int().min(0), limit: z.int().min(1), resets_at: z.iso.datetime({ offset: true }) }),
   /** Minha marca tem a logo do restaurante: a opção da logo fica disponível. */
@@ -212,18 +248,7 @@ export const VIDEO_CUTS_FAIL_REASONS = [
 ] as const;
 export type VideoCutsFailReason = (typeof VIDEO_CUTS_FAIL_REASONS)[number];
 
-/**
- * Um corte dos "Melhores momentos" (A6 · Z16; D-A6-150 e D-A6-152): o vídeo de Fotos (um dos `media_ids`), o começo e o
- * fim em milissegundos e a legenda (até 40 letras). A ordem da lista é a ordem do vídeo; o servidor confere cada corte
- * dentro do vídeo, de 1,5 a 8 segundos, sem repetir pedaço, o total perto da duração e as legendas pelo Compliance.
- */
-export const VideoCut = z.strictObject({
-  media_id: z.uuid(),
-  start_ms: z.int().min(0),
-  end_ms: z.int().min(1),
-  caption: z.string().trim().min(1).max(40),
-});
-export type VideoCut = z.infer<typeof VideoCut>;
+// O `VideoCut` (um corte: o vídeo, o começo, o fim e a legenda) é o mesmo do pedido de montagem, definido lá em cima.
 
 export const VideoCutsResponse = z.strictObject({
   id: z.uuid(),
@@ -255,7 +280,7 @@ export type VideoCutsResponse = z.infer<typeof VideoCutsResponse>;
 export type VideoRenderProps = {
   template: VideoTemplate;
   format: VideoFormat;
-  duration_s: 6 | 10 | 15;
+  duration_s: 6 | 10 | 15 | 20;
   /** Na ordem do pedido. */
   media: { url: string; kind: 'foto' | 'video' }[];
   title: string;
@@ -263,6 +288,11 @@ export type VideoRenderProps = {
   cta: string;
   logo_url: string | null;
   sound: 'sem' | 'original';
+  /**
+   * Os cortes dos "Melhores momentos" (A6 · Z16), na ordem do vídeo: `media` é a posição do vídeo em `media`, o começo e o
+   * fim em milissegundos e a legenda já conferida. O vídeo dura a soma dos cortes. Ausente nos outros modelos.
+   */
+  cuts?: { media: number; start_ms: number; end_ms: number; caption: string }[];
 };
 
 /** As medidas de cada formato, em pixels, e os quadros por segundo do vídeo montado. */

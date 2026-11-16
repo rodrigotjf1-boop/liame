@@ -119,7 +119,7 @@ O Liame aplica regras automáticas (e, quando ligado, o funcionário de Complian
 
 10.3. Os preços podem ser reajustados com aviso de **30 dias**. Se não concordar, você pode cancelar antes do reajuste valer.
 
-10.4. Se o pagamento não for confirmado, avisamos por e-mail já no primeiro dia de atraso. Com **10 dias** sem regularização, as ações dos funcionários de IA ficam pausadas; o acesso à conta e a leitura dos dados continuam. Com **30 dias**, a conta é suspensa; os seus dados continuam guardados pelo prazo da seção 11.
+10.4. Se o pagamento não for confirmado, avisamos por e-mail já no primeiro dia de atraso. Com **10 dias** sem regularização, as ações dos funcionários de IA ficam pausadas; o acesso à conta e a leitura dos dados continuam. Com **30 dias**, a conta é suspensa; os seus dados continuam guardados pelo prazo da seção 11. Sem uma assinatura paga (antes do primeiro pagamento ou depois do fim da assinatura), as ações dos funcionários de IA da marca ficam pausadas; o acesso à conta e a leitura dos dados continuam, e voltam ao normal assim que o primeiro pagamento for confirmado.
 
 10.5. A nota fiscal é emitida conforme a legislação.
 
@@ -127,7 +127,7 @@ O Liame aplica regras automáticas (e, quando ligado, o funcionário de Complian
 
 11.1. Você cancela a qualquer momento, pelo próprio Liame, **sem multa**. O cancelamento vale ao fim do período já pago. Na **primeira contratação**, você pode desistir em até **7 dias corridos** a partir do primeiro pagamento, com **devolução integral** do valor pago.
 
-11.2. Depois do cancelamento ou da suspensão, você tem **30 dias** para exportar os seus dados (CSV ou JSON). Depois disso, os dados da conta são **apagados de forma definitiva**, inclusive das cópias de segurança, e enviamos um certificado de exclusão ao Dono. Guardamos apenas o que a lei nos obriga a guardar, pelo prazo legal (por exemplo, registros de acesso e documentos fiscais).
+11.2. Depois do cancelamento ou da suspensão, você tem **30 dias** para exportar os seus dados (CSV ou JSON). Depois disso, os dados são **apagados de forma definitiva**, inclusive das cópias de segurança: quando a assinatura de uma marca termina e outra marca da empresa segue com assinatura, só os dados daquela marca são apagados; quando é a última, a conta inteira é apagada, e enviamos um certificado de exclusão ao Dono. Avisamos por e-mail, a quem cuida da cobrança, 7 dias antes e na véspera do apagamento. Guardamos apenas o que a lei nos obriga a guardar, pelo prazo legal (por exemplo, registros de acesso e documentos fiscais).
 
 ## 12. Disponibilidade e suporte
 
