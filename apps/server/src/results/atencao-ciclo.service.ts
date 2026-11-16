@@ -3,7 +3,8 @@ import { uuidv7 } from '@liame/database';
 import { Injectable } from '@nestjs/common';
 import { sql } from 'drizzle-orm';
 import { nomeDaPlataforma, textoDoGastoAcima, verbaDaLeitura } from '../actions/conferencia-do-gasto.js';
-import { avisosDoRitmoDasMarcas, textoDoAvisoDoRitmo } from '../campanhas/ritmo-avisos.js';
+import { textoDoAvisoDoRitmo } from '../campanhas/ritmo-avisos.js';
+import { avisosGravadosDoRitmo } from '../campanhas/ritmo-conferido.js';
 import { avisosDoTesteDasMarcas, textoDoAvisoDoTeste } from '../campanhas/teste-avisos.js';
 import { CONNECTORS } from '../actions/connectors.js';
 import { MODELO_PADRAO } from '../attribution/motor.js';
@@ -372,9 +373,10 @@ export class AtencaoCicloService {
       : { rows: [] };
 
     // O ritmo da semana (plano da região, R7; D-RG-73): a campanha que saiu do ritmo, a que ainda não voltou à verba de
-    // antes e a que gastou mais do que a soma das verbas de cada dia. Calculado agora, dos passos guardados e do gasto
-    // lido; sem ritmo nenhum nas marcas, é uma consulta só.
-    const doRitmo = await avisosDoRitmoDasMarcas(tx, marcas, instante);
+    // antes e a que gastou mais do que a soma das verbas de cada dia. Lidos da conferência gravada pela rotina do worker
+    // depois da leitura da manhã (D-RG-75; `worker/conferencia-do-ritmo.ts`), a de hoje ou a de ontem; sem conferência
+    // nenhuma nas marcas, é uma consulta só.
+    const doRitmo = await avisosGravadosDoRitmo(tx, marcas, instante);
 
     // O teste de criativo (plano da região, R8; D-RG-80): o teste que terminou, com ou sem vencedor, e o que foi
     // interrompido. Calculado agora, do teste guardado e da leitura da Meta; sem teste nenhum nas marcas, é uma consulta só.
