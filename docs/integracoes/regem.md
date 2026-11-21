@@ -16,6 +16,7 @@
 | `custos.ler` | custo por item | só se quem autorizou tem permissão financeira no Regem (presidente); sem ele, `custo_centavos` vem `null` |
 | `clientes.anonimizacao.ler` | avisos de cliente anonimizado | para o Liame apagar o cliente pseudonimizado |
 | `cupons.ler`, `cupons.uso.ler`, `cupons.criar` | contrato de cupons | — |
+| `clientes.audiencias.ler` | o tamanho de cada público do perfil do cliente e quantos dele aceitaram ofertas (§2.6) | só os números, nenhum cliente; permissão sensível e opcional no clique do Liame, que nasce desligada |
 
 - **Token do piloto (decisão do dono, 29/09/2026):** sai sem `clientes.telefone.ler` e sem `custos.ler`, só com os outros 5 escopos. O Liame já trata isso pelo contrato: `cliente` e `custo_centavos` vêm `null`, o caminho B (conversa → pedido) fica desligado, e os Resultados mostram "margem incompleta", sem veredito. Liberar os dois depois é emitir um token novo e revogar o antigo.
   - **Desde 01/10/2026, 04:03, o piloto usa o token da autorização pela loja** (o dono conectou pelo Liame): pedidos, custo, aviso de anonimização, cupons, usos e criar cupom, **sem `clientes.telefone.ler`**. O token da distribuição (que tinha os 7 escopos, diferente da decisão acima) foi revogado na troca.
@@ -202,6 +203,41 @@ Os pedidos de entrega da loja **somados por bairro**, para "Bairros para atacar 
     - a resposta de outra loja não entra.
   - **A gravação** guarda só as somas, na tabela `region_order_district`. A leitura substitui a anterior, e a conta desligada leva junto o que foi lido.
   - **No retrato,** os bairros do município da loja são casados com o Censo pelo nome, e os bairros da área de entrega sem o mínimo entram como "menos de 5". A conta de atacar e defender está em `regiao/bairros.ts`.
+
+### 2.6 `GET {base}/clientes/audiencias` · `clientes.audiencias.ler`
+
+No ar desde 21/11/2026 (Regem #1232, migração 483; F9 parte 1 do plano do perfil do cliente do Regem, §11 "Liame"). Para o Liame planejar campanha e anúncio pelo tamanho do público, sem saber quem são os clientes.
+
+- **Sem parâmetros**, sem cursor: a resposta é um retrato lido na hora (uma consulta, ~0,3 s na loja piloto).
+- **A permissão:** só da classe DMS (fora do teto do parceiro), **sensível** no manifesto, **opcional** no clique do Liame e nascendo desligada; o presidente da loja liga. Sem ela, **403** `escopo-insuficiente`. Ela sozinha não abre nenhuma outra rota.
+
+```json
+{
+  "perfil_ligado": true,
+  "calculado_em": "2026-11-21T09:00:00.000Z",
+  "minimo": 5,
+  "clientes_com_perfil": 1840,
+  "aceitaram_ofertas": 212,
+  "publicos": [
+    { "chave": "campeoes", "rotulo": "Campeões", "grupo": "segmento", "clientes": 312, "aceitaram_ofertas": 41 },
+    { "chave": "dinheiro", "rotulo": "Pedem no dinheiro no bolso", "grupo": "evento", "clientes": 88, "aceitaram_ofertas": null }
+  ]
+}
+```
+
+- **`publicos`:** sempre os mesmos 12, na mesma ordem (os da campanha do Regem e de Delivery › Clientes):
+  - `grupo = segmento` (pela recência, frequência e valor): `campeoes`, `leais`, `recentes`, `atencao`, `em_risco`, `inativos`;
+  - `grupo = ritmo`: `atrasado` (passou do próprio ritmo de pedir);
+  - `grupo = evento` (o que move o cliente): `dinheiro` (o dinheiro no bolso), `feriado`, `comemorativa`, `loja` (os eventos da loja);
+  - `grupo = interesse`: `olhou` (olhou um produto e não pediu).
+  - A `chave` é estável (o Liame guarda por ela); o `rotulo` é o nome em pt-BR que a loja vê no Regem e pode mudar.
+- **`clientes`:** quantos clientes estão no público. **`aceitaram_ofertas`:** quantos deles receberiam hoje uma campanha montada com o perfil — aceitaram ofertas **clicando** (no cardápio ou no WhatsApp), não pediram para sair e têm telefone.
+- **`null` = de 1 a 4** (abaixo do `minimo`): não se informa, para ninguém ser reconhecido num público pequeno. **`0` = nenhum.** O Liame mostra "menos de 5", nunca zero, e não tenta deduzir o número por diferença.
+- **Quem conta:** só o cliente **direto** da loja que tem perfil. Ficam de fora, sem regra a mais: quem só pediu por aplicativo de entrega (iFood, 99 — contrato do iFood cl. 16.3.3), quem pediu para não ser analisado e quem foi esquecido. Nada vem das conversas do WhatsApp.
+- **Qual loja:** a do token. Na empresa de várias lojas, conta o cliente que tem a loja do token como a principal dele.
+- **`perfil_ligado: false`:** o módulo "Perfil do cliente" está desligado na empresa; `publicos` vem vazio e os números `null`. Não é erro: o Liame mostra "a loja não usa o perfil do cliente".
+- **`calculado_em`:** quando o Regem calculou o perfil pela última vez (recalcula toda manhã). `null` = nunca. Ler mais de uma vez por dia não traz nada novo.
+- **Ficam para depois (no plano do Regem):** o perfil de cada cliente sem nome (`clientes.perfil.ler` — precisa de um pseudônimo com segredo da distribuição, porque o Liame já lê o id do cliente com o telefone), a lista para anúncio (`clientes.audiencias.exportar`, decisão jurídica antes) e o aviso "evento chegando".
 
 ## 3. Eventos (C3b)
 
