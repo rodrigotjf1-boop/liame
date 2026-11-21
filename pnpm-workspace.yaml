@@ -67,9 +67,9 @@ catalog:
   unplugin-swc: 2.0.0
   '@swc/core': 1.16.2
 
-  # Desde a 16.4.1, sem os avisos GHSA-2464-fhr4-w9xw e GHSA-673q-mjm6-r5xr (críticos) e GHSA-p3m5-59mp-jv5r (alto) da
-  # 16.3.8 (22/10/2026).
-  next: 16.4.1
+  # Desde a 16.4.5, sem os sete avisos médios da 16.4.1, publicados de 16 a 19/11/2026 (lista na base de conhecimento,
+  # §9 e histórico; 21/11/2026).
+  next: 16.4.5
   react: 19.3.0
   react-dom: 19.3.0
   '@types/react': 19.3.0
