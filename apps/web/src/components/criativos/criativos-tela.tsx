@@ -163,7 +163,7 @@ export function CriativosTela() {
     setAbrindoCampanha(true);
     const r = await chamar(() => api.GET('/v1/brand-photos', { params: { query: { brand_id: brandId } } }));
     setAbrindoCampanha(false);
-    setMontando({ peca: p, midias: r.ok && r.data.enabled ? r.data.items : null });
+    setMontando({ peca: p, midias: r.ok && r.data.enabled ? r.data.items.filter((f) => !f.edited) : null });
   }, []);
   /** A gaveta do teste de criativo (D-RG-96), com as fotos e os vídeos de Fotos, como a da campanha nova. */
   const [abrindoTeste, setAbrindoTeste] = useState(false);
@@ -171,7 +171,7 @@ export function CriativosTela() {
     setAbrindoTeste(true);
     const r = await chamar(() => api.GET('/v1/brand-photos', { params: { query: { brand_id: brandId } } }));
     setAbrindoTeste(false);
-    setMontandoTeste({ peca: p, midias: r.ok && r.data.enabled ? r.data.items : null });
+    setMontandoTeste({ peca: p, midias: r.ok && r.data.enabled ? r.data.items.filter((f) => !f.edited) : null });
   }, []);
   /** O mesmo para a campanha no Google (P45): só as fotos servem, e a gaveta filtra. */
   const [abrindoGoogle, setAbrindoGoogle] = useState(false);
@@ -179,7 +179,7 @@ export function CriativosTela() {
     setAbrindoGoogle(true);
     const r = await chamar(() => api.GET('/v1/brand-photos', { params: { query: { brand_id: brandId } } }));
     setAbrindoGoogle(false);
-    setMontandoGoogle({ peca: p, midias: r.ok && r.data.enabled ? r.data.items : null });
+    setMontandoGoogle({ peca: p, midias: r.ok && r.data.enabled ? r.data.items.filter((f) => !f.edited) : null });
   }, []);
 
   // A peça do endereço (`/criativos?peca=…`) abre assim que a lista chega.

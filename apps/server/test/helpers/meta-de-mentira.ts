@@ -368,6 +368,7 @@ export async function ligarFlagDaEmpresa(
     | 'search_console'
     | 'desempenho_anuncios'
     | 'fotos'
+    | 'dms_graph_fotos'
     | 'videos'
     | 'cobranca'
     | 'social_write'

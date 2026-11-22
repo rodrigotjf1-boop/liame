@@ -40,6 +40,8 @@ const Env = z.object({
   TERMS_URL: z.url().default('https://agencialiame.com/termos'),
   /** Endereços das plataformas: fixos em produção; fora dela, trocáveis para os testes com respostas gravadas. */
   META_GRAPH_URL: z.url().default('https://graph.facebook.com'),
+  /** O DMS Graph (produto da DMS, não a Graph API da Meta): editar a foto real (F4). O endereço é da distribuição. */
+  DMS_GRAPH_URL: z.url().default('https://graph.dmstecnologias.com'),
   /** O envio do vídeo à Página do Facebook (A6, Z10): o `rupload` da Meta, fora da Graph API. */
   META_RUPLOAD_URL: z.url().default('https://rupload.facebook.com'),
   GOOGLE_ADS_URL: z.url().default('https://googleads.googleapis.com'),
@@ -182,7 +184,7 @@ export type AppConfig = {
    * Produtos DMS (A2.5): rotas de integração do Regem e do RegemCast (nulo = ainda sem endereço). `regemPelaLigacao`: a
    * leitura do Regem vai pela ligação do Hub DMS quando a loja tem uma (F3, parte B; `REGEM_PELA_LIGACAO`).
    */
-  produtos: { regemApiUrl: string; regemcastApiUrl: string | null; regemPelaLigacao: boolean };
+  produtos: { regemApiUrl: string; regemcastApiUrl: string | null; regemPelaLigacao: boolean; dmsGraphUrl: string };
   /** O aplicativo do Liame no DMS ID (Hub DMS, F2); nulo = a comparação das credenciais do RegemCast não roda. */
   dmsId: { emissor: string; aplicativo: string; segredo: string } | null;
   /** O hub da DMS (Hub DMS, F2, A4, etapa 3); nulo = desligado (`HUB_LIGADO`): nada vai ao hub. */
@@ -406,7 +408,7 @@ export function loadConfig(source: NodeJS.ProcessEnv = process.env): AppConfig {
       searchConsoleUrl: env.SEARCH_CONSOLE_URL.replace(/\/$/, ''),
       metaAppSecret: env.META_APP_SECRET ?? null,
     },
-    produtos: { regemApiUrl, regemcastApiUrl, regemPelaLigacao: env.REGEM_PELA_LIGACAO === 'true' },
+    produtos: { regemApiUrl, regemcastApiUrl, regemPelaLigacao: env.REGEM_PELA_LIGACAO === 'true', dmsGraphUrl: env.DMS_GRAPH_URL },
     dmsId,
     hub,
     apiUrl,

@@ -214,7 +214,7 @@ export class TestesDeCriativoService {
       const midia = (
         await tx.execute<{ kind: string; has_cover: boolean | null; arquivo: string }>(sql`
           select kind, has_cover, coalesce(sha256, object_key) as arquivo from liame.brand_photo
-           where id = ${braco.media_id} and tenant_id = ${quem.tenantId} and brand_id = ${body.brand_id} and status = 'pronta' and removed_at is null`)
+           where id = ${braco.media_id} and tenant_id = ${quem.tenantId} and brand_id = ${body.brand_id} and status = 'pronta' and edited_at is null and removed_at is null`)
       ).rows[0];
       if (!midia) throw recusa('midia-fora-das-fotos', 'Mídia não encontrada', `Escolha uma foto ou um vídeo pronto de Fotos desta marca para o criativo ${letra}.`, `${caminho}.media_id`);
       if (midia.kind === 'video' && !midia.has_cover) {

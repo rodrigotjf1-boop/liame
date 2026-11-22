@@ -118,3 +118,49 @@
 .ig-tela img, .ig-tela .ig-sem-imagem { position: absolute; inset: 0; }
 .ig-tela img { display: block; width: 100%; height: 100%; object-fit: cover; }
 .ig-legenda span { white-space: pre-line; overflow-wrap: anywhere; }
+
+/* ===== DMS Graph · editar a foto real (F4; protótipo aprovado em 22/11/2026) ===== */
+.dg-opcao { display: flex; align-items: center; justify-content: space-between; gap: var(--sp-3); padding: var(--sp-2) 0; border-top: 1px solid var(--border); min-width: 0; }
+.dg-opcao:first-of-type { border-top: 0; }
+.dg-opcao > span { min-width: 0; }
+.dg-opcao b { display: block; font-weight: 500; }
+.dg-opcao small { display: block; font-size: var(--text-xs); color: var(--text-subtle); }
+.dg-chave { position: relative; flex: none; width: 40px; height: 23px; padding: 0; border: 0; border-radius: var(--radius-full); background: var(--border-strong); cursor: pointer; }
+.dg-chave::after { content: ""; position: absolute; top: 3px; left: 3px; width: 17px; height: 17px; border-radius: 50%; background: #fff; transition: left .15s; }
+.dg-chave[aria-checked="true"] { background: var(--link); }
+.dg-chave[aria-checked="true"]::after { left: 20px; }
+.dg-chave:focus-visible, .dg-quadro:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+.dg-chave:disabled, .dg-quadro:disabled { opacity: .6; cursor: default; }
+.dg-quadros { display: flex; flex-wrap: wrap; gap: 6px; }
+.dg-quadro { min-height: 34px; padding: 4px 12px; border: 1px solid var(--border-strong); border-radius: var(--radius-full); background: var(--surface); color: var(--text); font-size: var(--text-sm); font-weight: 500; cursor: pointer; }
+.dg-quadro[aria-pressed="true"] { background: var(--text); border-color: var(--text); color: var(--bg); }
+.dg-linha { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 2px var(--sp-2); min-width: 0; font-size: var(--text-sm); color: var(--text-muted); }
+.dg-linha b { color: var(--text); font-family: var(--font-mono, ui-monospace, monospace); font-weight: 600; }
+.dg-franquia { display: grid; gap: 6px; min-width: 0; }
+.dg-barra { display: block; height: 6px; overflow: hidden; border-radius: var(--radius-full); background: var(--bg-subtle); }
+.dg-barra i { display: block; height: 100%; background: var(--link); }
+.ft-nota.dg-nota-ia { background: var(--ai-soft); }
+.ft-nota.dg-nota-ia .ic { color: var(--ai); }
+.dg-espera { display: flex; align-items: center; gap: var(--sp-3); font-size: var(--text-sm); }
+.dg-gira { flex: none; width: 22px; height: 22px; border: 3px solid var(--border-strong); border-top-color: var(--link); border-radius: 50%; animation: dg-gira 1s linear infinite; }
+@keyframes dg-gira { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .dg-gira { animation: none; } }
+.dg-compara { position: relative; width: 100%; max-width: 100%; max-height: 420px; margin: 0 auto; overflow: hidden; border-radius: var(--radius); background: var(--bg-subtle); }
+.dg-compara img { position: absolute; inset: 0; display: block; width: 100%; height: 100%; object-fit: cover; }
+.dg-compara .dg-depois { clip-path: inset(0 calc(100% - var(--p, 50%)) 0 0); }
+.dg-divisor { position: absolute; top: 0; bottom: 0; left: var(--p, 50%); width: 2px; background: #fff; box-shadow: 0 0 0 1px rgb(11 13 23 / .35); pointer-events: none; }
+.dg-marca { position: absolute; bottom: 8px; padding: 2px 9px; border-radius: var(--radius-full); background: rgb(11 13 23 / .72); color: #fff; font-size: var(--text-xs); font-weight: 500; pointer-events: none; }
+.dg-marca--esq { left: 8px; }
+.dg-marca--dir { right: 8px; }
+.dg-confere { display: flex; align-items: flex-start; gap: var(--sp-2); padding: var(--sp-3); border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface-2); font-size: var(--text-sm); cursor: pointer; }
+.dg-confere input { flex: none; margin-top: 3px; accent-color: var(--link); }
+.dg-cartao { max-width: 720px; display: grid; gap: var(--sp-3); }
+.dg-recurso { display: flex; gap: var(--sp-2); min-width: 0; font-size: var(--text-sm); }
+.dg-recurso .ic { flex: none; margin-top: 2px; color: var(--success); }
+.dg-recurso span { min-width: 0; }
+.dg-recurso b { display: block; font-weight: 500; }
+.dg-recurso small { display: block; font-size: var(--text-xs); color: var(--text-subtle); }
+.dg-acoes { display: flex; flex-wrap: wrap; gap: var(--sp-2); }
+.dg-confirma { display: grid; gap: var(--sp-2); padding: var(--sp-3); border-radius: var(--radius); background: var(--danger-soft); font-size: var(--text-sm); }
+.dg-cnpj { max-width: 280px; }
+.dg-na-aprovacao { display: grid; gap: var(--sp-2); justify-items: start; }

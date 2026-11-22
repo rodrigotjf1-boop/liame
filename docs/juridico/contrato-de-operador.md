@@ -150,6 +150,7 @@ Previstos, com o aviso da cláusula 6.2 antes de cada um ser ligado:
 | Suboperador | Serviço | Local |
 | --- | --- | --- |
 | OpenAI, Google | Modelos de inteligência artificial (com dados minimizados) | Estados Unidos |
+| Google, pelo DMS Graph | Edição de luz, fundo e enquadramento de uma foto enviada pelo Cliente, quando a função for ligada | Estados Unidos |
 | Amazon Web Services | Cópia da auditoria em armazenamento que não permite alteração | Brasil (São Paulo) |
 | Grafana Cloud | Monitoramento técnico | Brasil |
 | Sentry | Erros técnicos, sem conteúdo de clientes | União Europeia |

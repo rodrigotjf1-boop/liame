@@ -6,6 +6,7 @@ import { Icone } from '@/components/ui/icone';
 import { useDialogo } from '@/components/ui/use-dialogo';
 import { api, chamar, mensagemDe, type Problema } from '@/lib/api';
 import { disparar } from '@/lib/disparar';
+import { resumoDaEdicao } from './edicao';
 import { TelaDoVideo } from './tela-do-video';
 import {
   canaisDoVideo,
@@ -45,9 +46,11 @@ type Props = {
   /** A foto inteira não carregou (o endereço de 5 minutos venceu): a tela pede endereços novos. */
   aoFalharImagem: () => void;
   aoFechar: () => void;
+  /** "Editar foto" pelo DMS Graph (F4): nulo sem a ligação, sem a permissão, no vídeo e na foto já editada. */
+  aoEditar?: (() => void) | null;
 };
 
-export function GavetaFoto({ foto, produtos, podeMudar, apagando, agora, reserva, aoSalvar, aoPedirApagar, aoMudarLa, aoProdutosMudarem, aoFalharImagem, aoFechar }: Props) {
+export function GavetaFoto({ foto, produtos, podeMudar, apagando, agora, reserva, aoSalvar, aoPedirApagar, aoMudarLa, aoProdutosMudarem, aoFalharImagem, aoFechar, aoEditar = null }: Props) {
   const ids = useId();
   const campo = useRef<HTMLSelectElement>(null);
   const fecharBt = useRef<HTMLButtonElement>(null);
@@ -141,6 +144,12 @@ export function GavetaFoto({ foto, produtos, podeMudar, apagando, agora, reserva
             <TelaDoVideo foto={foto} aoFalhar={aoFalharImagem} />
           ) : (
             <img className="ft-ver" src={foto.url} alt={foto.description || `Foto do produto: ${nome}`} referrerPolicy="no-referrer" onError={aoFalharImagem} />
+          )}
+          {foto.edited && (
+            <p className="ft-nota">
+              <Icone nome="info" pequeno />
+              <span>{resumoDaEdicao(foto)} Ela sai em post e Story; a campanha paga e o vídeo montado usam a foto original.</span>
+            </p>
           )}
           {foto.montage_id && (
             <p className="ft-nota">
@@ -248,6 +257,12 @@ export function GavetaFoto({ foto, produtos, podeMudar, apagando, agora, reserva
                 <Icone nome="trash" />
                 {video ? 'Apagar vídeo' : 'Apagar foto'}
               </button>
+              {aoEditar && (
+                <button className="btn" type="button" onClick={aoEditar} disabled={enviando}>
+                  <Icone nome="image" />
+                  Editar foto
+                </button>
+              )}
               <span className="spacer" />
               <button className="btn" type="button" onClick={fechar} disabled={enviando}>
                 Cancelar

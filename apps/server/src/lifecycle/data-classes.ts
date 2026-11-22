@@ -257,6 +257,9 @@ export const DATA_CLASSES: Record<string, TableClassification> = {
   // de imagens. É conteúdo da empresa (a tela pede foto sem pessoas que dê para reconhecer). Fica enquanto a marca
   // existir, ou até alguém apagar; a rotina `fotos` do worker e o expurgo tiram o arquivo antes da linha.
   brand_photo: { class: 'CONFIDENTIAL', retention: 'enquanto a marca existir, ou até alguém apagar (o arquivo sai antes da linha)' },
+  // O DMS Graph (F4; migration 0164): a ligação da empresa (o segredo fica no cofre) e o pedido de autorização em andamento.
+  dms_graph_link: { class: 'CONFIDENTIAL', retention: 'enquanto a empresa existir (a ligação desligada fica como histórico, sem o segredo)' },
+  dms_graph_request: { class: 'CONFIDENTIAL', retention: '10 minutos de validade; sai no pedido seguinte da empresa, depois de 1 dia' },
   // "Do seu Instagram" (A6, Z10, parte 5; migration 0122): as publicações mais novas da conta do Instagram ligada à
   // marca, com a legenda, o endereço, a miniatura no endereço da Meta e os números. É o que a própria loja publicou, sem
   // arquivo guardado; a lista espelha a conta a cada leitura (o que sai de lá sai daqui), como os números do Search Console.

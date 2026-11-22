@@ -1,6 +1,6 @@
 'use client';
 
-import type { BrandPhoto, BrandPhotosResponse, BrandResponse, InstagramMedia, NewCampaignOptionsResponse, VideoMontageListResponse, VideoMontageResponse } from '@liame/contracts';
+import type { BrandPhoto, BrandPhotosResponse, BrandResponse, DmsGraphSituation, InstagramMedia, NewCampaignOptionsResponse, VideoMontageListResponse, VideoMontageResponse } from '@liame/contracts';
 import { type DragEvent, useCallback, useEffect, useRef, useState } from 'react';
 import { useAvisar } from '@/components/ui/avisos';
 import { Estado } from '@/components/ui/estado';
@@ -18,6 +18,7 @@ import { GavetaCampanhaNova } from '@/components/criativos/gaveta-campanha-nova'
 import { GavetaDoInstagram } from './gaveta-do-instagram';
 import { concluirOVideo, enviarCapa, enviarFoto, hashDoArquivo, medirImagem, medirVideo, pedirEnvioDoVideo, quadroDoMeio, subirOVideo } from './enviar';
 import { FilaDoEnvio, type ItemDoEnvio } from './fila-do-envio';
+import { GavetaEditarFoto } from './gaveta-editar-foto';
 import { GavetaFoto } from './gaveta-foto';
 import { CartaoDaMontagem } from './video-montado/cartao';
 import { GavetaMontarVideo } from './video-montado/gaveta';
@@ -155,6 +156,14 @@ export function FotosTela() {
       }),
     );
   }, [marca, tentativa]);
+
+  // O DMS Graph (F4): a situação decide se a gaveta oferece "Editar foto". Sem resposta, a tela fica como sempre foi.
+  const [graph, setGraph] = useState<DmsGraphSituation | null>(null);
+  const [editando, setEditando] = useState<string | null>(null);
+  useEffect(() => {
+    disparar(chamar(() => api.GET('/v1/dms-graph')).then((r) => setGraph(r.ok ? r.data : null)));
+  }, []);
+  const graphPronto = Boolean(graph?.enabled && graph.can_edit && graph.link?.permissions.includes('imagens.editar'));
 
   /** Lê a lista de novo sem tirar a tela do lugar (endereços novos, produtos novos, a foto que outra pessoa apagou). */
   const reler = useCallback(async () => {
@@ -489,6 +498,7 @@ export function FotosTela() {
   }
 
   const fotos = dados?.items ?? [];
+  const fotoEditando = editando ? (fotos.find((f) => f.id === editando) ?? null) : null;
   const tem = fotos.length > 0;
   // O vídeo montado (A6 · Z15, parte 4): o botão, os pedidos na fila ou montando (na grade, antes das fotos) e o último
   // que não deu (uma faixa, até a pessoa fechar).
@@ -736,7 +746,7 @@ export function FotosTela() {
                 ? `As fotos e os vídeos de verdade dos produtos da ${nomeDaMarca}, como são, e o que a loja já publicou no Instagram. Os posts usam só estes.`
                 : dados?.videos_enabled
                   ? `As fotos e os vídeos de verdade dos produtos da ${nomeDaMarca}, como são. Os posts usam só estes.`
-                  : `As fotos de verdade dos produtos da ${nomeDaMarca}, como são. Os posts usam só estas fotos.`}
+                  : `As fotos de verdade dos produtos da ${nomeDaMarca}, como são. Os posts usam só estas fotos.${graphPronto ? ' A foto editada entra como uma nova, marcada, e a original nunca muda.' : ''}`}
             </p>
             {recebeArquivo && tem && <p className="ft-info">{info}</p>}
           </div>
@@ -818,6 +828,28 @@ export function FotosTela() {
           aoProdutosMudarem={() => disparar(reler())}
           aoFalharImagem={relerPorEndereco}
           aoFechar={() => setAberta((a) => (a === fotoAberta.id ? null : a))}
+          aoEditar={
+            graphPronto && !ehVideo(fotoAberta) && !fotoAberta.edited
+              ? () => {
+                  setEditando(fotoAberta.id);
+                  setAberta(null);
+                }
+              : null
+          }
+        />
+      )}
+      {dados && fotoEditando && (
+        <GavetaEditarFoto
+          key={`editar-${fotoEditando.id}`}
+          foto={fotoEditando}
+          quota={graph?.quota ?? null}
+          reserva={titulo}
+          aoMudarFranquia={(quota) => setGraph((g) => (g ? { ...g, quota } : g))}
+          aoGuardar={(nova) => {
+            setCarga((c) => (c.tipo === 'ok' && c.dados.brand_id === nova.brand_id ? { ...c, dados: { ...c.dados, items: [nova, ...c.dados.items] } } : c));
+            avisar('Foto editada guardada. A original continua em Fotos.');
+          }}
+          aoFechar={() => setEditando(null)}
         />
       )}
       {montar && marca && montagens && (
