@@ -195,7 +195,7 @@ export class VideoMontadoService {
     const midias = (
       await tx.execute<{ id: string; kind: string | null; montage_id: string | null; duration_ms: number | null; has_audio: boolean | null }>(sql`
         select id, kind, montage_id, duration_ms, has_audio from liame.brand_photo
-         where id in ${ids} and tenant_id = ${quem.tenantId} and brand_id = ${body.brand_id} and status = 'pronta' and removed_at is null`)
+         where id in ${ids} and tenant_id = ${quem.tenantId} and brand_id = ${body.brand_id} and status = 'pronta' and edited_at is null and removed_at is null`)
     ).rows;
     if (midias.length !== ids.length) throw recusa('midia-fora-das-fotos', 'Foto não encontrada', 'Escolha fotos ou vídeos prontos de Fotos desta marca.', 'media_ids');
     if (midias.some((m) => m.montage_id)) throw recusa('midia-montada', 'Vídeo montado', 'Um vídeo montado pelo Liame não entra de novo numa montagem.', 'media_ids');
@@ -272,7 +272,7 @@ export class VideoMontadoService {
       const midias = (
         await tx.execute<{ id: string; kind: string; product: string | null; description: string }>(sql`
           select id, kind, product, description from liame.brand_photo
-           where id in ${ids} and tenant_id = ${quem.tenantId} and brand_id = ${body.brand_id} and status = 'pronta'
+           where id in ${ids} and tenant_id = ${quem.tenantId} and brand_id = ${body.brand_id} and status = 'pronta' and edited_at is null
              and removed_at is null and montage_id is null`)
       ).rows;
       if (midias.length !== ids.length) throw recusa('midia-fora-das-fotos', 'Foto não encontrada', 'Escolha fotos ou vídeos prontos de Fotos desta marca.', 'media_ids');

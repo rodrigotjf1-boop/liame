@@ -6,6 +6,7 @@ import {
   type BrandVideoUploadResponse,
   type CreateBrandVideoRequest,
   DOSSIER_CONTENT_VERSION,
+  type FotoEdicaoOpcoes,
   type UpdateBrandPhotoRequest,
 } from '@liame/contracts';
 import { type Database, uuidv7 } from '@liame/database';
@@ -83,11 +84,19 @@ type LinhaDaFoto = {
   instagram_bytes: number | string | null;
   instagram_width: number | null;
   instagram_height: number | null;
+  // A foto editada pelo DMS Graph (F4; migration 0164).
+  edited_at: Date | string | null;
+  edited_from_id: string | null;
+  edited_by_name: string | null;
+  edit_options: FotoEdicaoOpcoes | null;
+  edit_prompt: string | null;
 };
 
 const COLUNAS = sql`p.id, p.brand_id, p.product, p.description, p.width, p.height, p.bytes, p.object_key, p.created_at,
   p.uploaded_by, u.name as uploaded_by_name, p.kind, p.duration_ms, p.media_type, p.has_audio, p.has_cover, p.montage_id,
-  p.instagram_status, p.instagram_bytes, p.instagram_width, p.instagram_height`;
+  p.instagram_status, p.instagram_bytes, p.instagram_width, p.instagram_height,
+  p.edited_at, p.edited_from_id, p.edit_options, p.edit_prompt,
+  (select e.name from liame.app_user e where e.id = p.edited_by) as edited_by_name`;
 
 export function quemPede(auth: AuthContext): Quem {
   if (!auth.tenantId) throw new AppProblem(403, 'sem-empresa-ativa', 'Escolha uma empresa', 'Selecione uma empresa com acesso ativo.');
@@ -213,7 +222,21 @@ export class FotosService {
             }
           : null,
       montage_id: l.montage_id,
+      edited:
+        l.edited_at && l.edit_options
+          ? { from_id: l.edited_from_id, at: iso(l.edited_at), by: l.edited_by_name, options: l.edit_options, prompt: l.edit_prompt }
+          : null,
     };
+  }
+
+  /** Uma foto pronta como a tela lê, na transação de quem chama (a foto editada que acabou de ser guardada). */
+  async fotoNaTransacao(id: string): Promise<BrandPhoto> {
+    const r = await currentTx().execute<LinhaDaFoto>(sql`
+      select ${COLUNAS} from liame.brand_photo p left join liame.app_user u on u.id = p.uploaded_by
+       where p.id = ${id} and p.status = 'pronta' and p.removed_at is null`);
+    const l = r.rows[0];
+    if (!l) throw naoEncontrada();
+    return this.paraTela(l, new Date(Date.now() + VALIDADE_DO_ENDERECO_S * 1000));
   }
 
   /** A lista da tela, na transação da rota. Desligada para a empresa, vazia. */

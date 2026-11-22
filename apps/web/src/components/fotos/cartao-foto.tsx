@@ -84,6 +84,11 @@ export function CartaoFoto({ foto, agora, aberta, aoAbrir, aoFalhar }: Props) {
             </>
           ) : (
             <>
+              {foto.edited && (
+                <span className="ft-selo-linha">
+                  <span className="st st--espera">Editada com IA</span>
+                </span>
+              )}
               <span>
                 {foto.orientation} · {dia(foto.uploaded_at, agora)}
               </span>

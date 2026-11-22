@@ -265,7 +265,7 @@ export class CampanhasNovasService {
       const midia = (
         await tx.execute<{ kind: string; has_cover: boolean | null }>(sql`
           select kind, has_cover from liame.brand_photo
-           where id = ${body.media_id!} and tenant_id = ${quem.tenantId} and brand_id = ${body.brand_id} and status = 'pronta' and removed_at is null`)
+           where id = ${body.media_id!} and tenant_id = ${quem.tenantId} and brand_id = ${body.brand_id} and status = 'pronta' and edited_at is null and removed_at is null`)
       ).rows[0];
       if (!midia) throw recusa('midia-fora-das-fotos', 'Mídia não encontrada', 'Escolha uma foto ou um vídeo pronto de Fotos desta marca.', 'media_id');
       if (midia.kind === 'video' && !midia.has_cover) {

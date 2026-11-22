@@ -208,7 +208,7 @@ export class CampanhasGoogleService {
     const foto = (
       await tx.execute<{ kind: string; width: number; height: number }>(sql`
         select kind, width, height from liame.brand_photo
-         where id = ${body.media_id} and tenant_id = ${quem.tenantId} and brand_id = ${body.brand_id} and status = 'pronta' and removed_at is null`)
+         where id = ${body.media_id} and tenant_id = ${quem.tenantId} and brand_id = ${body.brand_id} and status = 'pronta' and edited_at is null and removed_at is null`)
     ).rows[0];
     if (!foto) throw recusa('midia-fora-das-fotos', 'Foto não encontrada', 'Escolha uma foto pronta de Fotos desta marca.', 'media_id');
     if (foto.kind === 'video') throw recusa('nao-e-foto', 'Não é uma foto', 'No Google, a campanha nova leva uma foto: o vídeo fica para depois.', 'media_id');

@@ -121,13 +121,16 @@ describe('A1-4: toda rota declara o acesso e nega sem sessão', () => {
     // `POST /v1/google-campaigns/texts` (A5 · Y9, parte 4): o mesmo caminho, para os textos do Google pelo Criativo.
     // `POST /v1/direct/conversations/:id/suggestion` (A6 · Z12, parte 4b-2): o mesmo caminho, para a sugestão do Social
     // media numa conversa do Direct (a conversa lida numa transação curta, a IA sem transação aberta).
+    // As do DMS Graph (F4): chamam o Graph, que leva até 1 minuto na edição da foto; o banco em transações curtas, antes e depois.
     expect(semTransacao).toEqual([
+      'DELETE /v1/brand-photos/edits/:id',
       'GET /v1/actions/options',
       'GET /v1/agency-logos/:arquivo',
       'GET /v1/agency/clients/:id/reports/:reportId',
       'GET /v1/agency/reports',
       'GET /v1/billing/invoices/:id/pix',
       'GET /v1/conversions/google/actions',
+      'GET /v1/dms-graph',
       'GET /v1/messaging',
       'GET /v1/messaging/campaigns/:id',
       'GET /v1/reviews/authors',
@@ -135,10 +138,15 @@ describe('A1-4: toda rota declara o acesso e nega sem sessão', () => {
       'POST /v1/ai/explain/attention',
       'POST /v1/ai/explain/results',
       'POST /v1/brand-photos',
+      'POST /v1/brand-photos/:id/edits',
       'POST /v1/brand-photos/:id/video',
+      'POST /v1/brand-photos/edits/:id/save',
       'POST /v1/connections',
       'POST /v1/conversations/messages',
       'POST /v1/direct/conversations/:id/suggestion',
+      'POST /v1/dms-graph/authorize',
+      'POST /v1/dms-graph/callback',
+      'POST /v1/dms-graph/disconnect',
       'POST /v1/google-campaigns/texts',
       'POST /v1/region/address-lookup',
       'POST /v1/region/google-profile-address',
@@ -147,6 +155,7 @@ describe('A1-4: toda rota declara o acesso e nega sem sessão', () => {
       'PUT /v1/brand-photos/:id/cover',
       'PUT /v1/brands/:id/logo',
       'PUT /v1/conversions/google/destination',
+      'PUT /v1/dms-graph/cnpj',
     ]);
   });
 

@@ -30,6 +30,7 @@ import {
 } from './canais-da-meta';
 import { CartaoAutorizacao } from './cartao-autorizacao';
 import { CartaoAutorizacaoRegem } from './cartao-autorizacao-regem';
+import { CartaoDmsGraph } from './cartao-dms-graph';
 import { CartaoVendasGoogle } from './cartao-vendas-google';
 import { DialogoConectar } from './dialogo-conectar';
 import { DialogoConectarRegem } from './dialogo-conectar-regem';
@@ -809,6 +810,8 @@ export function ContasTela() {
           </ul>
         </div>
       )}
+
+      {dados && <CartaoDmsGraph />}
 
       {dialogo?.tipo === 'conectar' && (
         <DialogoConectar

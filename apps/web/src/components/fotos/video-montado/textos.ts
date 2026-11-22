@@ -28,7 +28,7 @@ export const ordinal = (n: number) => `${n}º`;
 /** As fotos e os vídeos de Fotos que o modelo aceita: prontos, da loja (o vídeo montado não entra de novo). */
 export function aceitas(fotos: readonly BrandPhoto[], modelo: VideoTemplate): BrandPhoto[] {
   const regra = VIDEO_TEMPLATE_RULES[modelo];
-  return fotos.filter((f) => !f.montage_id && (regra.video || f.kind !== 'video'));
+  return fotos.filter((f) => !f.montage_id && !f.edited && (regra.video || f.kind !== 'video'));
 }
 
 /** Quantas o modelo leva, como a tela escreve. */

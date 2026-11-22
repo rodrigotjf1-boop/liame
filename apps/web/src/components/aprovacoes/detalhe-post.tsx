@@ -11,6 +11,7 @@ import { ehStory, NOTA_DO_STORY } from '@/components/agenda/story-do-post';
 import { avisoDoApagar, deOndeSai, noFuso, podeApagar, podeTentarDeNovo, storyFicaNaPagina } from '@/components/agenda/textos';
 import { CABE_NO_REELS, conferidoDoVideo, duracaoDoVideo, ehPostComVideo, ehVideoPronto, PREPARO_ANTES, SEM_PREPARO, videoSemPreparo } from '@/components/agenda/video-do-post';
 import { ConfirmaNaLinha } from '@/components/ui/confirma-na-linha';
+import { resumoDaEdicao } from '@/components/fotos/edicao';
 import { Icone } from '@/components/ui/icone';
 import { disparar } from '@/lib/disparar';
 import { BarraDaDecisao, type Decisao } from './barra-da-decisao';
@@ -41,6 +42,8 @@ type Props = {
   temChave?: boolean;
   /** A foto do post (das Fotos); nula quando ela não pôde ser lida, saiu das Fotos ou quem vê não vê as Fotos. No post com vídeo, o vídeo. */
   foto: BrandPhoto | null;
+  /** A foto original, quando a do post foi editada pelo DMS Graph (F4) e a original ainda está em Fotos. */
+  fotoOriginal?: BrandPhoto | null;
   /** No post com vídeo, a foto escolhida como capa (P37), quando ela está na lista das Fotos. */
   capaFoto?: BrandPhoto | null;
   titulo: RefObject<HTMLHeadingElement | null>;
@@ -72,6 +75,7 @@ export function DetalhePost({
   temApp,
   temChave = false,
   foto,
+  fotoOriginal = null,
   capaFoto = null,
   titulo,
   campoCodigo,
@@ -94,6 +98,9 @@ export function DetalhePost({
   // O post com vídeo (P37, parte B): o vídeo da lista das Fotos e o que muda nas frases ("o texto, o vídeo, a capa").
   const comVideo = ehPostComVideo(post);
   const video = comVideo && foto && ehVideoPronto(foto) ? foto : null;
+  const resumoEditada = !comVideo && foto ? resumoDaEdicao(foto) : null;
+  const [verOriginal, setVerOriginal] = useState(false);
+  const fotoDaPrevia = resumoEditada && verOriginal && fotoOriginal ? fotoOriginal : foto;
   const oQueMuda = ehStory(post) ? `${comVideo ? 'o vídeo' : 'a foto'} ou os canais` : comVideo ? 'o texto, o vídeo, a capa ou os canais' : 'o texto, a foto ou os canais';
   const cancelarBt = useRef<HTMLButtonElement>(null);
   const [cancelando, setCancelando] = useState<'nao' | 'confirmando' | 'enviando'>('nao');
@@ -164,7 +171,7 @@ export function DetalhePost({
   const previas = (
     <div className="secao">
       <p className="rotulo-marca">Como sai</p>
-      <PreviasDoPost key={acao.id} post={post} foto={foto} capaFoto={capaFoto} aoFalharImagem={aoFalharImagem} />
+      <PreviasDoPost key={acao.id} post={post} foto={fotoDaPrevia} capaFoto={capaFoto} aoFalharImagem={aoFalharImagem} />
     </div>
   );
 
@@ -377,6 +384,21 @@ export function DetalhePost({
               <span>{CABE_NO_REELS(video)}</span>
             </p>
           </>
+        ) : resumoEditada ? (
+          <div className="dg-na-aprovacao">
+            <p className="nota">
+              <Icone nome="image" />
+              <span>
+                <b>{verOriginal && fotoOriginal ? 'Mostrando a foto original. ' : ''}</b>
+                {resumoEditada} A Meta pode mostrar que a imagem foi editada com IA.
+              </span>
+            </p>
+            {fotoOriginal && (
+              <button className="btn btn--sm" type="button" aria-pressed={verOriginal} onClick={() => setVerOriginal((v) => !v)}>
+                {verOriginal ? 'Ver a editada' : 'Ver a original'}
+              </button>
+            )}
+          </div>
         ) : (
           <p className="nota">
             <Icone nome={comVideo ? 'video' : 'image'} />
