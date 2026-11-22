@@ -164,16 +164,21 @@ export function GavetaEditarFoto({ foto, quota: quotaInicial, reserva, aoGuardar
           )}
           {previa ? (
             <>
-              <div className="dg-compara" style={{ aspectRatio: proporcao, ['--p' as string]: `${posicao}%` } as CSSProperties}>
-                <img src={foto.url} alt="Foto original" referrerPolicy="no-referrer" />
-                <img className="dg-depois" src={previa.url} alt="Foto editada" referrerPolicy="no-referrer" />
-                <span className="dg-divisor" aria-hidden="true" />
-                <span className="dg-marca dg-marca--esq" aria-hidden="true">
-                  Depois
-                </span>
-                <span className="dg-marca dg-marca--dir" aria-hidden="true">
-                  Antes
-                </span>
+              <div className="dg-compara-caixa">
+                <div
+                  className="dg-compara"
+                  style={{ aspectRatio: proporcao, ['--r' as string]: `calc(${proporcao})`, ['--p' as string]: `${posicao}%` } as CSSProperties}
+                >
+                  <img src={foto.url} alt="Foto original" referrerPolicy="no-referrer" />
+                  <img className="dg-depois" src={previa.url} alt="Foto editada" referrerPolicy="no-referrer" />
+                  <span className="dg-divisor" aria-hidden="true" />
+                  <span className="dg-marca dg-marca--esq" aria-hidden="true">
+                    Depois
+                  </span>
+                  <span className="dg-marca dg-marca--dir" aria-hidden="true">
+                    Antes
+                  </span>
+                </div>
               </div>
               <div className="campo">
                 <label htmlFor={`${ids}-cmp`}>Arraste para comparar</label>
