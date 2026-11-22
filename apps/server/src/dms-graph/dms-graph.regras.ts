@@ -82,12 +82,13 @@ const texto = (v: unknown): string => (typeof v === 'string' ? v : '');
 /** Confere a volta ANTES do banco. Sem o `iss` do Graph, ela não vale, mesmo com um `state` certo (RFC 9207). */
 export function conferirVolta(q: { code?: unknown; state?: unknown; iss?: unknown; error?: unknown }, origem: string): Volta {
   if (texto(q.iss) !== origem) return { tipo: 'invalida', motivo: 'a volta não veio do DMS Graph' };
-  if (typeof q.state !== 'string' || !FORMATO_DO_ESTADO.test(q.state)) return { tipo: 'invalida', motivo: 'a volta veio sem o pedido que o Liame abriu' };
+  const estado = texto(q.state);
+  if (estado.length !== 43 || !FORMATO_DO_ESTADO.test(estado)) return { tipo: 'invalida', motivo: 'a volta veio sem o pedido que o Liame abriu' };
   const erro = texto(q.error);
-  if (erro) return { tipo: 'recusa', estado: q.state, recusou: erro === 'access_denied' };
+  if (erro) return { tipo: 'recusa', estado, recusou: erro === 'access_denied' };
   const codigo = texto(q.code);
   if (!FORMATO_DO_CODIGO.test(codigo)) return { tipo: 'invalida', motivo: 'a volta veio sem o código da autorização' };
-  return { tipo: 'codigo', estado: q.state, codigo };
+  return { tipo: 'codigo', estado, codigo };
 }
 
 export type LigacaoDaTroca = { ligacao: string; prefixo: string; contaId: string | null; contaNome: string | null; permissoes: string[] };

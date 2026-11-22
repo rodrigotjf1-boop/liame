@@ -158941,6 +158941,10 @@
       "description": "Direct do Instagram: o ajuste da marca (ligar com o código do app; desligado na conta que a Central do Regem atende) e o que a tela Direct lê das conversas guardadas pela rotina do worker (o texto e o @ de quem escreveu, por 90 dias; foto, vídeo, áudio e story só na Meta); responder vem à parte (A6, Z12)"
     },
     {
+      "name": "dms-graph",
+      "description": "O DMS Graph (produto da DMS): conectar a empresa e editar a luz, o fundo e o enquadramento da foto real"
+    },
+    {
       "name": "fotos",
       "description": "Fotos dos produtos: as fotos de verdade que a empresa envia para os posts, guardadas no Liame (uma cópia em JPEG, sem os dados do celular, e a miniatura); enviar, ver, mudar o produto e apagar; nada vai para rede nenhuma por aqui (A6)"
     },
