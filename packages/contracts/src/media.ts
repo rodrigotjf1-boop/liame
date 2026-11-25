@@ -126,7 +126,9 @@ export const AttentionItem = z.strictObject({
    * um aviso por teste: `teste_com_vencedor` (um criativo venceu, e o outro continua gastando até alguém pedir a pausa
    * dele ou encerrar o teste), `teste_sem_vencedor` (o teste acabou no último dia, e os dois ficam como estão até
    * alguém encerrar o teste) e `teste_interrompido` (mexeram nele por fora, ou os cupons não saíram, e o Liame parou
-   * de medir). Nenhum tem prazo com a campanha de teste no ar; sem ela, o interrompido sai em 14 dias. A recomendação da sombra numa ação
+   * de medir). Nenhum tem prazo com a campanha de teste no ar; sem ela, o interrompido sai em 14 dias. O teste de
+   * região (R8, D-RG-102): `teste_regiao_com_resultado` (a medida gravou o resultado: a faixa do que o anúncio traz no
+   * bairro, ou o motivo de não haver conta), só informação, por 14 dias depois da medida, sem `campaign_id`. A recomendação da sombra numa ação
    * que saiu de Sombra (A3, I13): `sugestao_pausar_campanha`, `sugestao_reduzir_verba` e `sugestao_aumentar_verba`.
    * As vendas informadas ao Google que pararam sem ninguém mandar parar (A5, Y1): `vendas_google_sem_permissao` e
    * `vendas_google_recusadas`, com a conta do Google Ads em `connected_account_id`. O Perfil da Empresa no Google (A6,
@@ -160,9 +162,9 @@ export const AttentionItem = z.strictObject({
    */
   rhythm: z.strictObject({ id: z.uuid(), action_id: z.uuid().nullable() }).optional(),
   /**
-   * Só nos avisos do teste de criativo, e só na leitura da tela (plano da região, R8): o teste de que o aviso fala e o
-   * pedido dele em Aprovações, que é onde se acompanha, se pede a pausa do criativo que perdeu e se encerra (nulo para
-   * quem não vê os pedidos).
+   * Só nos avisos do teste de criativo e do resultado do teste de região, e só na leitura da tela (plano da região, R8):
+   * o teste de que o aviso fala e o pedido dele em Aprovações, que é onde se acompanha (no de criativo, também se pede a
+   * pausa do criativo que perdeu e se encerra; nulo para quem não vê os pedidos).
    */
   test: z.strictObject({ id: z.uuid(), action_id: z.uuid().nullable() }).optional(),
 });
