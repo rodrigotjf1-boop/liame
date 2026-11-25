@@ -50,7 +50,8 @@ describe('os avisos do teste de criativo na Atenção (R8)', () => {
 
   it('o botão leva ao teste em Aprovações, só para quem recebeu o pedido dele', () => {
     const comPedido = { id: ID, action_id: PEDIDO };
-    for (const kind of ['teste_com_vencedor', 'teste_sem_vencedor', 'teste_interrompido']) {
+    // Os três do teste de criativo e o resultado do teste de região (D-RG-102): todos abrem o teste em Aprovações.
+    for (const kind of ['teste_com_vencedor', 'teste_sem_vencedor', 'teste_interrompido', 'teste_regiao_com_resultado']) {
       expect(destinoDoTeste(aviso({ kind, test: comPedido }))).toEqual({ href: `/aprovacoes?pedido=${PEDIDO}`, rotulo: 'Ver o teste em Aprovações', curto: 'Ver o teste' });
       // Os avisos do teste não têm outra tela onde se resolvem.
       expect(acaoDoAviso(kind)).toBeNull();

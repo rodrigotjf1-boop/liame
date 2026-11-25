@@ -32,6 +32,8 @@ export type TipoCiclo =
   | 'teste_interrompido'
   | 'teste_com_vencedor'
   | 'teste_sem_vencedor'
+  // O resultado do teste de região (plano da região, R8; D-RG-102): a conta e as frases estão em `campanhas/teste-regiao-avisos.ts`.
+  | 'teste_regiao_com_resultado'
   // As vendas informadas ao Google que pararam sem ninguém mandar parar (A5, Y1; protótipo P14, parte B).
   | 'vendas_google_sem_permissao'
   | 'vendas_google_recusadas'
@@ -391,6 +393,7 @@ const PRIORIDADE: TipoCiclo[] = [
   'teste_interrompido',
   'teste_com_vencedor',
   'teste_sem_vencedor',
+  'teste_regiao_com_resultado',
   'gasto_da_campanha_fora_do_normal',
   'custo_por_pedido_fora_do_normal',
   'sugestao_pausar_campanha',

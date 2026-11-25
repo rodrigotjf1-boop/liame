@@ -6,6 +6,7 @@ import { nomeDaPlataforma, textoDoGastoAcima, verbaDaLeitura } from '../actions/
 import { textoDoAvisoDoRitmo } from '../campanhas/ritmo-avisos.js';
 import { avisosGravadosDoRitmo } from '../campanhas/ritmo-conferido.js';
 import { avisosDoTesteDasMarcas, textoDoAvisoDoTeste } from '../campanhas/teste-avisos.js';
+import { avisosDoTesteDeRegiaoDasMarcas, textoDoAvisoDoTesteDeRegiao } from '../campanhas/teste-regiao-avisos.js';
 import { CONNECTORS } from '../actions/connectors.js';
 import { MODELO_PADRAO } from '../attribution/motor.js';
 import { ESCOPO_DATA_MANAGER } from '../connectors/google-ads/data-manager.js';
@@ -382,6 +383,10 @@ export class AtencaoCicloService {
     // interrompido. Calculado agora, do teste guardado e da leitura da Meta; sem teste nenhum nas marcas, é uma consulta só.
     const doTeste = await avisosDoTesteDasMarcas(tx, marcas, instante);
 
+    // O resultado do teste de região (plano da região, R8; D-RG-102): o teste terminado que a medida já mediu, por 14 dias
+    // depois da medida. Do resultado guardado; sem teste medido nas marcas, é uma consulta só.
+    const doTesteDeRegiao = await avisosDoTesteDeRegiaoDasMarcas(tx, marcas, instante);
+
     const politicasDaMarca = new Map<string, LoadedPolicy[]>();
     for (const m of linhasDasMarcas) {
       if (sugestoes.rows.some((s) => s.brand_id === m.id)) politicasDaMarca.set(m.id, (await carregarPoliticas(tx, m.tenant_id, m.id)).policies);
@@ -502,6 +507,14 @@ export class AtencaoCicloService {
         for (const t of doTeste) {
           if (t.marca !== marca) continue;
           const item: ItemCiclo = { ...textoDoAvisoDoTeste(t.aviso), connected_account_id: t.conta, campaign_id: t.campanha, provider: 'meta_ads' };
+          itens.push(item);
+          if (leitor) testeDoAviso.set(item, { id: t.aviso.teste, action_id: leitor.vePedidos ? t.aviso.acao : null });
+        }
+
+        // O resultado do teste de região (R8): um aviso por teste, com o caminho para o teste em Aprovações (para quem vê os pedidos).
+        for (const t of doTesteDeRegiao) {
+          if (t.marca !== marca) continue;
+          const item: ItemCiclo = { ...textoDoAvisoDoTesteDeRegiao(t.aviso), connected_account_id: t.conta, campaign_id: null, provider: 'meta_ads' };
           itens.push(item);
           if (leitor) testeDoAviso.set(item, { id: t.aviso.teste, action_id: leitor.vePedidos ? t.aviso.acao : null });
         }

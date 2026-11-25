@@ -22,7 +22,8 @@ import { hasDb } from './env.js';
 //     rodar de novo não lê o Regem nem muda o resultado;
 //   - o teste rodando, o interrompido, o que acabou hoje e o de outra empresa (fora do escopo) não são tocados;
 //   - a leitura que falha não grava e o teste volta depois da espera; passados 7 dias do fim, fica "sem leitura"; a empresa
-//     cujo Regem falha não para a outra.
+//     cujo Regem falha não para a outra;
+//   - a Atenção mostra o resultado medido, só informação, por 14 dias depois da medida (D-RG-102 e D-RG-94).
 // As datas são relativas a hoje no fuso da loja (ERR-237), com o mesmo relógio na rotina (V89).
 
 const FUSO = 'America/Sao_Paulo';
@@ -318,5 +319,52 @@ describe.skipIf(!hasDb)('a medida do teste de região (plano da região, R8)', (
     expect(await rotina.executarLote(10, escopo, AGORA)).toEqual([{ tenantId: b.tenantId, teste: doB, situacao: 'medido', motivo: null }]);
     expect(leituras.at(-1)).toEqual({ loja: b.loja, de: dia(16), ate: dia(3) });
     expect(ResultadoDoTesteDeRegiao.parse((await linhaDe(doB)).result)).toMatchObject({ pedidos: { alvoDurante: 168, outrosDurante: 880 }, motivo: null });
+  }, 60_000);
+
+  it('a Atenção mostra o resultado medido por 14 dias depois da medida, com o caminho para o teste em Aprovações (D-RG-102)', async () => {
+    const id = await teste(a, 'terminado', dia(30), dia(17));
+    const resultado = (medidoHaDias: number) => ({
+      janela: { de: dia(30), ate: dia(17) },
+      pedidos: { alvoAntes: 480, outrosAntes: 1712, alvoDurante: 168, outrosDurante: 730 },
+      bairros: [
+        { nome: 'Centro', antes: 1000, durante: 520 },
+        { nome: 'Glória', antes: 412, durante: 210 },
+      ],
+      efeito: null,
+      motivo: 'poucos_bairros',
+      esperadoPorSemana: null,
+      minimoDoRegem: 5,
+      medido_em: new Date(AGORA.getTime() - medidoHaDias * 86_400_000).toISOString(),
+    });
+    const gravar = (medidoHaDias: number) =>
+      ownerQuery(`update liame.campaign_test set result = $2::jsonb where id = $1`, [id, JSON.stringify(ResultadoDoTesteDeRegiao.parse(resultado(medidoHaDias)))]);
+    const avisos = async () => {
+      const lido = await api.call('GET', `/v1/results/attention?brand_id=${a.brandId}`, { cookie: a.cookie });
+      expect(lido.status, JSON.stringify(lido.body)).toBe(200);
+      return (lido.body.items as Array<{ kind: string; test?: { id: string } }>).filter((i) => i.kind === 'teste_regiao_com_resultado' && i.test?.id === id);
+    };
+    // Medido há 13 dias: o aviso aparece, só informação, com o motivo da medida e o caminho para pedir outro teste.
+    await gravar(13);
+    expect(await avisos()).toEqual([
+      {
+        kind: 'teste_regiao_com_resultado',
+        severity: 'info',
+        title: 'O teste "Lapa sem anúncio por 14 dias" terminou sem conta',
+        detail: 'Nos dias do teste, sobraram 2 bairros para comparar; a conta pede pelo menos 3.',
+        action: 'Veja o teste em Aprovações. Para medir de novo, peça outro teste em Minha marca › Região › Sua região.',
+        connected_account_id: a.anuncios,
+        campaign_id: null,
+        provider: 'meta_ads',
+        brand_id: a.brandId,
+        // O teste criado direto no banco não tem o pedido em Aprovações.
+        test: { id, action_id: null },
+      },
+    ]);
+    // Medido há 15 dias: o prazo passou, e o aviso sai (o teste de região não deixa dinheiro gastando à espera de decisão).
+    await gravar(15);
+    expect(await avisos()).toEqual([]);
+    // O resultado fora da forma da medida não derruba a Atenção nem vira aviso.
+    await ownerQuery(`update liame.campaign_test set result = '{"medido_em": "ontem"}'::jsonb where id = $1`, [id]);
+    expect(await avisos()).toEqual([]);
   }, 60_000);
 });
