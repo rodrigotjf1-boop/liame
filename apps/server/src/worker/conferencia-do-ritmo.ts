@@ -79,7 +79,7 @@ export class ConferenciaDoRitmo {
             const avisos = await this.calcular(tx, [marca], instante);
             const linhas = lista.map((p) => {
               const doRitmo = avisos.filter((a) => a.aviso.ritmo === p.id);
-              return { id: uuidv7(), rhythm_id: p.id, checked_on: p.hoje, warnings: avisosParaGuardar(doRitmo), n: doRitmo.length };
+              return { id: uuidv7(), rhythm_id: p.id, checked_on: p.hoje, warnings: avisosParaGuardar(doRitmo, p.hoje), n: doRitmo.length };
             });
             await tx.execute(sql`
               insert into liame.budget_rhythm_check (id, tenant_id, rhythm_id, brand_id, checked_on, warnings, computed_at, error)

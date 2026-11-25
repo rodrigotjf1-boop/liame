@@ -1,4 +1,4 @@
-import type { BudgetLimitsRequest, BudgetMonthChange, BudgetMonthResponse } from '@liame/contracts';
+import type { BudgetLimitsRequest, BudgetMonthChange, BudgetMonthResponse, BudgetMonthRhythmCheck } from '@liame/contracts';
 import { plataforma } from '@/components/contas/textos';
 import { dataNoFuso, diaMes, type Frase, quandoNoFuso, somarDias, type Trecho } from '@/components/resultados/textos';
 import { Fontes, type LinhaDeFonte, type Num, type Texto } from '@/components/resumo/textos';
@@ -613,10 +613,39 @@ export function linhaDaMudanca(m: BudgetMonthChange, v: Pick<Verba, 'today' | 't
   };
 }
 
-/** Um ritmo da semana na Verba do mês: a semana, a situação e quantas mudanças de verba o Liame fez por ele. */
-export type RitmoDaVerba = { id: string; titulo: string; texto: string; href: string | null };
+/**
+ * Um ritmo da semana na Verba do mês: a semana, a situação, quantas mudanças de verba o Liame fez por ele e a conferência
+ * mais nova (nula antes da primeira).
+ */
+export type RitmoDaVerba = { id: string; titulo: string; texto: string; conferencia: string | null; href: string | null };
 
 const SITUACAO_DO_RITMO: Record<string, string> = { aprovado: 'aprovado', parado: 'parado', encerrado: 'encerrado' };
+
+/** Os avisos do ritmo na frase da conferência, na ordem da Atenção. */
+const AVISO_DO_RITMO: ReadonlyArray<[string, string]> = [
+  ['ritmo_gasto_acima', 'gasto acima do que o ritmo permite'],
+  ['ritmo_sem_volta', 'verba que ainda não voltou à de antes'],
+  ['ritmo_campanha_saiu', 'saída do ritmo'],
+];
+
+const comE = (partes: readonly string[]): string => (partes.length < 2 ? (partes[0] ?? '') : `${partes.slice(0, -1).join(', ')} e ${partes.at(-1)}`);
+
+/**
+ * A conferência mais nova do ritmo em uma frase (plano da região, R7; D-RG-75): o dia e os avisos dela na Atenção. A
+ * que falhou diz que o Liame tenta de novo, e que os avisos de antes continuam valendo.
+ */
+export function conferenciaDoRitmo(c: BudgetMonthRhythmCheck | null | undefined): string | null {
+  if (!c) return null;
+  const n = c.warnings.length;
+  if (!c.complete) {
+    const valem = n ? ` Até lá, ${n === 1 ? 'vale o aviso' : `valem os ${n} avisos`} da conferência de antes, na Atenção.` : '';
+    return `A conferência de ${diaMes(c.on)} não terminou, e o Liame tenta de novo depois de uma hora.${valem}`;
+  }
+  if (!n) return `Conferido em ${diaMes(c.on)}: nenhum aviso.`;
+  const avisos: readonly string[] = c.warnings;
+  const tipos = AVISO_DO_RITMO.filter(([kind]) => avisos.includes(kind)).map(([, frase]) => frase);
+  return `Conferido em ${diaMes(c.on)}: ${plural(n, 'aviso', 'avisos')} na Atenção (${comE(tipos)}).`;
+}
 
 /** Os ritmos da semana do mês (plano da região, R7): os passos diários ficam juntos aqui, fora da lista de mudanças. */
 export function ritmosDaVerba(v: Pick<Verba, 'rhythms'>): RitmoDaVerba[] {
@@ -624,6 +653,7 @@ export function ritmosDaVerba(v: Pick<Verba, 'rhythms'>): RitmoDaVerba[] {
     id: r.id,
     titulo: `Ritmo da semana de ${diaMes(r.week.from)} a ${diaMes(r.week.to)}${SITUACAO_DO_RITMO[r.status] ? ` (${SITUACAO_DO_RITMO[r.status]})` : ''}`,
     texto: `${plural(r.steps, 'mudança', 'mudanças')} de verba em ${plural(r.objects, 'campanha', 'campanhas')}, dentro do que foi aprovado para a semana.`,
+    conferencia: conferenciaDoRitmo(r.check),
     href: r.action_id ? `/aprovacoes?pedido=${r.action_id}` : null,
   }));
 }

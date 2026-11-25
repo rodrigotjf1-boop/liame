@@ -413,6 +413,7 @@ export function VerbaConteudo({
                   <div>
                     <b>{r.titulo}</b>
                     <span>{r.texto}</span>
+                    {r.conferencia && <span>{r.conferencia}</span>}
                     {r.href && (
                       <Link className="link-bt" href={r.href}>
                         Ver o ritmo em Aprovações

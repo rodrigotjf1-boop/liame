@@ -611,6 +611,23 @@ export const BudgetChangeCheck = z.strictObject({
 });
 export type BudgetChangeCheck = z.infer<typeof BudgetChangeCheck>;
 
+/**
+ * A conferência mais nova de um ritmo da semana (plano da região, R7; D-RG-75): a rotina do worker confere o gasto do
+ * ritmo depois da leitura da manhã da conta e grava o resultado do dia.
+ */
+export const BudgetMonthRhythmCheck = z.strictObject({
+  /** O dia da conferência, no fuso da loja do ritmo. */
+  on: Dia,
+  /**
+   * Falso quando a conta falhou nesse dia: os avisos são os da conferência de antes (o aviso de dinheiro não some), e a
+   * rotina tenta de novo depois de uma hora.
+   */
+  complete: z.boolean(),
+  /** Os avisos dela na Atenção, um por campanha ou conjunto, pelo tipo do aviso. */
+  warnings: z.array(z.enum(['ritmo_gasto_acima', 'ritmo_sem_volta', 'ritmo_campanha_saiu'])),
+});
+export type BudgetMonthRhythmCheck = z.infer<typeof BudgetMonthRhythmCheck>;
+
 /** Uma mudança que o Liame executou numa plataforma de anúncio, com a conferência dela. */
 /** Um ritmo da semana na Verba do mês: a semana, a situação e quantas mudanças de verba o Liame fez por ele no mês. */
 export const BudgetMonthRhythm = z.strictObject({
@@ -623,6 +640,8 @@ export const BudgetMonthRhythm = z.strictObject({
   /** As mudanças de verba feitas pelo ritmo no mês (os passos de cada dia e os da volta) e em quantos objetos. */
   steps: z.int(),
   objects: z.int(),
+  /** A conferência mais nova do ritmo (D-RG-75); nula antes da primeira, e ausente nas respostas de antes dela. */
+  check: BudgetMonthRhythmCheck.nullable().optional(),
 });
 export type BudgetMonthRhythm = z.infer<typeof BudgetMonthRhythm>;
 

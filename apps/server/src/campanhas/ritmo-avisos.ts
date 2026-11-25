@@ -165,33 +165,49 @@ const diaMes = (dia: string) => `${dia.slice(8, 10)}/${dia.slice(5, 7)}`;
 
 export type TipoDoAvisoDoRitmo = 'ritmo_campanha_saiu' | 'ritmo_sem_volta' | 'ritmo_gasto_acima';
 
-/** O aviso em palavras, no formato da Atenção: o que houve, o motivo e o que fazer. */
-export function textoDoAvisoDoRitmo(a: AvisoDoRitmo, reais: (micros: bigint) => string): { kind: TipoDoAvisoDoRitmo; severity: 'atencao' | 'info'; title: string; detail: string; action: string } {
+/** O tipo do aviso na Atenção (e na linha do ritmo na Verba do mês) pelo tipo da conta. */
+export const TIPO_DO_AVISO_DO_RITMO: Readonly<Record<AvisoDoRitmo['tipo'], TipoDoAvisoDoRitmo>> = {
+  saiu: 'ritmo_campanha_saiu',
+  nao_voltou: 'ritmo_sem_volta',
+  gasto_acima: 'ritmo_gasto_acima',
+};
+
+/**
+ * O aviso em palavras, no formato da Atenção: o que houve, o motivo e o que fazer. Com o dia da conferência que achou o
+ * aviso (D-RG-75), o detalhe termina dizendo de quando ela é: a leitura da conta pode parar por dias, e o aviso fica.
+ */
+export function textoDoAvisoDoRitmo(
+  a: AvisoDoRitmo,
+  reais: (micros: bigint) => string,
+  conferidoEm: string | null = null,
+): { kind: TipoDoAvisoDoRitmo; severity: 'atencao' | 'info'; title: string; detail: string; action: string } {
   const alvo = ALVO[a.recurso.split(':')[0] ?? ''] ?? ALVO.campanha!;
   const quem = `${alvo.o} "${a.nome}"`;
+  const quando = conferidoEm ? ` Conferido em ${diaMes(conferidoEm)}.` : '';
+  const kind = TIPO_DO_AVISO_DO_RITMO[a.tipo];
   if (a.tipo === 'saiu') {
     return {
-      kind: 'ritmo_campanha_saiu',
+      kind,
       severity: 'info',
       title: `${quem} saiu do ritmo da semana`,
-      detail: `Em ${diaMes(a.dia)}, a verba ${alvo.dela} na Meta não era a que o Liame tinha deixado, ou ${alvo.ela} não estava ativa: alguém mexeu por fora. O Liame não muda mais a verba ${alvo.dela} nesta semana, e ${alvo.ela} fica como está.`,
+      detail: `Em ${diaMes(a.dia)}, a verba ${alvo.dela} na Meta não era a que o Liame tinha deixado, ou ${alvo.ela} não estava ativa: alguém mexeu por fora. O Liame não muda mais a verba ${alvo.dela} nesta semana, e ${alvo.ela} fica como está.${quando}`,
       action: `Confira na Meta se a verba ${alvo.dela} está como você quer.`,
     };
   }
   if (a.tipo === 'nao_voltou') {
     return {
-      kind: 'ritmo_sem_volta',
+      kind,
       severity: 'atencao',
       title: `${quem} ainda não voltou à verba de antes do ritmo`,
-      detail: `O ritmo da semana de ${diaMes(a.semana.de)} a ${diaMes(a.semana.ate)} ${a.parado ? 'foi parado' : 'acabou'}, e ${alvo.ela} está com ${reais(BigInt(a.deixadaMicros))} por dia; antes do ritmo eram ${reais(BigInt(a.baseMicros))}. A volta não saiu ontem nem hoje: não coube nos limites da empresa (a verba do mês, o teto por campanha ou a política), ou a função do ritmo foi desligada.`,
+      detail: `O ritmo da semana de ${diaMes(a.semana.de)} a ${diaMes(a.semana.ate)} ${a.parado ? 'foi parado' : 'acabou'}, e ${alvo.ela} está com ${reais(BigInt(a.deixadaMicros))} por dia; antes do ritmo eram ${reais(BigInt(a.baseMicros))}. A volta não saiu ontem nem hoje: não coube nos limites da empresa (a verba do mês, o teto por campanha ou a política), ou a função do ritmo foi desligada.${quando}`,
       action: `Veja o ritmo em Aprovações. Para voltar já, peça a mudança da verba ${alvo.dela}.`,
     };
   }
   return {
-    kind: 'ritmo_gasto_acima',
+    kind,
     severity: 'atencao',
     title: `${quem} gastou mais do que o ritmo da semana permite`,
-    detail: `De ${diaMes(a.janela.de)} a ${diaMes(a.janela.ate)}, ${alvo.ela} gastou ${reais(a.gasto)}. Com a verba de cada dia, esses dias iriam até ${reais(a.permitido)}. A Meta pode passar da verba num dia e compensar em outro; o Liame avisa quando a soma dos 7 dias passa de ${FOLGA_DO_GASTO_DO_RITMO_PCT}%.`,
+    detail: `De ${diaMes(a.janela.de)} a ${diaMes(a.janela.ate)}, ${alvo.ela} gastou ${reais(a.gasto)}. Com a verba de cada dia, esses dias iriam até ${reais(a.permitido)}. A Meta pode passar da verba num dia e compensar em outro; o Liame avisa quando a soma dos 7 dias passa de ${FOLGA_DO_GASTO_DO_RITMO_PCT}%.${quando}`,
     action: `Veja na Meta o gasto ${alvo.dela} nesses dias. Se preferir, pare o ritmo em Aprovações.`,
   };
 }
@@ -208,6 +224,11 @@ export interface AvisoDoRitmoDaMarca {
   /** A campanha do Liame (a do conjunto, quando o objeto é um conjunto); nula se ela saiu da leitura. */
   campanha: string | null;
   aviso: AvisoDoRitmo;
+  /**
+   * O dia da conferência que achou o aviso, no fuso da loja (D-RG-75). Só nos avisos lidos da conferência gravada
+   * (`ritmo-conferido.ts`); a conta feita agora não tem.
+   */
+  conferidoEm?: string | null;
 }
 
 /**

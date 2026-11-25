@@ -139,6 +139,7 @@ export {
   BudgetLimitsRequest,
   BudgetMonthChange,
   BudgetMonthRhythm,
+  BudgetMonthRhythmCheck,
   BudgetMonthDay,
   BudgetMonthPlatform,
   BudgetMonthResponse,
