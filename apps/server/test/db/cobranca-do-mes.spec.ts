@@ -108,6 +108,8 @@ describe.skipIf(!hasDb)('a cobrança do mês por e-mail, com o PIX (A7; D-A7-44)
     await withSystem(database.db, (tx) => criarAssinatura(tx, { tenantId: e.tenantId, brandId: e.brandId, planoId: plano!.id, forma: 'pix', quem: e.userId, agora: meioDia('2026-10-21') }));
     const [f] = await ownerQuery<{ id: string }>(`select id from liame.billing_invoice where brand_id = $1 and status = 'aberta'`, [e.brandId]);
     // A primeira mensalidade ganha a cobrança no Asaas antes de ser paga: mesmo assim, ela nunca recebe o e-mail do mês.
+    // O Asaas no mesmo dia do relógio da spec (ERR-247).
+    asaas.hoje = '2026-10-21';
     await pixDoMes.executarLote(10, { tenantIds: [e.tenantId] }, meioDia('2026-10-21'));
     expect(await rotina.executarLote(100, { tenantIds: [e.tenantId] }, meioDia('2026-10-21'))).toEqual([]);
     await withSystem(database.db, (tx) => pagarFatura(tx, { faturaId: f!.id, pagoEm: meioDia('2026-10-22'), forma: 'pix', agora: meioDia('2026-10-22') }));
@@ -115,6 +117,8 @@ describe.skipIf(!hasDb)('a cobrança do mês por e-mail, com o PIX (A7; D-A7-44)
   }
   /** O dia: a rotina das assinaturas (a fatura nasce), a do PIX (a cobrança no Asaas) e a da cobrança do mês. */
   async function noDia(e: Empresa, dia: string, { comPix = true } = {}) {
+    // O Asaas no mesmo dia do relógio da spec: com o dia de verdade, a fatura de 22/11 vira "no passado" (ERR-247).
+    asaas.hoje = dia;
     await ownerQuery(`update liame.subscription set next_check_at = $2 where tenant_id = $1 and status <> 'encerrada'`, [e.tenantId, meioDia(dia).toISOString()]);
     await assinaturas.executarLote(20, { tenantIds: [e.tenantId] }, meioDia(dia));
     if (comPix) {
