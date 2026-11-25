@@ -1,7 +1,16 @@
 import { createHmac } from 'node:crypto';
 import { ErroConector, type PedidoConector, type RespostaConector } from '../connectors/cliente-http.js';
 import type { CategoriaDoPerfil } from '../connectors/google-business/conector-perfil-google.js';
-import { consultaDeLugares, ESTADOS_DO_BRASIL, type LugarNoGoogle, lugarDoTipo, lugaresDaResposta } from '../connectors/google-ads/lugares-no-google.js';
+import {
+  bairroDaLoja,
+  cidadesDaLoja,
+  consultaDeLugares,
+  ESTADOS_DO_BRASIL,
+  type LojaNoMapa,
+  type LugarNoGoogle,
+  lugarDoTipo,
+  lugaresDaResposta,
+} from '../connectors/google-ads/lugares-no-google.js';
 import type { ConjuntoComPublico } from '../connectors/meta/conector-meta.js';
 import { TAMANHO_DO_TEMA } from './temas-de-busca.js';
 
@@ -9,7 +18,8 @@ import { TAMANHO_DO_TEMA } from './temas-de-busca.js';
 // desenho do trilho com o "ok" da LIAME em 14/11/2026). Roda uma vez, pelo `scripts/prova-regiao.ts`, só com a ordem do
 // dono, e NADA é criado nem mudado:
 //   1. Google, os temas: quantos o grupo de recursos aceita (25, 26, 50 e 51) e o tamanho de cada um (80 e 81);
-//   2. Google, os lugares (leitura): o estado, a cidade e os bairros da loja pela constante e pelo pai de cada uma;
+//   2. Google, os lugares (leitura): o estado, a cidade e os bairros da loja; o bairro pela cadeia dele (os lugares acima
+//      dele que a `suggest` manda), com o estado e a cidade da loja nela (D-RG-103), e a cadeia de cada sugestão no registro;
 //   3. Google, os bairros com "só quem está" (PRESENCE) na mesma requisição, na campanha que está no ar;
 //   3b. Google, a criação inteira do jeito do desenho (a campanha aprovada, com o nome "(prova)", os temas no grupo de
 //       recursos novo e os bairros no lugar do raio), só validando: prova o caminho que o código vai usar;
@@ -239,8 +249,15 @@ async function sugerir(http: Http, g: Google, nomes: string[]): Promise<LugarNoG
   return lugaresDaResposta((await http(pedido)).corpo);
 }
 
+/** Cada sugestão no registro, com a cadeia (os lugares acima dela, tipo e constante), para a rodada seguinte não precisar de outra. */
 const descrever = (ls: readonly LugarNoGoogle[]): string =>
-  ls.slice(0, 6).map((l) => `${l.tipo} ${l.nome} [${l.nomeCanonico}] ${l.recurso} pai ${l.pai ?? '—'} (${l.situacao}, buscado "${l.buscado}")`).join('; ') || 'nenhum';
+  ls
+    .slice(0, 6)
+    .map((l) => {
+      const cadeia = l.cadeia.length ? l.cadeia.map((c) => `${c.tipo} ${c.recurso}`).join(' > ') : '—';
+      return `${l.tipo} ${l.nome} [${l.nomeCanonico}] ${l.recurso} pai ${l.pai ?? '—'} cadeia ${cadeia} (${l.situacao}, buscado "${l.buscado}")`;
+    })
+    .join('; ') || 'nenhum';
 
 /**
  * A prova inteira: cada passo com o resultado e o detalhe, para o registro e para a LIAME. Parou no meio (a trava ou
@@ -268,7 +285,7 @@ async function passos(ctx: ContextoDaProva, saida: ResultadoDoPasso[]): Promise<
     for (const n of [TAMANHO_DO_TEMA, TAMANHO_DO_TEMA + 1]) saida.push(await mutarSoValidando(http, g, `google: um tema de ${n} caracteres`, [sinalDoTema(grupo, temaDeTamanho(n))]));
   }
 
-  // 2. Os lugares: o estado, a cidade cujo pai é o estado, e os bairros cujo pai é a cidade.
+  // 2. Os lugares: o estado; as cidades com o nome da cidade da loja (só para o registro); e cada bairro pela cadeia dele.
   const achados: { bairro: BairroDaProva; lugar: LugarNoGoogle }[] = [];
   if (g) {
     try {
@@ -277,14 +294,18 @@ async function passos(ctx: ContextoDaProva, saida: ResultadoDoPasso[]): Promise<
       const deEstado = await sugerir(http, g, [nomeDoEstado]);
       const estado = lugarDoTipo(deEstado, 'State', null);
       saida.push({ passo: 'google: o estado', resultado: 'lido', detalhe: `${estado ? `escolhido ${estado.recurso}` : 'nenhum escolhido'}. Sugeridos: ${descrever(deEstado)}` });
+      const loja: LojaNoMapa = { cidade: ctx.loja.cidade, nomeDoEstado, estado };
       const deCidade = await sugerir(http, g, [ctx.loja.cidade]);
-      const cidade = estado ? lugarDoTipo(deCidade, 'City', estado.recurso) : null;
-      saida.push({ passo: 'google: a cidade', resultado: 'lido', detalhe: `${cidade ? `escolhida ${cidade.recurso}` : 'nenhuma escolhida'}. Sugeridas: ${descrever(deCidade)}` });
+      const cidades = cidadesDaLoja(deCidade, loja);
+      const qualCidade =
+        cidades.length === 1 ? `escolhida ${cidades[0]!.recurso}` : cidades.length ? `${cidades.length}: ${cidades.map((c) => c.recurso).join(' e ')}` : 'nenhuma';
+      saida.push({ passo: 'google: a cidade', resultado: 'lido', detalhe: `${qualCidade}. Sugeridas: ${descrever(deCidade)}` });
       for (const b of ctx.loja.bairros.slice(0, 3)) {
         const deBairro = await sugerir(http, g, [b.nome]);
-        const lugar = cidade ? lugarDoTipo(deBairro, 'Neighborhood', cidade.recurso) : null;
-        if (lugar) achados.push({ bairro: b, lugar });
-        saida.push({ passo: `google: o bairro ${b.nome}`, resultado: 'lido', detalhe: `${lugar ? `escolhido ${lugar.recurso}` : 'nenhum: vai por círculo'}. Sugeridos: ${descrever(deBairro)}` });
+        const achado = bairroDaLoja(deBairro, b.nome, loja);
+        if (achado) achados.push({ bairro: b, lugar: achado.lugar });
+        const qual = achado ? `escolhido ${achado.lugar.recurso} (${achado.caminho})` : 'nenhum: vai por círculo';
+        saida.push({ passo: `google: o bairro ${b.nome}`, resultado: 'lido', detalhe: `${qual}. Sugeridos: ${descrever(deBairro)}` });
       }
     } catch (err) {
       saida.push(falha('google: os lugares', err));

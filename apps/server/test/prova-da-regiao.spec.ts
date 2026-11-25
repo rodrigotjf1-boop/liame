@@ -14,7 +14,15 @@ import {
 } from '../src/campanhas/prova-da-regiao.js';
 import { ErroConector, type PedidoConector } from '../src/connectors/cliente-http.js';
 import { categoriaDoPerfil, nomeDaCategoria } from '../src/connectors/google-business/conector-perfil-google.js';
-import { consultaDeLugares, type LugarNoGoogle, lugarDoTipo, lugaresDaResposta } from '../src/connectors/google-ads/lugares-no-google.js';
+import {
+  bairroDaLoja,
+  cidadesDaLoja,
+  consultaDeLugares,
+  type LojaNoMapa,
+  type LugarNoGoogle,
+  lugarDoTipo,
+  lugaresDaResposta,
+} from '../src/connectors/google-ads/lugares-no-google.js';
 
 // A prova na conta real da D-RG-89 (plano da região, R9 e o teste de região), sem rede: a trava na saída única (o GET, a
 // `suggest` e a escrita que a plataforma valida sem aplicar, pelo corpo montado; ajustes 1 e 3 da LIAME), os lugares
@@ -146,6 +154,82 @@ describe('os lugares do Google: pela constante e pelo pai, nunca pelo texto', ()
   });
 });
 
+describe('o bairro pela cadeia dele (D-RG-103, depois da prova de 25/11/2026)', () => {
+  // Como a `suggest` responde (a forma da documentação: `geoTargetConstantParents` é uma lista de `GeoTargetConstant`), com o
+  // que a prova viu na conta real: nenhum `parentGeoTarget` e duas "City" Rio de Janeiro (1001655 e 9198038).
+  type Pai = [string, string, string];
+  const sugestao = (recurso: string, nome: string, tipo: string, canonico: string, pais: Pai[] = [], extra: Record<string, unknown> = {}) => ({
+    searchTerm: nome,
+    geoTargetConstant: { resourceName: recurso, name: nome, canonicalName: canonico, targetType: tipo, countryCode: 'BR', status: 'ENABLED', ...extra },
+    geoTargetConstantParents: pais.map(([r, n, t]) => ({ resourceName: r, name: n, canonicalName: n, targetType: t, countryCode: 'BR', status: 'ENABLED' })),
+  });
+  const ESTADO_RJ: Pai = ['geoTargetConstants/20102', 'Rio de Janeiro', 'State'];
+  const CIDADE_RJ: Pai = ['geoTargetConstants/1001655', 'Rio de Janeiro', 'City'];
+  const MUNICIPIO_RJ: Pai = ['geoTargetConstants/9198038', 'Rio de Janeiro', 'Municipality'];
+  const BRASIL: Pai = ['geoTargetConstants/2076', 'Brazil', 'Country'];
+  const estadoRj = lugaresDaResposta({ geoTargetConstantSuggestions: [sugestao('geoTargetConstants/20102', 'Rio de Janeiro', 'State', 'State of Rio de Janeiro,Brazil', [BRASIL])] })[0]!;
+  const LOJA: LojaNoMapa = { cidade: 'Rio de Janeiro', nomeDoEstado: 'Rio de Janeiro', estado: estadoRj };
+  const ler = (...s: ReturnType<typeof sugestao>[]) => lugaresDaResposta({ geoTargetConstantSuggestions: s });
+
+  it('a cadeia vem na leitura, cada pai com a constante, o nome e o tipo; o pai fora do formato fica de fora', () => {
+    const [penha] = ler(sugestao('geoTargetConstants/9100001', 'Penha', 'Neighborhood', 'Penha,Rio de Janeiro,State of Rio de Janeiro,Brazil', [CIDADE_RJ, ESTADO_RJ, BRASIL]));
+    expect(penha?.pai).toBeNull();
+    expect(penha?.cadeia.map((c) => `${c.tipo} ${c.recurso}`)).toEqual(['City geoTargetConstants/1001655', 'State geoTargetConstants/20102', 'Country geoTargetConstants/2076']);
+    const torto = lugaresDaResposta({
+      geoTargetConstantSuggestions: [{ ...sugestao('geoTargetConstants/9100001', 'Penha', 'Neighborhood', 'x'), geoTargetConstantParents: [{ resourceName: 'x/1' }, null, 'texto'] }],
+    });
+    expect(torto[0]?.cadeia).toEqual([]);
+  });
+
+  it('a Penha do Rio pela cadeia, sob a City ou o Municipality; a Penha de Santa Catarina e a de São Paulo não; "Penha Circular" não é "Penha"', () => {
+    const sugeridos = ler(
+      sugestao('geoTargetConstants/1031895', 'Penha', 'City', 'Penha,State of Santa Catarina,Brazil', [['geoTargetConstants/20096', 'Santa Catarina', 'State']]),
+      sugestao('geoTargetConstants/9196977', 'Penha', 'Neighborhood', 'Penha,Sao Paulo,State of Sao Paulo,Brazil', [['geoTargetConstants/1001773', 'São Paulo', 'City'], ['geoTargetConstants/20106', 'São Paulo', 'State']]),
+      sugestao('geoTargetConstants/9100001', 'Penha', 'Neighborhood', 'Penha,Rio de Janeiro,State of Rio de Janeiro,Brazil', [MUNICIPIO_RJ, ESTADO_RJ, BRASIL]),
+      sugestao('geoTargetConstants/9100002', 'Penha Circular', 'Neighborhood', 'Penha Circular,Rio de Janeiro,State of Rio de Janeiro,Brazil', [CIDADE_RJ, ESTADO_RJ]),
+    );
+    expect(bairroDaLoja(sugeridos, 'Penha', LOJA)).toMatchObject({ lugar: { recurso: 'geoTargetConstants/9100001' }, caminho: 'pela cadeia' });
+    expect(bairroDaLoja(sugeridos, 'penha circular', LOJA)).toMatchObject({ lugar: { recurso: 'geoTargetConstants/9100002' }, caminho: 'pela cadeia' });
+    // Sem a constante do estado (o passo do estado não achou): o estado pelo nome, na cadeia.
+    expect(bairroDaLoja(sugeridos, 'Penha', { ...LOJA, estado: null })?.lugar.recurso).toBe('geoTargetConstants/9100001');
+    // A loja em outra cidade do mesmo estado: a Penha do Rio não serve.
+    expect(bairroDaLoja(sugeridos, 'Penha', { ...LOJA, cidade: 'Niterói' })).toBeNull();
+  });
+
+  it('dois bairros que passam, o desativado e o de outro país: nenhum (vai por círculo)', () => {
+    const dois = ler(
+      sugestao('geoTargetConstants/9100001', 'Olaria', 'Neighborhood', 'Olaria,Rio de Janeiro,State of Rio de Janeiro,Brazil', [CIDADE_RJ, ESTADO_RJ]),
+      sugestao('geoTargetConstants/9100003', 'Olaria', 'Neighborhood', 'Olaria,Rio de Janeiro,State of Rio de Janeiro,Brazil', [MUNICIPIO_RJ, ESTADO_RJ]),
+    );
+    expect(bairroDaLoja(dois, 'Olaria', LOJA)).toBeNull();
+    const desativado = ler(sugestao('geoTargetConstants/9100001', 'Olaria', 'Neighborhood', 'x', [CIDADE_RJ, ESTADO_RJ], { status: 'REMOVAL_PLANNED' }));
+    expect(bairroDaLoja(desativado, 'Olaria', LOJA)).toBeNull();
+    const deFora = ler(sugestao('geoTargetConstants/9100001', 'Olaria', 'Neighborhood', 'x', [CIDADE_RJ, ESTADO_RJ], { countryCode: 'PT' }));
+    expect(bairroDaLoja(deFora, 'Olaria', LOJA)).toBeNull();
+  });
+
+  it('sem a cadeia, o plano B pelo nome canônico, dito no caminho; o canônico de outra cidade não passa', () => {
+    const semCadeia = ler(
+      sugestao('geoTargetConstants/9100004', 'Penha Circular', 'Neighborhood', 'Penha Circular,Rio de Janeiro,State of Rio de Janeiro,Brazil'),
+      sugestao('geoTargetConstants/9100005', 'Centro', 'Neighborhood', 'Centro,Niteroi,State of Rio de Janeiro,Brazil'),
+    );
+    expect(bairroDaLoja(semCadeia, 'Penha Circular', LOJA)).toMatchObject({ lugar: { recurso: 'geoTargetConstants/9100004' }, caminho: 'pelo nome canônico' });
+    expect(bairroDaLoja(semCadeia, 'Centro', LOJA)).toBeNull();
+  });
+
+  it('as cidades com o nome da loja: as duas "Rio de Janeiro" da prova; a de outro estado sai quando o Google diz o estado', () => {
+    const cidades = ler(
+      sugestao('geoTargetConstants/20102', 'Rio de Janeiro', 'State', 'State of Rio de Janeiro,Brazil', [BRASIL]),
+      sugestao('geoTargetConstants/1001655', 'Rio de Janeiro', 'City', 'Rio de Janeiro,State of Rio de Janeiro,Brazil'),
+      sugestao('geoTargetConstants/9198038', 'Rio de Janeiro', 'City', 'Rio de Janeiro,Rio de Janeiro,State of Rio de Janeiro,Brazil'),
+      sugestao('geoTargetConstants/1001650', 'Niterói', 'City', 'Niteroi,State of Rio de Janeiro,Brazil'),
+    );
+    expect(cidadesDaLoja(cidades, LOJA).map((c) => c.recurso)).toEqual(['geoTargetConstants/1001655', 'geoTargetConstants/9198038']);
+    const deOutroEstado = ler(sugestao('geoTargetConstants/1', 'Rio de Janeiro', 'City', 'x', [['geoTargetConstants/20096', 'Santa Catarina', 'State']]));
+    expect(cidadesDaLoja(deOutroEstado, LOJA)).toEqual([]);
+  });
+});
+
 describe('a categoria do perfil e o nome dela em português', () => {
   it('o id estável e o nome como veio; o nome do batchGet pelo id, em qualquer ordem', () => {
     expect(categoriaDoPerfil({ categories: { primaryCategory: { name: 'categories/gcid:hamburger_restaurant', displayName: 'Hamburger restaurant' } } })).toEqual({
@@ -186,7 +270,7 @@ const ESTADO: EstadoDaCampanhaNovaNoGoogle = {
   ativa: false,
 };
 const IMAGENS: ImagensDoGoogle = { recortes: [{ id: 'deitada', tipo: 'MARKETING_IMAGE', base64: 'ZGVpdGFkYQ==' }], logo: 'bG9nbw==' };
-const CENTRO: LugarNoGoogle = { recurso: 'geoTargetConstants/9000001', nome: 'Centro', nomeCanonico: 'Centro,Rio de Janeiro,Brazil', tipo: 'Neighborhood', pais: 'BR', pai: 'geoTargetConstants/1001773', situacao: 'ENABLED', buscado: 'Centro' };
+const CENTRO: LugarNoGoogle = { recurso: 'geoTargetConstants/9000001', nome: 'Centro', nomeCanonico: 'Centro,Rio de Janeiro,Brazil', tipo: 'Neighborhood', pais: 'BR', pai: 'geoTargetConstants/1001773', cadeia: [], situacao: 'ENABLED', buscado: 'Centro' };
 const LAPA = { nome: 'Lapa', latitude: -22.913, longitude: -43.18, raioKm: 1 };
 
 describe('as peças da prova', () => {
@@ -252,7 +336,17 @@ describe('a prova inteira contra um Google e uma Meta de mentira', () => {
               { searchTerm: nome, geoTargetConstant: { resourceName: 'geoTargetConstants/20106', name: 'Rio de Janeiro', targetType: 'State', countryCode: 'BR', status: 'ENABLED', parentGeoTarget: 'geoTargetConstants/2076' } },
               { searchTerm: nome, geoTargetConstant: { resourceName: 'geoTargetConstants/1001773', name: 'Rio de Janeiro', targetType: 'City', countryCode: 'BR', status: 'ENABLED', parentGeoTarget: 'geoTargetConstants/20106' } },
             ],
-            Centro: [{ searchTerm: nome, geoTargetConstant: { resourceName: 'geoTargetConstants/9000001', name: 'Centro', targetType: 'Neighborhood', countryCode: 'BR', status: 'ENABLED', parentGeoTarget: 'geoTargetConstants/1001773' } }],
+            Centro: [
+              {
+                searchTerm: nome,
+                geoTargetConstant: { resourceName: 'geoTargetConstants/9000001', name: 'Centro', targetType: 'Neighborhood', countryCode: 'BR', status: 'ENABLED', parentGeoTarget: 'geoTargetConstants/1001773' },
+                // A cadeia, como a `suggest` manda (D-RG-103): o bairro se decide por ela.
+                geoTargetConstantParents: [
+                  { resourceName: 'geoTargetConstants/1001773', name: 'Rio de Janeiro', targetType: 'City', countryCode: 'BR', status: 'ENABLED' },
+                  { resourceName: 'geoTargetConstants/20106', name: 'Rio de Janeiro', targetType: 'State', countryCode: 'BR', status: 'ENABLED' },
+                ],
+              },
+            ],
           };
           return { status: 200, corpo: { geoTargetConstantSuggestions: lugares[nome ?? ''] ?? [] }, cabecalhos: new Headers(), uso: null };
         }
