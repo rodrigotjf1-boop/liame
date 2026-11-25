@@ -133,6 +133,12 @@ export class AsaasDeMentira {
   ler: RespostaDoAsaas = 'ok';
   /** O Asaas cria a cobrança e a conexão cai antes da resposta (503): a cobrança ficou lá. */
   caiDepoisDeCriar = false;
+  /**
+   * O dia de hoje do Asaas (AAAA-MM-DD), para a spec que roda as rotinas num relógio de datas fixas: o Asaas recusa a
+   * cobrança com vencimento antes de hoje, e esse hoje tem de ser o do relógio da spec, não o de verdade (ERR-247: a
+   * spec da cobrança do mês parou de passar quando o dia de verdade passou do vencimento dela). Nulo: o dia de verdade.
+   */
+  hoje: string | null = null;
   /** O que o 429 manda esperar, em segundos (`RateLimit-Reset`). */
   resetEmSegundos = '120';
   /** Segura a resposta de criar a cobrança até o teste soltar (para dois caminhos ao mesmo tempo). */
@@ -267,7 +273,7 @@ export class AsaasDeMentira {
     return JSON.stringify({
       id: `evt_${randomBytes(16).toString('hex')}&${this.avisos}`,
       event: evento,
-      dateCreated: `${hojeNoBrasil()} 10:00:00`,
+      dateCreated: `${this.hoje ?? hojeNoBrasil()} 10:00:00`,
       account: { id: '47ed0d25-f9fb-4b35-b23a-d8895caf92b7', ownerId: null },
       payment: { object: 'payment', ...cobranca },
     });
@@ -331,7 +337,7 @@ export class AsaasDeMentira {
       const value = typeof corpo?.value === 'number' ? corpo.value : 0;
       if (value < 5) return erro(400, 'invalid_value', 'O valor da cobrança não pode ser menor que R$ 5,00');
       const dueDate = typeof corpo?.dueDate === 'string' ? corpo.dueDate : '';
-      if (!/^\d{4}-\d{2}-\d{2}$/.test(dueDate) || dueDate < hojeNoBrasil()) return erro(400, 'invalid_dueDate', 'A data de vencimento não pode ser anterior à data atual');
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(dueDate) || dueDate < (this.hoje ?? hojeNoBrasil())) return erro(400, 'invalid_dueDate', 'A data de vencimento não pode ser anterior à data atual');
       if (this.segurarCriacao) await this.segurarCriacao;
       const id = novoId('pay');
       const cobranca: CobrancaNoAsaas = {
@@ -372,7 +378,7 @@ export class AsaasDeMentira {
       const jaEstornado = c.refunds.filter((e) => e.status !== 'CANCELLED').reduce((t, e) => t + e.value, 0);
       const valor = typeof corpo?.value === 'number' ? corpo.value : c.value - jaEstornado;
       if (valor <= 0 || jaEstornado + valor > c.value + 1e-9) return erro(400, 'invalid_value', 'O valor do estorno ultrapassa o valor da cobrança');
-      c.refunds.push({ status: this.situacaoDoEstorno, value: valor, dateCreated: `${hojeNoBrasil()} 10:00:00`, description: typeof corpo?.description === 'string' ? corpo.description : null });
+      c.refunds.push({ status: this.situacaoDoEstorno, value: valor, dateCreated: `${this.hoje ?? hojeNoBrasil()} 10:00:00`, description: typeof corpo?.description === 'string' ? corpo.description : null });
       this.situacaoPelosEstornos(c);
       if (this.caiDepoisDeEstornar) return erro(503, 'service_unavailable', 'Serviço indisponível');
       return { status: 200, corpo: { object: 'payment', ...c } };
