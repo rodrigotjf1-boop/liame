@@ -11,7 +11,7 @@ import { configDoMontador, MontadorRemotion, type VideoMontadoNoDisco } from '..
 // Fumaça do serviço de montagem (A6 · Z15; o job `imagem` do CI): dentro da imagem `liame-render`, monta de verdade os
 // três modelos em 6 s: o "Produto em destaque" sobre uma imagem gerada aqui, o "Combo com preço" com três, e a "Novidade
 // da casa" com o vídeo que o destaque acabou de montar (servido por um servidor local, como o endereço assinado do
-// armazenamento). Confere o MP4, a capa e as medidas. Prova que o Chrome Headless Shell, as bibliotecas do Linux, as
+// armazenamento); e "Os melhores momentos" (Z16) com dois cortes desse vídeo. Confere o MP4, a capa e as medidas. Prova que o Chrome Headless Shell, as bibliotecas do Linux, as
 // fontes, o vídeo de entrada e os modelos empacotados estão na imagem. Sem banco e sem rede de fora.
 
 async function imagem(cor: string, forma: string): Promise<string> {
@@ -28,14 +28,15 @@ function servir(arquivo: string): Promise<{ url: string; servidor: Server }> {
   return new Promise((resolve) => servidor.listen(0, '127.0.0.1', () => resolve({ url: `http://127.0.0.1:${(servidor.address() as AddressInfo).port}/video.mp4`, servidor })));
 }
 
-async function montar(nome: string, props: VideoRenderProps, pasta: string, medidas: { largura: number; altura: number }): Promise<VideoMontadoNoDisco> {
+async function montar(nome: string, props: VideoRenderProps, pasta: string, medidas: { largura: number; altura: number; duracaoMs?: number }): Promise<VideoMontadoNoDisco> {
   const inicio = Date.now();
   let andou = 0;
   const pronto = await new MontadorRemotion(configDoMontador()).montar(props, pasta, (a) => {
     andou = a;
   });
   const bytes = (await stat(pronto.arquivo)).size;
-  const ok = bytes > 10_000 && pronto.capa.length > 5_000 && pronto.largura === medidas.largura && pronto.altura === medidas.altura && pronto.duracaoMs === props.duration_s * 1000 && andou > 0.9;
+  const duracaoMs = medidas.duracaoMs ?? props.duration_s * 1000;
+  const ok = bytes > 10_000 && pronto.capa.length > 5_000 && pronto.largura === medidas.largura && pronto.altura === medidas.altura && pronto.duracaoMs === duracaoMs && andou > 0.9;
   console.log(`fumaça do vídeo (${nome}): ${bytes} bytes, capa ${pronto.capa.length} bytes, ${pronto.largura}x${pronto.altura}, ${pronto.duracaoMs} ms, em ${((Date.now() - inicio) / 1000).toFixed(1)} s`);
   if (!ok) throw new Error(`o vídeo de fumaça (${nome}) não saiu como esperado`);
   return pronto;
@@ -72,6 +73,27 @@ async function principal(): Promise<void> {
       { ...base, template: 'novidade', format: '1x1', media: [{ url: servido.url, kind: 'video' }], title: 'Smash duplo, direto da chapa', price_line: null, cta: 'Peça pelo link da bio' },
       await pasta(),
       { largura: 1080, altura: 1080 },
+    );
+    // "Os melhores momentos" (A6 · Z16): dois cortes do mesmo vídeo, em sequência, com a legenda de cada um; o vídeo dura
+    // a soma dos cortes (2,5 s + 3 s), não os segundos do pedido.
+    await montar(
+      'momentos',
+      {
+        ...base,
+        template: 'momentos',
+        format: '9x16',
+        duration_s: 10,
+        media: [{ url: servido.url, kind: 'video' }],
+        title: 'Os melhores momentos',
+        price_line: null,
+        cta: '',
+        cuts: [
+          { media: 0, start_ms: 0, end_ms: 2_500, caption: 'A chapa no ponto' },
+          { media: 0, start_ms: 3_000, end_ms: 6_000, caption: 'Peça pelo link da bio' },
+        ],
+      },
+      await pasta(),
+      { largura: 1080, altura: 1920, duracaoMs: 5_500 },
     );
   } finally {
     servidor?.close();

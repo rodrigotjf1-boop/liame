@@ -15,7 +15,7 @@ import { FotosLoop } from '../../src/worker/fotos-loop.js';
 import { MOTIVO, MontagemDoVideo } from '../../src/worker/montagem-do-video.js';
 import { enableMfa, ownerQuery, resetIpRateLimits, signupAndLogin, startApi, type TestApi } from '../helpers/api.js';
 import { ligarFlagDaEmpresa } from '../helpers/meta-de-mentira.js';
-import { fotoGuardada } from '../helpers/posts-semeados.js';
+import { fotoGuardada, videoGuardado } from '../helpers/posts-semeados.js';
 import { hasDb, OWNER_URL } from './env.js';
 
 // O serviço de montagem do vídeo (A6 · Z15, parte 2b; D-A6-139 a D-A6-141), com um montador de mentira (sem o Chrome;
@@ -217,6 +217,49 @@ describe.skipIf(!hasDb)('o serviço de montagem do vídeo (Z15, parte 2b)', () =
     expect((await api.call('DELETE', `/v1/brand-photos/${video}`, { cookie: e.cookie })).status).toBe(204);
     expect(await fotosLoop.executarLote(20, escopo(e))).toEqual([video]);
     expect(await obter(e, id)).toMatchObject({ status: 'pronto', photo_id: null });
+  }, 120_000);
+
+  it('os melhores momentos (Z16): o modelo recebe os cortes pela posição do vídeo; o vídeo de um corte que saiu antes não deu', async () => {
+    const e = await empresa('Brasa Montagem Momentos');
+    await ligarFlagDaEmpresa(api, 'video_momentos', e.tenantId, true);
+    const v1 = await videoGuardado(e, armazem, { duracaoMs: 12_000 });
+    const v2 = await videoGuardado(e, armazem, { duracaoMs: 9_000 });
+    // 4,5 s + 4 s = 8,5 s, dentro do vídeo de 10 s; o primeiro corte é do segundo vídeo.
+    const momentos = {
+      template: 'momentos',
+      duration_s: 10,
+      title: undefined,
+      price_line: undefined,
+      cta: undefined,
+      cuts: [
+        { media_id: v2.id, start_ms: 1_000, end_ms: 5_500, caption: 'O queijo derretendo' },
+        { media_id: v1.id, start_ms: 0, end_ms: 4_000, caption: 'A chapa no ponto' },
+      ],
+    };
+    const id = await pedir(e, [v1.id, v2.id], momentos);
+    expect(await montagem.vez(escopo(e))).toEqual({ id, situacao: 'pronto' });
+    expect(montador.pedidos[0]).toMatchObject({
+      template: 'momentos',
+      duration_s: 10,
+      title: 'Os melhores momentos',
+      price_line: null,
+      cta: '',
+      cuts: [
+        { media: 1, start_ms: 1_000, end_ms: 5_500, caption: 'O queijo derretendo' },
+        { media: 0, start_ms: 0, end_ms: 4_000, caption: 'A chapa no ponto' },
+      ],
+    });
+    expect(montador.pedidos[0]!.media).toEqual([
+      { url: expect.any(String), kind: 'video' },
+      { url: expect.any(String), kind: 'video' },
+    ]);
+
+    // O vídeo de um corte apagado em Fotos depois do pedido: não deu, sem chamar o montador.
+    const saiu = await pedir(e, [v1.id, v2.id], momentos);
+    expect((await api.call('DELETE', `/v1/brand-photos/${v2.id}`, { cookie: e.cookie })).status).toBe(204);
+    expect(await montagem.vez(escopo(e))).toEqual({ id: saiu, situacao: 'nao_deu' });
+    expect((await obter(e, saiu)).error).toBe(MOTIVO.foto);
+    expect(montador.pedidos).toHaveLength(1);
   }, 120_000);
 
   it('o módulo do serviço resolve as dependências (com o montador de mentira no lugar do Remotion)', async () => {

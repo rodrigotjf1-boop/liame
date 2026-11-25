@@ -149220,6 +149220,9 @@
                     "enabled": {
                       "type": "boolean"
                     },
+                    "moments_enabled": {
+                      "type": "boolean"
+                    },
                     "today": {
                       "type": "object",
                       "properties": {
@@ -149269,7 +149272,8 @@
                             "enum": [
                               "destaque",
                               "combo",
-                              "novidade"
+                              "novidade",
+                              "momentos"
                             ]
                           },
                           "format": {
@@ -149304,6 +149308,44 @@
                           },
                           "cta": {
                             "type": "string"
+                          },
+                          "cuts": {
+                            "type": [
+                              "array",
+                              "null"
+                            ],
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "media_id": {
+                                  "type": "string",
+                                  "format": "uuid",
+                                  "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                                },
+                                "start_ms": {
+                                  "type": "integer",
+                                  "minimum": 0,
+                                  "maximum": 9007199254740991
+                                },
+                                "end_ms": {
+                                  "type": "integer",
+                                  "minimum": 1,
+                                  "maximum": 9007199254740991
+                                },
+                                "caption": {
+                                  "type": "string",
+                                  "minLength": 1,
+                                  "maxLength": 40
+                                }
+                              },
+                              "required": [
+                                "media_id",
+                                "start_ms",
+                                "end_ms",
+                                "caption"
+                              ],
+                              "additionalProperties": false
+                            }
                           },
                           "with_logo": {
                             "type": "boolean"
@@ -149400,6 +149442,7 @@
                   },
                   "required": [
                     "enabled",
+                    "moments_enabled",
                     "today",
                     "has_logo",
                     "items"
@@ -149633,7 +149676,8 @@
                     "enum": [
                       "destaque",
                       "combo",
-                      "novidade"
+                      "novidade",
+                      "momentos"
                     ]
                   },
                   "format": {
@@ -149663,6 +149707,12 @@
                         "enum": [
                           15
                         ]
+                      },
+                      {
+                        "type": "number",
+                        "enum": [
+                          20
+                        ]
                       }
                     ]
                   },
@@ -149691,6 +149741,43 @@
                     "minLength": 1,
                     "maxLength": 30
                   },
+                  "cuts": {
+                    "minItems": 2,
+                    "maxItems": 6,
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "media_id": {
+                          "type": "string",
+                          "format": "uuid",
+                          "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                        },
+                        "start_ms": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 9007199254740991
+                        },
+                        "end_ms": {
+                          "type": "integer",
+                          "minimum": 1,
+                          "maximum": 9007199254740991
+                        },
+                        "caption": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 40
+                        }
+                      },
+                      "required": [
+                        "media_id",
+                        "start_ms",
+                        "end_ms",
+                        "caption"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
                   "with_logo": {
                     "default": false,
                     "type": "boolean"
@@ -149709,9 +149796,7 @@
                   "template",
                   "format",
                   "duration_s",
-                  "media_ids",
-                  "title",
-                  "cta"
+                  "media_ids"
                 ],
                 "additionalProperties": false
               }
@@ -149741,7 +149826,8 @@
                       "enum": [
                         "destaque",
                         "combo",
-                        "novidade"
+                        "novidade",
+                        "momentos"
                       ]
                     },
                     "format": {
@@ -149776,6 +149862,44 @@
                     },
                     "cta": {
                       "type": "string"
+                    },
+                    "cuts": {
+                      "type": [
+                        "array",
+                        "null"
+                      ],
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "media_id": {
+                            "type": "string",
+                            "format": "uuid",
+                            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                          },
+                          "start_ms": {
+                            "type": "integer",
+                            "minimum": 0,
+                            "maximum": 9007199254740991
+                          },
+                          "end_ms": {
+                            "type": "integer",
+                            "minimum": 1,
+                            "maximum": 9007199254740991
+                          },
+                          "caption": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 40
+                          }
+                        },
+                        "required": [
+                          "media_id",
+                          "start_ms",
+                          "end_ms",
+                          "caption"
+                        ],
+                        "additionalProperties": false
+                      }
                     },
                     "with_logo": {
                       "type": "boolean"
@@ -150225,7 +150349,8 @@
                     "enum": [
                       "destaque",
                       "combo",
-                      "novidade"
+                      "novidade",
+                      "momentos"
                     ]
                   },
                   "media_ids": {
@@ -150724,7 +150849,8 @@
                       "enum": [
                         "destaque",
                         "combo",
-                        "novidade"
+                        "novidade",
+                        "momentos"
                       ]
                     },
                     "format": {
@@ -150759,6 +150885,44 @@
                     },
                     "cta": {
                       "type": "string"
+                    },
+                    "cuts": {
+                      "type": [
+                        "array",
+                        "null"
+                      ],
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "media_id": {
+                            "type": "string",
+                            "format": "uuid",
+                            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                          },
+                          "start_ms": {
+                            "type": "integer",
+                            "minimum": 0,
+                            "maximum": 9007199254740991
+                          },
+                          "end_ms": {
+                            "type": "integer",
+                            "minimum": 1,
+                            "maximum": 9007199254740991
+                          },
+                          "caption": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 40
+                          }
+                        },
+                        "required": [
+                          "media_id",
+                          "start_ms",
+                          "end_ms",
+                          "caption"
+                        ],
+                        "additionalProperties": false
+                      }
                     },
                     "with_logo": {
                       "type": "boolean"
