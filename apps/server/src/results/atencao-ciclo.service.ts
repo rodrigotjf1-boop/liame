@@ -498,7 +498,7 @@ export class AtencaoCicloService {
         // O ritmo da semana (R7): um aviso por campanha, com o caminho para o ritmo em Aprovações (para quem vê os pedidos).
         for (const r of doRitmo) {
           if (r.marca !== marca) continue;
-          const item: ItemCiclo = { ...textoDoAvisoDoRitmo(r.aviso, reais), connected_account_id: r.conta, campaign_id: r.campanha, provider: 'meta_ads' };
+          const item: ItemCiclo = { ...textoDoAvisoDoRitmo(r.aviso, reais, r.conferidoEm ?? null), connected_account_id: r.conta, campaign_id: r.campanha, provider: 'meta_ads' };
           itens.push(item);
           if (leitor) ritmoDoAviso.set(item, { id: r.aviso.ritmo, action_id: leitor.vePedidos ? r.aviso.acao : null });
         }

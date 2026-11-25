@@ -18,6 +18,7 @@ import { diaNoFuso } from '../../src/results/fora-do-normal.js';
 import { ActionExecutor } from '../../src/worker/action-executor.js';
 import { ConferenciaDoGasto } from '../../src/worker/conferencia-do-gasto.js';
 import { avisosDoRitmoDasMarcas } from '../../src/campanhas/ritmo-avisos.js';
+import { avisosParaGuardar } from '../../src/campanhas/ritmo-conferido.js';
 import { ConferenciaDoRitmo } from '../../src/worker/conferencia-do-ritmo.js';
 import { RitmoDaSemanaService } from '../../src/worker/ritmo-da-semana.service.js';
 import { ownerQuery, resetIpRateLimits, startApi, type TestApi } from '../helpers/api.js';
@@ -233,7 +234,24 @@ describe.skipIf(!hasDb)('o ritmo da semana: os passos do dia (R7, parte 1b-2)', 
     expect(doMes.status, JSON.stringify(doMes.body)).toBe(200);
     const verbaDoMes = BudgetMonthResponse.parse(doMes.body);
     expect(verbaDoMes.changes).toEqual([]);
-    expect(verbaDoMes.rhythms).toEqual([{ id, status: 'aprovado', week: { from: segundaDe(HOJE), to: diasDepois(segundaDe(HOJE), 6) }, action_id: null, steps: 2, objects: 2 }]);
+    expect(verbaDoMes.rhythms).toEqual([{ id, status: 'aprovado', week: { from: segundaDe(HOJE), to: diasDepois(segundaDe(HOJE), 6) }, action_id: null, steps: 2, objects: 2, check: null }]);
+    // Com a conferência gravada (D-RG-75), a linha do ritmo traz a mais nova: ontem, com um aviso; hoje, a conta falhou e
+    // a linha guardou os avisos de ontem (a rotina tenta de novo depois de uma hora).
+    const ontem = diasDepois(HOJE, -1);
+    const saiu = avisosParaGuardar([{ marca: e.brandId, conta: e.conta, campanha: null, aviso: { ritmo: id, acao: null, recurso: a.recurso, nome: 'Combo sexta', tipo: 'saiu', dia: ontem } }], ontem);
+    const conferido = (dia: string, erro: string | null) =>
+      ownerQuery(
+        `insert into liame.budget_rhythm_check (id, tenant_id, rhythm_id, brand_id, checked_on, warnings, error) values (gen_random_uuid(), $1, $2, $3, $4::date, $5::jsonb, $6)`,
+        [e.tenantId, id, e.brandId, dia, JSON.stringify(saiu), erro],
+      );
+    const conferenciaNaVerba = async () => BudgetMonthResponse.parse((await api.call('GET', '/v1/budget/month', { cookie: e.cookie })).body).rhythms?.map((r) => r.check);
+    await conferido(ontem, null);
+    expect(await conferenciaNaVerba()).toEqual([{ on: ontem, complete: true, warnings: ['ritmo_campanha_saiu'] }]);
+    await conferido(HOJE, 'falha de propósito');
+    expect(await conferenciaNaVerba()).toEqual([{ on: HOJE, complete: false, warnings: ['ritmo_campanha_saiu'] }]);
+    await ownerQuery(`update liame.budget_rhythm_check set warnings = '[]'::jsonb, error = null where rhythm_id = $1 and checked_on = $2::date`, [id, HOJE]);
+    expect(await conferenciaNaVerba()).toEqual([{ on: HOJE, complete: true, warnings: [] }]);
+    await ownerQuery(`delete from liame.budget_rhythm_check where rhythm_id = $1`, [id]);
 
     // Uma pessoa não pede o passo direto: ele só sai pelo ritmo aprovado.
     const direto = await api.call('POST', '/v1/actions', {
@@ -726,6 +744,8 @@ describe.skipIf(!hasDb)('o ritmo da semana: os passos do dia (R7, parte 1b-2)', 
     const frase = (kind: string) => itens.find((i) => i.kind === kind)!.detail.replaceAll(String.fromCharCode(160), ' ');
     expect(frase('ritmo_gasto_acima')).toContain(`De ${diasDepois(domingo, -6).slice(8, 10)}/${diasDepois(domingo, -6).slice(5, 7)} a ${domingo.slice(8, 10)}/${domingo.slice(5, 7)}, ela gastou R$ 5.000,00`);
     expect(frase('ritmo_sem_volta')).toContain('ela está com R$ 90,00 por dia; antes do ritmo eram R$ 100,00');
+    // Cada aviso diz de quando é a conferência que o achou (D-RG-75): a da rotina, hoje.
+    for (const kind of ['ritmo_gasto_acima', 'ritmo_sem_volta', 'ritmo_campanha_saiu']) expect(frase(kind)).toMatch(new RegExp(` Conferido em ${HOJE.slice(8, 10)}/${HOJE.slice(5, 7)}\\.$`));
 
     // Quem não vê os pedidos recebe o aviso com o ritmo, sem o pedido dele; a rotina (sem leitor) nem recebe o ritmo.
     const peloServico = (leitor: { userId: string; podePedir: boolean; vePedidos: boolean } | null) =>
@@ -791,7 +811,7 @@ describe.skipIf(!hasDb)('o ritmo da semana: os passos do dia (R7, parte 1b-2)', 
       );
     }
     const linha = async (e: EmpresaComMeta) =>
-      (await ownerQuery<{ error: string | null; n: number }>(`select error, jsonb_array_length(warnings)::int as n from liame.budget_rhythm_check where rhythm_id = $1`, [ritmos.get(e.brandId)]))[0];
+      (await ownerQuery<{ error: string | null; n: number }>(`select error, jsonb_array_length(warnings)::int as n from liame.budget_rhythm_check where rhythm_id = $1 order by checked_on desc`, [ritmos.get(e.brandId)]))[0];
     const avisosDe = async (e: EmpresaComMeta & { cookie: string }) =>
       ClosedLoopAttentionResponse.parse((await api.call('GET', `/v1/results/attention?brand_id=${e.brandId}`, { cookie: e.cookie })).body).items.filter((i) => i.kind.startsWith('ritmo_')).map((i) => i.kind);
     const escopo = { tenantIds: [a.tenantId, b.tenantId] };
@@ -825,6 +845,27 @@ describe.skipIf(!hasDb)('o ritmo da semana: os passos do dia (R7, parte 1b-2)', 
     expect(await conferencia.executarLote(50, escopo)).toEqual([]);
     expect(await linha(a)).toEqual({ error: 'falha de propósito', n: 1 });
     expect(await avisosDe(a)).toEqual(['ritmo_campanha_saiu']);
+    const hojeNaFrase = `${HOJE.slice(8, 10)}/${HOJE.slice(5, 7)}`;
+    const detalheDe = async (e: EmpresaComMeta & { cookie: string }) =>
+      ClosedLoopAttentionResponse.parse((await api.call('GET', `/v1/results/attention?brand_id=${e.brandId}`, { cookie: e.cookie })).body).items.find((i) => i.kind === 'ritmo_campanha_saiu')!.detail;
+    expect(await detalheDe(a)).toMatch(new RegExp(` Conferido em ${hojeNaFrase}\\.$`));
+
+    // A conferência que achou o aviso foi ontem, e a de hoje falhou: a linha nova de hoje leva os avisos de ontem, e o
+    // aviso diz "Conferido em" ontem (o dia vai com o aviso copiado), e não o dia da linha (D-RG-75).
+    const ontem = diasDepois(HOJE, -1);
+    await ownerQuery(
+      `update liame.budget_rhythm_check
+          set checked_on = $2::date,
+              warnings = (select coalesce(jsonb_agg(w || jsonb_build_object('conferido_em', $2::text)), '[]'::jsonb) from jsonb_array_elements(warnings) w)
+        where rhythm_id = $1`,
+      [ritmos.get(a.brandId), ontem],
+    );
+    expect(await conferencia.executarLote(50, escopo)).toEqual([]);
+    expect(await ownerQuery(`select checked_on::text as dia, error from liame.budget_rhythm_check where rhythm_id = $1 order by checked_on`, [ritmos.get(a.brandId)])).toEqual([
+      { dia: ontem, error: 'falha de propósito' },
+      { dia: HOJE, error: 'falha de propósito' },
+    ]);
+    expect(await detalheDe(a)).toMatch(new RegExp(` Conferido em ${ontem.slice(8, 10)}/${ontem.slice(5, 7)}\\.$`));
   }, 120_000);
 
   it('a campanha de um teste de criativo que ainda roda fica fora do ritmo, com o motivo; terminado o teste, ela pode entrar (R8)', async () => {

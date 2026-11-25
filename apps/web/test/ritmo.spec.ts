@@ -22,7 +22,7 @@ import { apresentar } from '@/components/aprovacoes/textos';
 import { ItemAviso } from '@/components/atencao/item-aviso';
 import { acaoDoAviso, destinoDoRitmo } from '@/components/atencao/textos';
 import { tituloDoPedido } from '@/components/pedir/textos';
-import { mudancasDaVerba, ritmosDaVerba } from '@/components/verba/textos';
+import { conferenciaDoRitmo, mudancasDaVerba, ritmosDaVerba } from '@/components/verba/textos';
 
 // Plano da região, R7, parte 1b-3b (protótipo aprovado pelo dono em 13/11/2026): as frases do ritmo da semana nas telas,
 // sem React. Em Aprovações: o título, o porquê de cada dia, a situação do ritmo e de cada campanha, o caminho (o que o
@@ -218,11 +218,33 @@ describe('o ritmo da semana na Verba do mês (R7, parte 1b-3b)', () => {
       ],
     });
     expect(linhas).toEqual([
-      { id: ID, titulo: 'Ritmo da semana de 16/11 a 22/11 (aprovado)', texto: '13 mudanças de verba em 3 campanhas, dentro do que foi aprovado para a semana.', href: `/aprovacoes?pedido=${acao}` },
-      { id: ID.replace('a1', 'a2'), titulo: 'Ritmo da semana de 09/11 a 15/11 (parado)', texto: '1 mudança de verba em 1 campanha, dentro do que foi aprovado para a semana.', href: null },
+      { id: ID, titulo: 'Ritmo da semana de 16/11 a 22/11 (aprovado)', texto: '13 mudanças de verba em 3 campanhas, dentro do que foi aprovado para a semana.', conferencia: null, href: `/aprovacoes?pedido=${acao}` },
+      { id: ID.replace('a1', 'a2'), titulo: 'Ritmo da semana de 09/11 a 15/11 (parado)', texto: '1 mudança de verba em 1 campanha, dentro do que foi aprovado para a semana.', conferencia: null, href: null },
     ]);
     // A resposta de antes do ritmo não traz o campo: nenhuma linha.
     expect(ritmosDaVerba({})).toEqual([]);
+  });
+
+  it('a conferência mais nova do ritmo (D-RG-75): o dia e os avisos dela, ou que ela não terminou', () => {
+    const linha = (check: Parameters<typeof conferenciaDoRitmo>[0]) =>
+      ritmosDaVerba({ rhythms: [{ id: ID, status: 'aprovado', week: { from: '2026-11-16', to: '2026-11-22' }, action_id: null, steps: 1, objects: 1, check }] })[0]!.conferencia;
+    expect(linha(null)).toBeNull();
+    expect(linha(undefined)).toBeNull();
+    expect(linha({ on: '2026-11-25', complete: true, warnings: [] })).toBe('Conferido em 25/11: nenhum aviso.');
+    expect(linha({ on: '2026-11-25', complete: true, warnings: ['ritmo_campanha_saiu'] })).toBe('Conferido em 25/11: 1 aviso na Atenção (saída do ritmo).');
+    // Os tipos sem repetir, na ordem da Atenção; a contagem é a dos avisos (um por campanha ou conjunto).
+    expect(linha({ on: '2026-11-25', complete: true, warnings: ['ritmo_campanha_saiu', 'ritmo_gasto_acima', 'ritmo_gasto_acima'] })).toBe(
+      'Conferido em 25/11: 3 avisos na Atenção (gasto acima do que o ritmo permite e saída do ritmo).',
+    );
+    expect(linha({ on: '2026-11-25', complete: true, warnings: ['ritmo_sem_volta', 'ritmo_campanha_saiu', 'ritmo_gasto_acima'] })).toBe(
+      'Conferido em 25/11: 3 avisos na Atenção (gasto acima do que o ritmo permite, verba que ainda não voltou à de antes e saída do ritmo).',
+    );
+    // A conta falhou: os avisos são os da conferência de antes, e a rotina tenta de novo.
+    expect(linha({ on: '2026-11-25', complete: false, warnings: [] })).toBe('A conferência de 25/11 não terminou, e o Liame tenta de novo depois de uma hora.');
+    expect(linha({ on: '2026-11-25', complete: false, warnings: ['ritmo_sem_volta'] })).toBe(
+      'A conferência de 25/11 não terminou, e o Liame tenta de novo depois de uma hora. Até lá, vale o aviso da conferência de antes, na Atenção.',
+    );
+    expect(linha({ on: '2026-11-25', complete: false, warnings: ['ritmo_sem_volta', 'ritmo_gasto_acima'] })).toContain('Até lá, valem os 2 avisos da conferência de antes, na Atenção.');
   });
 
   it('a mudança de uma pessoa trocada depois por um passo do ritmo diz que foi o ritmo', () => {

@@ -9,6 +9,7 @@ import {
   type PassoGuardado,
   permitidoNoDia,
   type RitmoComPassos,
+  TIPO_DO_AVISO_DO_RITMO,
   textoDoAvisoDoRitmo,
 } from '../src/campanhas/ritmo-avisos.js';
 import { reais } from '../src/results/atencao-ciclo.js';
@@ -180,5 +181,25 @@ describe('os avisos do ritmo (R7, parte 1b-3c)', () => {
       detail: nbsp('De 16/11 a 22/11, ela gastou R$ 880,00. Com a verba de cada dia, esses dias iriam até R$ 717,00. A Meta pode passar da verba num dia e compensar em outro; o Liame avisa quando a soma dos 7 dias passa de 5%.'),
       action: 'Veja na Meta o gasto dela nesses dias. Se preferir, pare o ritmo em Aprovações.',
     });
+  });
+
+  it('com o dia da conferência (D-RG-75), o detalhe termina dizendo de quando ela é; o resto não muda', () => {
+    const base = { ritmo: 'r1', acao: 'a1', recurso: 'campanha:111', nome: 'Smash em dobro' };
+    const avisos: AvisoDoRitmo[] = [
+      { ...base, tipo: 'saiu', dia: '2026-11-17' },
+      { ...base, tipo: 'nao_voltou', semana: SEMANA, parado: false, deixadaMicros: 90 * REAL, baseMicros: 100 * REAL },
+      { ...base, tipo: 'gasto_acima', janela: SEMANA, gasto: BigInt(880 * REAL), permitido: BigInt(717 * REAL) },
+    ];
+    for (const a of avisos) {
+      const sem = textoDoAvisoDoRitmo(a, reais);
+      const com = textoDoAvisoDoRitmo(a, reais, '2026-11-13');
+      expect(com).toEqual({ ...sem, detail: `${sem.detail} Conferido em 13/11.` });
+      expect(textoDoAvisoDoRitmo(a, reais, null)).toEqual(sem);
+    }
+    expect(avisos.map((a) => [a.tipo, TIPO_DO_AVISO_DO_RITMO[a.tipo], textoDoAvisoDoRitmo(a, reais).kind])).toEqual([
+      ['saiu', 'ritmo_campanha_saiu', 'ritmo_campanha_saiu'],
+      ['nao_voltou', 'ritmo_sem_volta', 'ritmo_sem_volta'],
+      ['gasto_acima', 'ritmo_gasto_acima', 'ritmo_gasto_acima'],
+    ]);
   });
 });

@@ -11,6 +11,7 @@ import { PolicyService } from '../policy/policy.service.js';
 import { regrasDaVerba, tetoDaVerba } from '../policy/teto-da-verba.js';
 import { diaNoFuso, menosDias } from '../results/fora-do-normal.js';
 import type { VerbaDoMesGuardada } from '../results/relatorio-mensal.js';
+import { conferenciasDosRitmos } from '../campanhas/ritmo-conferido.js';
 import { DIAS_CONFERINDO, nomeDaPlataforma, textoDoGastoAcima } from './conferencia-do-gasto.js';
 import { CONNECTORS } from './connectors.js';
 import {
@@ -473,7 +474,8 @@ export class BudgetService {
 
   /**
    * O ritmo da semana no período (plano da região, R7; D-RG-73): cada ritmo com passos feitos de `inicio` a `ate`, do
-   * mais novo ao mais antigo, com quantas mudanças de verba o Liame fez por ele e em quantos objetos.
+   * mais novo ao mais antigo, com quantas mudanças de verba o Liame fez por ele e em quantos objetos, e a conferência
+   * mais nova dele (D-RG-75; nula antes da primeira).
    */
   private async ritmosDoMes(tx: Tx, e: { tenantId: string; inicio: string; ate: string }): Promise<BudgetMonthRhythm[]> {
     const r = await tx.execute<{ id: string; status: string; week_start: string; week_end: string; action_id: string | null; passos: string; objetos: string }>(sql`
@@ -485,7 +487,16 @@ export class BudgetService {
        group by b.id
        order by b.week_start desc, b.id desc
        limit 12`);
-    return r.rows.map((l) => ({ id: l.id, status: l.status, week: { from: l.week_start, to: l.week_end }, action_id: l.action_id, steps: Number(l.passos), objects: Number(l.objetos) }));
+    const conferencias = await conferenciasDosRitmos(tx, e.tenantId, r.rows.map((l) => l.id));
+    return r.rows.map((l) => ({
+      id: l.id,
+      status: l.status,
+      week: { from: l.week_start, to: l.week_end },
+      action_id: l.action_id,
+      steps: Number(l.passos),
+      objects: Number(l.objetos),
+      check: conferencias.get(l.id) ?? null,
+    }));
   }
 
   /**
