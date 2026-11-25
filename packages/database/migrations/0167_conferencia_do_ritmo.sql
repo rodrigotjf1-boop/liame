@@ -1,4 +1,4 @@
--- 0166 · A conferência do ritmo gravada pela rotina (plano da região, R7; D-RG-75, "antes de ligar além do piloto").
+-- 0167 · A conferência do ritmo gravada pela rotina (plano da região, R7; D-RG-75, "antes de ligar além do piloto").
 -- Os avisos do ritmo da semana (a campanha que saiu do ritmo, a que não voltou à verba de antes e a que gastou mais do que
 -- o ritmo permite) saíam calculados a cada leitura da Atenção, com um laço por marca e conta e leituras do gasto a cada
 -- abertura de tela (e o número do menu passa pela Atenção). Agora a rotina do worker os calcula depois da leitura da manhã
