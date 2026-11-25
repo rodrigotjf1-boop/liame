@@ -40,6 +40,7 @@ import { CobrancasPixLoop } from './cobrancas-pix-loop.js';
 import { CobrancasReleituraLoop } from './cobrancas-releitura-loop.js';
 import { ConexaoProcessor } from './conexao-processor.js';
 import { ConferenciaDoGasto } from './conferencia-do-gasto.js';
+import { ConferenciaDoRitmo } from './conferencia-do-ritmo.js';
 import { FotosLoop } from './fotos-loop.js';
 import { PostsNumerosLoop } from './posts-numeros-loop.js';
 import { DoSeuInstagramLoop } from './do-seu-instagram-loop.js';
@@ -143,6 +144,7 @@ import { WebhookDeliverer } from './webhook-deliverer.js';
     ActionExecutor,
     // O gasto conferido (A4, X4): todo dia, cada mudança executada numa conta de anúncio é conferida com a plataforma.
     ConferenciaDoGasto,
+    ConferenciaDoRitmo,
     // O connector de escrita do Regem (criar cupom de campanha) recebe o cofre e o cliente HTTP aqui.
     EscritaRegem,
     // O da Meta (situação e verba de anúncio, A4): o cofre, o cliente HTTP e a versão da API do registro.

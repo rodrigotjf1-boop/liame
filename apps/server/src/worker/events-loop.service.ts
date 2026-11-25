@@ -15,6 +15,7 @@ import { ResumoDasPessoasService } from './resumo-das-pessoas.service.js';
 import { ComparacaoDmsIdLoop } from './comparacao-dms-id.js';
 import { ConexaoProcessor } from './conexao-processor.js';
 import { ConferenciaDoGasto } from './conferencia-do-gasto.js';
+import { ConferenciaDoRitmo } from './conferencia-do-ritmo.js';
 import { ConversasLoop } from './conversas-loop.js';
 import { ConversoesLoop } from './conversoes-loop.js';
 import { CriativoLoop } from './criativo-loop.js';
@@ -91,6 +92,7 @@ export class EventsLoopService implements OnApplicationBootstrap, OnApplicationS
     private readonly pesquisa: PesquisaLoop,
     private readonly criativo: CriativoLoop,
     private readonly conferencia: ConferenciaDoGasto,
+    private readonly conferenciaDoRitmo: ConferenciaDoRitmo,
     private readonly conversoes: ConversoesLoop,
     private readonly esperam: PedidosQueEsperam,
     private readonly noDestino: PedidosNoDestino,
@@ -166,6 +168,9 @@ export class EventsLoopService implements OnApplicationBootstrap, OnApplicationS
       this.loop('criativo', 3, 5_000, async (n) => (await this.criativo.executarLote(n)).length),
       // O gasto de cada mudança, conferido depois da leitura da manhã: olha de 5 em 5 minutos o que falta conferir hoje.
       this.loop('conferencia-do-gasto', 100, 300_000, async (n) => (await this.conferencia.executarLote(n)).reduce((s, c) => s + c.conferidas, 0)),
+      // Os avisos do ritmo da semana (plano da região, R7; D-RG-75), conferidos depois da leitura da manhã e refeitos quando
+      // uma entrada muda: olha de 5 em 5 minutos; a Atenção só lê a conferência gravada.
+      this.loop('conferencia-do-ritmo', 50, 300_000, async (n) => (await this.conferenciaDoRitmo.executarLote(n)).length),
       // As vendas confirmadas para o Google: cada conta com destino passa uma vez por hora; a fila das contas é olhada de 5 em 5 minutos.
       this.loop('conversoes-google', 2, 300_000, async (n) => (await this.conversoes.executarLote(n)).length),
       // Os pedidos que esperam com um impedimento: cada um é conferido de 15 em 15 minutos; a fila é olhada a cada minuto.

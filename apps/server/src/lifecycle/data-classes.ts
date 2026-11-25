@@ -206,6 +206,7 @@ export const DATA_CLASSES: Record<string, TableClassification> = {
   // O ritmo da semana (plano da região, R7; migration 0156): a tabela da semana e os passos de cada dia.
   budget_rhythm: { class: 'PERSONAL', retention: 'com a marca (quem parou fica ligado ao ritmo)' },
   budget_rhythm_step: { class: 'CONFIDENTIAL', retention: 'com o ritmo da semana (a verba de cada dia em cada campanha)' },
+  budget_rhythm_check: { class: 'CONFIDENTIAL', retention: 'com o ritmo da semana (os avisos de cada dia, refeitos pela rotina)' },
   // O teste de criativo (plano da região, R8; migration 0157): o teste que a pessoa pediu e os dois criativos dele, com o
   // que já existe na Meta e o cupom de cada um; o resultado guardado são somas (nunca um pedido nem um cliente).
   campaign_test: { class: 'PERSONAL', retention: 'com a marca (quem pediu e quem encerrou ficam ligados ao teste)' },
