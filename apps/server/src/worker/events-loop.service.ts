@@ -43,6 +43,7 @@ import { RegiaoMidiaLoop } from './regiao-midia.service.js';
 import { RegiaoPublicoLoop } from './regiao-publico.service.js';
 import { RitmoDaSemanaService } from './ritmo-da-semana.service.js';
 import { TestesDeCriativoRotina } from './testes-de-criativo.service.js';
+import { TestesDeRegiaoRotina } from './testes-de-regiao.service.js';
 import { RotinaDoCrmLoop } from './rotina-do-crm-loop.js';
 import { SincronizacaoLoop } from './sincronizacao-loop.js';
 import { SombraLoop } from './sombra-loop.js';
@@ -102,6 +103,7 @@ export class EventsLoopService implements OnApplicationBootstrap, OnApplicationS
     private readonly regiaoPublico: RegiaoPublicoLoop,
     private readonly ritmoDaSemana: RitmoDaSemanaService,
     private readonly testesDeCriativo: TestesDeCriativoRotina,
+    private readonly testesDeRegiao: TestesDeRegiaoRotina,
     private readonly comparacao: ComparacaoDmsIdLoop,
     private readonly fotos: FotosLoop,
     private readonly numerosDosPosts: PostsNumerosLoop,
@@ -205,6 +207,10 @@ export class EventsLoopService implements OnApplicationBootstrap, OnApplicationS
       // deixa o teste pronto quando os dois existem e liga cada cupom à campanha de teste; de 2 em 2 minutos, e na hora
       // quando o lote andou. Só com a função `teste_de_criativo` ligada.
       this.loop('testes-de-criativo', 10, 120_000, async (n) => (await this.testesDeCriativo.executarLote(n)).filter((r) => r.situacao === 'cupom_pedido' || r.situacao === 'pronto').length),
+      // A medida dos testes de região (R8, D-RG-102): o teste terminado ganha o resultado pelos pedidos do Regem dos 14 dias,
+      // uma vez; a leitura que falha volta em 1 hora (passados 7 dias do fim, fica "sem leitura"). Não encerra o teste nem
+      // mexe na Meta. De 10 em 10 minutos, e na hora quando o lote mediu cheio. Só com a função `teste_de_regiao` ligada.
+      this.loop('testes-de-regiao', 5, 600_000, async (n) => (await this.testesDeRegiao.executarLote(n)).filter((r) => r.situacao === 'medido').length),
       // Hub DMS (F2, A3): as leituras do RegemCast pelas duas credenciais, comparadas; cada conta uma vez por hora, só
       // com a função `comparacao_dms_id` ligada e o aplicativo do Liame no DMS ID configurado; a fila é olhada de 5 em 5 minutos.
       this.loop('comparacao-dms-id', 2, 300_000, async (n) => (await this.comparacao.executarLote(n)).length),

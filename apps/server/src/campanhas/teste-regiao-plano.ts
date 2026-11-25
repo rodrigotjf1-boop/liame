@@ -54,6 +54,49 @@ export const EstadoDoTesteDeRegiao = z.object({
 });
 export type EstadoDoTesteDeRegiao = z.infer<typeof EstadoDoTesteDeRegiao>;
 
+// ------------------------------------------------------------ o resultado (a medida, D-RG-102)
+
+/**
+ * Por que a medida não fez a conta: `incompleto` (o teste parou antes dos 14 dias), `poucos_bairros` (menos de 3 bairros
+ * de comparar com pedidos nos dois lados), `abaixo_do_minimo` (o bairro do teste não veio pelo nome na leitura dos dias do
+ * teste), `sem_conta` (uma das quatro contagens deu zero) ou `sem_leitura` (o Regem não devolveu os pedidos até 7 dias
+ * depois do fim).
+ */
+export const MotivoDaMedida = z.enum(['incompleto', 'poucos_bairros', 'abaixo_do_minimo', 'sem_conta', 'sem_leitura']);
+export type MotivoDaMedida = z.infer<typeof MotivoDaMedida>;
+
+const Contagem = z.number().int().min(0);
+const PorSemana = z.number().min(0);
+
+/**
+ * Um bairro que ficou na comparação, com os pedidos dele: `antes`, nas 4 semanas de antes (como a pessoa viu no pedido);
+ * `durante`, nos 14 dias do teste, pela leitura do Regem. `durante` é nulo sem a leitura (`incompleto`, `sem_leitura`).
+ */
+export const BairroDaMedida = z.object({ nome: z.string().min(1).max(200), antes: Contagem, durante: Contagem.nullable() });
+export type BairroDaMedida = z.infer<typeof BairroDaMedida>;
+
+/**
+ * O que o teste mostrou (`campaign_test.result`), gravado uma vez pela medida: a janela do teste, os pedidos do bairro e
+ * dos de comparar antes e durante, os bairros que ficaram na comparação (com os pedidos de cada um), a conta (ou o motivo
+ * de não haver conta), o mínimo que o Regem usou e a hora da medida. São somas: nunca um pedido nem um cliente.
+ * `esperadoPorSemana` fica só no `abaixo_do_minimo` (com a conta, o número está no efeito).
+ */
+export const ResultadoDoTesteDeRegiao = z
+  .object({
+    janela: z.object({ de: Dia, ate: Dia }),
+    pedidos: z.object({ alvoAntes: Contagem, outrosAntes: Contagem, alvoDurante: Contagem.nullable(), outrosDurante: Contagem.nullable() }),
+    bairros: z.array(BairroDaMedida).max(200),
+    efeito: z
+      .object({ esperadoPorSemana: PorSemana, feitoPorSemana: PorSemana, trazPorSemana: PorSemana, faixa: z.object({ de: PorSemana, ate: PorSemana }), provou: z.boolean() })
+      .nullable(),
+    motivo: MotivoDaMedida.nullable(),
+    esperadoPorSemana: PorSemana.nullable(),
+    minimoDoRegem: z.number().int().min(1).max(1000).nullable(),
+    medido_em: z.iso.datetime(),
+  })
+  .refine((r) => (r.efeito === null) !== (r.motivo === null), { message: 'o resultado leva a conta ou o motivo, um dos dois' });
+export type ResultadoDoTesteDeRegiao = z.infer<typeof ResultadoDoTesteDeRegiao>;
+
 export type PlanoDoTesteDeRegiao = { ok: true; desejado: EstadoDoTesteDeRegiao } | { ok: false; motivo: string };
 
 const NAO_E = 'Esta ferramenta é para um teste de região do Liame.';

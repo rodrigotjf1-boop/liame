@@ -1,4 +1,5 @@
 import type { CreativeTestResponse, RegionTestResponse } from '@liame/contracts';
+import { resultadoDoTesteDeRegiao } from '@/components/aprovacoes/teste-de-regiao-textos';
 import { reaisDeMicros } from '@/lib/formato';
 
 /** Reais com os centavos ("R$ 40,00"), sem ponto flutuante. */
@@ -107,13 +108,15 @@ export function linhaDoTesteDeCriativo(t: CreativeTestResponse, hoje: string): T
   };
 }
 
-/** Um teste de região na lista: o bairro e os pedidos de antes. O resultado em faixa entra com a medida do teste. */
+/** Um teste de região na lista: o bairro, os pedidos de antes e, depois da medida, o resultado em faixa (D-RG-102). */
 export function linhaDoTesteDeRegiao(t: RegionTestResponse, hoje: string): TesteNaLista {
   const alvo = t.weeks.districts.find((d) => d.target);
+  const resultado = resultadoDoTesteDeRegiao(t);
   let veredito: string;
   if (t.status === 'interrompido' || t.status === 'cancelado') veredito = t.reason ?? t.error ?? (t.status === 'cancelado' ? 'O pedido foi recusado ou expirou em Aprovações.' : 'O teste foi interrompido: o Liame não conclui.');
+  else if (resultado) veredito = resultado;
   else if (t.status === 'rodando') veredito = `${t.district.name} está sem anúncio. O resultado sai quando os ${t.days} dias acabarem.`;
-  else if (t.status === 'terminado' || t.status === 'encerrado') veredito = 'O teste acabou; o resultado em faixa aparece aqui quando a medida do teste de região estiver pronta.';
+  else if (t.status === 'encerrado') veredito = `O teste foi encerrado antes do fim: com menos de ${t.days} dias, o Liame não tira conclusão.`;
   else veredito = `${t.district.name} vai ficar ${t.days} dias sem anúncio nas campanhas do Liame; o caixa diz quanto o anúncio traz ali.`;
   return {
     id: t.id,

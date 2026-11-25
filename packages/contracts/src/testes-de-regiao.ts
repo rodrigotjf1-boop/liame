@@ -24,6 +24,57 @@ export type CreateRegionTestRequest = z.infer<typeof CreateRegionTestRequest>;
 
 export const RegionTestAdSetStatus = z.enum(['a_tirar', 'tirado', 'devolvido', 'mexido', 'falhou']);
 
+/**
+ * O que o teste de região mostrou (D-RG-81 e D-RG-102): medido uma vez, depois do fim, pelos pedidos de entrega do caixa
+ * (o Regem da loja), o bairro e os de comparar, nas 4 semanas de antes e nos dias do teste. São somas: nunca um pedido
+ * nem um cliente. Ou vem a conta (`effect`), ou o motivo de não haver conta (`reason`).
+ */
+export const RegionTestResult = z.strictObject({
+  /** Os dias do teste que entram na conta, no fuso da loja: os 14 dias; no teste que parou antes, até o último dia sem anúncio. */
+  window: z.strictObject({ from: z.iso.date(), to: z.iso.date() }),
+  /**
+   * Os pedidos de entrega do bairro do teste e dos bairros de comparar, nas 4 semanas de antes e nos dias do teste. Os
+   * do teste são nulos sem a leitura deles; o do bairro também quando ele ficou abaixo do mínimo que o Regem mostra.
+   */
+  orders: z.strictObject({ target_before: z.int(), others_before: z.int(), target_during: z.int().nullable(), others_during: z.int().nullable() }),
+  /**
+   * Os bairros que ficaram na comparação, com os pedidos de entrega de cada um: nas 4 semanas de antes (`orders_before`) e
+   * nos dias do teste (`orders_during`, nulo sem a leitura deles). O bairro de comparar que, nos dias do teste, ficou abaixo
+   * do mínimo do Regem sai dos dois lados e não aparece aqui. Somados, dão `others_before` e `others_during`.
+   */
+  districts: z.array(z.strictObject({ name: z.string(), orders_before: z.int(), orders_during: z.int().nullable() })),
+  /**
+   * A conta, por semana: o que o bairro teria feito seguindo os outros bairros (`expected_per_week`), o que ele fez sem
+   * anúncio (`actual_per_week`), o que o anúncio traz ali (`brings_per_week`) e a faixa de 95% (`range`, nunca abaixo de
+   * zero). `proven`: a faixa fica acima de zero. Nula quando não houve conta (o motivo em `reason`).
+   */
+  effect: z
+    .strictObject({
+      expected_per_week: z.number(),
+      actual_per_week: z.number(),
+      brings_per_week: z.number(),
+      range: z.strictObject({ from: z.number(), to: z.number() }),
+      proven: z.boolean(),
+    })
+    .nullable(),
+  /**
+   * Por que não houve conta, em código: `incompleto` (o teste parou antes dos 14 dias), `poucos_bairros` (menos de 3
+   * bairros de comparar nos dois lados), `abaixo_do_minimo` (o bairro do teste ficou abaixo do mínimo que o Regem mostra),
+   * `sem_conta` (faltou pedido em uma das quatro contagens) ou `sem_leitura` (o Regem não devolveu os pedidos até 7 dias
+   * depois do fim). Nulo com `effect`. A lista pode crescer.
+   */
+  reason: z
+    .string()
+    .regex(/^[a-z_]{2,40}$/)
+    .nullable(),
+  /** Só com `reason` = `abaixo_do_minimo`: os pedidos por semana que o bairro faria seguindo os outros bairros. Nulo nos outros casos. */
+  expected_per_week: z.number().nullable(),
+  /** O mínimo de pedidos que o Regem usou para mostrar um bairro pelo nome nos dias do teste; nulo sem a leitura. */
+  regem_minimum: z.int().nullable(),
+  measured_at: z.iso.datetime(),
+});
+export type RegionTestResult = z.infer<typeof RegionTestResult>;
+
 export const RegionTestResponse = z.strictObject({
   id: z.uuid(),
   brand_id: z.uuid(),
@@ -49,6 +100,8 @@ export const RegionTestResponse = z.strictObject({
   error: z.string().nullable(),
   /** Por que o teste foi interrompido, quando foi. */
   reason: z.string().nullable(),
+  /** O que o teste mostrou: nulo até a medida, que sai depois do fim, quando a leitura dos pedidos do Regem cobre os 14 dias. */
+  result: RegionTestResult.nullable().optional(),
   created_at: z.iso.datetime(),
 });
 export type RegionTestResponse = z.infer<typeof RegionTestResponse>;

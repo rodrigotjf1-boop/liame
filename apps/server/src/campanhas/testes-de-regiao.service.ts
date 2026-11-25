@@ -13,8 +13,16 @@ import { nomeComparavel } from '../regiao/coordenada.js';
 import { type BairroDaCampanha, raioDoBairro } from './bairros-da-campanha.js';
 import { conflito, contasDaMarca, recusa } from './campanhas-novas.service.js';
 import { conjuntosNaMeta } from './conjuntos-na-meta.js';
-import { anunciaSoNoBairro, conjuntoAlcancaOBairro, DIAS_DO_TESTE_DE_REGIAO, distanciaKm, oQueImpedeOBairro, type PedidosDoBairro } from './teste-regiao-contas.js';
-import { type EstadoDoTesteDeRegiao, FLAG_DO_TESTE_DE_REGIAO, impressaoDoPublico, nomeDoTesteDeRegiao, recursoDoTesteDeRegiao } from './teste-regiao-plano.js';
+import { anunciaSoNoBairro, conjuntoAlcancaOBairro, DIAS_DO_TESTE_DE_REGIAO, distanciaKm, oQueImpedeOBairro } from './teste-regiao-contas.js';
+import { pedidosPorBairro } from './teste-regiao-medida.js';
+import {
+  type EstadoDoTesteDeRegiao,
+  FLAG_DO_TESTE_DE_REGIAO,
+  impressaoDoPublico,
+  nomeDoTesteDeRegiao,
+  ResultadoDoTesteDeRegiao,
+  recursoDoTesteDeRegiao,
+} from './teste-regiao-plano.js';
 
 // O pedido do teste de região (plano da região, R8; protótipo dos testes aprovado pelo dono em 13/11/2026; D-RG-81 e
 // D-RG-82). A rota confere o que a D-RG-82 pede antes de o pedido nascer (o bairro com pedidos e bairros para comparar,
@@ -38,10 +46,36 @@ type Linha = {
   ended_on: string | null;
   error: string | null;
   reason: string | null;
+  result: unknown;
   created_at: Date;
 };
 
 type LinhaDoConjunto = { test_id: string; meta_campaign_id: string; meta_adset_id: string; name: string; status: RegionTestResponse['ad_sets'][number]['status'] };
+
+/** O que o teste mostrou, no formato do contrato; nulo até a medida (e se o guardado não puder ser lido). */
+function resultadoNaResposta(guardado: unknown): RegionTestResponse['result'] {
+  const lido = ResultadoDoTesteDeRegiao.safeParse(guardado);
+  if (!lido.success) return null;
+  const r = lido.data;
+  return {
+    window: { from: r.janela.de, to: r.janela.ate },
+    orders: { target_before: r.pedidos.alvoAntes, others_before: r.pedidos.outrosAntes, target_during: r.pedidos.alvoDurante, others_during: r.pedidos.outrosDurante },
+    districts: r.bairros.map((b) => ({ name: b.nome, orders_before: b.antes, orders_during: b.durante })),
+    effect: r.efeito
+      ? {
+          expected_per_week: r.efeito.esperadoPorSemana,
+          actual_per_week: r.efeito.feitoPorSemana,
+          brings_per_week: r.efeito.trazPorSemana,
+          range: { from: r.efeito.faixa.de, to: r.efeito.faixa.ate },
+          proven: r.efeito.provou,
+        }
+      : null,
+    reason: r.motivo,
+    expected_per_week: r.esperadoPorSemana,
+    regem_minimum: r.minimoDoRegem,
+    measured_at: r.medido_em,
+  };
+}
 
 /** A resposta de um teste de região a partir da linha e dos conjuntos dele (a mesma no obter e na lista). */
 function respostaDoTesteDeRegiao(t: Linha, conjuntos: LinhaDoConjunto[]): RegionTestResponse {
@@ -62,6 +96,7 @@ function respostaDoTesteDeRegiao(t: Linha, conjuntos: LinhaDoConjunto[]): Region
       ended_on: t.ended_on,
       error: t.error,
       reason: t.reason,
+      result: resultadoNaResposta(t.result),
       created_at: new Date(t.created_at).toISOString(),
     };
 }
@@ -127,15 +162,12 @@ export class TestesDeRegiaoService {
     if (!linhas.length) {
       throw conflito('sem-pedidos-por-bairro', 'Os pedidos por bairro ainda não chegaram', 'O teste compara os pedidos de entrega de cada bairro, que vêm do Regem da loja. Eles ainda não chegaram: confira a ligação com o Regem em Contas conectadas, ou espere a leitura de amanhã.');
     }
-    const doMunicipio = (c: string | null) => !c || !loja.address_city || nomeComparavel(c) === nomeComparavel(loja.address_city);
-    const porNome = new Map<string, PedidosDoBairro>();
-    for (const l of linhas) {
-      if (!l.district || !doMunicipio(l.city)) continue;
-      const k = nomeComparavel(l.district);
-      porNome.set(k, { nome: porNome.get(k)?.nome ?? l.district, pedidos: (porNome.get(k)?.pedidos ?? 0) + l.orders });
-    }
-    const lista = [...porNome.values()].sort((x, y) => y.pedidos - x.pedidos);
-    const alvo = porNome.get(nomeComparavel(bairro.nome))?.nome ?? bairro.nome;
+    // Só os bairros do município da loja, somados pelo nome: a medida conta os dias do teste com a mesma regra.
+    const lista = pedidosPorBairro(
+      linhas.map((l) => ({ bairro: l.district, cidade: l.city, pedidos: l.orders })),
+      loja.address_city,
+    );
+    const alvo = lista.find((x) => nomeComparavel(x.nome) === nomeComparavel(bairro.nome))?.nome ?? bairro.nome;
     const impede = oQueImpedeOBairro(alvo, lista);
     if (impede) throw conflito('bairro-nao-testavel', `Não dá para testar ${bairro.nome}`, impede);
 
@@ -285,7 +317,7 @@ export class TestesDeRegiaoService {
   private async linhas(tenantId: string, filtro: SQL, fim: SQL = sql``): Promise<Linha[]> {
     return (
       await currentTx().execute<Linha>(sql`
-        select id, brand_id, unit_id, name, status, plan, action_id, started_on::text as started_on, ended_on::text as ended_on, error, reason, created_at
+        select id, brand_id, unit_id, name, status, plan, action_id, started_on::text as started_on, ended_on::text as ended_on, error, reason, result, created_at
           from liame.campaign_test where tenant_id = ${tenantId} and kind = 'regiao' and ${filtro}
           ${fim}`)
     ).rows;
