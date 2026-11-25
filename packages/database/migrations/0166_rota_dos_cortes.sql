@@ -1,4 +1,4 @@
--- 0165 · Rota de modelo dos cortes dos melhores momentos (A6 · Z16; D-A6-150 a D-A6-155, P46 aprovado pelo dono em
+-- 0166 · Rota de modelo dos cortes dos melhores momentos (A6 · Z16; D-A6-150 a D-A6-155, P46 aprovado pelo dono em
 -- 15/11/2026). ADR-006 item 8; `evals/README.md`. Regra do produto: modelo só entra numa tarefa depois de passar no eval
 -- dela, e a regra dos testes pede duas rodadas aprovadas seguidas com o mesmo prompt (uma só não mede a variação).
 --
@@ -23,7 +23,7 @@
 -- Nada muda para quem não ligou: a rota só é chamada na empresa com a função `video_momentos` ligada, a IA ligada e o Social
 -- media ativo na marca, e só quando uma pessoa pede os cortes (até 10 pedidos por marca por dia); os quadros não entram no
 -- registro de uso (só o tamanho e a assinatura de cada um, `paraGuardar`) e saem do armazenamento quando a proposta chega
--- (Política 7.17).
+-- (Política 7.18).
 -- Idempotente. Se a tarefa já tiver outra rota ativa (um banco de desenvolvimento com rota de teste), esta entra como
 -- rascunho, sem tirar a que está valendo; em produção não há rota nenhuma para ela, e ela entra ativa.
 -- Uma transação por arquivo (ADR-018).
@@ -35,16 +35,16 @@ insert into liame.ai_model_route (id, task, version, status, purpose, provider, 
                                   max_cost_usd_micros, fallback, eval_threshold, eval_score, created_by, deployed_at)
 select v.id::uuid, v.task, 1, case when o.task is null then 'ativa' else 'rascunho' end, v.purpose, 'anthropic', 'claude-sonnet-5-5', 'low',
        v.max_output_tokens, v.timeout_ms, v.max_cost_usd_micros, '[]'::jsonb, 0.95, v.eval_score,
-       'distribuição: evals de 15/11/2026 (migration 0165)', case when o.task is null then now() end
+       'distribuição: evals de 15/11/2026 (migration 0166)', case when o.task is null then now() end
   from (values
-    ('019a7c00-0000-7000-8000-000000000165', 'social_cortes', 'texto', 1500, 60000, 60000, 1.0000)
+    ('019a7c00-0000-7000-8000-000000000166', 'social_cortes', 'texto', 1500, 60000, 60000, 1.0000)
   ) as v(id, task, purpose, max_output_tokens, timeout_ms, max_cost_usd_micros, eval_score)
   left join (select distinct task from liame.ai_model_route where status = 'ativa') o on o.task = v.task
 on conflict do nothing;
 
 do $$
 begin
-  if not exists (select 1 from liame.ai_model_route where task = 'social_cortes' and created_by = 'distribuição: evals de 15/11/2026 (migration 0165)') then
-    raise exception '0165: a rota dos cortes não entrou';
+  if not exists (select 1 from liame.ai_model_route where task = 'social_cortes' and created_by = 'distribuição: evals de 15/11/2026 (migration 0166)') then
+    raise exception '0166: a rota dos cortes não entrou';
   end if;
 end $$;

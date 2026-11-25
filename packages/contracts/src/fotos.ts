@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { BrandPhotoEdited } from './dms-graph.js';
 
 // Fotos dos produtos (A6, Z4; ADR-021; protótipo P20, aprovado em 21/10/2026). As fotos de verdade que a empresa envia
 // para os posts. O Liame guarda uma cópia em JPEG, com o lado maior em até 2.048 px e sem os dados do celular (como a
@@ -180,6 +181,11 @@ export const BrandPhoto = z.strictObject({
    * traz.
    */
   montage_id: z.uuid().nullable().optional(),
+  /**
+   * A foto editada pelo DMS Graph (F4): a original, quem editou, o que mudou e o pedido escrito. Nulo na foto como a loja
+   * enviou. Só post e Story aceitam a editada. Opcional: a resposta de antes de 22/11/2026 não traz.
+   */
+  edited: BrandPhotoEdited.nullable().optional(),
 });
 export type BrandPhoto = z.infer<typeof BrandPhoto>;
 

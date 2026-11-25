@@ -1101,6 +1101,10 @@ export function AprovacoesTela() {
         temApp={temApp}
         temChave={temChave}
         foto={post.post.photo_id ? (fotos.get(post.post.photo_id) ?? null) : null}
+        fotoOriginal={(() => {
+          const origem = post.post.photo_id ? fotos.get(post.post.photo_id)?.edited?.from_id : null;
+          return origem ? (fotos.get(origem) ?? null) : null;
+        })()}
         capaFoto={post.post.cover_photo_id ? (fotos.get(post.post.cover_photo_id) ?? null) : null}
         titulo={tituloDoDetalhe}
         campoCodigo={campoCodigo}

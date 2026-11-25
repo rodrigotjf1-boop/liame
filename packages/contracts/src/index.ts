@@ -556,6 +556,23 @@ export {
   UpdateBrandPhotoRequest,
 } from './fotos.js';
 export {
+  BrandPhotoEdited,
+  BrandPhotoEditPreview,
+  CreateBrandPhotoEditRequest,
+  DmsGraphCallbackRequest,
+  DmsGraphCallbackResponse,
+  DmsGraphCnpjRequest,
+  DmsGraphQuota,
+  DmsGraphSituation,
+  DmsGraphStartResponse,
+  FOTO_EDICAO_ENQUADRAMENTOS,
+  FOTO_EDICAO_PEDIDO_MAX,
+  FotoEdicaoOpcoes,
+  type ProblemaDoPedidoDaFoto,
+  problemaDoPedidoDaFoto,
+  SaveBrandPhotoEditRequest,
+} from './dms-graph.js';
+export {
   CreatePostRequest,
   PACKAGE_CHANNELS,
   PackageChannel,

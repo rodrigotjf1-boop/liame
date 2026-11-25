@@ -808,7 +808,7 @@ Destino único para **conversões offline**, **Customer Match** e **enhanced con
 | Node.js | **24.22.1 (LTS "Krypton")** | a correção de segurança de 21/10/2026, desde 23/10/2026 (era a 24.21.0; §15.1); 26.x ainda Current; 22.x em manutenção |
 | NestJS | 12.1.0 | Node ≥ 20; `@nestjs/cli` 12.0.6 depende de **`typescript ~6.0.2`** |
 | TypeScript | **6.0.3** | A 7.0.2 existe, mas o Nest CLI ainda não usa |
-| Next.js | 16.4.1 | Node ≥ 20.9; desde 22/10/2026, sem os avisos GHSA-2464-fhr4-w9xw, GHSA-673q-mjm6-r5xr e GHSA-p3m5-59mp-jv5r da 16.3.8 |
+| Next.js | 16.4.5 | Node ≥ 20.9; desde 21/11/2026, sem os sete avisos médios da 16.4.1 (histórico abaixo) |
 | React | 19.3.0 | — |
 | Tailwind CSS | 4.3.3 | configuração CSS-first |
 | Drizzle ORM | 0.45.3 (estável) | 1.0 em **RC.5**: não usar em produção ainda |
@@ -927,6 +927,7 @@ Destino único para **conversões offline**, **Customer Match** e **enhanced con
 
 | Data | Atualização |
 | --- | --- |
+| 21/11/2026 | §9: **Next.js 16.4.5.** A 16.4.1 ficou com sete avisos médios, publicados de 16 a 19/11/2026 (GHSA-7qx7-33qx-rqx2, GHSA-f3mh-rxg3-f5g2, GHSA-mfr8-8qww-v76h, GHSA-pc58-hwjq-p385, GHSA-rhh4-g77r-r9qj, GHSA-vc7v-qv4w-wrv8 e GHSA-vvgp-ww4w-46vf), corrigidos na 16.4.5 (publicada em 03/11/2026): o osv-scanner ficou vermelho no primeiro PR depois deles. A OSV não tem aviso para a 16.4.5 (consultada em 21/11/2026). |
 | 13/11/2026 | §3.1: **o projeto passou ao nível Básico da API do Google Ads** (lido no console; 15.000 operações por dia; o planejamento deixa de estar bloqueado). O que o Explorer bloqueava fica como registro do período anterior |
 | 12/11/2026 | §19.6 (nova): **a semana que vem, para a R2, parte 5** do plano da região: a previsão do CPTEC pela BrasilAPI conferida por chamada real (a cidade pelo nome, com a UF; a previsão de 6 dias com o código e o texto da condição), as datas do calendário do Liame (`commercial_date`, §16.5) e o prazo do salário (CLT, art. 459, §1º [O]; o sábado conta como dia útil pela fiscalização do trabalho [S]). |
 | 11/11/2026 | §19 e §19.5: **o CNPJ da Receita conferido para a R2, parte 4** do plano da região: o formato dos arquivos (um .csv por .zip, deflate, o maior em zip64; 30 colunas; situação 02 e 08), a velocidade medida (≈ 265 KB/s daqui), a tabela de municípios (código próprio, sem a UF) e a equivalência com o IBGE (16 nomes diferentes, em tabela). O [NC] do endereço do CNPJ na §19 virou [O]. |

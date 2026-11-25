@@ -1,0 +1,406 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<style>body{margin:0}[hidden]{display:none!important}</style>
+</head>
+<body>
+<title>Editar Foto no Liame</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@500;600&family=Poppins:wght@400;500;600;700&display=swap">
+<style>
+/* Layout: a tela real do Liame (menu, Fotos e a gaveta à direita) sob uma faixa de protótipo que troca a etapa. */
+:root {
+  --bg: #F4F2EC; --bg-sutil: #ECE9E1; --sup: #FFFFFF; --sup-2: #FAF8F3; --borda: #E5E1D7; --borda-forte: #D0CBBF;
+  --txt: #0B0D17; --txt-2: #4A5068; --txt-3: #646A80;
+  --acao: #2DD4DE; --acao-hover: #26C4CE; --acao-txt: #0B0D17; --acao-suave: #DCF6F8; --link: #0A6C75;
+  --ia: #5A43D8; --ia-suave: #EEEAFF;
+  --ok: #0C6F5B; --ok-suave: #E2F3EE; --alerta: #8A5F00; --alerta-suave: #FFF1D1; --perigo: #B42F2F; --perigo-suave: #FFE3E3;
+  --faixa: #E9E6DD; --sombra: 0 10px 30px rgb(11 13 23 / .10);
+  --r: 10px; --r-g: 16px; --r-t: 999px;
+  --f: "Poppins", "Segoe UI", system-ui, sans-serif; --m: "JetBrains Mono", ui-monospace, "Cascadia Mono", Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #0B0D17; --bg-sutil: #10131F; --sup: #151A2E; --sup-2: #1A2038; --borda: #262C49; --borda-forte: #3A4166;
+  --txt: #F4F2EC; --txt-2: #9AA0B4; --txt-3: #878EAB;
+  --acao: #2DD4DE; --acao-hover: #62E1E8; --acao-txt: #0B0D17; --acao-suave: #0E2B33; --link: #2DD4DE;
+  --ia: #A08FFF; --ia-suave: #211C45;
+  --ok: #46BC9F; --ok-suave: #0F2C26; --alerta: #FFC24B; --alerta-suave: #2E2610; --perigo: #FF6B6B; --perigo-suave: #361A1F;
+  --faixa: #10131F; --sombra: 0 10px 30px rgb(0 0 0 / .4); color-scheme: dark;
+} }
+:root[data-theme="dark"] {
+  --bg: #0B0D17; --bg-sutil: #10131F; --sup: #151A2E; --sup-2: #1A2038; --borda: #262C49; --borda-forte: #3A4166;
+  --txt: #F4F2EC; --txt-2: #9AA0B4; --txt-3: #878EAB;
+  --acao: #2DD4DE; --acao-hover: #62E1E8; --acao-txt: #0B0D17; --acao-suave: #0E2B33; --link: #2DD4DE;
+  --ia: #A08FFF; --ia-suave: #211C45;
+  --ok: #46BC9F; --ok-suave: #0F2C26; --alerta: #FFC24B; --alerta-suave: #2E2610; --perigo: #FF6B6B; --perigo-suave: #361A1F;
+  --faixa: #10131F; --sombra: 0 10px 30px rgb(0 0 0 / .4); color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body { background: var(--bg); color: var(--txt); font: 400 14px/1.55 var(--f); }
+h1, h2, h3, h4, p, ul, ol, dl, dd { margin: 0; padding: 0; }
+ul, ol { list-style: none; }
+h1, h2, h3 { text-wrap: balance; }
+button, input { font: inherit; color: inherit; }
+button { cursor: pointer; }
+:focus-visible { outline: 2px solid var(--link); outline-offset: 2px; }
+@media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
+
+.faixa { background: var(--faixa); border-bottom: 1px solid var(--borda); padding-block: 10px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); display: grid; gap: 8px; }
+.faixa-topo { display: flex; flex-wrap: wrap; gap: 6px 14px; align-items: center; }
+.selo-proto { font: 600 11px/1.4 var(--m); letter-spacing: .06em; text-transform: uppercase; }
+.faixa small { color: var(--txt-2); font-size: 12px; }
+.linha-bt { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.linha-bt > span { color: var(--txt-2); font-size: 12px; margin-right: 2px; }
+.chip { border: 1px solid var(--borda-forte); background: var(--sup); border-radius: var(--r-t); padding: 4px 11px; font-size: 12.5px; font-weight: 500; min-height: 30px; }
+.chip[aria-pressed="true"] { background: var(--txt); color: var(--bg); border-color: var(--txt); }
+
+.app { display: grid; grid-template-columns: 220px minmax(0, 1fr); min-height: 720px; }
+.menu { background: var(--bg-sutil); border-right: 1px solid var(--borda); padding: 18px 12px; display: flex; flex-direction: column; gap: 3px; }
+.marca { font-weight: 700; font-size: 21px; letter-spacing: .02em; padding: 0 8px 12px; }
+.marca i { font-style: normal; color: var(--ia); }
+.marca b { color: var(--link); font-weight: 700; }
+.empresa { background: var(--sup); border: 1px solid var(--borda); border-radius: var(--r); padding: 8px 10px; margin-bottom: 12px; font-weight: 600; font-size: 13px; }
+.empresa small { display: block; color: var(--txt-3); font-weight: 400; font-size: 12px; }
+.menu a { display: block; padding: 7px 10px; border-radius: 8px; color: var(--txt-2); font-size: 13.5px; text-decoration: none; }
+.menu a[aria-current] { background: var(--sup); color: var(--txt); font-weight: 600; }
+.menu-t { font: 500 10.5px/1 var(--m); letter-spacing: .12em; text-transform: uppercase; color: var(--txt-3); padding: 12px 10px 6px; }
+
+.corpo { min-width: 0; padding-block: 20px 36px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); display: grid; gap: 16px; align-content: start; }
+.trilha { color: var(--txt-3); font-size: 13px; }
+.trilha b { color: var(--txt); font-weight: 600; }
+h1 { font-size: 26px; font-weight: 700; line-height: 1.2; }
+.sub { color: var(--txt-2); max-width: 62ch; }
+.duas { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 440px); gap: 18px; align-items: start; }
+.grade { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; }
+.cartao-foto { background: var(--sup); border: 1px solid var(--borda); border-radius: var(--r-g); overflow: hidden; padding: 0; text-align: left; display: block; width: 100%; position: relative; }
+.cartao-foto[aria-current="true"] { border-color: var(--link); box-shadow: 0 0 0 2px var(--link); }
+.cartao-foto .img { aspect-ratio: 1; display: block; }
+.cartao-foto .img svg { display: block; width: 100%; height: 100%; }
+.cartao-foto .leg { padding: 8px 11px 10px; display: block; }
+.cartao-foto b { display: block; font-weight: 600; font-size: 13px; line-height: 1.3; }
+.cartao-foto small { color: var(--txt-3); font-size: 12px; }
+.tag-ia { position: absolute; top: 8px; left: 8px; background: var(--ia-suave); color: var(--ia); border-radius: var(--r-t); padding: 2px 9px; font-size: 11.5px; font-weight: 600; }
+
+.gaveta { background: var(--sup); border: 1px solid var(--borda); border-radius: var(--r-g); box-shadow: var(--sombra); padding: 18px; display: grid; gap: 14px; min-width: 0; }
+.gaveta-cab { display: flex; justify-content: space-between; gap: 10px; align-items: flex-start; }
+.rotulo { font: 500 11px/1.4 var(--m); letter-spacing: .09em; text-transform: uppercase; color: var(--txt-3); }
+.gaveta h2 { font-size: 19px; font-weight: 600; line-height: 1.25; }
+.fechar { border: 0; background: transparent; width: 32px; height: 32px; border-radius: 8px; font-size: 18px; color: var(--txt-2); flex: none; }
+.foto-grande { border-radius: var(--r); overflow: hidden; position: relative; background: var(--bg-sutil); max-width: 100%; }
+.foto-grande svg { display: block; width: 100%; height: 100%; }
+.q-original { aspect-ratio: 4 / 3; } .q-1-1 { aspect-ratio: 1; } .q-9-16 { aspect-ratio: 9 / 16; max-height: 420px; margin-inline: auto; } .q-16-9 { aspect-ratio: 16 / 9; }
+.camada { position: absolute; inset: 0; }
+.camada-depois { clip-path: inset(0 calc(100% - var(--p, 50%)) 0 0); }
+.divisor { position: absolute; top: 0; bottom: 0; left: var(--p, 50%); width: 2px; background: #fff; box-shadow: 0 0 0 1px rgb(11 13 23 / .35); pointer-events: none; }
+.marca-cmp { position: absolute; bottom: 8px; background: rgb(11 13 23 / .72); color: #fff; font-size: 11.5px; font-weight: 500; border-radius: var(--r-t); padding: 2px 9px; pointer-events: none; }
+.campo { display: grid; gap: 5px; }
+.campo label, .t-grupo { font-weight: 600; font-size: 13px; }
+input[type="range"] { width: 100%; accent-color: var(--link); }
+input[type="text"], textarea { width: 100%; background: var(--sup); border: 1px solid var(--borda-forte); border-radius: var(--r); padding: 9px 11px; font: inherit; color: inherit; }
+textarea { resize: vertical; min-height: 66px; display: block; }
+textarea[aria-invalid="true"] { border-color: var(--perigo); }
+.opc { color: var(--txt-3); font-weight: 400; }
+.grupo { display: grid; gap: 8px; }
+.op-linha { display: flex; justify-content: space-between; gap: 12px; align-items: center; padding: 9px 0; border-top: 1px solid var(--borda); }
+.op-linha:first-of-type { border-top: 0; }
+.op-linha span { min-width: 0; }
+.op-linha b { display: block; font-weight: 500; }
+.op-linha small { color: var(--txt-3); font-size: 12px; line-height: 1.4; display: block; }
+.chave { flex: none; width: 40px; height: 23px; border-radius: var(--r-t); border: 0; background: var(--borda-forte); position: relative; padding: 0; }
+.chave::after { content: ""; position: absolute; top: 3px; left: 3px; width: 17px; height: 17px; border-radius: 50%; background: #fff; transition: left .15s; }
+.chave[aria-checked="true"] { background: var(--link); }
+.chave[aria-checked="true"]::after { left: 20px; }
+.nota { border-radius: var(--r); padding: 9px 11px; font-size: 12.5px; line-height: 1.5; background: var(--sup-2); border: 1px solid var(--borda); color: var(--txt-2); }
+.nota b { color: var(--txt); font-weight: 600; display: block; }
+.nota.ia { background: var(--ia-suave); border-color: transparent; color: var(--txt); }
+.nota.ok { background: var(--ok-suave); border-color: transparent; color: var(--txt); } .nota.ok b { color: var(--ok); }
+.nota.at { background: var(--alerta-suave); border-color: transparent; color: var(--txt); } .nota.at b { color: var(--alerta); }
+.nota.er { background: var(--perigo-suave); border-color: transparent; color: var(--txt); } .nota.er b { color: var(--perigo); }
+.acoes { display: flex; flex-wrap: wrap; gap: 8px; }
+.bt { border: 1px solid var(--borda-forte); background: var(--sup); border-radius: var(--r); padding: 8px 15px; font-weight: 600; font-size: 13.5px; min-height: 38px; }
+.bt.pri { background: var(--acao); border-color: var(--acao); color: var(--acao-txt); }
+.bt.pri:hover { background: var(--acao-hover); }
+.bt.per { color: var(--perigo); border-color: var(--perigo); background: transparent; }
+.bt:disabled { opacity: .5; cursor: not-allowed; }
+.franquia { display: flex; justify-content: space-between; gap: 8px; flex-wrap: wrap; font-size: 12.5px; color: var(--txt-2); }
+.franquia b { font-family: var(--m); font-weight: 600; color: var(--txt); font-variant-numeric: tabular-nums; }
+.barra { height: 6px; border-radius: var(--r-t); background: var(--bg-sutil); overflow: hidden; }
+.barra i { display: block; height: 100%; background: var(--link); }
+.check { display: flex; gap: 9px; align-items: flex-start; background: var(--sup-2); border: 1px solid var(--borda); border-radius: var(--r); padding: 10px 11px; font-size: 13px; cursor: pointer; }
+.check input { margin-top: 3px; accent-color: var(--link); flex: none; }
+.gira { width: 28px; height: 28px; border-radius: 50%; border: 3px solid var(--borda-forte); border-top-color: var(--link); animation: g 1s linear infinite; }
+@keyframes g { to { transform: rotate(360deg); } }
+.espera { display: flex; gap: 12px; align-items: center; }
+.painel { background: var(--sup); border: 1px solid var(--borda); border-radius: var(--r-g); padding: 16px 18px; display: grid; gap: 12px; min-width: 0; }
+.painel-cab { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; flex-wrap: wrap; }
+.painel h2, .painel h3 { font-size: 16px; font-weight: 600; }
+.status { border-radius: var(--r-t); font-size: 12px; font-weight: 600; padding: 2px 10px; background: var(--bg-sutil); color: var(--txt-2); white-space: nowrap; }
+.status.ok { background: var(--ok-suave); color: var(--ok); } .status.er { background: var(--perigo-suave); color: var(--perigo); }
+.lista-conta { display: grid; gap: 8px; }
+.lista-conta li { display: flex; justify-content: space-between; gap: 10px; align-items: center; border: 1px solid var(--borda); border-radius: var(--r); padding: 9px 12px; background: var(--sup); flex-wrap: wrap; }
+.lista-conta small { color: var(--txt-3); font-size: 12px; display: block; }
+.rec { display: flex; gap: 10px; }
+.rec > i { flex: none; width: 21px; height: 21px; border-radius: 50%; background: var(--ok-suave); color: var(--ok); font-style: normal; font-size: 12px; font-weight: 700; display: grid; place-items: center; margin-top: 1px; }
+.rec b { font-weight: 500; display: block; }
+.rec small { color: var(--txt-3); font-size: 12px; line-height: 1.45; display: block; }
+.post { display: grid; grid-template-columns: minmax(0, 300px) minmax(0, 1fr); gap: 18px; align-items: start; }
+.onde { display: grid; gap: 6px; }
+.onde li { display: flex; gap: 8px; font-size: 13px; color: var(--txt-2); }
+.onde li b { color: var(--txt); font-weight: 500; }
+.decisoes { display: grid; gap: 12px; max-width: 860px; counter-reset: d; }
+.decisao { background: var(--sup); border: 1px solid var(--borda); border-radius: var(--r-g); padding: 16px 18px; display: grid; gap: 7px; counter-increment: d; }
+.decisao.muda { border-color: var(--alerta); }
+.decisao h2 { font-size: 16px; font-weight: 600; display: flex; gap: 9px; align-items: baseline; }
+.decisao h2::before { content: counter(d); font: 600 14px var(--m); color: var(--link); }
+.decisao .tag { justify-self: start; background: var(--alerta-suave); color: var(--alerta); border-radius: var(--r-t); padding: 1px 10px; font-size: 12px; font-weight: 600; }
+.decisao .tag.ok { background: var(--ok-suave); color: var(--ok); }
+.decisao p { max-width: 74ch; color: var(--txt-2); }
+.decisao p b { color: var(--txt); font-weight: 600; }
+@media (max-width: 1180px) { .duas { grid-template-columns: minmax(0, 1fr); } .gaveta { order: -1; } }
+@media (max-width: 860px) { .app { grid-template-columns: minmax(0, 1fr); } .menu { display: none; } .post { grid-template-columns: minmax(0, 1fr); } .post .foto-grande { max-width: 320px; } }
+</style>
+
+<header class="faixa">
+  <div class="faixa-topo">
+    <span class="selo-proto">Protótipo para aprovação</span>
+    <small>Dados de exemplo. Nada disto está no ar.</small>
+  </div>
+  <div class="linha-bt" id="abas" role="group" aria-label="Parte do protótipo"></div>
+  <div class="linha-bt" id="etapas" role="group" aria-label="Situação da tela"></div>
+</header>
+<div class="app">
+  <nav class="menu" aria-label="Menu do Liame (exemplo)">
+    <div class="marca">L<i>IA</i>ME<b>-</b></div>
+    <div class="empresa">Mister Burgers<small>Dono</small></div>
+    <div class="menu-t">Agência</div>
+    <a href="#editar" id="m-atencao">Atenção</a>
+    <a href="#aprovacao" id="m-aprov">Aprovações</a>
+    <a href="#editar" id="m-marca">Minha marca</a>
+    <a href="#editar" id="m-fotos">Fotos</a>
+    <a href="#cartao" id="m-contas">Contas conectadas</a>
+    <a href="#decisoes" id="m-dec">Decisões do protótipo</a>
+  </nav>
+  <main class="corpo" id="palco"></main>
+</div>
+
+<script>
+const ABAS = [['editar', 'Editar a foto'], ['cartao', 'Cartão do DMS Graph'], ['aprovacao', 'Na aprovação'], ['decisoes', 'Decisões']];
+const ETAPAS = [['gaveta', 'Foto aberta'], ['escolher', 'Escolher'], ['barrado', 'Pedido barrado'], ['editando', 'Editando'], ['conferir', 'Conferir'], ['guardada', 'Guardada'], ['sem', 'Sem franquia'], ['acabou', 'Franquia acabou'], ['naodeu', 'Não deu'], ['sove', 'Quem só vê']];
+const CARTOES = [['antes', 'Antes de ligar'], ['cnpj', 'Falta o CNPJ'], ['semacesso', 'Sem permissão'], ['ligado', 'Ligado'], ['desligar', 'Desligar'], ['tirado', 'Acesso tirado']];
+const QUADROS = [['original', 'Como está'], ['1-1', 'Quadrada 1:1'], ['9-16', 'Story 9:16'], ['16-9', 'Deitada 16:9']];
+const NOME_QUADRO = { original: 'como está', '1-1': '1:1', '9-16': '9:16', '16-9': '16:9' };
+const E = { aba: 'editar', etapa: 'escolher', cartao: 'ligado', luz: true, fundo: true, quadro: '1-1', confere: false, original: false, pedido: 'Fundo de madeira clara, com luz de fim de tarde', erroPedido: '' };
+let nArte = 0;
+const esc = (t) => String(t).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+// A trava do exemplo: pega o pedido óbvio antes de gastar a franquia. O que passar, a pessoa confere no antes e depois.
+const MUDA_PRODUTO = /\b(mais|menos|maior|menor|dobr\w*|tripl\w*|aument\w*|diminu\w*|acrescent\w*|adicion\w*|coloc\w*|p[oõ]e|p[oô]r|bot\w*|troc\w*|tir\w*|remov\w*)\b[^.]{0,40}\b(queijo|bacon|carne|hamb[uú]rguer|burger|p[aã]o|molho|salada|alface|tomate|cebola|batata|fritas?|recheio|por[cç][aã]o|ingredientes?|comida|produto|prato|lanche)\b/i;
+const ESCREVE = /\b(escrev\w*|texto|frase|pre[cç]o|promo[cç][aã]o|desconto|logo|logotipo|letreiro)\b/i;
+const PESSOA = /\b(pessoas?|modelo|cliente|mulher|homem|crian[cç]a|m[aã]os?|rosto)\b/i;
+function problemaDoPedido(t) {
+  if (MUDA_PRODUTO.test(t)) return 'Ele muda o produto. Peça só luz, fundo, cenário ou enquadramento.';
+  if (ESCREVE.test(t)) return 'A foto não leva texto, preço nem logotipo. Para isso, use a legenda do post.';
+  if (PESSOA.test(t)) return 'A edição não coloca pessoas na foto.';
+  return '';
+}
+const temAlgo = () => E.luz || E.fundo || E.quadro !== 'original' || E.pedido.trim() !== '';
+const linhaPedido = () => (E.pedido.trim() ? ` Pedido: "${esc(E.pedido.trim())}".` : '');
+const campoPedido = () => `<div class="campo"><label for="pedido">Pedido extra <span class="opc">(opcional)</span></label>
+  <textarea id="pedido" rows="2" maxlength="200" aria-describedby="pedido-dica" ${E.erroPedido ? 'aria-invalid="true"' : ''} placeholder="Ex.: fundo de madeira clara, com luz de fim de tarde">${esc(E.pedido)}</textarea>
+  <div class="franquia"><span id="pedido-dica">Fale de luz, fundo ou cenário. O produto não muda.</span><b id="pedido-n">${E.pedido.length} de 200</b></div>
+  ${E.erroPedido ? `<p class="nota er" role="alert" id="pedido-erro"><b>Este pedido não pode ir</b>${E.erroPedido} Nada foi gasto.</p>` : ''}</div>`;
+
+// A ilustração: o MESMO hambúrguer nas duas versões. Só a luz e o fundo mudam.
+function arte(editada, rotulo, luz = true, fundo = true) {
+  const id = `a${(nArte += 1)}`;
+  const limpo = editada && fundo;
+  const claro = editada && luz;
+  const filtro = claro ? 'brightness(1.04) saturate(1.06)' : 'brightness(.74) saturate(.82)';
+  const atras = limpo
+    ? `<rect width="600" height="600" fill="url(#${id})"/>`
+    : `<rect width="600" height="600" fill="url(#${id})"/><rect x="0" y="330" width="600" height="270" fill="#4A3324"/><rect x="42" y="96" width="74" height="178" rx="10" fill="#8C6E58"/><rect x="52" y="112" width="54" height="70" rx="5" fill="#B5472F"/><circle cx="512" cy="136" r="62" fill="#6F5645"/><rect x="430" y="248" width="150" height="86" rx="8" fill="#CFC4B4" transform="rotate(-7 505 290)"/>`;
+  const c1 = limpo ? '#EFD9B8' : '#6E4E38', c2 = limpo ? '#CF9A62' : '#3D2A1E';
+  return `<svg viewBox="0 0 600 600" preserveAspectRatio="xMidYMid slice" role="img" aria-label="${rotulo}" style="filter:${filtro}">
+    <defs><linearGradient id="${id}" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="${c1}"/><stop offset="1" stop-color="${c2}"/></linearGradient></defs>
+    ${atras}
+    <ellipse cx="300" cy="432" rx="218" ry="62" fill="#EDE7DD"/>
+    <path d="M168 300c0-78 60-128 132-128s132 50 132 128z" fill="#DF9E48"/>
+    <circle cx="256" cy="226" r="5" fill="#FBEBC8"/><circle cx="318" cy="208" r="5" fill="#FBEBC8"/><circle cx="360" cy="244" r="5" fill="#FBEBC8"/>
+    <path d="M152 318c44-20 92 10 148-4s106-12 148 6l-6 18H160z" fill="#5FA53A"/>
+    <rect x="160" y="334" width="280" height="40" rx="14" fill="#5A2D18"/>
+    <path d="M166 372h268l-22 16-30-10-34 14-44-12-42 12-40-14-28 8z" fill="#F4C430"/>
+    <rect x="164" y="386" width="272" height="42" rx="18" fill="#DC9442"/>
+  </svg>`;
+}
+
+const franquia = (usados, total) => `<div class="grupo"><div class="franquia"><span>Edições de foto em novembro</span><b>${usados} de ${total}</b></div><div class="barra"><i style="width:${total ? Math.round((usados / total) * 100) : 0}%"></i></div></div>`;
+const cabGaveta = (rot, titulo) => `<div class="gaveta-cab"><div><p class="rotulo">${rot}</p><h2>${titulo}</h2></div><button class="fechar" aria-label="Fechar" data-etapa="gaveta">×</button></div>`;
+const qClasse = () => `q-${E.quadro}`;
+const oQueMudou = () => [E.luz && 'luz', E.fundo && 'fundo', E.quadro !== 'original' && `enquadramento ${NOME_QUADRO[E.quadro]}`].filter(Boolean).join(', ').replace(/, ([^,]*)$/, ' e $1');
+
+function gaveta() {
+  const foto = (ed = false) => `<div class="foto-grande ${ed ? qClasse() : 'q-original'}">${arte(ed, ed ? 'Smash duplo, foto editada' : 'Smash duplo, foto original', E.luz, E.fundo)}</div>`;
+  switch (E.etapa) {
+    case 'gaveta':
+      return `${cabGaveta('Foto', 'Smash duplo')}${foto()}
+        <div class="campo"><label for="prod">Produto</label><input id="prod" type="text" value="Smash duplo" readonly></div>
+        <p class="nota">1.600 × 1.200 · enviada por Rodrigo em 18/10</p>
+        <div class="acoes"><button class="bt pri" data-etapa="escolher">Editar foto</button><button class="bt">Salvar</button><button class="bt per">Apagar</button></div>`;
+    case 'escolher':
+    case 'barrado':
+      return `${cabGaveta('Editar foto', 'Smash duplo')}${foto()}
+        <div class="grupo"><p class="t-grupo">O que melhorar</p>
+          <div class="op-linha"><span><b>Melhorar a luz</b><small>Corrige a foto escura ou amarelada.</small></span><button class="chave" role="switch" aria-checked="${E.luz}" aria-label="Melhorar a luz" data-liga="luz"></button></div>
+          <div class="op-linha"><span><b>Limpar o fundo</b><small>Tira o que distrai atrás do produto.</small></span><button class="chave" role="switch" aria-checked="${E.fundo}" aria-label="Limpar o fundo" data-liga="fundo"></button></div>
+        </div>
+        <div class="grupo"><p class="t-grupo">Enquadramento</p><div class="linha-bt" role="group" aria-label="Enquadramento">${QUADROS.map(([k, r]) => `<button class="chip" aria-pressed="${E.quadro === k}" data-quadro="${k}">${r}</button>`).join('')}</div></div>
+        ${campoPedido()}
+        <p class="nota ia"><b>O produto não muda</b>O Liame manda manter a comida, o tamanho e os ingredientes, mesmo com o seu pedido. Nada é escrito na foto.</p>
+        <p class="nota">A foto vai ao Google para a edição, fora do Brasil. Use só fotos da empresa, sem pessoas que dê para reconhecer.</p>
+        ${franquia(8, 30)}
+        <div class="acoes"><button class="bt pri" id="bt-editar" ${temAlgo() ? '' : 'disabled'} data-acao="editar">Editar foto (usa 1 de 22)</button><button class="bt" data-etapa="gaveta">Cancelar</button></div>`;
+    case 'editando':
+      return `${cabGaveta('Editar foto', 'Smash duplo')}${foto()}
+        <div class="espera" role="status"><div class="gira" aria-hidden="true"></div><div><b style="font-weight:600">Editando a foto</b><br><span style="color:var(--txt-2);font-size:13px">Pode levar até 1 minuto. Pode continuar usando o Liame.</span></div></div>`;
+    case 'conferir':
+      return `${cabGaveta('Confira antes de guardar', 'Smash duplo')}
+        <div class="foto-grande ${qClasse()}" id="cmp" style="--p:50%">
+          <div class="camada">${arte(false, 'Antes', E.luz, E.fundo)}</div>
+          <div class="camada camada-depois">${arte(true, 'Depois', E.luz, E.fundo)}</div>
+          <div class="divisor"></div><span class="marca-cmp" style="left:8px">Depois</span><span class="marca-cmp" style="right:8px">Antes</span>
+        </div>
+        <div class="campo"><label for="compara">Arraste para comparar</label><input id="compara" type="range" min="0" max="100" value="50"></div>
+        <p class="nota">Mudou: ${oQueMudou() || 'só o seu pedido'}.${linhaPedido()} A imagem leva a marca invisível do Google, e as redes podem mostrar que ela foi editada com IA.</p>
+        <label class="check" for="confere"><input id="confere" type="checkbox" ${E.confere ? 'checked' : ''}><span>Conferi: o produto continua igual ao que a loja entrega.</span></label>
+        <div class="acoes"><button class="bt pri" id="bt-guardar" ${E.confere ? '' : 'disabled'} data-acao="guardar">Guardar como nova foto</button><button class="bt" data-acao="editar">Fazer outra versão (usa 1)</button><button class="bt" data-etapa="gaveta">Descartar</button></div>
+        <p class="nota">Esta edição já contou na franquia, mesmo se você descartar.</p>`;
+    case 'guardada':
+      return `${cabGaveta('Foto guardada', 'Smash duplo, editada')}${foto(true)}
+        <p class="nota ok" role="status"><b>Nova foto em Fotos</b>A original continua lá, sem mudança. Editada por Rodrigo em 22/11: ${oQueMudou() || 'só o seu pedido'}.${linhaPedido()}</p>
+        ${franquia(9, 30)}
+        <div class="acoes"><button class="bt pri" data-aba="aprovacao">Usar num post</button><button class="bt" data-etapa="gaveta">Fechar</button></div>`;
+    case 'sem':
+      return `${cabGaveta('Editar foto', 'Smash duplo')}${foto()}
+        <p class="nota at"><b>A edição de foto ainda não foi liberada</b>A empresa começa com franquia 0, e a DMS libera. A foto segue valendo como está.</p>${franquia(0, 0)}
+        <div class="acoes"><button class="bt" data-etapa="gaveta">Voltar</button></div>`;
+    case 'acabou':
+      return `${cabGaveta('Editar foto', 'Smash duplo')}${foto()}
+        <p class="nota at"><b>As 30 edições de novembro acabaram</b>A franquia volta em 01/12. É a mesma da empresa no Regem e no Liame. A foto segue valendo como está.</p>${franquia(30, 30)}
+        <div class="acoes"><button class="bt" data-etapa="gaveta">Voltar</button></div>`;
+    case 'naodeu':
+      return `${cabGaveta('Editar foto', 'Smash duplo')}${foto()}
+        <p class="nota er" role="alert"><b>Não deu para editar esta foto</b>O Google recusa certas fotos, como as com pessoas reconhecíveis. Use outra foto do produto.</p>
+        <div class="acoes"><button class="bt" data-etapa="escolher">Tentar de novo</button><button class="bt" data-etapa="gaveta">Voltar</button></div>`;
+    default:
+      return `${cabGaveta('Foto', 'Smash duplo')}${foto()}
+        <p class="nota">Só o Dono, o Administrador e o Gestor editam fotos. Você pode ver e usar as que já estão aqui.</p>`;
+  }
+}
+
+function telaEditar() {
+  const nova = E.etapa === 'guardada';
+  const item = (nome, data, ed, atual) => `<li><button class="cartao-foto" ${atual ? 'aria-current="true"' : ''} data-etapa="gaveta">${ed ? '<span class="tag-ia">Editada com IA</span>' : ''}<span class="img">${arte(ed, nome)}</span><span class="leg"><b>${nome}</b><small>${data}</small></span></button></li>`;
+  return `<p class="trilha">Mister Burgers / <b>Fotos</b></p>
+    <div><h1>Fotos</h1><p class="sub">As fotos de verdade dos produtos da Mister Burgers. A foto editada entra como uma nova, e a original nunca muda.</p></div>
+    <div class="duas"><ul class="grade">${nova ? item('Smash duplo', 'quadrada · 22/11', true, true) : ''}${item('Smash duplo', 'horizontal · 18/10', false, !nova)}${item('Combo sexta', 'vertical · 17/10', false)}${item('Hambúrguer vegano', 'quadrada · 12/10', false)}</ul>
+    <aside class="gaveta" aria-label="Gaveta da foto">${gaveta()}</aside></div>`;
+}
+
+function cartaoGraph() {
+  const liberado = `<div class="rec"><i aria-hidden="true">✓</i><span><b>Editar foto</b><small>Ajusta a luz, o fundo e o enquadramento de uma foto real, sem texto na arte.</small></span></div>`;
+  const pedir = `<div class="grupo"><p class="t-grupo">O que o Liame vai pedir ao DMS Graph</p><div class="rec"><i aria-hidden="true">✓</i><span><b>Editar foto</b><small>Necessária. Ajusta a luz, o fundo e o enquadramento de uma foto real, sem texto na arte. Recurso pago: a empresa começa com franquia 0, e a DMS libera.</small></span></div></div>`;
+  const selo = { ligado: ['ok', 'Conectado'], desligar: ['ok', 'Conectado'], tirado: ['er', 'Acesso tirado'] }[E.cartao] ?? ['', 'Não conectado'];
+  const corpo = {
+    antes: `${pedir}<div class="acoes"><button class="bt pri" data-cartao="ligado">Conectar ao DMS Graph</button></div><p class="nota">Abre a página do DMS Graph. Lá, você entra com o DMS ID, vê o que o Liame vai usar e confirma.</p>`,
+    cnpj: `<p class="nota at"><b>Falta o CNPJ da empresa</b>A conta da empresa no DMS Graph nasce pelo CNPJ. Informe uma vez.</p><div class="campo" style="max-width:280px"><label for="cnpj">CNPJ da empresa</label><input id="cnpj" type="text" inputmode="numeric" value="00.000.000/0000-00"></div><div class="acoes"><button class="bt pri" data-cartao="antes">Salvar CNPJ</button></div>`,
+    semacesso: `${pedir}<p class="nota"><b>Só quem conecta contas liga o DMS Graph</b>Peça para o Dono ou o Administrador abrir esta tela.</p>`,
+    ligado: `<div class="grupo"><p class="t-grupo">O que está liberado</p>${liberado}</div>${franquia(8, 30)}<p class="nota">Conectado desde 22/11 por Rodrigo, na conta Mister Burguer Steakhouse do DMS Graph. A franquia é da empresa e vale para o Regem e o Liame.</p><div class="acoes"><button class="bt" data-cartao="desligar">Desligar</button></div>`,
+    desligar: `<div class="nota er" role="alertdialog" aria-label="Desligar o DMS Graph"><b>Desligar o DMS Graph do Liame?</b>O Liame para de editar fotos. As fotos editadas que já estão em Fotos continuam lá, e o que já foi publicado não muda. A ligação de outros produtos da empresa continua.</div><div class="acoes"><button class="bt per" data-cartao="antes">Desligar</button><button class="bt" data-cartao="ligado">Manter ligado</button></div>`,
+    tirado: `<p class="nota er"><b>O acesso foi tirado no DMS Graph</b>O Liame parou de editar fotos. Conecte de novo para voltar.</p><div class="acoes"><button class="bt pri" data-cartao="ligado">Conectar de novo</button></div>`,
+  }[E.cartao];
+  return `<p class="trilha">Mister Burgers / Contas conectadas / <b>Autorizações</b></p>
+    <div><h1>Contas conectadas</h1><p class="sub">Quem autorizou o Liame a usar cada serviço, e o que cada um libera.</p></div>
+    <ul class="lista-conta" style="max-width:720px">
+      <li><span>Meta<small>Autorizada por Rodrigo</small></span><span class="status ok">Conectada</span></li>
+      <li><span>Google<small>Autorizada por Rodrigo</small></span><span class="status ok">Conectada</span></li>
+    </ul>
+    <section class="painel" style="max-width:720px" aria-labelledby="t-graph"><div class="painel-cab"><div><h2 id="t-graph">DMS Graph</h2><p class="sub">Melhore a foto real da sua loja antes de publicar.</p></div><span class="status ${selo[0]}">${selo[1]}</span></div>${corpo}</section>`;
+}
+
+function telaAprovacao() {
+  return `<p class="trilha">Mister Burgers / Aprovações / <b>Post do Instagram</b></p>
+    <div><h1>Post para aprovar</h1><p class="sub">Quem aprova vê que a foto foi editada e pode abrir a original antes de dar o código.</p></div>
+    <section class="painel" style="max-width:860px"><div class="post">
+      <div class="grupo"><div class="foto-grande q-1-1">${arte(!E.original, E.original ? 'Foto original' : 'Foto editada')}${E.original ? '' : '<span class="tag-ia">Editada com IA</span>'}</div>
+      <button class="bt" aria-pressed="${E.original}" data-acao="original">${E.original ? 'Ver a editada' : 'Ver a original'}</button></div>
+      <div class="grupo"><p class="rotulo">Instagram · sexta, 19h</p><p>Sexta é dia de smash duplo. Pão selado na manteiga e carne na chapa. Peça até as 23h.</p>
+        <p class="nota ia"><b>Foto editada com IA</b>Luz, fundo e enquadramento 1:1, por Rodrigo em 22/11.${linhaPedido()} Rodrigo conferiu que o produto continua igual.</p>
+        <div class="grupo"><p class="t-grupo">Onde a foto editada pode sair</p><ul class="onde"><li><span aria-hidden="true">✓</span><span><b>Post e Story</b></span></li><li><span aria-hidden="true">–</span><span><b>Campanha paga e vídeo montado:</b> só com a foto original nesta fase</span></li></ul></div>
+        <div class="acoes"><button class="bt pri">Aprovar com o código</button><button class="bt">Pedir mudança</button></div></div>
+    </div></section>`;
+}
+
+const DECISOES = [
+  ['Mudar a regra do Liame que proíbe editar foto', 'Liberar só luz, fundo e enquadramento, com a foto sempre marcada.', 'A regra aprovada D-A6-6 diz que o post usa a foto "como ela é", porque comida feita por IA engana quem vê. Editar foto contraria esse texto, então só você pode mudar. A trava é que o produto não muda e uma pessoa confere.', 'Manter a regra. Nesse caso o Liame não recebe o DMS Graph agora, e vou direto ao Farol.', 'ok'],
+  ['Como a pessoa pede a edição', 'Botões de luz, fundo e enquadramento, mais um pedido opcional de até 200 letras sobre luz, fundo ou cenário.', 'O texto da pessoa entra depois da regra fixa de não mudar o produto. Pedidos óbvios, como "mais queijo", escrever preço ou colocar pessoas, são barrados antes de gastar a franquia. Essa trava não pega tudo, por isso a pessoa confere o antes e depois, e quem aprova o post vê o pedido feito.', 'Ficar só com os botões, sem pedido escrito.', 'novo'],
+  ['Onde a foto editada pode sair', 'Em post e Story. Campanha paga e vídeo montado seguem só com a foto original.', 'O anúncio pago tem a regra mais dura, e a Meta pode marcar a imagem como feita com IA. Primeiro vemos como isso se comporta no post.', 'Liberar em tudo que usa Fotos.', 'ok'],
+  ['A foto sai do Brasil', 'Avisar na tela e atualizar a Política de Privacidade e o Contrato de Dados no mesmo PR.', 'A edição roda no Google, fora do Brasil. A D-A6-72 já citava isso como risco de LGPD. Vai só a foto, sem dado de cliente, e a tela pede foto sem pessoas reconhecíveis.', 'Não editar enquanto não houver um fornecedor no Brasil.', 'ok'],
+  ['Quem pode editar', 'Dono, Administrador e Gestor, os mesmos que enviam e apagam fotos.', 'É a regra atual de Fotos (D-A6-19). Quem só vê continua vendo, sem o botão.', 'Restringir ao Dono.', 'ok'],
+  ['A franquia de imagem', 'Dividir a franquia da empresa entre Regem e Liame, como o Graph já faz.', 'A franquia é por conta e por recurso. Com o mesmo CNPJ, o banner do Regem e a foto do Liame gastam do mesmo saldo, e cada edição custa cerca de R$ 0,20.', 'Criar uma franquia por produto, o que exige mudar o Graph.', 'ok'],
+];
+const telaDecisoes = () => `<div><h1>Decisões para aprovar</h1><p class="sub">As decisões 1, 3, 4, 5 e 6 foram aprovadas em 22/11. A 2 mudou a seu pedido e falta o seu ok.</p></div>
+  <ol class="decisoes">${DECISOES.map(([t, r, w, a, s]) => `<li class="decisao ${s === 'novo' ? 'muda' : ''}"><h2>${t}</h2><span class="tag ${s === 'ok' ? 'ok' : ''}">${s === 'ok' ? 'Aprovada' : 'Falta o seu ok'}</span><p><b>${s === 'ok' ? 'Aprovado' : 'Recomendo'}:</b> ${r}</p><p>${w}</p>${s === 'ok' ? '' : `<p><b>Outra opção:</b> ${a}</p>`}</li>`).join('')}</ol>`;
+
+function desenha() {
+  document.getElementById('abas').innerHTML = `<span>Parte:</span>${ABAS.map(([k, r]) => `<button class="chip" aria-pressed="${E.aba === k}" data-aba="${k}">${r}</button>`).join('')}`;
+  const et = document.getElementById('etapas');
+  et.hidden = !['editar', 'cartao'].includes(E.aba);
+  if (E.aba === 'editar') et.innerHTML = `<span>Situação:</span>${ETAPAS.map(([k, r]) => `<button class="chip" aria-pressed="${E.etapa === k}" data-etapa="${k}">${r}</button>`).join('')}`;
+  if (E.aba === 'cartao') et.innerHTML = `<span>Situação:</span>${CARTOES.map(([k, r]) => `<button class="chip" aria-pressed="${E.cartao === k}" data-cartao="${k}">${r}</button>`).join('')}`;
+  document.getElementById('palco').innerHTML = { editar: telaEditar, cartao: cartaoGraph, aprovacao: telaAprovacao, decisoes: telaDecisoes }[E.aba]();
+  const atual = { editar: 'm-fotos', cartao: 'm-contas', aprovacao: 'm-aprov', decisoes: 'm-dec' }[E.aba];
+  document.querySelectorAll('.menu a').forEach((a) => (a.id === atual ? a.setAttribute('aria-current', 'page') : a.removeAttribute('aria-current')));
+}
+
+let relogio = null;
+document.addEventListener('click', (ev) => {
+  const b = ev.target.closest('button, .menu a');
+  if (!b) return;
+  if (b.matches('.menu a')) return;
+  const d = b.dataset;
+  if (d.aba) { E.aba = d.aba; try { history.replaceState(null, '', `#${d.aba}`); } catch { /* o endereço não muda nesta visão */ } }
+  else if (d.etapa) {
+    clearTimeout(relogio); E.etapa = d.etapa; E.confere = false;
+    if (d.etapa === 'barrado') { E.pedido = 'Põe mais queijo e bacon no hambúrguer'; E.erroPedido = problemaDoPedido(E.pedido); }
+    else { E.erroPedido = ''; if (problemaDoPedido(E.pedido)) E.pedido = ''; }
+  }
+  else if (d.cartao) E.cartao = d.cartao;
+  else if (d.liga) E[d.liga] = !E[d.liga];
+  else if (d.quadro) E.quadro = d.quadro;
+  else if (d.acao === 'editar') { const p = problemaDoPedido(E.pedido); if (p) { E.erroPedido = p; desenha(); document.getElementById('pedido')?.focus(); return; } E.etapa = 'editando'; E.confere = false; clearTimeout(relogio); relogio = setTimeout(() => { if (E.etapa === 'editando') { E.etapa = 'conferir'; desenha(); } }, 1400); }
+  else if (d.acao === 'guardar') E.etapa = 'guardada';
+  else if (d.acao === 'original') E.original = !E.original;
+  else return;
+  desenha();
+});
+document.addEventListener('input', (ev) => {
+  if (ev.target.id === 'compara') document.getElementById('cmp')?.style.setProperty('--p', `${ev.target.value}%`);
+  if (ev.target.id === 'pedido') {
+    E.pedido = ev.target.value; E.erroPedido = '';
+    document.getElementById('pedido-erro')?.remove();
+    ev.target.removeAttribute('aria-invalid');
+    document.getElementById('pedido-n').textContent = `${E.pedido.length} de 200`;
+    const b = document.getElementById('bt-editar'); if (b) b.disabled = !temAlgo();
+  }
+  if (ev.target.id === 'confere') { E.confere = ev.target.checked; const g = document.getElementById('bt-guardar'); if (g) g.disabled = !E.confere; }
+});
+function peloEndereco() { const h = location.hash.slice(1); if (ABAS.some(([k]) => k === h)) E.aba = h; desenha(); }
+addEventListener('hashchange', peloEndereco);
+peloEndereco();
+</script>
+
+</body>
+</html>

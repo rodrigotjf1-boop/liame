@@ -1,4 +1,4 @@
--- 0164 · Os melhores momentos: o vídeo montado com os cortes (A6, Z16, parte 4; o item 7 do dono de 07/11/2026; D-A6-82 e
+-- 0165 · Os melhores momentos: o vídeo montado com os cortes (A6, Z16, parte 4; o item 7 do dono de 07/11/2026; D-A6-82 e
 -- D-A6-150 a D-A6-154, do protótipo P46, seguidas como recomendadas). Depois da 0163 (o pedido dos cortes ao Social media e a
 -- função `video_momentos`): a pessoa confere ou muda os cortes propostos e manda montar; o serviço de montagem (liame-render)
 -- monta os cortes em sequência, com a legenda de cada um.
