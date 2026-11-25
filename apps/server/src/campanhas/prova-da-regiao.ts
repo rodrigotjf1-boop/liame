@@ -250,9 +250,9 @@ async function sugerir(http: Http, g: Google, nomes: string[]): Promise<LugarNoG
 }
 
 /** Cada sugestão no registro, com a cadeia (os lugares acima dela, tipo e constante), para a rodada seguinte não precisar de outra. */
-const descrever = (ls: readonly LugarNoGoogle[]): string =>
+const descrever = (ls: readonly LugarNoGoogle[], quantos = 6): string =>
   ls
-    .slice(0, 6)
+    .slice(0, quantos)
     .map((l) => {
       const cadeia = l.cadeia.length ? l.cadeia.map((c) => `${c.tipo} ${c.recurso}`).join(' > ') : '—';
       return `${l.tipo} ${l.nome} [${l.nomeCanonico}] ${l.recurso} pai ${l.pai ?? '—'} cadeia ${cadeia} (${l.situacao}, buscado "${l.buscado}")`;
@@ -293,7 +293,8 @@ async function passos(ctx: ContextoDaProva, saida: ResultadoDoPasso[]): Promise<
       if (!nomeDoEstado) throw new Error(`UF desconhecida: ${ctx.loja.uf}`);
       const deEstado = await sugerir(http, g, [nomeDoEstado]);
       const estado = lugarDoTipo(deEstado, 'State', null);
-      saida.push({ passo: 'google: o estado', resultado: 'lido', detalhe: `${estado ? `escolhido ${estado.recurso}` : 'nenhum escolhido'}. Sugeridos: ${descrever(deEstado)}` });
+      // Até 3 sugestões: a linha inteira cabe no console do EasyPanel (na prova de 25/11/2026 ela saiu cortada).
+      saida.push({ passo: 'google: o estado', resultado: 'lido', detalhe: `${estado ? `escolhido ${estado.recurso}` : 'nenhum escolhido'}. Sugeridos: ${descrever(deEstado, 3)}` });
       const loja: LojaNoMapa = { cidade: ctx.loja.cidade, nomeDoEstado, estado };
       const deCidade = await sugerir(http, g, [ctx.loja.cidade]);
       const cidades = cidadesDaLoja(deCidade, loja);

@@ -157,11 +157,11 @@ describe('os lugares do Google: pela constante e pelo pai, nunca pelo texto', ()
 describe('o bairro pela cadeia dele (D-RG-103, depois da prova de 25/11/2026)', () => {
   // Como a `suggest` responde (a forma da documentação: `geoTargetConstantParents` é uma lista de `GeoTargetConstant`), com o
   // que a prova viu na conta real: nenhum `parentGeoTarget` e duas "City" Rio de Janeiro (1001655 e 9198038).
-  type Pai = [string, string, string];
+  type Pai = [string, string, string, string?];
   const sugestao = (recurso: string, nome: string, tipo: string, canonico: string, pais: Pai[] = [], extra: Record<string, unknown> = {}) => ({
     searchTerm: nome,
     geoTargetConstant: { resourceName: recurso, name: nome, canonicalName: canonico, targetType: tipo, countryCode: 'BR', status: 'ENABLED', ...extra },
-    geoTargetConstantParents: pais.map(([r, n, t]) => ({ resourceName: r, name: n, canonicalName: n, targetType: t, countryCode: 'BR', status: 'ENABLED' })),
+    geoTargetConstantParents: pais.map(([r, n, t, c]) => ({ resourceName: r, name: n, canonicalName: c ?? n, targetType: t, countryCode: 'BR', status: 'ENABLED' })),
   });
   const ESTADO_RJ: Pai = ['geoTargetConstants/20102', 'Rio de Janeiro', 'State'];
   const CIDADE_RJ: Pai = ['geoTargetConstants/1001655', 'Rio de Janeiro', 'City'];
@@ -192,6 +192,11 @@ describe('o bairro pela cadeia dele (D-RG-103, depois da prova de 25/11/2026)', 
     expect(bairroDaLoja(sugeridos, 'penha circular', LOJA)).toMatchObject({ lugar: { recurso: 'geoTargetConstants/9100002' }, caminho: 'pela cadeia' });
     // Sem a constante do estado (o passo do estado não achou): o estado pelo nome, na cadeia.
     expect(bairroDaLoja(sugeridos, 'Penha', { ...LOJA, estado: null })?.lugar.recurso).toBe('geoTargetConstants/9100001');
+    // ...ou pelo canônico, quando o nome da cadeia vem de outro jeito (traduzido ou não): "State of Rio de Janeiro,Brazil".
+    const outroNome = ler(
+      sugestao('geoTargetConstants/9100001', 'Penha', 'Neighborhood', 'x', [MUNICIPIO_RJ, ['geoTargetConstants/20102', 'Estado do Rio de Janeiro', 'State', 'State of Rio de Janeiro,Brazil']]),
+    );
+    expect(bairroDaLoja(outroNome, 'Penha', { ...LOJA, estado: null })?.lugar.recurso).toBe('geoTargetConstants/9100001');
     // A loja em outra cidade do mesmo estado: a Penha do Rio não serve.
     expect(bairroDaLoja(sugeridos, 'Penha', { ...LOJA, cidade: 'Niterói' })).toBeNull();
   });
@@ -215,6 +220,9 @@ describe('o bairro pela cadeia dele (D-RG-103, depois da prova de 25/11/2026)', 
     );
     expect(bairroDaLoja(semCadeia, 'Penha Circular', LOJA)).toMatchObject({ lugar: { recurso: 'geoTargetConstants/9100004' }, caminho: 'pelo nome canônico' });
     expect(bairroDaLoja(semCadeia, 'Centro', LOJA)).toBeNull();
+    // A cidade com o nome do estado: a parte da cidade não conta como o estado; sem o "State of", nenhum.
+    const semEstado = ler(sugestao('geoTargetConstants/9100006', 'Penha', 'Neighborhood', 'Penha,Rio de Janeiro,Brazil'));
+    expect(bairroDaLoja(semEstado, 'Penha', LOJA)).toBeNull();
   });
 
   it('as cidades com o nome da loja: as duas "Rio de Janeiro" da prova; a de outro estado sai quando o Google diz o estado', () => {

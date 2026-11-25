@@ -114,10 +114,17 @@ export function lugarDoTipo(lugares: readonly LugarNoGoogle[], tipo: 'State' | '
 /** A loja onde os bairros ficam: a cidade, o estado por extenso e, quando o passo do estado achou, a constante dele. */
 export type LojaNoMapa = { cidade: string; nomeDoEstado: string; estado: LugarNoGoogle | null };
 
-/** O lugar da cadeia é o estado da loja: pela constante achada ou, sem ela, um `State` com o nome do estado. */
+/** O nome canônico de um estado do Brasil, como o Google escreve (em inglês): "State of Rio de Janeiro,Brazil". */
+const canonicoDoEstado = (nomeDoEstado: string) => `state of ${nomeComparavel(nomeDoEstado)},brazil`;
+
+/**
+ * O lugar da cadeia é o estado da loja: pela constante achada ou, sem ela, um `State` com o nome do estado ou com o
+ * canônico dele (não se sabe se o nome da cadeia vem traduzido; o canônico vem em inglês).
+ */
 function ehOEstado(l: LugarDaCadeia, loja: LojaNoMapa): boolean {
   if (loja.estado) return l.recurso === loja.estado.recurso;
-  return l.tipo === 'State' && nomeComparavel(l.nome) === nomeComparavel(loja.nomeDoEstado);
+  if (l.tipo !== 'State') return false;
+  return nomeComparavel(l.nome) === nomeComparavel(loja.nomeDoEstado) || nomeComparavel(l.nomeCanonico) === canonicoDoEstado(loja.nomeDoEstado);
 }
 
 /** O lugar da cadeia é a cidade da loja: City ou Municipality com o nome dela. */
@@ -143,11 +150,15 @@ export function cidadesDaLoja(lugares: readonly LugarNoGoogle[], loja: LojaNoMap
 /** O bairro achado no Google e por qual caminho ele foi decidido. */
 export type BairroNoGoogle = { lugar: LugarNoGoogle; caminho: 'pela cadeia' | 'pelo nome canônico' };
 
-/** O plano B, sem a cadeia: o nome da cidade e o do estado nas partes do nome canônico depois da primeira. */
+/**
+ * O plano B, sem a cadeia: nas partes do nome canônico depois da primeira, a cidade e, noutra parte, "State of <estado>"
+ * (o canônico do Brasil vem em inglês). A parte do estado é só a com "State of": quando a cidade tem o nome do estado (Rio
+ * de Janeiro, São Paulo), a parte da cidade não pode contar duas vezes. No Distrito Federal o canônico é "Federal
+ * District": o plano B não passa e o bairro vai por círculo (o lado seguro).
+ */
 function peloNomeCanonico(l: LugarNoGoogle, loja: LojaNoMapa): boolean {
   const resto = l.nomeCanonico.split(',').slice(1).map(nomeComparavel);
-  const estado = nomeComparavel(loja.nomeDoEstado);
-  return resto.includes(nomeComparavel(loja.cidade)) && resto.some((p) => p === estado || p === `state of ${estado}`);
+  return resto.includes(nomeComparavel(loja.cidade)) && resto.includes(`state of ${nomeComparavel(loja.nomeDoEstado)}`);
 }
 
 /**
