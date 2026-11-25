@@ -111,6 +111,53 @@
 .vm-job-veu { position: absolute; inset: 0; display: grid; place-content: center; justify-items: center; gap: 6px; background: color-mix(in srgb, #0b0d17 55%, transparent); color: #fff; font-size: var(--text-sm); font-weight: 600; text-align: center; }
 .vm-job-veu .ic { width: 22px; height: 22px; }
 
+/* "Os melhores momentos" (A6 · Z16; P46): a miniatura do modelo, os cortes (a lista empilha no estreito e vira linha a
+   partir de 480 px da peça), o total e a legenda na prévia. Nenhuma cor nova. */
+.vm-mini--momentos { background: linear-gradient(90deg, #6b3b1f 0 33%, #2b4a1d 33% 66%, #1d2b4a 66%); }
+.vm-mini--momentos::before { left: 3px; right: 3px; top: 3px; height: 2px; background: repeating-linear-gradient(90deg, #fff 0 8px, transparent 8px 10px); }
+.vm-mini--momentos::after { left: 4px; right: 4px; width: auto; bottom: 7px; height: 5px; border-radius: 2px; background: #0b0d17; }
+.vm-cortes-bloco { min-width: 0; container: vmc / inline-size; }
+.vm-cortes-viu { margin: 0; color: var(--text); overflow-wrap: anywhere; }
+.vm-cortes-usados { display: grid; gap: var(--sp-3); padding: var(--sp-3) var(--sp-4); border: 1px solid var(--border); border-radius: var(--radius); background: var(--bg-subtle); font-size: var(--text-sm); }
+.vm-cortes-usados .vm-social-cab > .ic { color: var(--ai); }
+.vm-cortes { display: grid; gap: var(--sp-2); margin: 0; padding: 0; list-style: none; }
+.vm-corte { display: grid; grid-template-columns: 52px minmax(0, 1fr); grid-template-areas: "mini de" "leg leg" "acoes acoes"; gap: var(--sp-2) var(--sp-3); align-items: start; min-width: 0; padding: var(--sp-2); border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); }
+.vm-corte-mini { grid-area: mini; position: relative; display: block; width: 52px; aspect-ratio: 1 / 1; overflow: hidden; border-radius: 6px; background: #0b0d17; }
+.vm-corte-mini img { display: block; width: 100%; height: 100%; object-fit: cover; }
+.vm-corte-mini .vm-ordem { left: 3px; top: 3px; min-width: 20px; height: 20px; font-size: 11px; }
+.vm-corte-de { grid-area: de; align-self: center; display: grid; gap: 2px; margin: 0; min-width: 0; font-size: var(--text-sm); overflow-wrap: anywhere; }
+.vm-corte-de b { font-weight: 600; }
+.vm-corte-s { color: var(--text-muted); font-size: var(--text-xs); }
+.vm-corte-leg { grid-area: leg; display: grid; gap: 4px; min-width: 0; }
+.vm-corte-leg label { font-size: var(--text-xs); font-weight: 600; color: var(--text-muted); }
+.vm-corte-leg .vm-dica-linha { justify-content: flex-end; }
+.vm-corte-acoes { grid-area: acoes; display: flex; flex-wrap: wrap; gap: var(--sp-2); min-width: 0; }
+.vm-corte-acoes .btn[aria-disabled="true"] { opacity: .5; cursor: not-allowed; }
+@container vmc (min-width: 480px) {
+  .vm-corte { grid-template-columns: 52px minmax(0, 1fr) auto; grid-template-areas: "mini de acoes" "mini leg leg"; }
+  .vm-corte-acoes { justify-content: flex-end; }
+}
+.vm-cortes-total { display: flex; align-items: flex-start; gap: var(--sp-2); margin: 0; font-size: var(--text-sm); overflow-wrap: anywhere; }
+.vm-cortes-total > span { min-width: 0; }
+.vm-cortes-total .ic { flex: none; margin-top: 2px; }
+.vm-cortes-total--ok .ic { color: var(--success); }
+.vm-cortes-total--aviso .ic { color: var(--warning); }
+.vm-cortes-total--perigo .ic, .vm-cortes-total--perigo b { color: var(--danger); }
+.vm-nota--aviso .ic { color: var(--warning); }
+.vm-social-acoes .btn[aria-disabled="true"] { opacity: .62; cursor: not-allowed; }
+.vm-v-legenda { left: 7%; right: 7%; bottom: max(9%, 38px); padding: 6px 10px; border-radius: var(--radius-sm); background: var(--vm-tinta); color: var(--vm-claro); font-size: var(--text-sm); font-weight: 600; line-height: 1.25; text-align: center; }
+.vm-cena--espera { filter: brightness(.5); }
+.vm-vazio--sobre > span:last-child { padding: 4px 8px; border-radius: var(--radius-sm); background: color-mix(in srgb, var(--vm-tinta) 72%, transparent); }
+.vm-agora { min-height: 1.4em; }
+/* A gaveta do vídeo pronto dos "Melhores momentos" em Fotos: os cortes escolhidos pelo Social media (P46, `.p46-det`). */
+.vm-det { display: grid; gap: var(--sp-2); }
+.vm-det .rotulo-marca { margin: 0; }
+.vm-det-lista { display: grid; gap: var(--sp-2); margin: 0; padding: 0; list-style: none; }
+.vm-det-lista li { display: grid; grid-template-columns: 40px minmax(0, 1fr); align-items: center; gap: var(--sp-3); font-size: var(--text-sm); }
+.vm-det-lista img, .vm-det-sem { display: block; width: 40px; height: 40px; border-radius: 6px; object-fit: cover; background: var(--bg-subtle); }
+.vm-det-lista span { display: grid; gap: 2px; min-width: 0; overflow-wrap: anywhere; }
+.vm-det-lista small { color: var(--text-muted); font-size: var(--text-xs); }
+
 @media (prefers-reduced-motion: reduce) {
   .vm-quadro .vm-v { transition: none; }
 }

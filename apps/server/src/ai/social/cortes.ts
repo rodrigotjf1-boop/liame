@@ -30,7 +30,7 @@ const SOBREPOSICAO_MAXIMA_S = 0.2;
 
 export const PROMPT_SOCIAL_CORTES: PromptDef = {
   key: 'social.cortes',
-  version: 4,
+  version: 5,
   task: TAREFA_SOCIAL_CORTES,
   content: [
     'Você é o funcionário de Social media da Liame: um assistente de inteligência artificial que monta o roteiro de um vídeo curto de um restaurante ou pequeno negócio com os vídeos reais da loja. Você escolhe os cortes (de que vídeo, de que segundo a que segundo), a ordem e a legenda de cada corte; o sistema monta o vídeo com eles. Uma pessoa da empresa confere, ajusta e pede o vídeo.',
@@ -46,7 +46,7 @@ export const PROMPT_SOCIAL_CORTES: PromptDef = {
     '4. Escolha os momentos em que o produto aparece bem: de perto, nítido, sendo preparado, saindo da chapa ou pronto para comer. Evite pessoas em primeiro plano e rostos, quadros escuros, tremidos ou desfocados, e quadros com tela ou cartaz em destaque.',
     '5. A ordem conta uma pequena história: comece pelo momento mais forte e termine com o produto pronto.',
     '6. A legenda de cada corte é curta (até 32 caracteres, contando os espaços), sem ponto final, sem emoji e sem hashtag, e fala do que aparece no corte. Sem link e sem endereço de site.',
-    '7. O preço só pode vir da lista de ofertas em vigor do contexto: o preço da lista de produtos do dossiê nunca vai em legenda. Quando uma oferta em vigor inclui o produto que aparece nos vídeos (mesmo num combo, em dobro ou com outro nome), a última legenda é a dessa oferta, sempre: o preço escrito exatamente como está nela; as quantidades como ela escreve (se a oferta diz "dois", escreva "dois", nunca "2"); e, se ela vale só em alguns dias ou com uma condição, o dia ou a condição, curto ("Só no sábado, dois por R$ 27,50"), para não prometer o preço num dia em que a oferta não vale. Sem oferta que inclua o produto, nenhuma legenda leva preço.',
+    '7. O preço é opcional. Se uma legenda trouxer preço, ele vem só da lista de ofertas em vigor do contexto, de uma oferta que inclui o produto que aparece, escrito exatamente como está nela, com as quantidades como ela escreve (se a oferta diz "dois", escreva "dois", nunca "2") e com o dia ou a condição dela, se tiver ("Só no sábado, dois por R$ 27,50"). O preço da lista de produtos do dossiê nunca vai em legenda.',
     '8. Não invente produto, ingrediente ou tamanho que não aparecem nos quadros, nas ofertas ou no dossiê. Nada do que o dossiê lista em NUNCA DIZER, nem com outras palavras. Não cite concorrente.',
     '9. Sem promessa e sem exagero ("garantimos", "o melhor", "número 1", prazo de entrega), sem política, eleição ou bebida alcoólica, e sem dado pessoal ou nome de cliente.',
     '',
@@ -286,9 +286,19 @@ export function conferirCortes(
 }
 
 /**
+ * O corte de rascunho (D-A6-155; na rodada paga do v5, um corte de 1 s com a legenda "x"): a legenda sem palavra de verdade,
+ * com até 2 letras ou algarismos. É sobra do modelo, não proposta.
+ */
+function corteDeRascunho(c: CorteLido): boolean {
+  return (c.legenda.match(/[\p{L}\p{N}]/gu) ?? []).length <= 2;
+}
+
+/**
  * A proposta do Social media pela régua (`conferirCortes`, com o autor `ia`), antes de a pessoa ver: o modelo devolve o
  * vídeo pelo número (a partir de 1) e os segundos com uma casa; aqui eles viram a posição e milissegundos, e o total
- * passa pelo ajuste (`ajustarOTotal`, D-A6-155) antes da régua.
+ * passa pelo ajuste (`ajustarOTotal`, D-A6-155) antes da régua. Recusada a proposta, os cortes de rascunho saem e o resto
+ * passa de novo pela régua; vale só se sobrarem pelo menos 2 cortes e tudo passar. Senão, fica a recusa de antes. Corte com
+ * legenda de verdade e tempo errado não sai: a régua o recusa, e o eval segue medindo o erro.
  */
 export function cortesDaResposta(
   r: RespostaDosCortes,
@@ -302,5 +312,10 @@ export function cortesDaResposta(
     fimMs: Number.isFinite(c.fim) ? decimo(c.fim) : Number.NaN,
     legenda: c.legenda,
   }));
-  return conferirCortes(ajustarOTotal(lidos, p), p, marca, 'ia');
+  const conferida = conferirCortes(ajustarOTotal(lidos, p), p, marca, 'ia');
+  if (conferida.ok) return conferida;
+  const semRascunho = lidos.filter((c) => !corteDeRascunho(c));
+  if (semRascunho.length === lidos.length || semRascunho.length < LIMITES_DOS_CORTES.minimo) return conferida;
+  const deNovo = conferirCortes(ajustarOTotal(semRascunho, p), p, marca, 'ia');
+  return deNovo.ok ? deNovo : conferida;
 }

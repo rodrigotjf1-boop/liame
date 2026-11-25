@@ -8,6 +8,7 @@ import { api, chamar, mensagemDe, type Problema } from '@/lib/api';
 import { disparar } from '@/lib/disparar';
 import { resumoDaEdicao } from './edicao';
 import { TelaDoVideo } from './tela-do-video';
+import { type CorteDoDetalhe, tempoTxt } from './video-montado/momentos';
 import {
   canaisDoVideo,
   DESCRICAO_MAX,
@@ -46,11 +47,13 @@ type Props = {
   /** A foto inteira não carregou (o endereço de 5 minutos venceu): a tela pede endereços novos. */
   aoFalharImagem: () => void;
   aoFechar: () => void;
+  /** O vídeo pronto dos "Melhores momentos" (A6 · Z16; P46): quantos vídeos e os cortes que o Social media escolheu. */
+  momentos?: { videos: number; cortes: CorteDoDetalhe[] } | null;
   /** "Editar foto" pelo DMS Graph (F4): nulo sem a ligação, sem a permissão, no vídeo e na foto já editada. */
   aoEditar?: (() => void) | null;
 };
 
-export function GavetaFoto({ foto, produtos, podeMudar, apagando, agora, reserva, aoSalvar, aoPedirApagar, aoMudarLa, aoProdutosMudarem, aoFalharImagem, aoFechar, aoEditar = null }: Props) {
+export function GavetaFoto({ foto, produtos, podeMudar, apagando, agora, reserva, aoSalvar, aoPedirApagar, aoMudarLa, aoProdutosMudarem, aoFalharImagem, aoFechar, momentos = null, aoEditar = null }: Props) {
   const ids = useId();
   const campo = useRef<HTMLSelectElement>(null);
   const fecharBt = useRef<HTMLButtonElement>(null);
@@ -154,8 +157,33 @@ export function GavetaFoto({ foto, produtos, podeMudar, apagando, agora, reserva
           {foto.montage_id && (
             <p className="ft-nota">
               <Icone nome="video" pequeno />
-              <span>Montado pelo Liame a partir das Fotos da marca. Dali, vai para um post (Reels), um Story ou uma campanha nova, com a aprovação de sempre.</span>
+              <span>
+                {momentos
+                  ? `Montado pelo Liame com o modelo Os melhores momentos, a partir de ${momentos.videos === 1 ? '1 vídeo' : `${momentos.videos} vídeos`} de Fotos. Não é vídeo gerado por IA: são pedaços dos vídeos da loja, como ela gravou, com as legendas por cima.`
+                  : 'Montado pelo Liame a partir das Fotos da marca. Dali, vai para um post (Reels), um Story ou uma campanha nova, com a aprovação de sempre.'}
+              </span>
             </p>
+          )}
+          {momentos && (
+            <section className="vm-det" aria-labelledby={`${ids}-det-t`}>
+              <h3 className="rotulo-marca" id={`${ids}-det-t`}>
+                Cortes escolhidos pelo Social media (IA)
+              </h3>
+              <p className="campo-dica">O Social media viu os quadros dos vídeos e escolheu os pedaços, a ordem e as legendas; o Compliance conferiu as legendas. As imagens são as da loja.</p>
+              <ol className="vm-det-lista">
+                {momentos.cortes.map((c, i) => (
+                  <li key={`${i}-${c.start_ms}`}>
+                    {c.capa ? <img src={c.capa} alt="" decoding="async" loading="lazy" referrerPolicy="no-referrer" /> : <span className="vm-det-sem" aria-hidden="true" />}
+                    <span>
+                      <b>
+                        {i + 1}. Vídeo {c.video + 1} · de {tempoTxt(c.start_ms)} a {tempoTxt(c.end_ms)}
+                      </b>
+                      <small>{c.caption ? `“${c.caption}”` : 'sem legenda'}</small>
+                    </span>
+                  </li>
+                ))}
+              </ol>
+            </section>
           )}
           {ehDeitado && (
             <p className="ft-nota ft-nota--aviso">

@@ -1,4 +1,5 @@
 import { type BrandPhoto, VIDEO_MONTAGE_LIMITS, VIDEO_TEMPLATE_RULES, type VideoFormat, type VideoMontageResponse, type VideoTemplate, type VideoTextsResponse } from '@liame/contracts';
+import { segundosTxt, tempoTxt, totalMs } from './momentos';
 
 // Os textos e as regras da tela do vídeo montado pelo Liame (A6 · Z15, parte 4; P43 aprovado em 11/11/2026): os nomes
 // dos modelos e dos formatos, as durações, o que cada fase diz (na gaveta e no cartão de Fotos) e o porquê de o
@@ -8,7 +9,9 @@ export const MODELOS: Record<VideoTemplate, { nome: string; desc: string }> = {
   destaque: { nome: 'Produto em destaque', desc: 'Uma foto, com zoom lento, o nome e o preço.' },
   combo: { nome: 'Combo com preço', desc: 'De 2 a 4 fotos em sequência, e o preço no fim.' },
   novidade: { nome: 'Novidade da casa', desc: 'Uma foto ou um vídeo, a faixa “Novidade” e a chamada.' },
+  momentos: { nome: 'Os melhores momentos', desc: 'De 1 a 4 vídeos: o Social media escolhe os cortes, a ordem e a legenda.' },
 };
+/** Os modelos da gaveta. "Os melhores momentos" (A6 · Z16) entram com a tela dos cortes (P46), quando o dono aprovar. */
 export const ORDEM_DOS_MODELOS: VideoTemplate[] = ['destaque', 'combo', 'novidade'];
 
 export const FORMATOS: Record<VideoFormat, { nome: string; w: number; h: number }> = {
@@ -28,14 +31,14 @@ export const ordinal = (n: number) => `${n}º`;
 /** As fotos e os vídeos de Fotos que o modelo aceita: prontos, da loja (o vídeo montado não entra de novo). */
 export function aceitas(fotos: readonly BrandPhoto[], modelo: VideoTemplate): BrandPhoto[] {
   const regra = VIDEO_TEMPLATE_RULES[modelo];
-  return fotos.filter((f) => !f.montage_id && !f.edited && (regra.video || f.kind !== 'video'));
+  return fotos.filter((f) => !f.montage_id && !f.edited && (regra.onlyVideo ? f.kind === 'video' : regra.video || f.kind !== 'video'));
 }
 
 /** Quantas o modelo leva, como a tela escreve. */
 export function quantasLeva(modelo: VideoTemplate): string {
   const r = VIDEO_TEMPLATE_RULES[modelo];
   if (r.min === r.max) return r.video ? '1 foto ou 1 vídeo' : '1 foto';
-  return `de ${r.min} a ${r.max} fotos, na ordem em que entram no vídeo`;
+  return `de ${r.min} a ${r.max} ${r.onlyVideo ? 'vídeos' : 'fotos'}, na ordem em que entram no vídeo`;
 }
 
 /** A frase da fila, a mesma na gaveta e no cartão. */
@@ -89,9 +92,28 @@ export function semIaTxt(r: VideoTextsResponse): string {
 }
 
 /** O rótulo da prévia para quem não vê o quadro. */
-export function rotuloDaPrevia(p: { modelo: VideoTemplate; formato: VideoFormat; dur: number; midias: { video: boolean; produto: string }[]; titulo: string; preco: string; chamada: string; logo: boolean; somOriginal: boolean }): string {
+export function rotuloDaPrevia(p: {
+  modelo: VideoTemplate;
+  formato: VideoFormat;
+  dur: number;
+  midias: { video: boolean; produto: string }[];
+  titulo: string;
+  preco: string;
+  chamada: string;
+  logo: boolean;
+  somOriginal: boolean;
+  cortes?: readonly { media: number; start_ms: number; end_ms: number; caption: string }[];
+}): string {
   const regra = VIDEO_TEMPLATE_RULES[p.modelo];
+  if (p.modelo === 'momentos') {
+    const cortes = p.cortes ?? [];
+    const lista = cortes.map((c, i) => `corte ${i + 1}, vídeo ${c.media + 1} de ${tempoTxt(c.start_ms)} a ${tempoTxt(c.end_ms)}${c.caption ? `, “${c.caption}”` : ''}`).join('; ');
+    const n = p.midias.length;
+    const oque = cortes.length ? `${cortes.length} cortes de ${n === 1 ? '1 vídeo' : `${n} vídeos`}, na ordem: ${lista}` : n ? 'ainda sem os cortes' : 'ainda sem vídeo';
+    const tempo = cortes.length ? `${segundosTxt(totalMs(cortes))} de ${p.dur} segundos` : duracaoTxt(p.dur);
+    return `Prévia do vídeo: ${MODELOS.momentos.nome}, ${FORMATOS[p.formato].nome}, ${tempo}: ${oque}${p.logo ? ', com a logo' : ''}${p.somOriginal && cortes.length ? ', com o som original de cada corte' : ', sem música'}.`;
+  }
   const oque = p.midias.length ? p.midias.map((m, i) => `${p.midias.length > 1 ? `${ordinal(i + 1)} ` : ''}${m.video ? 'o vídeo' : 'a foto'} de ${m.produto}`).join(', ') : 'ainda sem foto';
   const textos = [p.titulo && `o título “${p.titulo}”`, regra.price && p.preco && `o preço “${p.preco}”`, p.chamada && `a chamada “${p.chamada}”`].filter(Boolean);
-  return `Prévia do vídeo: ${MODELOS[p.modelo].nome}, ${FORMATOS[p.formato].nome}, ${duracaoTxt(p.dur)}: ${oque}${regra.video ? ', a faixa “Novidade”' : ''}${textos.length ? `, ${textos.join(', ')}` : ''}${p.logo ? ', com a logo' : ''}${p.somOriginal ? ', com o som do vídeo original' : ', sem música'}.`;
+  return `Prévia do vídeo: ${MODELOS[p.modelo].nome}, ${FORMATOS[p.formato].nome}, ${duracaoTxt(p.dur)}: ${oque}${p.modelo === 'novidade' ? ', a faixa “Novidade”' : ''}${textos.length ? `, ${textos.join(', ')}` : ''}${p.logo ? ', com a logo' : ''}${p.somOriginal ? ', com o som do vídeo original' : ', sem música'}.`;
 }

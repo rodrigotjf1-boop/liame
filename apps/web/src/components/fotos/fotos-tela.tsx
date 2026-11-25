@@ -22,6 +22,7 @@ import { GavetaEditarFoto } from './gaveta-editar-foto';
 import { GavetaFoto } from './gaveta-foto';
 import { CartaoDaMontagem } from './video-montado/cartao';
 import { GavetaMontarVideo } from './video-montado/gaveta';
+import { momentosDoVideo } from './video-montado/momentos';
 import {
   aceita,
   conferirArquivo,
@@ -809,6 +810,7 @@ export function FotosTela() {
         <GavetaFoto
           key={`gaveta-${fotoAberta.id}`}
           foto={fotoAberta}
+          momentos={momentosDoVideo(fotoAberta, montagens?.items ?? [], fotos)}
           produtos={dados.products}
           podeMudar={dados.can_manage}
           apagando={apagar === fotoAberta.id}
@@ -859,6 +861,7 @@ export function FotosTela() {
           iniciais={iniciais}
           fotos={fotos}
           temLogo={montagens.has_logo}
+          momentos={montagens.moments_enabled}
           hoje={montagens.today}
           pedido={montar.pedido}
           reserva={titulo}
