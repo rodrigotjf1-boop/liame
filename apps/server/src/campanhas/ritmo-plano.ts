@@ -54,9 +54,13 @@ export function janelaDoRitmo(horarios: { source: string; ads_from: string; to: 
 
 /** A janela como as respostas da API a escrevem (`from`, `to`); nula: os anúncios ligados o dia todo. */
 export const janelaNaResposta = (j: JanelaDoRitmo | null): { from: string; to: string } | null => (j ? { from: j.de, to: j.ate } : null);
-/** As ferramentas do ritmo no trilho de ações: o pedido da semana e o passo de um dia. */
+/**
+ * As ferramentas do ritmo no trilho de ações: o pedido da semana, o passo da verba de um dia e o passo de situação do
+ * horário (R7, parte 2b: ligar, pausar e deixar ligado).
+ */
 export const FERRAMENTA_DO_RITMO = 'ritmo_da_semana';
 export const FERRAMENTA_DA_VERBA_DO_DIA = 'orcamento_do_ritmo';
+export const FERRAMENTA_DA_SITUACAO_DO_RITMO = 'situacao_do_ritmo';
 
 /**
  * O motivo do passo que não sai porque a campanha não está como o Liame deixou (D-RG-63): alguém mudou a verba ou
@@ -64,8 +68,12 @@ export const FERRAMENTA_DA_VERBA_DO_DIA = 'orcamento_do_ritmo';
  */
 export const FORA_DO_RITMO = 'A campanha não está como o Liame deixou (a verba ou a situação mudou por fora): ela sai do ritmo e fica como está.';
 
-/** O passo de um dia: o ritmo, o dia (no fuso da loja) e o tipo (`ritmo`: a verba do dia; `volta`: a verba de antes). */
-export type PassoDoRitmo = { ritmo: string; dia: string; tipo: 'ritmo' | 'volta' };
+/**
+ * O passo de um dia: o ritmo, o dia (no fuso da loja) e o tipo (`ritmo`: a verba do dia; `volta`: a verba de antes;
+ * com o horário, R7 parte 2b: `ligar` e `pausar`, no começo e no fim da janela do dia, e `soltar`, que deixa ligado o
+ * dia todo no fim do ritmo).
+ */
+export type PassoDoRitmo = { ritmo: string; dia: string; tipo: 'ritmo' | 'volta' | 'ligar' | 'pausar' | 'soltar' };
 
 /** Até quantas campanhas entram num ritmo (o resto fica fora, com o motivo). */
 export const CAMPANHAS_NO_RITMO = 30;

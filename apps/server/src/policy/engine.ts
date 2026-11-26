@@ -23,7 +23,7 @@ export const VARIACAO_MAXIMA_DA_VERBA_PCT = 10;
  */
 export const PLATFORM_POLICY: LoadedPolicy = {
   source: 'platform',
-  version: 17,
+  version: 18,
   document: {
     rules: [
       // Conteúdo político bloqueado por padrão (ADR-007; TSE 23.755/2026, base §6.1).
@@ -130,6 +130,16 @@ export const PLATFORM_POLICY: LoadedPolicy = {
       // do teste (a função, o teste aprovado e em criação, o código e a regra exatamente como aprovados, a loja do teste)
       // é conferido no pedido e de novo na execução. Só no Regem.
       { type: 'autonomy', action: 'cupom.criar_do_teste', provider: 'regem', actor: 'agent', mode: 'AUTO' },
+      // v18 (plano da região, R7, parte 2b; D-RG-61 e D-RG-104): o passo de situação do ritmo aprovado (ligar a campanha
+      // no começo da janela dos pedidos, pausar no fim, deixar ligada no fim do ritmo) sai sem outro pedido de aprovação,
+      // só quando quem pede é o funcionário de IA, pelo ritmo que a pessoa aprovou com o código do app, que mostra a
+      // janela. As ações são próprias (`horario.*`): a regra não alcança o pausar e o retomar comuns (`campanha.*`,
+      // `conjunto.*`). O portão do ritmo (as funções, o ritmo aprovado, o momento da janela e a campanha como o Liame
+      // deixou) é conferido no pedido e de novo na execução. O limite por hora no mesmo objeto é a proteção contra um
+      // defeito que ligasse e pausasse sem parar: o horário dá no máximo dois passos por dia. Só na Meta.
+      { type: 'rate_limit', action: 'horario.*', provider: 'meta_ads', per: 'resource', max: 3, window_minutes: 60 },
+      { type: 'autonomy', action: 'horario.ligar', provider: 'meta_ads', actor: 'agent', mode: 'AUTO' },
+      { type: 'autonomy', action: 'horario.pausar', provider: 'meta_ads', actor: 'agent', mode: 'AUTO' },
     ],
   },
 };

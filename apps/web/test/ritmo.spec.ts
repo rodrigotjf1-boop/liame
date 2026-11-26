@@ -8,6 +8,7 @@ import {
   diaEscrito,
   ehPedidoDoRitmo,
   fraseDoRitmo,
+  horarioDoDia,
   idDoRitmo,
   janelaDosAnuncios,
   linhasDoRitmoNaRegiao,
@@ -94,6 +95,11 @@ describe('o ritmo da semana em Aprovações (R7, parte 1b-3b)', () => {
     expect(tituloDoPedido('orcamento.ritmo_aumentar', alvo)).toBe('Aumentar a verba da campanha “Combo sexta”, pelo ritmo da semana');
     expect(tituloDoPedido('orcamento.ritmo_reduzir', alvo)).toBe('Reduzir a verba da campanha “Combo sexta”, pelo ritmo da semana');
     expect(tituloDoPedido('orcamento.aumentar', alvo)).toBe('Aumentar a verba da campanha “Combo sexta”');
+    // O horário do ritmo (R7, parte 2b): ligar e pausar na janela, com a origem dita; o pausar comum segue igual.
+    expect(tituloDoPedido('horario.ligar', alvo)).toBe('Ligar a campanha “Combo sexta”, pelo horário do ritmo da semana');
+    expect(tituloDoPedido('horario.pausar', alvo)).toBe('Pausar a campanha “Combo sexta”, pelo horário do ritmo da semana');
+    expect(tituloDoPedido('campanha.pausar', alvo)).toBe('Pausar a campanha “Combo sexta”');
+    expect(origemDoAnuncio({ tool: 'situacao_do_ritmo', undoes: null, recommendation: null, agent_key: 'trafego' } as never)).toBe('pelo horário do ritmo da semana que uma pessoa aprovou');
   });
 
   it('o dia: quanto muda sobre a verba de hoje e o porquê (os pedidos, o setor, a chuva e a data)', () => {
@@ -248,6 +254,10 @@ describe('o ritmo da semana na Verba do mês (R7, parte 1b-3b)', () => {
     expect(linha({ on: '2026-11-25', complete: true, warnings: ['ritmo_sem_volta', 'ritmo_campanha_saiu', 'ritmo_gasto_acima'] })).toBe(
       'Conferido em 25/11: 3 avisos na Atenção (gasto acima do que o ritmo permite, verba que ainda não voltou à de antes e saída do ritmo).',
     );
+    // O horário (R7, parte 2b): a pausada que o Liame não conseguiu ligar de novo vem primeiro.
+    expect(linha({ on: '2026-11-25', complete: true, warnings: ['ritmo_gasto_acima', 'ritmo_pausada'] })).toBe(
+      'Conferido em 25/11: 2 avisos na Atenção (pausada pelo horário sem conseguir ligar de novo e gasto acima do que o ritmo permite).',
+    );
     // A conta falhou: os avisos são os da conferência de antes, e a rotina tenta de novo.
     expect(linha({ on: '2026-11-25', complete: false, warnings: [] })).toBe('A conferência de 25/11 não terminou, e o Liame tenta de novo depois de uma hora.');
     expect(linha({ on: '2026-11-25', complete: false, warnings: ['ritmo_sem_volta'] })).toBe(
@@ -347,6 +357,37 @@ describe('desfazer um passo do ritmo (R7, parte 1b-3b)', () => {
     );
     expect(avisoDoDesfazerNoRitmo(pedido('orcamento_ajustar', 'campanha'))).toBeNull();
     expect(avisoDoDesfazerNoRitmo(pedido('orcamento_aumentar', 'campanha'))).toBeNull();
+    // O passo do horário (R7, parte 2b): desfazer devolve a situação de antes, e a campanha sai do ritmo.
+    expect(avisoDoDesfazerNoRitmo(pedido('situacao_do_ritmo', 'campanha'))).toBe(
+      'Este é um passo do horário do ritmo da semana: desfazer devolve a campanha “Smash em dobro” à situação de antes, e ela sai do ritmo. O Liame não liga, não pausa nem muda mais a verba dela nesta semana.',
+    );
+    expect(avisoDoDesfazerNoRitmo(pedido('situacao_do_ritmo', 'conjunto'))).toContain('e ele sai do ritmo');
+  });
+});
+
+describe('o horário do ritmo na trilha (R7, parte 2b)', () => {
+  const passo = (kind: string, status: string, day = '2026-11-17') => ({ day, kind, status, target_micros: 0, expected_micros: 0, reason: null, action_id: null, at: '2026-11-17T21:00:00.000Z' });
+  const janela = { from: '17:00', to: '22:00' };
+
+  it('o que o horário fez no dia: ligou, pausou, na fila e o que não saiu', () => {
+    expect(horarioDoDia([], janela)).toBeNull();
+    expect(horarioDoDia([passo('ligar', 'feito'), passo('pausar', 'feito')], janela)).toEqual({ texto: '17:00 ligou · 22:00 pausou', falhou: false, naFila: false });
+    expect(horarioDoDia([passo('ligar', 'igual'), passo('pausar', 'pedido')], janela)).toEqual({ texto: '17:00 ligou · 1 passo do horário na fila', falhou: false, naFila: true });
+    expect(horarioDoDia([passo('ligar', 'bloqueado'), passo('pausar', 'fora')], janela)).toEqual({ texto: '2 passos do horário não saíram', falhou: true, naFila: false });
+  });
+
+  it('o dia da trilha junta a verba e o horário; depois da semana, os anúncios ficam ligados o dia todo', () => {
+    const [a] = ritmo().campaigns as [Ritmo['campaigns'][number]];
+    const comHorario = ritmo({
+      status: 'aprovado',
+      today: '2026-11-17',
+      approved_at: '2026-11-15T21:42:00.000Z',
+      ads_on: janela,
+      campaigns: [{ ...a, state: 'no_ritmo', steps: [passo('ritmo', 'feito', '2026-11-16'), passo('ligar', 'feito', '2026-11-16'), passo('pausar', 'bloqueado', '2026-11-16')] }],
+    });
+    const trilha = trilhaDoRitmo(comHorario);
+    expect(trilha[2]).toMatchObject({ estado: 'falha', sub: '1 campanha na verba do dia · 17:00 ligou · 1 passo do horário não saiu' });
+    expect(trilha.at(-1)!.titulo).toBe(nbsp('Depois de 22/11: a verba volta à de antes (R$ 100,00 por dia), e os anúncios ficam ligados o dia todo'));
   });
 });
 

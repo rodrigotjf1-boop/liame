@@ -77,7 +77,7 @@ describe('a ferramenta `cupom_do_teste` e a política', () => {
 
   it('a política da distribuição (versão 17): automático só para o funcionário, só no Regem; o cupom de campanha segue em Aprovação', () => {
     const proposta = (action: string, actor: 'human' | 'agent', provider = 'regem') => ({ action, provider, actor, riskLevel: 'R1' as const, budgetImpact: 'none' as const, valueMicros: null, currentValueMicros: null });
-    expect(PLATFORM_POLICY.version).toBe(17);
+    expect(PLATFORM_POLICY.version).toBe(18);
     expect(chooseMode([PLATFORM_POLICY], proposta('cupom.criar_do_teste', 'agent') as never).mode).toBe('AUTO');
     expect(chooseMode([PLATFORM_POLICY], proposta('cupom.criar_do_teste', 'human') as never).mode).not.toBe('AUTO');
     expect(chooseMode([PLATFORM_POLICY], proposta('cupom.criar_do_teste', 'agent', 'meta_ads') as never).mode).not.toBe('AUTO');

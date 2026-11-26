@@ -30,12 +30,23 @@ export const FOLGA_DO_GASTO_DO_RITMO_PCT = 5;
 
 export interface PassoGuardado {
   dia: string;
-  tipo: 'ritmo' | 'volta';
+  /**
+   * `ritmo` ou `volta` (a verba). O passo de situação do horário (R7, parte 2b) só entra aqui quando tirou o objeto do
+   * ritmo (`fora`): a verba dele não muda, e ele não conta nas contas da verba.
+   */
+  tipo: 'ritmo' | 'volta' | 'ligar' | 'pausar' | 'soltar';
   /** `pedido`, `feito`, `fora`, `bloqueado` ou `igual`. */
   situacao: string;
   /** A verba que o Liame esperava encontrar e a que o passo deixa. */
   deMicros: number;
   paraMicros: number;
+}
+
+/** Um passo de situação do horário (R7, parte 2b): ligar, pausar ou deixar ligado, e em que pé ficou. */
+export interface PassoDoHorario {
+  dia: string;
+  tipo: 'ligar' | 'pausar' | 'soltar';
+  situacao: string;
 }
 
 export interface ObjetoNoRitmo {
@@ -47,6 +58,8 @@ export interface ObjetoNoRitmo {
   partidaMicros: number;
   /** Os passos deste objeto neste ritmo, do mais antigo ao mais novo. */
   passos: PassoGuardado[];
+  /** Os passos de situação do horário neste ritmo, do mais antigo ao mais novo (R7, parte 2b); ausente: nenhum. */
+  horario?: PassoDoHorario[];
 }
 
 export interface RitmoComPassos {
@@ -69,7 +82,20 @@ export type AvisoDoRitmo = { ritmo: string; acao: string | null; recurso: string
   | { tipo: 'saiu'; dia: string }
   | { tipo: 'nao_voltou'; semana: { de: string; ate: string }; parado: boolean; deixadaMicros: number; baseMicros: number }
   | { tipo: 'gasto_acima'; janela: { de: string; ate: string }; gasto: bigint; permitido: bigint }
+  // O horário (R7, parte 2b): o Liame pausou o objeto fora da janela e não conseguiu ligar de novo (a escrita na Meta
+  // desligada, a trava geral): ele segue pausado, sem anúncios. `dia`: o dia da tentativa que não saiu.
+  | { tipo: 'pausada'; dia: string }
 );
+
+/**
+ * O objeto que o Liame pausou pelo horário e não conseguiu ligar de novo: depois do último "pausar" feito, um "ligar" ou
+ * "soltar" que ficou bloqueado (e nenhum feito). Devolve o dia da tentativa bloqueada, ou nulo.
+ */
+export function pausadaSemLigar(horario: readonly PassoDoHorario[]): string | null {
+  const ultimo = horario.findLastIndex((p) => p.situacao === 'feito');
+  if (ultimo < 0 || horario[ultimo]!.tipo !== 'pausar') return null;
+  return horario.slice(ultimo + 1).findLast((p) => (p.tipo === 'ligar' || p.tipo === 'soltar') && p.situacao === 'bloqueado')?.dia ?? null;
+}
 
 const feitosDe = (passos: readonly PassoGuardado[]) => passos.filter((p) => p.situacao === 'feito');
 
@@ -135,6 +161,9 @@ export function avisosDoRitmo(ritmos: readonly RitmoComPassos[], hoje: string, l
       if (hoje <= ritmo.semana.ate) avisos.push({ ...base, tipo: 'saiu', dia: fora.dia });
       continue;
     }
+    // O horário (R7, parte 2b): pausado pelo Liame, sem conseguir ligar de novo. Vale enquanto for assim.
+    const semLigar = pausadaSemLigar(objeto.horario ?? []);
+    if (semLigar) avisos.push({ ...base, tipo: 'pausada', dia: semLigar });
     const naSemana = ritmo.situacao === 'aprovado' && hoje <= ritmo.semana.ate;
     // A rotina andou: um passo feito (ou que não precisou mudar nada) ontem ou hoje, ou o pedido de hoje ainda na fila.
     const andou = objeto.passos.some((p) => (p.dia >= ontem && (p.situacao === 'feito' || p.situacao === 'igual')) || (p.dia === hoje && p.situacao === 'pedido'));
@@ -157,19 +186,20 @@ export function avisosDoRitmo(ritmos: readonly RitmoComPassos[], hoje: string, l
 
 // ------------------------------------------------------------------ as frases
 
-const ALVO: Record<string, { o: string; ela: string; dela: string }> = {
-  campanha: { o: 'A campanha', ela: 'ela', dela: 'dela' },
-  conjunto: { o: 'O conjunto', ela: 'ele', dela: 'dele' },
+const ALVO: Record<string, { o: string; ela: string; dela: string; pausada: string }> = {
+  campanha: { o: 'A campanha', ela: 'ela', dela: 'dela', pausada: 'pausada' },
+  conjunto: { o: 'O conjunto', ela: 'ele', dela: 'dele', pausada: 'pausado' },
 };
 const diaMes = (dia: string) => `${dia.slice(8, 10)}/${dia.slice(5, 7)}`;
 
-export type TipoDoAvisoDoRitmo = 'ritmo_campanha_saiu' | 'ritmo_sem_volta' | 'ritmo_gasto_acima';
+export type TipoDoAvisoDoRitmo = 'ritmo_campanha_saiu' | 'ritmo_sem_volta' | 'ritmo_gasto_acima' | 'ritmo_pausada';
 
 /** O tipo do aviso na Atenção (e na linha do ritmo na Verba do mês) pelo tipo da conta. */
 export const TIPO_DO_AVISO_DO_RITMO: Readonly<Record<AvisoDoRitmo['tipo'], TipoDoAvisoDoRitmo>> = {
   saiu: 'ritmo_campanha_saiu',
   nao_voltou: 'ritmo_sem_volta',
   gasto_acima: 'ritmo_gasto_acima',
+  pausada: 'ritmo_pausada',
 };
 
 /**
@@ -190,8 +220,19 @@ export function textoDoAvisoDoRitmo(
       kind,
       severity: 'info',
       title: `${quem} saiu do ritmo da semana`,
-      detail: `Em ${diaMes(a.dia)}, a verba ${alvo.dela} na Meta não era a que o Liame tinha deixado, ou ${alvo.ela} não estava ativa: alguém mexeu por fora. O Liame não muda mais a verba ${alvo.dela} nesta semana, e ${alvo.ela} fica como está.${quando}`,
+      // Com o horário (R7, parte 2b), fora da janela ela fica pausada pelo próprio Liame: "mexida por fora" é estar
+      // diferente do que ele deixou, ligada ou pausada.
+      detail: `Em ${diaMes(a.dia)}, a verba ${alvo.dela} na Meta não era a que o Liame tinha deixado, ou ${alvo.ela} não estava ligad${alvo.pausada.slice(-1)} ou ${alvo.pausada} como ele deixou: alguém mexeu por fora. O Liame não muda mais a verba ${alvo.dela} nesta semana, e ${alvo.ela} fica como está.${quando}`,
       action: `Confira na Meta se a verba ${alvo.dela} está como você quer.`,
+    };
+  }
+  if (a.tipo === 'pausada') {
+    return {
+      kind,
+      severity: 'atencao',
+      title: `${quem} está ${alvo.pausada} pelo horário do ritmo, e o Liame não conseguiu ligar de novo`,
+      detail: `O Liame ${alvo.pausada === 'pausada' ? 'a' : 'o'} pausou fora da janela dos pedidos e, em ${diaMes(a.dia)}, não conseguiu ligar de novo: a escrita na Meta pode estar desligada, ou a trava geral, acionada. Enquanto isso, ${alvo.ela} não mostra anúncios.${quando}`,
+      action: `Ligue ${alvo.ela} na Meta. Depois, veja o ritmo em Aprovações.`,
     };
   }
   if (a.tipo === 'nao_voltou') {
@@ -253,7 +294,7 @@ export async function avisosDoRitmoDasMarcas(tx: Tx, marcas: readonly string[], 
   ).rows;
   if (!linhas.length) return [];
   const passos = (
-    await tx.execute<{ rhythm_id: string; resource_id: string; dia: string; kind: 'ritmo' | 'volta'; status: string; target_micros: string; expected_micros: string }>(sql`
+    await tx.execute<{ rhythm_id: string; resource_id: string; dia: string; kind: PassoGuardado['tipo']; status: string; target_micros: string; expected_micros: string }>(sql`
       select rhythm_id, resource_id, day::text as dia, kind, status, target_micros::text as target_micros, expected_micros::text as expected_micros
         from liame.budget_rhythm_step
        where rhythm_id in ${linhas.map((l) => l.id)}
@@ -279,9 +320,13 @@ export async function avisosDoRitmoDasMarcas(tx: Tx, marcas: readonly string[], 
           nome: c.nome,
           baseMicros: c.base_micros,
           partidaMicros: c.partida_micros ?? c.base_micros,
+          // Os passos da verba; os de situação do horário (R7, parte 2b) só quando tiraram o objeto do ritmo.
           passos: passos
-            .filter((p) => p.rhythm_id === l.id && p.resource_id === c.recurso)
+            .filter((p) => p.rhythm_id === l.id && p.resource_id === c.recurso && (p.kind === 'ritmo' || p.kind === 'volta' || p.status === 'fora'))
             .map((p) => ({ dia: p.dia, tipo: p.kind, situacao: p.status, deMicros: Number(p.expected_micros), paraMicros: Number(p.target_micros) })),
+          horario: passos
+            .filter((p) => p.rhythm_id === l.id && p.resource_id === c.recurso && (p.kind === 'ligar' || p.kind === 'pausar' || p.kind === 'soltar'))
+            .map((p) => ({ dia: p.dia, tipo: p.kind as PassoDoHorario['tipo'], situacao: p.status })),
         })),
       });
     }

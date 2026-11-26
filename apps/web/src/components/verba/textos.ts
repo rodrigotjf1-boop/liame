@@ -623,6 +623,7 @@ const SITUACAO_DO_RITMO: Record<string, string> = { aprovado: 'aprovado', parado
 
 /** Os avisos do ritmo na frase da conferência, na ordem da Atenção. */
 const AVISO_DO_RITMO: ReadonlyArray<[string, string]> = [
+  ['ritmo_pausada', 'pausada pelo horário sem conseguir ligar de novo'],
   ['ritmo_gasto_acima', 'gasto acima do que o ritmo permite'],
   ['ritmo_sem_volta', 'verba que ainda não voltou à de antes'],
   ['ritmo_campanha_saiu', 'saída do ritmo'],

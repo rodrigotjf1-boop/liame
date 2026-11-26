@@ -68,8 +68,12 @@ export function alvoNaFrase(a: AcaoDeAnuncio): { o: string; do: string; no: stri
  * nos outros pedidos, nada.
  */
 export function avisoDoDesfazerNoRitmo(a: AcaoDeAnuncio): string | null {
-  if (a.tool !== 'orcamento_do_ritmo') return null;
   const alvo = alvoNaFrase(a);
+  // O passo do horário (R7, parte 2b): desfazer devolve a situação de antes (ligada ou pausada), e o objeto sai do ritmo.
+  if (a.tool === 'situacao_do_ritmo') {
+    return `Este é um passo do horário do ritmo da semana: desfazer devolve ${alvo.o} à situação de antes, e ${alvo.fem ? 'ela' : 'ele'} sai do ritmo. O Liame não liga, não pausa nem muda mais a verba ${alvo.fem ? 'dela' : 'dele'} nesta semana.`;
+  }
+  if (a.tool !== 'orcamento_do_ritmo') return null;
   return `Este é um passo do ritmo da semana: desfazer devolve a verba de antes deste dia, e ${alvo.o} sai do ritmo. O Liame não muda mais a verba ${alvo.fem ? 'dela' : 'dele'} nesta semana.`;
 }
 
@@ -235,6 +239,8 @@ export function origemDoAnuncio(a: Acao): string | null {
   if (a.undoes) return 'é a volta de outro pedido';
   // O passo de um dia do ritmo da semana (plano da região, R7): sai sem outro pedido de aprovação, pelo ritmo aprovado.
   if (a.tool === 'orcamento_do_ritmo') return 'pelo ritmo da semana que uma pessoa aprovou';
+  // O horário do ritmo (R7, parte 2b): ligar e pausar na janela que a pessoa aprovou junto com a semana.
+  if (a.tool === 'situacao_do_ritmo') return 'pelo horário do ritmo da semana que uma pessoa aprovou';
   return a.recommendation && !a.agent_key ? 'pela recomendação do Gestor de tráfego' : null;
 }
 

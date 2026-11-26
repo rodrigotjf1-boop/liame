@@ -38,7 +38,7 @@ import { buscarCep, cepNormalizado, type EnderecoDoCep } from './cep.js';
 import { FONTE_CENSO_BAIRRO } from './censo.js';
 import { bairroDaArea, type Coordenada, nomeComparavel, procuraDeCoordenada } from './coordenada.js';
 import { MUNICIPIOS_DO_IPCA, RMS_DO_IPCA } from './ibge.js';
-import { controleDoRitmo } from '../campanhas/ritmo-passos.js';
+import { controleDoRitmo, pausadaPeloRitmo } from '../campanhas/ritmo-passos.js';
 import { EstadoDoRitmo, FLAG_DO_HORARIO, FLAG_DO_RITMO, janelaDoRitmo, janelaNaResposta } from '../campanhas/ritmo-plano.js';
 import { carregarPoliticas } from '../policy/policy.service.js';
 import { tetoDaVerba } from '../policy/teto-da-verba.js';
@@ -896,6 +896,10 @@ export class RegiaoService {
     const emTeste = sql`exists (select 1 from liame.campaign_test t
                                  where t.tenant_id = c.tenant_id and t.ad_account_id = c.connected_account_id and t.meta_campaign_id = c.external_id
                                    and t.status in ('criando', 'pronto', 'rodando'))`;
+    // A pausada pelo próprio Liame no horário do ritmo (R7, parte 2b) conta como ativa: fora da janela, ela está pausada
+    // por ele, e não por uma pessoa (D-RG-64 tira só as pausadas por uma pessoa).
+    const campanhaAtiva = sql`(c.status = 'ativa' or ${pausadaPeloRitmo(sql`c.tenant_id`, sql`'campanha:' || c.external_id`)})`;
+    const conjuntoAtivo = sql`(g.status = 'ativa' or ${pausadaPeloRitmo(sql`g.tenant_id`, sql`'conjunto:' || g.external_id`)})`;
     const candidatas = (
       await tx.execute<{ id: string; nivel: string; nome: string; verba: string; recurso: string; conta: string; em_teste: boolean }>(sql`
         select c.id, 'campanha' as nivel, c.name as nome, c.daily_budget_micros::text as verba, 'campanha:' || c.external_id as recurso, a.id as conta,
@@ -903,7 +907,7 @@ export class RegiaoService {
           from liame.campaign c
           join liame.connected_account a on a.id = c.connected_account_id and a.tenant_id = c.tenant_id
          where a.brand_id = ${brandId} and a.provider = 'meta_ads' and ${contaConectada('a')}
-           and c.status = 'ativa' and c.daily_budget_micros > 0 and c.lifetime_budget_micros is null
+           and ${campanhaAtiva} and c.daily_budget_micros > 0 and c.lifetime_budget_micros is null
            and not exists (select 1 from liame.ad_campaign_new n
                             where n.tenant_id = c.tenant_id and n.meta_campaign_id = c.external_id and n.objective in ('alcance', 'seguidores'))
         union all
@@ -913,7 +917,7 @@ export class RegiaoService {
           join liame.campaign c on c.id = g.campaign_id
           join liame.connected_account a on a.id = c.connected_account_id and a.tenant_id = c.tenant_id
          where a.brand_id = ${brandId} and a.provider = 'meta_ads' and ${contaConectada('a')}
-           and c.status = 'ativa' and g.status = 'ativa' and c.daily_budget_micros is null and c.lifetime_budget_micros is null and g.daily_budget_micros > 0
+           and c.status = 'ativa' and ${conjuntoAtivo} and c.daily_budget_micros is null and c.lifetime_budget_micros is null and g.daily_budget_micros > 0
            and not exists (select 1 from liame.ad_campaign_new n
                             where n.tenant_id = c.tenant_id and n.meta_campaign_id = c.external_id and n.objective in ('alcance', 'seguidores'))
          order by nome, id`)

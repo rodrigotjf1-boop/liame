@@ -160,9 +160,19 @@ describe('os avisos do ritmo (R7, parte 1b-3c)', () => {
       kind: 'ritmo_campanha_saiu',
       severity: 'info',
       title: 'A campanha "Smash em dobro" saiu do ritmo da semana',
-      detail: 'Em 17/11, a verba dela na Meta não era a que o Liame tinha deixado, ou ela não estava ativa: alguém mexeu por fora. O Liame não muda mais a verba dela nesta semana, e ela fica como está.',
+      detail: 'Em 17/11, a verba dela na Meta não era a que o Liame tinha deixado, ou ela não estava ligada ou pausada como ele deixou: alguém mexeu por fora. O Liame não muda mais a verba dela nesta semana, e ela fica como está.',
       action: 'Confira na Meta se a verba dela está como você quer.',
     });
+    expect(textoDoAvisoDoRitmo({ ...base, recurso: 'conjunto:222', tipo: 'saiu', dia: '2026-11-17' }, reais).detail).toContain('ou ele não estava ligado ou pausado como ele deixou');
+    // O horário (R7, parte 2b): pausada pelo Liame, e ele não conseguiu ligar de novo.
+    expect(textoDoAvisoDoRitmo({ ...base, tipo: 'pausada', dia: '2026-12-02' }, reais)).toEqual({
+      kind: 'ritmo_pausada',
+      severity: 'atencao',
+      title: 'A campanha "Smash em dobro" está pausada pelo horário do ritmo, e o Liame não conseguiu ligar de novo',
+      detail: 'O Liame a pausou fora da janela dos pedidos e, em 02/12, não conseguiu ligar de novo: a escrita na Meta pode estar desligada, ou a trava geral, acionada. Enquanto isso, ela não mostra anúncios.',
+      action: 'Ligue ela na Meta. Depois, veja o ritmo em Aprovações.',
+    });
+    expect(textoDoAvisoDoRitmo({ ...base, recurso: 'conjunto:222', tipo: 'pausada', dia: '2026-12-02' }, reais).title).toBe('O conjunto "Smash em dobro" está pausado pelo horário do ritmo, e o Liame não conseguiu ligar de novo');
     const naoVoltou = textoDoAvisoDoRitmo({ ...base, recurso: 'conjunto:222', nome: 'Smash · Raio de 3 km', tipo: 'nao_voltou', semana: SEMANA, parado: true, deixadaMicros: 96_760_000, baseMicros: 118 * REAL }, reais);
     expect(naoVoltou.kind).toBe('ritmo_sem_volta');
     expect(naoVoltou.severity).toBe('atencao');
@@ -201,5 +211,20 @@ describe('os avisos do ritmo (R7, parte 1b-3c)', () => {
       ['nao_voltou', 'ritmo_sem_volta', 'ritmo_sem_volta'],
       ['gasto_acima', 'ritmo_gasto_acima', 'ritmo_gasto_acima'],
     ]);
+  });
+
+  it('o horário (R7, parte 2b): pausada pelo Liame sem ligar de novo avisa; os passos do horário não contam na verba', () => {
+    const hoje = '2026-11-20';
+    const doHorario = (horario: ObjetoNoRitmo['horario']) => avisosDoRitmo([ritmo([objeto(SEMANA_FEITA.slice(0, 4), { horario })])], hoje, nada);
+    // O soltar que ficou bloqueado depois do pausar feito: o aviso, com o dia da tentativa.
+    expect(doHorario([{ dia: '2026-11-18', tipo: 'pausar', situacao: 'feito' }, { dia: '2026-11-19', tipo: 'soltar', situacao: 'bloqueado' }])).toEqual([
+      { ritmo: 'r1', acao: 'a1', recurso: 'campanha:111', nome: 'Smash em dobro', tipo: 'pausada', dia: '2026-11-19' },
+    ]);
+    // Ligou depois, ou o ligar ainda está na fila: nada.
+    expect(doHorario([{ dia: '2026-11-18', tipo: 'pausar', situacao: 'feito' }, { dia: '2026-11-19', tipo: 'ligar', situacao: 'feito' }])).toEqual([]);
+    expect(doHorario([{ dia: '2026-11-18', tipo: 'pausar', situacao: 'feito' }, { dia: '2026-11-19', tipo: 'ligar', situacao: 'pedido' }])).toEqual([]);
+    // A campanha que saiu do ritmo por um passo do horário (alguém ligou ou pausou por fora) avisa que saiu, e não que está pausada.
+    const saiu = avisosDoRitmo([ritmo([objeto([...SEMANA_FEITA.slice(0, 4), passo('2026-11-19', 'fora', 'pausar')], { horario: [{ dia: '2026-11-19', tipo: 'pausar', situacao: 'fora' }] })])], hoje, nada);
+    expect(saiu.map((a) => [a.tipo, 'dia' in a ? a.dia : null])).toEqual([['saiu', '2026-11-19']]);
   });
 });

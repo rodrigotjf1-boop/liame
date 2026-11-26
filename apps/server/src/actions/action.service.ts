@@ -43,7 +43,7 @@ import type { AcaoSombra } from '../sombra/regras.js';
 import { advance, workflowOf } from '../workflow/workflow.js';
 import { SOCIAL } from '../ai/social/prompt.js';
 import { abrirSegundaRodada, maisSugestoes, oQueDesligaAsSugestoes, paramsDaResposta, type SituacaoDaSugestao } from '../avaliacoes/sugestoes.js';
-import { FERRAMENTA_DA_VERBA_DO_DIA, FERRAMENTA_DO_RITMO, type PassoDoRitmo } from '../campanhas/ritmo-plano.js';
+import { FERRAMENTA_DA_SITUACAO_DO_RITMO, FERRAMENTA_DA_VERBA_DO_DIA, FERRAMENTA_DO_RITMO, type PassoDoRitmo } from '../campanhas/ritmo-plano.js';
 import { oQueSeguraOPassoDoRitmo } from '../campanhas/ritmo-portao.js';
 import { oQueSeguraOCupomDoTeste } from '../campanhas/teste-portao.js';
 import { oQueSeguraOAutomatico } from '../comentarios/automatico.js';
@@ -398,6 +398,8 @@ export class ActionService {
    * pedindo outra coisa para o passo, 409 (`ritmo-segurado` ou `automatico-segurado`): o passo não sai. O pedido nasce
    * aprovado (a pessoa aprovou a semana com o código do app) e passa pelos limites de sempre: os 10% por mudança, as
    * mudanças por hora, o teto por campanha e, quando aumenta, a verba do mês. `emNomeDe` é quem aprovou o ritmo.
+   * O passo de situação do horário (R7, parte 2b: ligar, pausar e deixar ligado) vem pelo mesmo caminho, com a ferramenta
+   * própria; nele a verba não muda, e o valor do portão é a verba que o Liame deixou.
    */
   async ajustarPeloRitmo(
     alvo: { tenantId: string; agentKey: string; agentLabel: string; emNomeDe: string },
@@ -405,8 +407,11 @@ export class ActionService {
     passo: PassoDoRitmo,
     agora = new Date(),
   ): Promise<string> {
-    const valor = (input.params as { daily_budget_micros?: unknown }).daily_budget_micros;
-    if (input.tool !== FERRAMENTA_DA_VERBA_DO_DIA || !input.brand_id || typeof valor !== 'number') {
+    const params = input.params as { daily_budget_micros?: unknown; expected_micros?: unknown };
+    const deVerba = input.tool === FERRAMENTA_DA_VERBA_DO_DIA && (passo.tipo === 'ritmo' || passo.tipo === 'volta');
+    const deSituacao = input.tool === FERRAMENTA_DA_SITUACAO_DO_RITMO && (passo.tipo === 'ligar' || passo.tipo === 'pausar' || passo.tipo === 'soltar');
+    const valor = deVerba ? params.daily_budget_micros : deSituacao ? params.expected_micros : null;
+    if ((!deVerba && !deSituacao) || !input.brand_id || typeof valor !== 'number') {
       throw new AppProblem(400, 'ferramenta-nao-e-o-ritmo', 'Não é o passo do ritmo', 'Por aqui o funcionário só pede o passo de um dia do ritmo da semana.');
     }
     const segura = await oQueSeguraOPassoDoRitmo(

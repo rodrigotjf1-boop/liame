@@ -19,6 +19,8 @@ import { ActionExecutor } from '../../src/worker/action-executor.js';
 import { ConferenciaDoGasto } from '../../src/worker/conferencia-do-gasto.js';
 import { avisosDoRitmoDasMarcas } from '../../src/campanhas/ritmo-avisos.js';
 import { avisosParaGuardar } from '../../src/campanhas/ritmo-conferido.js';
+import { momentoDoHorario } from '../../src/campanhas/ritmo-horario.js';
+import { currentTx } from '../../src/context/request-context.js';
 import { ConferenciaDoRitmo } from '../../src/worker/conferencia-do-ritmo.js';
 import { RitmoDaSemanaService } from '../../src/worker/ritmo-da-semana.service.js';
 import { ownerQuery, resetIpRateLimits, startApi, type TestApi } from '../helpers/api.js';
@@ -592,8 +594,10 @@ describe.skipIf(!hasDb)('o ritmo da semana: os passos do dia (R7, parte 1b-2)', 
     const volta = (agora = new Date()) => rotina.executarPassos(20, { tenantIds: [e.tenantId] }, agora);
     // Ontem a rotina pediu o passo (a verba do domingo, ou a volta), e o executor não chegou a rodar.
     expect(resumo(await volta(meioDiaDe(diasDepois(HOJE, -1))))).toEqual([[a.recurso, 'pedido']]);
-    // Hoje, o pedido de ontem ainda está na fila para o mesmo objeto: o de hoje não entra, e nada fica guardado.
-    expect(resumo(await volta())).toEqual([[a.recurso, 'nao_pediu']]);
+    // Hoje, o pedido de ontem ainda está na fila para o mesmo objeto: o de hoje não entra, e nada fica guardado. Desde o
+    // horário (R7, parte 2b), a rotina nem tenta: um pedido de cada vez em cada objeto (dois de ferramentas diferentes
+    // não se barram pela fila, e o segundo encontraria a campanha mudada pelo primeiro).
+    expect(resumo(await volta())).toEqual([]);
     expect((await passos(id)).filter((p) => p.dia === HOJE)).toEqual([]);
     // O executor encerra o de ontem pelo dia (o portão), sem tocar a Meta.
     await executar(e);
@@ -951,5 +955,110 @@ describe.skipIf(!hasDb)('o ritmo da semana: os passos do dia (R7, parte 1b-2)', 
     await ownerQuery(`update liame.budget_rhythm set status = 'encerrado' where id = $1`, [id]);
     const semRitmo = RegionRhythmResponse.parse((await api.call('GET', `/v1/region/rhythm?brand_id=${e.brandId}&unit_id=${e.loja}`, { cookie: e.cookie })).body);
     expect(semRitmo.campaigns[0]!.base_micros).toBe(72 * REAL);
+  }, 120_000);
+
+  it('o horário (R7, parte 2b): fora da janela pausa, dentro liga, a verba muda com a campanha pausada pelo Liame, sem a função ela volta a ligar', async () => {
+    const e = await cenario('Brasa Horario Do Ritmo');
+    await ligar('ritmo_horario', e.tenantId, true);
+    const a = await objetoLido(meta, e, 'campanha', { name: 'Combo noite', daily_budget: '6000' });
+    // O executor confere o portão no relógio de verdade: as janelas saem da hora de agora na loja, e são escolhidas para
+    // valer em qualquer dia e hora em que o teste rodar (V194): a de pausar começa daqui a 15 minutos (ainda não começou
+    // hoje, e a última que acabou é a de ontem, ou a véspera da semana na segunda; nunca a do fim da semana), e a de
+    // ligar começa agora (sempre a de hoje, mesmo perto da meia-noite). O único momento em que não dá é o domingo depois
+    // das 23:45 (a de pausar começaria na semana seguinte): aí o teste para, dizendo por quê.
+    const naLoja = () => {
+      const d = new Date();
+      return { dia: diaNoFuso(d, 'America/Sao_Paulo'), hora: new Intl.DateTimeFormat('pt-BR', { timeZone: 'America/Sao_Paulo', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).format(d) };
+    };
+    const somar = (hora: string, min: number) => {
+      const t = (((Number(hora.slice(0, 2)) * 60 + Number(hora.slice(3, 5)) + min) % 1440) + 1440) % 1440;
+      return `${String(Math.floor(t / 60)).padStart(2, '0')}:${String(t % 60).padStart(2, '0')}`;
+    };
+    const agora1 = naLoja();
+    const semana = { de: segundaDe(agora1.dia), ate: diasDepois(segundaDe(agora1.dia), 6) };
+    const futura = { de: somar(agora1.hora, 15), ate: somar(agora1.hora, 75) };
+    if (diaDaSemana(agora1.dia) === 0 && agora1.hora >= '23:45') {
+      console.warn('o teste do horário não roda no domingo depois das 23:45 (a janela de pausar cairia na semana seguinte)');
+      return;
+    }
+    const id = await ritmo(e, [{ recurso: a.recurso, nome: 'Combo noite', base: 60, dias: todosOsDias(60) }], { inicio: semana.de, horario: futura });
+    const rotina = novaRotina();
+    const volta = () => rotina.executarPassos(20, { tenantIds: [e.tenantId] }, new Date());
+    const situacoes = async () => (await passos(id)).filter((p) => ['ligar', 'pausar', 'soltar'].includes(p.kind)).map((p) => [p.dia, p.kind, p.status]);
+    const naMeta = (campo: 'status' | 'daily_budget') =>
+      meta
+        .escritasDe(a.id)
+        .filter((c) => !c.validar && c.params[campo])
+        .map((c) => c.params[campo]);
+
+    // 1. Fora da janela: a verba do dia já é a de hoje (só registra), e a campanha é pausada pelo pausar da janela que acabou.
+    const fora = momentoDoHorario(agora1, semana, futura)!;
+    expect(fora).toMatchObject({ status: 'pausado', tipo: 'pausar' });
+    expect(resumo(await volta())).toEqual([
+      [a.recurso, 'igual'],
+      [a.recurso, 'pedido'],
+    ]);
+    expect((await pedidosDe(e)).map((p) => [p.tool, p.action, p.mode])).toEqual([['situacao_do_ritmo', 'horario.pausar', 'AUTO']]);
+    await executar(e);
+    expect(await volta()).toEqual([]);
+    expect(naMeta('status')).toEqual(['PAUSED']);
+    expect(await situacoes()).toEqual([[fora.dia, 'pausar', 'feito']]);
+
+    // 2. A verba de um dia muda com a campanha pausada pelo próprio Liame: ela não sai do ritmo, e continua pausada.
+    await ownerQuery(`delete from liame.budget_rhythm_step where rhythm_id = $1 and kind = 'ritmo'`, [id]);
+    await ownerQuery(`update liame.budget_rhythm set plan = jsonb_set(plan, '{campanhas,0,dias_micros}', $2::jsonb) where id = $1`, [id, JSON.stringify(todosOsDias(66 * REAL))]);
+    expect(resumo(await volta())).toEqual([[a.recurso, 'pedido']]);
+    expect((await pedidosDe(e)).at(-1)).toMatchObject({ tool: 'orcamento_do_ritmo', action: 'orcamento.ritmo_aumentar', value: String(66 * REAL) });
+    await executar(e);
+    expect(await volta()).toEqual([]);
+    expect([naMeta('daily_budget'), naMeta('status')]).toEqual([['6600'], ['PAUSED']]);
+
+    // 3. O pedido da semana seguinte conta a campanha pausada pelo Liame como ativa (D-RG-64 fala das pausadas por uma pessoa).
+    await ownerQuery(`update liame.campaign set status = 'pausada', daily_budget_micros = $3, last_seen_at = now() where connected_account_id = $1 and external_id = $2`, [e.conta, a.id, 66 * REAL]);
+    const previa = RegionRhythmResponse.parse((await api.call('GET', `/v1/region/rhythm?brand_id=${e.brandId}&unit_id=${e.loja}`, { cookie: e.cookie })).body);
+    // Ela entra como candidata (na lista do ritmo ou na das que ficaram fora pelas regras do dinheiro, que são outras).
+    expect([...previa.campaigns.map((c) => c.name), ...previa.out.map((o) => o.name)], JSON.stringify({ status: previa.status, out: previa.out })).toContain('Combo noite');
+
+    // 4. Dentro da janela: liga.
+    const agora2 = naLoja();
+    const atual = { de: agora2.hora, ate: somar(agora2.hora, 60) };
+    await ownerQuery(`update liame.budget_rhythm set plan = jsonb_set(plan, '{horario}', $2::jsonb) where id = $1`, [id, JSON.stringify(atual)]);
+    const dentro = momentoDoHorario(agora2, semana, atual)!;
+    expect(dentro).toMatchObject({ status: 'ativo', tipo: 'ligar' });
+    expect(resumo(await volta())).toEqual([[a.recurso, 'pedido']]);
+    expect((await pedidosDe(e)).at(-1)).toMatchObject({ tool: 'situacao_do_ritmo', action: 'horario.ligar' });
+    await executar(e);
+    expect(await volta()).toEqual([]);
+    expect(naMeta('status')).toEqual(['PAUSED', 'ACTIVE']);
+    expect(await situacoes()).toEqual([
+      [fora.dia, 'pausar', 'feito'],
+      [dentro.dia, 'ligar', 'feito'],
+    ].sort((x, y) => x[0]!.localeCompare(y[0]!)));
+
+    // 5. Sem a função do horário, a campanha que o Liame deixou pausada volta a ficar ligada o dia todo (soltar), mesmo
+    // com a função desligada. A situação de "pausada pelo Liame" vem de um pausar feito hoje, depois do ligar (o pausar de
+    // hoje está livre: o da janela que ainda não começou é o de ontem, ou o da véspera da semana).
+    await ownerQuery(
+      `insert into liame.budget_rhythm_step (id, tenant_id, rhythm_id, day, resource_id, kind, target_micros, expected_micros, status) values (gen_random_uuid(), $1, $2, $3::date, $4, 'pausar', $5, $5, 'feito')`,
+      [e.tenantId, id, naLoja().dia, a.recurso, 66 * REAL],
+    );
+    meta.objetos.get(a.id)!.status = 'PAUSED';
+    await ligar('ritmo_horario', e.tenantId, false);
+    expect(resumo(await volta())).toEqual([[a.recurso, 'pedido']]);
+    expect((await pedidosDe(e)).at(-1)).toMatchObject({ tool: 'situacao_do_ritmo', action: 'horario.ligar' });
+    await executar(e);
+    expect(await volta()).toEqual([]);
+    expect(naMeta('status')).toEqual(['PAUSED', 'ACTIVE', 'ACTIVE']);
+    expect((await situacoes()).find((p) => p[1] === 'soltar')).toEqual([naLoja().dia, 'soltar', 'feito']);
+
+    // 6. Pausada de novo e sem a escrita na Meta: o soltar fica bloqueado, e a Atenção avisa que ela está pausada pelo
+    // horário sem o Liame conseguir ligar.
+    await ownerQuery(`delete from liame.budget_rhythm_step where rhythm_id = $1 and kind = 'soltar'`, [id]);
+    meta.objetos.get(a.id)!.status = 'PAUSED';
+    await ligarFlagDaEmpresa(api, 'meta_write', e.tenantId, false);
+    expect(resumo(await volta())).toEqual([[a.recurso, 'bloqueado']]);
+    const avisos = await naTransacaoDaEmpresa(database, { tenantId: e.tenantId, userId: null }, () => avisosDoRitmoDasMarcas(currentTx(), [e.brandId], new Date().toISOString()));
+    expect(avisos.map((x) => [x.aviso.tipo, x.aviso.recurso])).toEqual([['pausada', a.recurso]]);
+    await ligarFlagDaEmpresa(api, 'meta_write', e.tenantId, true);
   }, 120_000);
 });

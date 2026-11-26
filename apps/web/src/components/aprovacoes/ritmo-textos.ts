@@ -118,6 +118,9 @@ const MOTIVOS_DO_PORTAO: Record<string, string> = {
   acima_do_aprovado: 'passaria do que foi aprovado para o dia',
   acima_do_teto_por_campanha: 'passaria do teto por campanha',
   passo_desconhecido: 'o Liame não achou o passo deste pedido',
+  // O horário (R7, parte 2b).
+  fora_da_hora: 'o pedido ficou na fila e a janela dos anúncios virou',
+  ritmo_sem_horario: 'o ritmo não tem a janela dos anúncios',
 };
 
 /** O motivo de um passo bloqueado, em palavras: o servidor guarda o código e a frase da recusa. */
@@ -174,8 +177,25 @@ function resumoDoDia(passos: readonly RegionRhythmStep[]): { texto: string; falh
 }
 
 /**
+ * O horário de um dia na trilha (R7, parte 2b): o que o Liame ligou e pausou na janela daquele dia, nas campanhas do
+ * ritmo ("17:00 ligou · 22:00 pausou"), o que está na fila e o que não saiu. Nulo: nenhum passo do horário no dia.
+ */
+export function horarioDoDia(passos: readonly RegionRhythmStep[], janela: NonNullable<Ritmo['ads_on']>): { texto: string; falhou: boolean; naFila: boolean } | null {
+  const de = (kind: string, ...status: string[]) => passos.filter((p) => p.kind === kind && status.includes(p.status)).length;
+  const fila = de('ligar', 'pedido') + de('pausar', 'pedido');
+  const falhas = de('ligar', 'bloqueado', 'fora') + de('pausar', 'bloqueado', 'fora');
+  const partes = [
+    de('ligar', 'feito', 'igual') ? `${janela.from} ligou` : null,
+    de('pausar', 'feito', 'igual') ? `${janela.to} pausou` : null,
+    fila ? `${contar(fila, 'passo', 'passos')} do horário na fila` : null,
+    falhas ? `${contar(falhas, 'passo', 'passos')} do horário não ${falhas === 1 ? 'saiu' : 'saíram'}` : null,
+  ].filter((x): x is string => x !== null);
+  return partes.length ? { texto: partes.join(' · '), falhou: falhas > 0, naFila: fila > 0 } : null;
+}
+
+/**
  * O caminho do ritmo: o pedido, a aprovação, cada dia da semana (o que o Liame fez, o dia de hoje e os que faltam), a
- * parada e a volta à verba de antes.
+ * parada e a volta à verba de antes. Com a janela dos anúncios (R7, parte 2b), cada dia diz também o que o horário fez.
  */
 export function trilhaDoRitmo(r: Ritmo): PassoDaTrilha[] {
   const trilha: PassoDaTrilha[] = [{ estado: 'ok', titulo: 'Pedido pelo Gestor de tráfego', sub: quandoEscrito(r.requested_at) }];
@@ -183,14 +203,19 @@ export function trilhaDoRitmo(r: Ritmo): PassoDaTrilha[] {
   if (r.status === 'cancelado') return [...trilha, { estado: 'falha', titulo: 'Não aprovado: recusado, ou o prazo acabou', sub: 'nada mudou nas campanhas' }];
   if (r.approved_at) trilha.push({ estado: 'ok', titulo: `Aprovado${r.approved_by ? ` por ${r.approved_by.name}` : ''}, com o código do app`, sub: quandoEscrito(r.approved_at) });
   const doRitmo = r.campaigns.flatMap((c) => c.steps.filter((p) => p.kind === 'ritmo'));
+  const doHorario = r.campaigns.flatMap((c) => c.steps.filter((p) => p.kind === 'ligar' || p.kind === 'pausar'));
   const paradoEm = r.stopped_at ? r.stopped_at.slice(0, 10) : null;
   for (const d of r.days) {
     const dia = diaEscrito(d.day, d.weekday);
     const passos = doRitmo.filter((p) => p.day === d.day);
     if (passos.length) {
       const resumo = resumoDoDia(passos);
+      const horario = r.ads_on ? horarioDoDia(doHorario.filter((p) => p.day === d.day), r.ads_on) : null;
       const hoje = d.day === r.today ? ' (hoje)' : '';
-      trilha.push({ estado: resumo.falhou ? 'falha' : resumo.naFila ? 'espera' : 'ok', titulo: `${dia}${hoje}: verba do dia ${reais(d.total_micros)}`, sub: resumo.texto });
+      const falhou = resumo.falhou || Boolean(horario?.falhou);
+      const naFila = resumo.naFila || Boolean(horario?.naFila);
+      const sub = [resumo.texto, horario?.texto].filter((x): x is string => Boolean(x)).join(' · ');
+      trilha.push({ estado: falhou ? 'falha' : naFila ? 'espera' : 'ok', titulo: `${dia}${hoje}: verba do dia ${reais(d.total_micros)}`, sub });
     } else if (r.status === 'aprovado' && d.day === r.today) {
       trilha.push({ estado: 'espera', titulo: `${dia} (hoje): verba do dia ${reais(d.total_micros)}`, sub: 'o Liame põe a verba do dia em instantes' });
     } else if (r.status === 'aprovado' && d.day > r.today) {
@@ -203,7 +228,8 @@ export function trilhaDoRitmo(r: Ritmo): PassoDaTrilha[] {
   const semVoltar = r.campaigns.filter((c) => c.state === 'voltando').length;
   const fora = r.campaigns.filter((c) => c.state === 'fora').length;
   if (r.status === 'aprovado' && r.today <= r.week.to) {
-    trilha.push({ estado: 'depois', titulo: `Depois de ${diaMes(r.week.to)}: a verba volta à de antes (${reais(r.base_micros)} por dia)`, sub: 'em até 10% por dia' });
+    const ligados = r.ads_on ? ', e os anúncios ficam ligados o dia todo' : '';
+    trilha.push({ estado: 'depois', titulo: `Depois de ${diaMes(r.week.to)}: a verba volta à de antes (${reais(r.base_micros)} por dia)${ligados}`, sub: 'em até 10% por dia' });
   } else if (semVoltar) {
     trilha.push({ estado: 'espera', titulo: `A verba está voltando à de antes: ${contar(semVoltar, 'campanha ainda não chegou', 'campanhas ainda não chegaram')}`, sub: 'em até 10% por dia' });
   } else {

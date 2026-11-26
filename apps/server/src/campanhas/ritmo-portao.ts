@@ -4,7 +4,8 @@ import type { FlagService } from '../flags/flag.service.js';
 import { carregarPoliticas } from '../policy/policy.service.js';
 import { tetoDaVerba } from '../policy/teto-da-verba.js';
 import { FLAG_DA_REGIAO } from '../regiao/regiao.js';
-import { EstadoDoRitmo, FLAG_DO_RITMO, type PassoDoRitmo } from './ritmo-plano.js';
+import { momentoDoHorario } from './ritmo-horario.js';
+import { EstadoDoRitmo, FLAG_DO_HORARIO, FLAG_DO_RITMO, type PassoDoRitmo } from './ritmo-plano.js';
 
 // O portão do passo do ritmo da semana (plano da região, R7, parte 1b-2; D-RG-62 e D-RG-63). O passo de um dia sai sem
 // outro pedido de aprovação porque uma pessoa aprovou a semana com o código do app; por isso, antes de pedir e de novo
@@ -18,19 +19,28 @@ import { EstadoDoRitmo, FLAG_DO_RITMO, type PassoDoRitmo } from './ritmo-plano.j
 //   - subindo, nunca acima do teto por campanha da empresa ou da marca, em qualquer forma em que a regra foi escrita
 //     (a regra antiga, só para `orcamento.aumentar`, não casa com a ação do passo no motor da política: quem a garante
 //     é este portão, e não só quem chama).
-// "A campanha como o Liame deixou" é conferida pelo plano da ferramenta (a verba lida na Meta tem de ser a esperada) e,
-// na execução, pela versão do estado. Devolve nulo quando o passo pode sair; senão, o porquê.
+// Os passos de situação do horário (R7, parte 2b; D-RG-104), em que a verba não muda (o valor é a verba que o Liame
+// deixou):
+//   - ligar e pausar na janela: as funções `regiao`, `ritmo_da_semana` e `ritmo_horario` ligadas, o ritmo aprovado, com
+//     a janela no plano, e o passo é o do momento de agora (o pedido que ficou na fila depois que a janela virou não sai);
+//   - soltar (deixar ligado o dia todo, no fim do ritmo, quando alguém para ou quando a função do horário é desligada):
+//     sem conferir as funções, porque só devolve a campanha à situação em que a pessoa a deixou, e a campanha pausada
+//     pelo Liame não pode ficar pausada porque alguém desligou uma função; o dia do passo é hoje.
+// "A campanha como o Liame deixou" é conferida pelo plano da ferramenta (a verba e a situação lidas na Meta têm de ser
+// as esperadas) e, na execução, pela versão do estado. Devolve nulo quando o passo pode sair; senão, o porquê.
 
 type Linha = {
   dia: string;
   hoje: string;
-  kind: 'ritmo' | 'volta';
+  hora: string;
+  kind: PassoDoRitmo['tipo'];
   target_micros: string;
   expected_micros: string;
   resource_id: string;
   status: string;
   brand_id: string;
   ad_account_id: string;
+  week_start: string;
   week_end: string;
   plan: unknown;
 };
@@ -42,7 +52,6 @@ export async function oQueSeguraOPassoDoRitmo(
   agora: Date,
 ): Promise<string | null> {
   const contexto = flags.context({ tenantId: alvo.tenantId, brandId: alvo.brandId });
-  if (!(await flags.isEnabled(FLAG_DA_REGIAO, contexto)) || !(await flags.isEnabled(FLAG_DO_RITMO, contexto))) return 'funcao_desligada';
   const qual =
     'acao' in alvo.passo
       ? sql`s.action_id = ${alvo.passo.acao}`
@@ -50,20 +59,37 @@ export async function oQueSeguraOPassoDoRitmo(
   const linha = (
     await tx.execute<Linha>(sql`
       select s.day::text as dia, s.kind, s.target_micros::text as target_micros, s.expected_micros::text as expected_micros, s.resource_id,
-             r.status, r.brand_id, r.ad_account_id, r.week_end::text as week_end, r.plan,
-             (${agora.toISOString()}::timestamptz at time zone coalesce(u.timezone, 'America/Sao_Paulo'))::date::text as hoje
+             r.status, r.brand_id, r.ad_account_id, r.week_start::text as week_start, r.week_end::text as week_end, r.plan,
+             (${agora.toISOString()}::timestamptz at time zone coalesce(u.timezone, 'America/Sao_Paulo'))::date::text as hoje,
+             to_char(${agora.toISOString()}::timestamptz at time zone coalesce(u.timezone, 'America/Sao_Paulo'), 'HH24:MI') as hora
         from liame.budget_rhythm_step s
         join liame.budget_rhythm r on r.id = s.rhythm_id and r.tenant_id = s.tenant_id
         join liame.unit u on u.id = r.unit_id and u.tenant_id = r.tenant_id
        where s.tenant_id = ${alvo.tenantId} and ${qual}`)
   ).rows[0];
+  // Deixar ligado não depende das funções; todo o resto, sim (sem o passo, as funções primeiro, como antes do horário).
+  if (linha?.kind !== 'soltar') {
+    if (!(await flags.isEnabled(FLAG_DA_REGIAO, contexto)) || !(await flags.isEnabled(FLAG_DO_RITMO, contexto))) return 'funcao_desligada';
+  }
   if (!linha) return 'passo_desconhecido';
   if (linha.brand_id !== alvo.brandId || linha.ad_account_id !== alvo.accountId || linha.resource_id !== alvo.resourceId) return 'passo_de_outro_objeto';
-  if (linha.dia !== linha.hoje) return 'fora_do_dia';
   if (Number(linha.target_micros) !== alvo.valorMicros) return 'valor_diferente_do_passo';
   const plano = EstadoDoRitmo.omit({ situacao: true }).safeParse(linha.plan);
   const campanha = plano.success ? plano.data.campanhas.find((c) => c.recurso === alvo.resourceId) : undefined;
   if (!plano.success || !campanha) return 'campanha_fora_do_plano';
+
+  // Os passos de situação do horário (R7, parte 2b).
+  if (linha.kind === 'ligar' || linha.kind === 'pausar') {
+    if (!(await flags.isEnabled(FLAG_DO_HORARIO, contexto))) return 'funcao_desligada';
+    if (linha.status !== 'aprovado') return linha.status === 'parado' ? 'ritmo_parado' : 'ritmo_nao_aprovado';
+    if (!plano.data.horario) return 'ritmo_sem_horario';
+    const momento = momentoDoHorario({ dia: linha.hoje, hora: linha.hora }, { de: linha.week_start, ate: linha.week_end }, plano.data.horario);
+    if (!momento || momento.tipo !== linha.kind || momento.dia !== linha.dia) return 'fora_da_hora';
+    return null;
+  }
+  if (linha.dia !== linha.hoje) return 'fora_do_dia';
+  if (linha.kind === 'soltar') return linha.status === 'aprovado' || linha.status === 'parado' || linha.status === 'encerrado' ? null : 'ritmo_nao_aprovado';
+
   const sobe = alvo.valorMicros > Number(linha.expected_micros);
   if (sobe) {
     const teto = tetoDaVerba((await carregarPoliticas(tx, alvo.tenantId, alvo.brandId)).policies, 'meta_ads');

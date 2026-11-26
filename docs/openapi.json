@@ -44679,6 +44679,7 @@
                                 "items": {
                                   "type": "string",
                                   "enum": [
+                                    "ritmo_pausada",
                                     "ritmo_gasto_acima",
                                     "ritmo_sem_volta",
                                     "ritmo_campanha_saiu"
@@ -45558,6 +45559,7 @@
                                 "items": {
                                   "type": "string",
                                   "enum": [
+                                    "ritmo_pausada",
                                     "ritmo_gasto_acima",
                                     "ritmo_sem_volta",
                                     "ritmo_campanha_saiu"
