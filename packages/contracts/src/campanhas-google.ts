@@ -8,6 +8,15 @@ import { NewCampaignBlock, NewCampaignStatus, NewCampaignUnitOption } from './ca
 // títulos de até 30 caracteres, de 1 a 5 títulos longos de até 90, de 2 a 5 descrições de até 90, o nome da loja com até
 // 25) são conferidos pela rota, que recusa com as palavras da tela (422 `textos-do-google`, no campo de cada um).
 
+/**
+ * Os temas de busca da Performance Max (plano da região, R9; D-RG-85, D-RG-86 e D-RG-89): até 25 por grupo de recursos,
+ * de até 80 caracteres cada. Vale o menor entre a referência da API (25) e a ajuda do Google Ads (50) até a conta real
+ * dizer outro. Uma constante só para o contrato, a rota, o estado da ferramenta e o texto do erro; o `check` do banco
+ * (`google_campaign_new_temas`, migration 0169) repete o 25, e a spec com banco confere.
+ */
+export const SEARCH_THEMES_MAX = 25;
+export const SEARCH_THEME_MAX_LENGTH = 80;
+
 export const CreateGoogleCampaignRequest = z.strictObject({
   brand_id: z.uuid(),
   /** Uma peça aprovada em Criativos; vai a versão atual dela. */
@@ -36,6 +45,12 @@ export const CreateGoogleCampaignRequest = z.strictObject({
   daily_budget_micros: z.int().min(10_000).max(100_000_000_000),
   /** O último dia, no fuso da empresa; ausente, a campanha não tem data de fim. */
   end_date: z.iso.date().optional(),
+  /**
+   * Os temas de busca que vão ao grupo de recursos (R9; D-RG-85): até 25, de até 80 caracteres, sem repetir, cada um
+   * conferido como os textos (sem concorrente, dado pessoal ou promessa que a loja não prova). A rota recusa com as
+   * palavras da tela (422 `tema-de-busca`, no campo `search_themes[i]`). Ausente ou vazio, a campanha vai sem temas.
+   */
+  search_themes: z.array(z.string().max(200)).max(SEARCH_THEMES_MAX * 2).optional(),
 });
 export type CreateGoogleCampaignRequest = z.infer<typeof CreateGoogleCampaignRequest>;
 
@@ -54,6 +69,8 @@ export const GoogleCampaignResponse = z.strictObject({
   radius_km: z.number(),
   daily_budget_micros: z.int(),
   end_date: z.iso.date().nullable(),
+  /** Os temas de busca do grupo de recursos (R9); vazia na campanha pedida sem temas. */
+  search_themes: z.array(z.string()),
   /** O cardápio da loja, o destino do anúncio (D-A5-26). */
   link: z.string(),
   status: NewCampaignStatus,
@@ -97,6 +114,15 @@ export const GoogleCampaignOptionsResponse = z.strictObject({
   by_piece: z.array(
     z.strictObject({ piece_id: z.uuid(), campaign_id: z.uuid(), status: NewCampaignStatus, active: z.boolean(), action_id: z.uuid().nullable() }),
   ),
+  /**
+   * Os temas de busca que a gaveta sugere (R9; D-RG-85), montados por regra, sem IA: os termos de Minha marca (até 3;
+   * vazia, a gaveta pede os termos) e, por loja, a lista com "perto de mim", "delivery" e os bairros das áreas de entrega
+   * dela, com a frase de onde a lista parou (vazia quando coube tudo). É sugestão: vai ao Google o que a pessoa pedir.
+   */
+  search_themes: z.strictObject({
+    terms: z.array(z.string()),
+    by_unit: z.array(z.strictObject({ unit_id: z.uuid(), themes: z.array(z.string()), cut: z.string() })),
+  }),
 });
 export type GoogleCampaignOptionsResponse = z.infer<typeof GoogleCampaignOptionsResponse>;
 

@@ -103,6 +103,7 @@ export async function lerCampanhaGoogle(tx: Tx, ref: ResourceRef, travar = false
       headlines: string[];
       long_headlines: string[];
       descriptions: string[];
+      search_themes: string[];
       business_name: string;
       media_id: string;
       media_file: string;
@@ -125,7 +126,7 @@ export async function lerCampanhaGoogle(tx: Tx, ref: ResourceRef, travar = false
     }
   >(sql`
     select c.id, c.status, c.active, c.version, c.error, c.google_campaign_id,
-           c.brand_id, c.name, c.piece_id, c.piece_version, c.headlines, c.long_headlines, c.descriptions, c.business_name,
+           c.brand_id, c.name, c.piece_id, c.piece_version, c.headlines, c.long_headlines, c.descriptions, c.search_themes, c.business_name,
            c.media_id, m.sha256 as media_file, m.object_key as foto_chave, m.width, m.height,
            b.logo_id, least(b.logo_width, b.logo_height) as logo_lado,
            c.radius_km::text, c.daily_budget_micros::text, c.end_date::text as end_date, c.link,
@@ -160,6 +161,7 @@ export async function lerCampanhaGoogle(tx: Tx, ref: ResourceRef, travar = false
     link: l.link,
     situacao: l.status,
     ativa: l.active,
+    temas_de_busca: l.search_themes ?? [],
   });
   if (!lido.success) return null;
   return {

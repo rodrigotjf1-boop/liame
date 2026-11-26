@@ -30,6 +30,7 @@ const opcoes = (o: Partial<GoogleCampaignOptionsResponse> = {}): GoogleCampaignO
   ],
   campaign_cap_micros: 50_000_000,
   by_piece: [],
+  search_themes: { terms: [], by_unit: [] },
   ...o,
 });
 const foto = (o: Partial<BrandPhoto> = {}): BrandPhoto => ({ id: 'f1', brand_id: 'b', product: 'Smash', description: '', width: 1440, height: 1800, kind: 'foto_produto', thumbnail_url: 'x', url: 'x', ...o }) as BrandPhoto;

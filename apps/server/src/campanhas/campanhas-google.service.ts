@@ -38,7 +38,9 @@ import { PolicyService } from '../policy/policy.service.js';
 import { REGRAS_DE_TEXTO_VERSAO } from '../policy/texto.js';
 import { tetoDaVerba } from '../policy/teto-da-verba.js';
 import { destinoDoPost } from '../posts/link-do-post.js';
+import { bairroDaArea } from '../regiao/coordenada.js';
 import { LIMITES_DO_GOOGLE, motivoDaFotoPequena, motivoDosTextos, recursoDaCampanhaGoogle } from './campanha-google-plano.js';
+import { fraseDoCorte, montarTemas, problemaDosTemas, termosDaLoja } from './temas-de-busca.js';
 
 // A campanha nova no Google, criada pausada (A5, Y9, parte 2; P45 pré-aprovado em 12/11/2026; D-A5-21 a D-A5-26). A
 // rota confere tudo o que a ferramenta `campanha_google_criar` exige antes de pedir: a peça aprovada, os textos nos
@@ -114,6 +116,7 @@ type Linha = {
   headlines: string[];
   long_headlines: string[];
   descriptions: string[];
+  search_themes: string[];
   business_name: string;
   radius_km: string;
   daily_budget_micros: string;
@@ -148,6 +151,7 @@ function resposta(l: Linha): GoogleCampaignResponse {
     radius_km: Number(l.radius_km),
     daily_budget_micros: Number(l.daily_budget_micros),
     end_date: l.end_date,
+    search_themes: l.search_themes ?? [],
     link: l.link,
     status: l.status,
     action_id: l.action_id,
@@ -190,8 +194,11 @@ export class CampanhasGoogleService {
 
     // A peça aprovada, na versão atual.
     const peca = (
-      await tx.execute<{ status: string; version: number }>(sql`
-        select status, version from liame.ad_piece where id = ${body.piece_id} and tenant_id = ${quem.tenantId} and brand_id = ${body.brand_id}`)
+      await tx.execute<{ status: string; version: number; offer: string | null }>(sql`
+        select p.status, p.version, r.offer
+          from liame.ad_piece p
+          left join liame.ad_piece_request r on r.id = p.request_id and r.tenant_id = p.tenant_id
+         where p.id = ${body.piece_id} and p.tenant_id = ${quem.tenantId} and p.brand_id = ${body.brand_id}`)
     ).rows[0];
     if (!peca) throw recusa('peca-nao-encontrada', 'Peça não encontrada', 'A peça não está em Criativos desta marca.', 'piece_id');
     if (peca.status !== 'aprovada') throw recusa('peca-nao-aprovada', 'A peça não foi aprovada', 'Só a peça aprovada em Criativos vira campanha. Aprove a peça antes.', 'piece_id');
@@ -255,6 +262,16 @@ export class CampanhasGoogleService {
     }
     if (body.end_date && body.end_date <= hojeNoFuso(agora, timezone)) throw recusa('fim-no-passado', 'Data de fim', 'A data de fim precisa ser depois de hoje.', 'end_date');
 
+    // Os temas de busca (R9; D-RG-86): a mesma conferência dos textos, com Minha marca e a oferta da peça; o primeiro
+    // problema basta, com as palavras da tela, no campo do tema. Sem temas, a campanha vai como antes.
+    const temas = (body.search_themes ?? []).map((t) => t.replace(/\s+/g, ' ').trim());
+    if (temas.length) {
+      const dossie = await marcaDoCriativo(body.brand_id, timezone, agora);
+      const base = baseDoPedido({ oferta: peca.offer ?? '', instrucao: null }, { fatos: dossie?.fatos ?? '', proibidas: dossie?.proibidas ?? [], concorrentes: dossie?.concorrentes ?? [] });
+      const problema = problemaDosTemas(temas, base);
+      if (problema) throw recusa('tema-de-busca', 'Um tema de busca não passa', `Tema ${problema.indice + 1}: ${problema.motivo}`, `search_themes[${problema.indice}]`);
+    }
+
     // O pedido anterior com a mesma peça que já se encerrou em Aprovações sai do caminho: a campanha nova dele fica
     // cancelada (ou não criada, se já estava sendo criada).
     await tx.execute(sql`
@@ -271,11 +288,11 @@ export class CampanhasGoogleService {
     const lista = (itens: string[]) => sql`array[${sql.join(itens.map((t) => sql`${t}`), sql`, `)}]::text[]`;
     const nova = await tx.execute(sql`
       insert into liame.google_campaign_new (id, tenant_id, brand_id, ad_account_id, piece_id, piece_version, headlines, long_headlines, descriptions,
-                                             business_name, media_id, unit_id, link, name, radius_km, daily_budget_micros, end_date, created_by)
+                                             business_name, media_id, unit_id, link, name, radius_km, daily_budget_micros, end_date, created_by, search_themes)
       values (${id}, ${quem.tenantId}, ${body.brand_id}, ${conta.id}, ${body.piece_id}, ${peca.version},
               ${lista(textos.titulos)}, ${lista(textos.titulosLongos)}, ${lista(textos.descricoes)},
               ${body.business_name}, ${body.media_id}, ${body.unit_id}, ${destino.url}, ${body.name}, ${body.radius_km}, ${body.daily_budget_micros},
-              ${body.end_date ?? null}, ${quem.userId})
+              ${body.end_date ?? null}, ${quem.userId}, ${temas.length ? lista(temas) : sql`'{}'::text[]`})
       on conflict do nothing
       returning id`);
     if (!nova.rows[0]) {
@@ -302,6 +319,7 @@ export class CampanhasGoogleService {
         headlines: textos.titulos.length,
         long_headlines: textos.titulosLongos.length,
         descriptions: textos.descricoes.length,
+        search_themes: temas.length,
         radius_km: body.radius_km,
         daily_budget_micros: body.daily_budget_micros,
         end_date: body.end_date ?? null,
@@ -437,9 +455,18 @@ export class CampanhasGoogleService {
 
     const destino = await destinoDoPost(tx, quem.tenantId, query.brand_id);
     const lojas = (
-      await tx.execute<{ id: string; name: string; street: string | null; number: string | null; district: string | null; precision: string | null; radius: string | null }>(sql`
+      await tx.execute<{
+        id: string;
+        name: string;
+        street: string | null;
+        number: string | null;
+        district: string | null;
+        precision: string | null;
+        radius: string | null;
+        delivery_areas: unknown;
+      }>(sql`
         select id, name, address_street as street, address_number as number, address_district as district,
-               location_precision as precision, delivery_radius_km::text as radius
+               location_precision as precision, delivery_radius_km::text as radius, delivery_areas
           from liame.unit where tenant_id = ${quem.tenantId} and brand_id = ${query.brand_id}
          order by name, id`)
     ).rows;
@@ -450,7 +477,21 @@ export class CampanhasGoogleService {
       return { id: u.id, name: u.name, address, has_address: u.precision === 'endereco', delivery_radius_km: u.radius === null ? null : Number(u.radius), menu_available: motivo === null, menu_block: motivo };
     });
 
-    const { policies } = await this.policies.load(tx, quem.tenantId, query.brand_id);
+    const { policies, timezone } = await this.policies.load(tx, quem.tenantId, query.brand_id);
+
+    // Os temas de busca sugeridos (R9; D-RG-85): os termos de Minha marca e, por loja, as áreas de entrega dela. A
+    // categoria do Perfil da Empresa fica de fora (é uma leitura ao vivo do Google, sem cópia guardada).
+    const dossie = await marcaDoCriativo(query.brand_id, timezone, new Date());
+    const termos = termosDaLoja(null, dossie?.conteudo.identity.search_terms ?? []);
+    const search_themes: GoogleCampaignOptionsResponse['search_themes'] = {
+      terms: termos.map((t) => t.termo),
+      by_unit: lojas.map((u) => {
+        const areas = (Array.isArray(u.delivery_areas) ? u.delivery_areas : []).filter((a): a is string => typeof a === 'string').map(bairroDaArea);
+        const m = montarTemas(termos, areas);
+        return { unit_id: u.id, themes: m.temas, cut: fraseDoCorte(m) };
+      }),
+    };
+
     // A situação que vale, como no `obter`: o pedido que se encerrou em Aprovações sem criar (recusado, expirado ou que
     // falhou) deixa a campanha cancelada (fora daqui: a peça volta a poder pedir) ou não criada, se já estava sendo
     // criada. A situação guardada só muda no pedido seguinte; lida crua, a peça ficava em "Espera a aprovação" depois da
@@ -476,6 +517,7 @@ export class CampanhasGoogleService {
       units,
       campaign_cap_micros: tetoDaVerba(policies, 'google_ads'),
       by_piece,
+      search_themes,
     };
   }
 
@@ -485,7 +527,7 @@ export class CampanhasGoogleService {
     // O pedido que se encerrou em Aprovações sem criar: cancelada (ou não criada, se já estava sendo criada).
     const r = await currentTx().execute<Linha>(sql`
       select c.id, c.brand_id, c.piece_id, c.piece_version, c.media_id, c.unit_id, c.name, c.headlines, c.long_headlines, c.descriptions,
-             c.business_name, c.radius_km::text, c.daily_budget_micros::text, c.end_date::text as end_date, c.link,
+             c.search_themes, c.business_name, c.radius_km::text, c.daily_budget_micros::text, c.end_date::text as end_date, c.link,
              case when c.status in ('pedida', 'criando') and r.status in ${ENCERRADOS}
                   then (case when c.status = 'criando' then 'nao_criada' else 'cancelada' end) else c.status end as status,
              c.action_id,

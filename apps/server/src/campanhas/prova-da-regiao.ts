@@ -12,6 +12,7 @@ import {
   lugaresDaResposta,
 } from '../connectors/google-ads/lugares-no-google.js';
 import type { ConjuntoComPublico } from '../connectors/meta/conector-meta.js';
+import { sinalDoTema } from './campanha-google-plano.js';
 import { TAMANHO_DO_TEMA } from './temas-de-busca.js';
 
 // A prova na conta real do que a R9 e o teste de região precisam saber antes do código (plano da região, D-RG-89; o
@@ -177,7 +178,6 @@ const criterioDoCirculo = (campanha: string, b: BairroDaProva) => ({
     },
   },
 });
-const sinalDoTema = (grupo: string, text: string) => ({ assetGroupSignalOperation: { create: { assetGroup: grupo, searchTheme: { text } } } });
 
 type Operacao = {
   campaignOperation?: { create?: { resourceName?: string } };

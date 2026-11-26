@@ -1,5 +1,6 @@
 import { randomBytes, randomUUID } from 'node:crypto';
 import { resolve } from 'node:path';
+import { SEARCH_THEME_MAX_LENGTH, SEARCH_THEMES_MAX } from '@liame/contracts';
 import { createDatabase, type Database, runMigrations } from '@liame/database';
 import sharp from 'sharp';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
@@ -294,6 +295,83 @@ describe.skipIf(!hasDb)('a campanha nova no Google: o pedido e a criação (A5 �
     expect([...google.campanhas.values()].filter((x) => x.cliente === e.cliente)).toEqual([]);
     expect(await lida(e, id)).toMatchObject({ status: 'nao_criada', error: p.status_reason, google: { campaign_id: null, budget_id: null, asset_group_id: null } });
   }, 180_000);
+
+  it('os temas de busca (R9): a sugestão por loja, as recusas no campo do tema, o limite do banco, a criação com os sinais no grupo e a recusa do Google', async () => {
+    const e = await cenario('Brasa Google Temas');
+    const opcoes = async () => (await api.call('GET', `/v1/google-campaigns/options?brand_id=${e.brandId}`, { cookie: e.cookie })).body;
+    // Sem termos em Minha marca, a sugestão vem vazia (a gaveta pede os termos).
+    expect((await opcoes()).search_themes).toEqual({ terms: [], by_unit: [{ unit_id: e.unitId, themes: [], cut: '' }] });
+
+    // Com os termos de Minha marca e as áreas de entrega da loja (o Perfil escreve o lugar inteiro; vale o bairro).
+    const atual = (await api.call('GET', `/v1/brand-dossier?brand_id=${e.brandId}`, { cookie: e.cookie })).body;
+    const salvo = await api.call('PUT', '/v1/brand-dossier', {
+      cookie: e.cookie,
+      body: { brand_id: e.brandId, base_version: atual.version?.version ?? 0, content: { ...atual.content, identity: { ...atual.content.identity, search_terms: ['hamburgueria', 'smash burger'] } } },
+    });
+    expect(salvo.status, JSON.stringify(salvo.body)).toBe(200);
+    await ownerQuery(`update liame.unit set delivery_areas = $2::jsonb where id = $1`, [e.unitId, JSON.stringify(['Penha, Rio de Janeiro - RJ, Brasil', 'Olaria'])]);
+    expect((await opcoes()).search_themes).toEqual({
+      terms: ['hamburgueria', 'smash burger'],
+      by_unit: [
+        {
+          unit_id: e.unitId,
+          themes: [
+            'hamburgueria perto de mim',
+            'smash burger perto de mim',
+            'smash burger delivery',
+            'hamburgueria Penha',
+            'hamburgueria Olaria',
+            'delivery de smash burger Penha',
+            'delivery de smash burger Olaria',
+          ],
+          cut: '',
+        },
+      ],
+    });
+
+    // As recusas no campo do tema, com as palavras da tela: o repetido, o vazio, o longo e o 26º.
+    const recusa = async (temas: string[]) => {
+      const r = await pedir(e, { search_themes: temas });
+      return [r.status, r.body.code, r.body.errors?.[0]?.path, r.body.detail];
+    };
+    expect(await recusa(['hamburgueria Penha', 'Hamburgueria  penha'])).toEqual([422, 'tema-de-busca', 'search_themes[1]', 'Tema 2: O tema repete o tema 1.']);
+    expect(await recusa(['hamburgueria Penha', '  '])).toEqual([422, 'tema-de-busca', 'search_themes[1]', 'Tema 2: O tema está vazio: escreva o tema ou tire a linha.']);
+    expect(await recusa(['x'.repeat(SEARCH_THEME_MAX_LENGTH + 1)])).toEqual([422, 'tema-de-busca', 'search_themes[0]', `Tema 1: O tema passa de ${SEARCH_THEME_MAX_LENGTH} caracteres.`]);
+    const muitos = Array.from({ length: SEARCH_THEMES_MAX + 1 }, (_, i) => `hamburgueria ${i + 1}`);
+    expect(await recusa(muitos)).toEqual([422, 'tema-de-busca', `search_themes[${SEARCH_THEMES_MAX}]`, `Tema ${SEARCH_THEMES_MAX + 1}: O Google aceita até ${SEARCH_THEMES_MAX} temas por campanha: tire 1 tema.`]);
+    expect((await ownerQuery<{ n: number }>(`select count(*)::int as n from liame.google_campaign_new where piece_id = $1`, [e.peca]))[0]!.n).toBe(0);
+
+    // O pedido com os temas: a coluna, a resposta, a auditoria (só a contagem) e o estado aprovado.
+    const temas = ['hamburgueria perto de mim', 'smash burger delivery', 'hamburgueria Penha'];
+    const { id, pedido } = await pedirEAprovar(e, { search_themes: [' hamburgueria  perto de mim', ...temas.slice(1)] });
+    expect((await lida(e, id)).search_themes).toEqual(temas);
+    expect((await pedidoDe(pedido)).before_state).toMatchObject({ temas_de_busca: temas });
+    const auditoria = await ownerQuery<{ after: Record<string, unknown> }>(`select "after" from liame.audit_event where resource_id = $1 and "after" ? 'search_themes'`, [id]);
+    expect(auditoria.map((a) => a.after.search_themes)).toEqual([3]);
+
+    // A criação: os sinais no fim da mesma requisição, no grupo de recursos; a validação e a escrita iguais.
+    const p = await pedidoDe(pedido);
+    expect([p.status, p.status_reason], JSON.stringify(p)).toEqual(['executada', null]);
+    const [validacao, escrita] = google.chamadasDe(e.cliente);
+    const ops = escrita!.corpo.mutateOperations as Record<string, { create: Record<string, unknown> }>[];
+    expect(validacao!.corpo.mutateOperations).toEqual(ops);
+    expect(ops.slice(-temas.length).map((o) => Object.keys(o)[0])).toEqual(temas.map(() => 'assetGroupSignalOperation'));
+    const c = [...google.campanhas.values()].find((x) => x.cliente === e.cliente)!;
+    expect([...google.grupos.values()].find((g) => g.campanha === c.id)!.temas).toEqual(temas);
+
+    // O banco tem o mesmo limite do contrato: o 26º tema não entra nem por fora da rota.
+    await expect(ownerQuery(`update liame.google_campaign_new set search_themes = $2::text[] where id = $1`, [id, muitos])).rejects.toThrow(/google_campaign_new_temas/);
+
+    // O tema que o Google recusa pela política dele: nada é criado, e o motivo do Google fica no pedido (o risco que
+    // fica escrito no plano: a rota confere antes, mas a regra do Google pode ser mais dura).
+    const outra = await cenario('Brasa Google Tema Recusado');
+    google.temasRecusados.add('hamburgueria Olaria');
+    const recusada = await pedirEAprovar(outra, { search_themes: ['hamburgueria Olaria'] });
+    google.temasRecusados.delete('hamburgueria Olaria');
+    const pr = await pedidoDe(recusada.pedido);
+    expect([pr.status, pr.status_reason]).toEqual(['falhou', 'O Google recusou a mudança: The search theme violates the policy (assetGroupSignalError.SEARCH_THEME_POLICY_VIOLATION).']);
+    expect(await lida(outra, recusada.id)).toMatchObject({ status: 'nao_criada', search_themes: ['hamburgueria Olaria'], google: { campaign_id: null } });
+  }, 240_000);
 
   it('a resposta da criação se perde: a ação espera, e a tentativa seguinte acha a campanha pelo nome, sem criar de novo', async () => {
     const e = await cenario('Brasa Google Perde');

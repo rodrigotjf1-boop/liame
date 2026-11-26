@@ -774,6 +774,8 @@ export {
   GoogleCampaignResponse,
   GoogleCampaignTextsRequest,
   GoogleCampaignTextsResponse,
+  SEARCH_THEME_MAX_LENGTH,
+  SEARCH_THEMES_MAX,
 } from './campanhas-google.js';
 export {
   CreateVideoCutsRequest,
