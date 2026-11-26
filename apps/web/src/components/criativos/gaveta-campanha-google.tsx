@@ -15,8 +15,11 @@ import {
   conferirCampanhaGoogle,
   erroDoPedidoGoogle,
   type ErrosDoGoogle,
+  fonteDosTemas,
   LIMITES_DO_GOOGLE,
+  LIMITES_DOS_TEMAS,
   recortesDaFoto,
+  temasDaLoja,
   textosDaPeca,
 } from './campanha-google-textos';
 import { dicaDoRaio, efeitoDaCampanha, raiosDaLoja } from './campanha-nova-textos';
@@ -92,7 +95,10 @@ export function GavetaCampanhaGoogle({ brandId, peca, midias, opcoes, hoje, rese
     raio: 5,
     verba: '30,00',
     fim: '',
+    temas: temasDaLoja(opcoes, lojaInicial?.id ?? null).temas,
   }));
+  // A lista das buscas segue a loja enquanto ninguém mexe nela à mão (R9; como no protótipo).
+  const [temasMexidos, setTemasMexidos] = useState(false);
   const [aba, setAba] = useState<'busca' | 'display'>('busca');
   const [erros, setErros] = useState<ErrosDoGoogle>({});
   const [erroGeral, setErroGeral] = useState<string | null>(null);
@@ -102,7 +108,7 @@ export function GavetaCampanhaGoogle({ brandId, peca, midias, opcoes, hoje, rese
   const [pedindo, setPedindo] = useState(false);
   const [semIa, setSemIa] = useState<string | null>(null);
   const [logo, setLogo] = useState<string | null>(null);
-  const [focoEm, setFocoEm] = useState<CampoDoGoogle | 'mais-titulos' | 'mais-descricoes' | 'criativo' | null>(null);
+  const [focoEm, setFocoEm] = useState<CampoDoGoogle | 'mais-titulos' | 'mais-descricoes' | 'mais-temas' | 'criativo' | null>(null);
 
   // A logo de Minha marca, para a prévia (sem ela, a prévia mostra o lugar vazio).
   useEffect(() => {
@@ -143,6 +149,12 @@ export function GavetaCampanhaGoogle({ brandId, peca, midias, opcoes, hoje, rese
     if (campo) setErros((e) => ({ ...e, [campo]: undefined }));
     setErroGeral(null);
   }
+  function mudarTemas(temas: string[]) {
+    setCampos((c) => ({ ...c, temas }));
+    setTemasMexidos(true);
+    setErros((e) => ({ ...e, temas: undefined }));
+    setErroGeral(null);
+  }
   function mudarItem(lista: 'titulos' | 'descricoes', i: number, texto: string) {
     setCampos((c) => ({ ...c, [lista]: c[lista].map((t, j) => (j === i ? texto : t)) }));
     setErros((e) => ({ ...e, [lista]: undefined }));
@@ -169,7 +181,7 @@ export function GavetaCampanhaGoogle({ brandId, peca, midias, opcoes, hoje, rese
   }
 
   function focar(e: ErrosDoGoogle) {
-    const ordem: CampoDoGoogle[] = ['titulos', 'longo', 'descricoes', 'foto', 'loja', 'nome', 'verba', 'fim'];
+    const ordem: CampoDoGoogle[] = ['titulos', 'longo', 'descricoes', 'foto', 'loja', 'nome', 'temas', 'verba', 'fim'];
     const primeiro = ordem.find((c) => e[c]);
     if (primeiro) setFocoEm(primeiro);
   }
@@ -197,6 +209,7 @@ export function GavetaCampanhaGoogle({ brandId, peca, midias, opcoes, hoje, rese
           radius_km: campos.raio,
           daily_budget_micros: Number(microsDeReais(campos.verba)),
           ...(campos.fim ? { end_date: campos.fim } : {}),
+          search_themes: campos.temas.map((t) => t.replace(/\s+/g, ' ').trim()),
         },
       }),
     );
@@ -614,7 +627,7 @@ export function GavetaCampanhaGoogle({ brandId, peca, midias, opcoes, hoje, rese
                       value={campos.loja ?? ''}
                       aria-describedby={descrito('loja')}
                       aria-invalid={erros.loja ? true : undefined}
-                      onChange={(e) => mudar({ loja: e.target.value }, 'loja')}
+                      onChange={(e) => mudar({ loja: e.target.value, ...(temasMexidos ? {} : { temas: temasDaLoja(opcoes, e.target.value).temas }) }, 'loja')}
                       disabled={enviando}
                     >
                       {lojas.map((u) => (
@@ -663,6 +676,72 @@ export function GavetaCampanhaGoogle({ brandId, peca, midias, opcoes, hoje, rese
                       {dicaDoRaio(campos.raio, loja)} No Google, o raio vale para quem está ou costuma estar ali.
                     </span>
                   )}
+                </fieldset>
+                <fieldset className="campo" aria-describedby={descrito('temas', `${ids}-temas-d`)}>
+                  <legend>
+                    As buscas{' '}
+                    <span className="campo-dica">
+                      temas de busca: até {LIMITES_DOS_TEMAS.temas}, até {LIMITES_DOS_TEMAS.tema} caracteres cada
+                    </span>
+                  </legend>
+                  <span className="campo-dica" id={`${ids}-temas-d`}>
+                    O que as pessoas digitam quando procuram uma loja como a sua. É uma pista para o Google, não uma garantia: ele decide em que buscas mostra o anúncio. {fonteDosTemas(opcoes.search_themes.terms)}
+                  </span>
+                  {campos.temas.length > 0 && (
+                    <ol className="cg-lista">
+                      {campos.temas.map((t, i) => (
+                        // biome-ignore lint/suspicious/noArrayIndexKey: os temas não têm id; a posição é a identidade na lista
+                        <li key={i}>
+                          <label className="sr-only" htmlFor={`${ids}-temas-${i}`}>
+                            Tema {i + 1}
+                          </label>
+                          <input
+                            className="input"
+                            id={`${ids}-temas-${i}`}
+                            data-campo={i === 0 ? 'temas' : undefined}
+                            autoComplete="off"
+                            maxLength={LIMITES_DOS_TEMAS.tema * 2}
+                            value={t}
+                            aria-describedby={[`${ids}-temas-${i}-n`, erros.temas ? `${ids}-temas-erro` : null].filter(Boolean).join(' ')}
+                            aria-invalid={erros.temas && [...t].length > LIMITES_DOS_TEMAS.tema ? true : undefined}
+                            onChange={(e) => mudarTemas(campos.temas.map((x, j) => (j === i ? e.target.value : x)))}
+                            disabled={enviando}
+                          />
+                          <Conta texto={t} max={LIMITES_DOS_TEMAS.tema} id={`${ids}-temas-${i}-n`} />
+                          <button
+                            className="btn btn--icon btn--ghost btn--sm"
+                            type="button"
+                            aria-label={`Tirar o tema ${i + 1}`}
+                            onClick={() => {
+                              mudarTemas(campos.temas.filter((_, j) => j !== i));
+                              setFocoEm(campos.temas.length > 1 ? 'mais-temas' : 'temas');
+                            }}
+                            disabled={enviando}
+                          >
+                            <Icone nome="x" pequeno />
+                          </button>
+                        </li>
+                      ))}
+                    </ol>
+                  )}
+                  {campos.temas.length < LIMITES_DOS_TEMAS.temas && (
+                    <button
+                      className="btn btn--sm cg-mais"
+                      type="button"
+                      data-campo={campos.temas.length ? 'mais-temas' : 'temas'}
+                      onClick={() => {
+                        const n = campos.temas.length;
+                        mudarTemas([...campos.temas, '']);
+                        setTimeout(() => document.getElementById(`${ids}-temas-${n}`)?.focus(), 0);
+                      }}
+                      disabled={enviando}
+                    >
+                      <Icone nome="plus" pequeno />
+                      Mais um tema
+                    </button>
+                  )}
+                  {!temasMexidos && temasDaLoja(opcoes, campos.loja).corte && <span className="campo-dica">{temasDaLoja(opcoes, campos.loja).corte}</span>}
+                  {erroDe('temas')}
                 </fieldset>
                 <div className="campo">
                   <label htmlFor={`${ids}-verba`}>Verba diária</label>
@@ -756,7 +835,7 @@ export function GavetaCampanhaGoogle({ brandId, peca, midias, opcoes, hoje, rese
                 <p className="pd-nota">
                   <Icone nome="shield" pequeno />
                   <span>
-                    O pedido vai para Aprovações, com a prévia. Depois da aprovação com o código do app, o Liame confere com o Google e cria tudo numa requisição só: o orçamento, a campanha, o raio e o grupo de recursos com os textos, os recortes, o nome e a logo, pausados. Se o Google recusar, nada é criado.
+                    O pedido vai para Aprovações, com a prévia. Depois da aprovação com o código do app, o Liame confere com o Google e cria tudo numa requisição só: o orçamento, a campanha, o raio e o grupo de recursos com os textos, os recortes, o nome, a logo e os temas de busca, pausados. Se o Google recusar, nada é criado.
                   </span>
                 </p>
               </div>

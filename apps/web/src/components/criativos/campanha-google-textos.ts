@@ -1,4 +1,4 @@
-import type { AdPieceResponse, BrandPhoto, GoogleCampaignOptionsResponse, GoogleCampaignResponse } from '@liame/contracts';
+import { type AdPieceResponse, type BrandPhoto, type GoogleCampaignOptionsResponse, type GoogleCampaignResponse, SEARCH_THEME_MAX_LENGTH, SEARCH_THEMES_MAX } from '@liame/contracts';
 import { microsDeReais } from '@/components/links/cupons-textos';
 import type { Problema } from '@/lib/api';
 import { reaisDeMicros } from '@/lib/formato';
@@ -82,7 +82,59 @@ export function textosDaPeca(peca: Pick<AdPieceResponse['current'], 'title' | 'b
   return { titulos, longo, descricoes: descricao ? [descricao, convite] : [convite, ''] };
 }
 
-export type CampoDoGoogle = 'titulos' | 'longo' | 'descricoes' | 'foto' | 'loja' | 'nome' | 'verba' | 'fim';
+export type CampoDoGoogle = 'titulos' | 'longo' | 'descricoes' | 'foto' | 'loja' | 'nome' | 'temas' | 'verba' | 'fim';
+
+/** Os limites dos temas de busca (R9): as constantes do contrato, as mesmas da rota e do banco. */
+export const LIMITES_DOS_TEMAS = { temas: SEARCH_THEMES_MAX, tema: SEARCH_THEME_MAX_LENGTH } as const;
+
+/** O tema comparado como o servidor compara (`nomeComparavel`): sem acento, sem maiúscula e sem espaço sobrando. */
+const temaComparavel = (t: string): string =>
+  t
+    .normalize('NFD')
+    .replace(/\p{M}/gu, '')
+    .toLowerCase()
+    .replace(/\s+/g, ' ')
+    .trim();
+
+/**
+ * O que impede os temas de busca (R9; D-RG-86), com as palavras do servidor: o limite, o vazio, o longo e o repetido. A
+ * conferência dos textos (concorrente, dado pessoal, promessa) depende de Minha marca e fica com o servidor, que devolve
+ * a recusa no mesmo campo. Nulo quando servem.
+ */
+export function motivoDosTemas(temas: readonly string[]): string | null {
+  const { temas: limite, tema: tamanhoMaximo } = LIMITES_DOS_TEMAS;
+  if (temas.length > limite) {
+    const sobra = temas.length - limite;
+    return `Tema ${limite + 1}: O Google aceita até ${limite} temas por campanha: tire ${sobra} ${sobra === 1 ? 'tema' : 'temas'}.`;
+  }
+  const vistos = new Map<string, number>();
+  for (const [i, bruto] of temas.entries()) {
+    const t = bruto.replace(/\s+/g, ' ').trim();
+    if (!t) return `Tema ${i + 1}: O tema está vazio: escreva o tema ou tire a linha.`;
+    if (tamanho(t) > tamanhoMaximo) return `Tema ${i + 1}: O tema passa de ${tamanhoMaximo} caracteres.`;
+    const chave = temaComparavel(t);
+    const antes = vistos.get(chave);
+    if (antes !== undefined) return `Tema ${i + 1}: O tema repete o tema ${antes + 1}.`;
+    vistos.set(chave, i);
+  }
+  return null;
+}
+
+/** A lista que o Liame sugere para a loja (os termos de Minha marca e as áreas de entrega dela) e a frase do corte. */
+export function temasDaLoja(opcoes: Pick<GoogleCampaignOptionsResponse, 'search_themes'>, loja: string | null): { temas: string[]; corte: string } {
+  const daLoja = opcoes.search_themes.by_unit.find((u) => u.unit_id === loja);
+  return { temas: [...(daLoja?.themes ?? [])], corte: daLoja?.cut ?? '' };
+}
+
+/** De onde a lista veio, numa frase; sem termos em Minha marca, onde escrevê-los (D-RG-85). */
+export function fonteDosTemas(termos: readonly string[]): string {
+  if (!termos.length) {
+    return 'Para o Liame montar a lista, escreva os termos de busca da loja em Minha marca › Identidade, no campo "Termos de busca da loja" (até 3). Ou escreva os temas aqui.';
+  }
+  const lista = termos.map((t) => `“${t}”`);
+  const escritos = lista.length < 2 ? lista.join('') : `${lista.slice(0, -1).join(', ')} e ${lista.at(-1)}`;
+  return `O Liame montou a lista, sem IA, com ${escritos} (Minha marca), mais “perto de mim”, “delivery” e os bairros de entrega da loja.`;
+}
 export type ErrosDoGoogle = Partial<Record<CampoDoGoogle, string>>;
 
 /** Os textos do Google e o campo da recusa (as mesmas regras e palavras do servidor); nulo quando servem. */
@@ -105,7 +157,7 @@ export function motivoDosTextos(t: TextosDaGaveta): { campo: 'titulos' | 'longo'
   return null;
 }
 
-export type CamposDoGoogle = TextosDaGaveta & { foto: string | null; loja: string | null; nome: string; raio: number; verba: string; fim: string };
+export type CamposDoGoogle = TextosDaGaveta & { foto: string | null; loja: string | null; nome: string; raio: number; verba: string; fim: string; temas: string[] };
 
 /** Tudo o que o servidor confere e a gaveta já sabe, no campo de cada um (o que depende do banco fica com o servidor). */
 export function conferirCampanhaGoogle(c: CamposDoGoogle, opcoes: GoogleCampaignOptionsResponse, fotos: BrandPhoto[], hoje: string): ErrosDoGoogle {
@@ -124,6 +176,8 @@ export function conferirCampanhaGoogle(c: CamposDoGoogle, opcoes: GoogleCampaign
   else if (!loja.menu_available) e.loja = loja.menu_block ?? 'A loja não tem o cardápio online ligado ao Liame: no Google, o anúncio leva ao cardápio.';
   if (!c.nome.trim()) e.nome = 'Dê um nome à campanha.';
   else if (tamanho(c.nome.trim()) > 80) e.nome = 'O nome vai até 80 caracteres.';
+  const temas = motivoDosTemas(c.temas);
+  if (temas) e.temas = temas;
   const micros = microsDeReais(c.verba);
   if (micros === null || BigInt(micros) < 10_000n) e.verba = 'Digite a verba diária em reais, como 30,00.';
   else if (opcoes.campaign_cap_micros !== null && BigInt(micros) > BigInt(opcoes.campaign_cap_micros)) {
@@ -151,6 +205,7 @@ export function erroDoPedidoGoogle(p: Problema): { campo: CampoDoGoogle | null; 
     'verba-invalida': 'verba',
     'acima-do-teto': 'verba',
     'fim-no-passado': 'fim',
+    'tema-de-busca': 'temas',
   };
   return { campo: (p.code && porCodigo[p.code]) || null, texto };
 }
