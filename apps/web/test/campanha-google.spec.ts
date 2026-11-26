@@ -4,11 +4,14 @@ import {
   type CamposDoGoogle,
   conferirCampanhaGoogle,
   erroDoPedidoGoogle,
+  fonteDosTemas,
   idDaCampanhaGoogle,
   motivoDaFotoPequena,
+  motivoDosTemas,
   motivoDosTextos,
   recortesDaFoto,
   situacaoDaCampanhaGoogle,
+  temasDaLoja,
   textosDaPeca,
 } from '../src/components/criativos/campanha-google-textos';
 
@@ -44,6 +47,7 @@ const campos = (o: Partial<CamposDoGoogle> = {}): CamposDoGoogle => ({
   raio: 5,
   verba: '30,00',
   fim: '',
+  temas: [],
   ...o,
 });
 const HOJE = '2026-11-12';
@@ -118,6 +122,38 @@ describe('campanha nova no Google: a gaveta', () => {
     expect(erroDoPedidoGoogle({ status: 422, code: 'foto-pequena', title: 'x', detail: 'A foto é pequena.' })).toEqual({ campo: 'foto', texto: 'A foto é pequena.' });
     expect(erroDoPedidoGoogle({ status: 422, code: 'sem-cardapio', title: 'x', detail: 'd' }).campo).toBe('loja');
     expect(erroDoPedidoGoogle({ status: 409, code: 'ja-pedida', title: 'Já pedida', detail: 'A peça já tem um pedido em aberto.' })).toEqual({ campo: null, texto: 'A peça já tem um pedido em aberto.' });
+  });
+
+  it('as buscas (R9): a lista sugerida por loja, de onde ela veio, a conferência com as palavras do servidor e a recusa no campo', () => {
+    const o = opcoes({
+      search_themes: {
+        terms: ['hamburgueria', 'smash burger'],
+        by_unit: [{ unit_id: LOJA, themes: ['hamburgueria perto de mim', 'hamburgueria Penha'], cut: 'A lista parou em 25 temas: Olaria ficou com um tema só. Tire um tema para pôr outro.' }],
+      },
+    });
+    expect(temasDaLoja(o, LOJA)).toEqual({ temas: ['hamburgueria perto de mim', 'hamburgueria Penha'], corte: 'A lista parou em 25 temas: Olaria ficou com um tema só. Tire um tema para pôr outro.' });
+    // A loja sem sugestão (ou nenhuma escolhida) começa vazia; a lista devolvida é uma cópia, para a gaveta mexer à vontade.
+    expect(temasDaLoja(o, OUTRA)).toEqual({ temas: [], corte: '' });
+    expect(temasDaLoja(o, null)).toEqual({ temas: [], corte: '' });
+    temasDaLoja(o, LOJA).temas.push('outro');
+    expect(o.search_themes.by_unit[0]!.themes).toHaveLength(2);
+    expect(fonteDosTemas(['hamburgueria', 'smash burger'])).toBe('O Liame montou a lista, sem IA, com “hamburgueria” e “smash burger” (Minha marca), mais “perto de mim”, “delivery” e os bairros de entrega da loja.');
+    expect(fonteDosTemas([])).toContain('Minha marca › Identidade, no campo "Termos de busca da loja"');
+
+    // As mesmas palavras do servidor (`problemaDosTemas`): o vazio, o longo, o repetido sem acento e sem maiúscula, o 26º.
+    expect(motivoDosTemas([])).toBeNull();
+    expect(motivoDosTemas(['hamburgueria Penha', 'delivery Olaria'])).toBeNull();
+    expect(motivoDosTemas(['hamburgueria Penha', '  '])).toBe('Tema 2: O tema está vazio: escreva o tema ou tire a linha.');
+    expect(motivoDosTemas(['x'.repeat(81)])).toBe('Tema 1: O tema passa de 80 caracteres.');
+    expect(motivoDosTemas(['açaí na Penha', 'Acai  na penha'])).toBe('Tema 2: O tema repete o tema 1.');
+    expect(motivoDosTemas(Array.from({ length: 27 }, (_, i) => `tema ${i}`))).toBe('Tema 26: O Google aceita até 25 temas por campanha: tire 2 temas.');
+    expect(motivoDosTemas(Array.from({ length: 25 }, (_, i) => `tema ${i}`))).toBeNull();
+    expect(conferirCampanhaGoogle(campos({ temas: ['pizza', 'Pizza'] }), opcoes(), [foto()], HOJE)).toEqual({ temas: 'Tema 2: O tema repete o tema 1.' });
+    // A recusa do servidor (a conferência dos textos, que a gaveta não faz) vai para o campo das buscas.
+    expect(erroDoPedidoGoogle({ status: 422, code: 'tema-de-busca', detail: 'Tema 1: “Brasa Burger” é nome de concorrente.', errors: [{ path: 'search_themes[0]', message: 'x' }] } as never)).toEqual({
+      campo: 'temas',
+      texto: 'Tema 1: “Brasa Burger” é nome de concorrente.',
+    });
   });
 
   it('a etiqueta de cada situação e o recurso do pedido', () => {

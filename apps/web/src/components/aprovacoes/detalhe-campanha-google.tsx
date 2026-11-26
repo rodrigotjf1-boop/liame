@@ -158,7 +158,7 @@ export function DetalheCampanhaGoogle({ acao, grupo, agora, podeDecidir, podeOpe
     ? [
         { rotulo: 'A campanha', id: c.google.campaign_id, detalhe: c.active ? 'Performance Max, ativa' : 'Performance Max, pausada' },
         { rotulo: 'O orçamento', id: c.google.budget_id, detalhe: `${verba} por dia, só desta campanha` },
-        { rotulo: 'O grupo de recursos', id: c.google.asset_group_id, detalhe: 'os textos, os recortes, o nome e a logo, com o cardápio' },
+        { rotulo: 'O grupo de recursos', id: c.google.asset_group_id, detalhe: c.search_themes.length ? 'os textos, os recortes, o nome, a logo e os temas de busca, com o cardápio' : 'os textos, os recortes, o nome e a logo, com o cardápio' },
       ]
     : [];
   const googleAds = (
@@ -323,6 +323,11 @@ export function DetalheCampanhaGoogle({ acao, grupo, agora, podeDecidir, podeOpe
             {c.business_name}
             <small>com a logo de Minha marca, num quadrado</small>
           </dd>
+          <dt>As buscas</dt>
+          <dd>
+            {c.search_themes.length ? `${c.search_themes.length} ${c.search_themes.length === 1 ? 'tema' : 'temas'} de busca` : 'Sem temas de busca'}
+            <small>{c.search_themes.length ? 'a lista inteira vem abaixo, depois dos textos' : 'o Google decide sozinho em que buscas mostra o anúncio'}</small>
+          </dd>
         </dl>
       </div>
 
@@ -349,6 +354,27 @@ export function DetalheCampanhaGoogle({ acao, grupo, agora, podeDecidir, podeOpe
           </ol>
         </div>
       </div>
+
+      {c.search_themes.length > 0 && (
+        <div className="secao">
+          <p className="rotulo-marca">As buscas ({c.search_themes.length})</p>
+          <div className="cg-proposta">
+            <ol>
+              {c.search_themes.map((t) => (
+                <li key={t}>{t}</li>
+              ))}
+            </ol>
+          </div>
+          <p className="pd-nota">
+            <Icone nome="sparkles" pequeno />
+            <span>São pistas para o Google, não uma garantia: ele decide em que buscas mostra o anúncio, sempre para quem está no raio.</span>
+          </p>
+          <p className="pd-nota">
+            <Icone nome="shield" pequeno />
+            <span>Cada tema passou pela mesma conferência dos textos (sem nome de concorrente, sem dado pessoal, sem promessa que a loja não prova).</span>
+          </p>
+        </div>
+      )}
 
       <div className="secao">
         <p className="rotulo-marca">A foto e os recortes</p>
