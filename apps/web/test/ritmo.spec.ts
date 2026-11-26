@@ -9,6 +9,7 @@ import {
   ehPedidoDoRitmo,
   fraseDoRitmo,
   idDoRitmo,
+  janelaDosAnuncios,
   linhasDoRitmoNaRegiao,
   motivoDoBloqueio,
   porqueDoDia,
@@ -123,6 +124,14 @@ describe('o ritmo da semana em Aprovações (R7, parte 1b-3b)', () => {
     const igual = ritmo({ days: ritmo().days.map((d) => ({ ...d, weight: 1 })), source: 'setor' });
     expect(fraseDoRitmo(igual).dias).toBe('Nesta semana, a verba de cada dia fica igual à de hoje: a referência do setor não pede mudança.');
     expect(fraseDoRitmo(ritmo({ campaigns: [ritmo().campaigns[0]!] })).semana).toContain('em 1 campanha.');
+  });
+
+  it('a janela dos anúncios (R7, parte 2; D-RG-104): a célula e a frase; sem janela, nada (ligados o dia todo)', () => {
+    expect(janelaDosAnuncios({ from: '17:00', to: '22:00' })).toEqual({ celula: '17:00 às 22:00', frase: 'deixa os anúncios ligados só das 17:00 às 22:00, e pausados fora disso' });
+    // A que passa da meia-noite termina no dia seguinte.
+    expect(janelaDosAnuncios({ from: '21:00', to: '01:00' })?.celula).toBe('21:00 às 01:00 do dia seguinte');
+    expect(janelaDosAnuncios(null)).toBeNull();
+    expect(janelaDosAnuncios(undefined)).toBeNull();
   });
 
   it('a situação do ritmo e de cada campanha', () => {

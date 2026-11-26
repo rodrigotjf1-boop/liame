@@ -26,6 +26,34 @@ export function ritmoDoRecurso(resourceId: string): string | null {
 
 /** A função do ritmo da semana (nasce desligada; só a distribuição liga, por empresa). */
 export const FLAG_DO_RITMO = 'ritmo_da_semana';
+/**
+ * A função do horário do ritmo (R7, parte 2; D-RG-61 e D-RG-104; nasce desligada): com ela, o pedido da semana leva a
+ * janela em que os anúncios ficam ligados. Vale junto com a do ritmo.
+ */
+export const FLAG_DO_HORARIO = 'ritmo_horario';
+
+const HORA = /^([01]\d|2[0-3]):[0-5]\d$/;
+
+/**
+ * A janela dos anúncios no ritmo (D-RG-61 e D-RG-104): de 1 hora antes do bloco dos pedidos da loja (D-RG-29) até o fim
+ * dele, a mesma em todos os dias da semana, no fuso da loja; `ate` menor que `de` passa da meia-noite. Fora dela, os
+ * anúncios ficam pausados.
+ */
+export const JanelaDoRitmo = z.object({ de: z.string().regex(HORA), ate: z.string().regex(HORA) }).refine((j) => j.de !== j.ate, 'a janela não pode começar e acabar na mesma hora');
+export type JanelaDoRitmo = z.infer<typeof JanelaDoRitmo>;
+
+/**
+ * A janela do ritmo pelos horários da loja (D-RG-104): só com os pedidos da própria loja. Pela referência do setor (a
+ * loja sem pedidos que bastem), os anúncios ficam ligados o dia todo: pausar a loja pelo horário de outras seria chute.
+ */
+export function janelaDoRitmo(horarios: { source: string; ads_from: string; to: string } | null): JanelaDoRitmo | null {
+  if (!horarios || horarios.source !== 'loja') return null;
+  const janela = JanelaDoRitmo.safeParse({ de: horarios.ads_from, ate: horarios.to });
+  return janela.success ? janela.data : null;
+}
+
+/** A janela como as respostas da API a escrevem (`from`, `to`); nula: os anúncios ligados o dia todo. */
+export const janelaNaResposta = (j: JanelaDoRitmo | null): { from: string; to: string } | null => (j ? { from: j.de, to: j.ate } : null);
 /** As ferramentas do ritmo no trilho de ações: o pedido da semana e o passo de um dia. */
 export const FERRAMENTA_DO_RITMO = 'ritmo_da_semana';
 export const FERRAMENTA_DA_VERBA_DO_DIA = 'orcamento_do_ritmo';
@@ -85,6 +113,11 @@ export const EstadoDoRitmo = z.object({
   fora: z.array(z.object({ nome: z.string().max(300), motivo: z.string().max(60) })).max(50),
   /** O teto por campanha da empresa quando o ritmo foi montado; nulo sem teto. */
   teto_micros: z.number().int().positive().nullable(),
+  /**
+   * A janela em que os anúncios ficam ligados (R7, parte 2; D-RG-104), quando o pedido foi montado com a função do
+   * horário e os pedidos da loja; ausente: os anúncios ficam ligados o dia todo (e nos ritmos de antes dela).
+   */
+  horario: JanelaDoRitmo.optional(),
   moeda: z.string().min(3).max(3),
   situacao: SituacaoDoRitmo,
 });

@@ -117,7 +117,7 @@ describe.skipIf(!hasDb)('o ritmo da semana: os passos do dia (R7, parte 1b-2)', 
   async function ritmo(
     e: Empresa,
     campanhas: Array<{ recurso: string; nome: string; base: number; dias: number[] }>,
-    o: { inicio?: string; status?: 'pedido' | 'aprovado' | 'parado'; pesoDeDomingo?: number } = {},
+    o: { inicio?: string; status?: 'pedido' | 'aprovado' | 'parado'; pesoDeDomingo?: number; horario?: { de: string; ate: string } } = {},
   ): Promise<string> {
     const id = randomUUID();
     const status = o.status ?? 'aprovado';
@@ -132,6 +132,7 @@ describe.skipIf(!hasDb)('o ritmo da semana: os passos do dia (R7, parte 1b-2)', 
       campanhas: campanhas.map((c) => ({ recurso: c.recurso, nome: c.nome, base_micros: c.base * REAL, dias_micros: c.dias.map((v) => Math.round(v * REAL)) })),
       fora: [],
       teto_micros: null,
+      ...(o.horario ? { horario: o.horario } : {}),
       moeda: 'BRL',
     };
     await ownerQuery(
@@ -224,6 +225,12 @@ describe.skipIf(!hasDb)('o ritmo da semana: os passos do dia (R7, parte 1b-2)', 
       ['Smash em dobro', 'no_ritmo', 36 * REAL, [[HOJE, 'ritmo', 'feito', 36 * REAL]]],
     ]);
     expect(detalhe.campaigns[0]!.steps[0]).toMatchObject({ expected_micros: 60 * REAL, reason: null, action_id: pedidos.find((p) => p.resource_id === a.recurso)!.id });
+    // A janela dos anúncios (R7, parte 2; D-RG-104): o ritmo de antes dela não tem (ligados o dia todo); o pedido com a
+    // janela a devolve como foi pedida, inclusive passando da meia-noite.
+    expect(detalhe.ads_on ?? null).toBeNull();
+    const comJanela = await ritmo(e, [{ recurso: a.recurso, nome: 'Combo sexta', base: 66, dias: todosOsDias(66) }], { inicio: diasDepois(segundaDe(HOJE), 7), status: 'pedido', horario: { de: '21:00', ate: '01:00' } });
+    expect((await guardado(e, comJanela)).ads_on).toEqual({ from: '21:00', to: '01:00' });
+    await ownerQuery(`delete from liame.budget_rhythm where id = $1`, [comJanela]);
     // A prévia da semana que vem cita o ritmo que está rodando nesta.
     const previa = RegionRhythmResponse.parse((await api.call('GET', `/v1/region/rhythm?brand_id=${e.brandId}&unit_id=${e.loja}`, { cookie: e.cookie })).body);
     expect([previa.running, previa.proposed]).toEqual([{ id, status: 'aprovado', week: { from: segundaDe(HOJE), to: diasDepois(segundaDe(HOJE), 6) }, action_id: null }, null]);

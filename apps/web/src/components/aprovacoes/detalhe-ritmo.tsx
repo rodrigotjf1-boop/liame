@@ -9,15 +9,28 @@ import type { Prova } from '@/lib/chave-de-acesso';
 import { disparar } from '@/lib/disparar';
 import { reaisDeMicros } from '@/lib/formato';
 import { BarraDaDecisao, type Decisao } from './barra-da-decisao';
-import { campanhaNoRitmo, diaEscrito, diaMes, fraseDoRitmo, idDoRitmo, porqueDoDia, quandoEscrito, situacaoDoRitmo, tituloDoRitmo, trilhaDoRitmo, variacaoDoDia } from './ritmo-textos';
+import {
+  campanhaNoRitmo,
+  diaEscrito,
+  diaMes,
+  fraseDoRitmo,
+  idDoRitmo,
+  janelaDosAnuncios,
+  porqueDoDia,
+  quandoEscrito,
+  situacaoDoRitmo,
+  tituloDoRitmo,
+  trilhaDoRitmo,
+  variacaoDoDia,
+} from './ritmo-textos';
 import { cabecalhoDe, type Grupo, MOTIVOS_DA_RECUSA, politicaDe, prazoDe, resultadoDe, riscoDe, ROTULO_RISCO } from './textos';
 
 // O pedido "Ritmo da semana" em Aprovações (plano da região, R7, parte 1b-3; protótipo aprovado pelo dono em
 // 13/11/2026, D-RG-58 a D-RG-65 e D-RG-68 a D-RG-72). O Gestor de tráfego monta a verba de cada dia das campanhas da
 // Meta, por regra e sem IA; a pessoa aprova uma vez, com o código do app, e a aprovação vale para os 7 dias. A tela
 // mostra o ritmo dia a dia com o porquê, a verba de cada campanha, o caminho (o que o Liame já fez em cada dia), a
-// campanha que saiu do ritmo e "Parar o ritmo", que não pede o código. Nesta parte o ritmo mexe só na verba do dia: o
-// horário (ligar e pausar os anúncios) é a parte 2.
+// campanha que saiu do ritmo e "Parar o ritmo", que não pede o código. O ritmo pedido com a janela dos anúncios (R7,
+// parte 2; D-RG-104) mostra a coluna "Anúncios ligados"; sem ela, os anúncios ficam ligados o dia todo.
 
 type Props = {
   acao: ActionResponse;
@@ -144,6 +157,8 @@ export function DetalheRitmo({ acao, grupo, agora, podeDecidir, podeOperar, temA
   const comNota = r.campaigns.map((c) => ({ c, s: campanhaNoRitmo(c) })).filter((x) => x.s?.nota);
   const n = r.campaigns.length;
   const campanhas = n === 1 ? 'a campanha' : `as ${n} campanhas`;
+  // A janela dos anúncios (R7, parte 2): a coluna "Anúncios ligados" só existe no ritmo pedido com ela.
+  const janela = janelaDosAnuncios(r.ads_on);
 
   const tabelaDosDias = (
     <div className="secao">
@@ -151,12 +166,13 @@ export function DetalheRitmo({ acao, grupo, agora, podeDecidir, podeOperar, temA
       <div className="r7-envolve">
         <div className="table-wrap">
           <table className="tabela r7-tabela">
-            <caption className="sr-only">O ritmo da semana, dia a dia: a verba do dia e por quê</caption>
+            <caption className="sr-only">O ritmo da semana, dia a dia: a verba do dia e por quê{janela ? ', e quando os anúncios ficam ligados' : ''}</caption>
             <thead>
               <tr>
                 <th scope="col">Dia</th>
                 <th scope="col">Verba do dia</th>
                 <th scope="col">Por quê</th>
+                {janela && <th scope="col">Anúncios ligados</th>}
               </tr>
             </thead>
             <tbody>
@@ -187,6 +203,12 @@ export function DetalheRitmo({ acao, grupo, agora, podeDecidir, podeOperar, temA
                         })}
                       </ul>
                     </td>
+                    {janela && (
+                      <td className="r7-liga" data-col="Anúncios ligados">
+                        {janela.celula}
+                        <small>fora disso, pausados</small>
+                      </td>
+                    )}
                   </tr>
                 );
               })}
@@ -198,7 +220,9 @@ export function DetalheRitmo({ acao, grupo, agora, podeDecidir, podeOperar, temA
                   <b>{reais(r.week_micros)}</b>
                   <small>sem o ritmo: {reais(r.base_week_micros)}</small>
                 </td>
-                <td data-col="">O ritmo muda o dia, não o total: o que sai dos dias fracos vai para os fortes.</td>
+                <td data-col="" colSpan={janela ? 2 : undefined}>
+                  O ritmo muda o dia, não o total: o que sai dos dias fracos vai para os fortes.
+                </td>
               </tr>
             </tfoot>
           </table>
@@ -278,7 +302,8 @@ export function DetalheRitmo({ acao, grupo, agora, podeDecidir, podeOperar, temA
       {pendente && (
         <div className="secao secao--lite">
           <p className="lite-frase lite-frase--grande">
-            {frase.dias} <b>{frase.semana}</b> Se você aprovar, o Liame muda a verba d{campanhas} no começo de cada dia.
+            {frase.dias} <b>{frase.semana}</b> Se você aprovar, o Liame muda a verba d{campanhas} no começo de cada dia
+            {janela ? ` e ${janela.frase}` : ''}.
           </p>
           <div className="lite-chips">
             <span className="lite-chip">A soma das verbas da semana não aumenta</span>

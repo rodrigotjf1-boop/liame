@@ -533,6 +533,17 @@ export const RegionRhythmRef = z.strictObject({
 export type RegionRhythmRef = z.infer<typeof RegionRhythmRef>;
 
 /**
+ * A janela em que os anúncios ficam ligados no ritmo (R7, parte 2; D-RG-61 e D-RG-104): de 1 hora antes do bloco dos
+ * pedidos da loja até o fim dele, a mesma em todos os dias, no fuso da loja ("HH:MM"); `to` menor que `from` passa da
+ * meia-noite. Fora dela, os anúncios ficam pausados.
+ */
+export const RegionRhythmAdsWindow = z.strictObject({
+  from: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/),
+  to: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/),
+});
+export type RegionRhythmAdsWindow = z.infer<typeof RegionRhythmAdsWindow>;
+
+/**
  * O ritmo da semana que vem, como o Gestor de tráfego o montaria (R7; a prévia: nada é pedido nem executado). A verba de
  * cada dia segue os pedidos da loja por dia da semana (ou a referência do setor), a chuva prevista e as datas, com os
  * limites: cada dia entre 20% abaixo e 20% acima da verba de hoje, até 10% de mudança de um dia para o outro, nenhum dia
@@ -582,6 +593,11 @@ export const RegionRhythmResponse = z.strictObject({
   week_micros: z.int(),
   /** O horário dos pedidos (o mesmo do plano de mídia, D-RG-29): o bloco e quando os anúncios começam; nulo sem ele. */
   hours: z.strictObject({ source: Slug, from: z.string(), to: z.string(), ads_from: z.string() }).nullable(),
+  /**
+   * A janela em que os anúncios ficariam ligados com o ritmo (R7, parte 2; D-RG-61 e D-RG-104): com a função do horário
+   * e os pedidos da própria loja; nula (ou ausente) quando os anúncios ficam ligados o dia todo.
+   */
+  ads_on: RegionRhythmAdsWindow.nullable().optional(),
   /**
    * O ritmo que está rodando nesta semana (aprovado, ou parado e devolvendo a verba) e o que o Gestor de tráfego pediu
    * para a semana desta prévia (em qualquer situação); nulos quando não há.
@@ -668,6 +684,11 @@ export const RegionRhythmDetailResponse = z.strictObject({
   week_micros: z.int(),
   /** O teto por campanha da empresa quando o ritmo foi montado; nulo sem teto. */
   ceiling_micros: z.int().nullable(),
+  /**
+   * A janela em que os anúncios ficam ligados (R7, parte 2; D-RG-104), quando o ritmo foi pedido com ela; nula (ou
+   * ausente): os anúncios ficam ligados o dia todo.
+   */
+  ads_on: RegionRhythmAdsWindow.nullable().optional(),
   generated_at: z.iso.datetime(),
 });
 export type RegionRhythmDetailResponse = z.infer<typeof RegionRhythmDetailResponse>;

@@ -522,6 +522,14 @@ describe.skipIf(!hasDb)('Sua região: a rotina das fontes públicas e o retrato 
       expect(maior.reasons[0]).toMatchObject({ kind: 'pedidos', share_pct: 96 });
       expect(dias.every((d) => d.reasons[0]!.kind === 'pedidos' && d.reasons.every((x) => ['pedidos', 'chuva', 'data'].includes(x.kind)))).toBe(true);
       expect(r.body.hours).toMatchObject({ source: 'loja' });
+      // A janela dos anúncios (R7, parte 2; D-RG-104): sem as funções do ritmo e do horário, nenhuma (ligados o dia
+      // todo); com as duas, de 1 hora antes do bloco dos pedidos da loja até o fim dele. Só o horário não basta.
+      expect(r.body.ads_on ?? null).toBeNull();
+      await ligarFlagDaEmpresa(api, 'ritmo_horario', tenantId, true);
+      expect((await ritmo(tijuca)).body.ads_on ?? null).toBeNull();
+      await ligarFlagDaEmpresa(api, 'ritmo_da_semana', tenantId, true);
+      const comHorario = await ritmo(tijuca);
+      expect(comHorario.body.ads_on).toEqual({ from: comHorario.body.hours.ads_from, to: comHorario.body.hours.to });
 
       // Outra loja da marca, num município de mentira (o código começa com 9), sem pedidos: a referência do setor, e a
       // chuva prevista entra no dia dela.
@@ -540,6 +548,8 @@ describe.skipIf(!hasDb)('Sua região: a rotina das fontes públicas e o retrato 
       await ownerQuery(`delete from liame.region_weather where geo_code = $1`, [cidade]);
       expect(doSetor.status, JSON.stringify(doSetor.body)).toBe(200);
       expect(doSetor.body).toMatchObject({ status: 'pronto', source: 'setor', hours: { source: 'setor' } });
+      // Pela referência do setor, os anúncios ficam ligados o dia todo, mesmo com o horário ligado (D-RG-104).
+      expect(doSetor.body.ads_on).toBeNull();
       const s = doSetor.body.days as Dia[];
       expect(s.every((d) => d.reasons[0]!.kind === 'setor')).toBe(true);
       expect(s[3]!.reasons).toContainEqual({ kind: 'chuva', share_pct: null, text: 'Pancadas de Chuva', min: 19, max: 24, eve: null });
@@ -553,8 +563,11 @@ describe.skipIf(!hasDb)('Sua região: a rotina das fontes públicas e o retrato 
       expect((await ritmo(randomUUID())).status).toBe(404);
       await ownerQuery(`delete from liame.unit where id = $1`, [outra]);
     } finally {
-      // A conta de anúncios sai (leva as campanhas): os testes seguintes contam com a marca sem a Meta.
+      // A conta de anúncios sai (leva as campanhas): os testes seguintes contam com a marca sem a Meta. As funções do
+      // ritmo e do horário voltam a ficar desligadas.
       await ownerQuery(`delete from liame.connected_account where id = $1`, [meta]);
+      await ligarFlagDaEmpresa(api, 'ritmo_horario', tenantId, false);
+      await ligarFlagDaEmpresa(api, 'ritmo_da_semana', tenantId, false);
     }
   });
 
