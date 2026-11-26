@@ -1057,8 +1057,22 @@ describe.skipIf(!hasDb)('o ritmo da semana: os passos do dia (R7, parte 1b-2)', 
     meta.objetos.get(a.id)!.status = 'PAUSED';
     await ligarFlagDaEmpresa(api, 'meta_write', e.tenantId, false);
     expect(resumo(await volta())).toEqual([[a.recurso, 'bloqueado']]);
-    const avisos = await naTransacaoDaEmpresa(database, { tenantId: e.tenantId, userId: null }, () => avisosDoRitmoDasMarcas(currentTx(), [e.brandId], new Date().toISOString()));
-    expect(avisos.map((x) => [x.aviso.tipo, x.aviso.recurso])).toEqual([['pausada', a.recurso]]);
+    const avisosAgora = () => naTransacaoDaEmpresa(database, { tenantId: e.tenantId, userId: null }, () => avisosDoRitmoDasMarcas(currentTx(), [e.brandId], new Date().toISOString()));
+    expect((await avisosAgora()).map((x) => [x.aviso.tipo, x.aviso.recurso])).toEqual([['pausada', a.recurso]]);
+
+    // 7. A nova tentativa do ligar: com a escrita de volta, antes de 15 minutos nada; depois deles, o mesmo passo é reaberto,
+    // a campanha liga e o aviso sai.
     await ligarFlagDaEmpresa(api, 'meta_write', e.tenantId, true);
+    expect(await volta()).toEqual([]);
+    await ownerQuery(`update liame.budget_rhythm_step set updated_at = now() - interval '16 minutes' where rhythm_id = $1 and kind = 'soltar'`, [id]);
+    // O limite de 3 por hora no mesmo objeto (política v18) contaria o pausar, o ligar e o soltar deste teste, feitos em
+    // segundos; na loja, o horário dá no máximo dois passos por dia: as ações de antes ficam de duas horas atrás.
+    await ownerQuery(`update liame.action_request set updated_at = now() - interval '2 hours' where tenant_id = $1 and starts_with(action, 'horario.')`, [e.tenantId]);
+    expect(resumo(await volta())).toEqual([[a.recurso, 'pedido']]);
+    await executar(e);
+    expect(await volta()).toEqual([]);
+    expect(naMeta('status')).toEqual(['PAUSED', 'ACTIVE', 'ACTIVE', 'ACTIVE']);
+    expect((await situacoes()).filter((p) => p[1] === 'soltar')).toEqual([[naLoja().dia, 'soltar', 'feito']]);
+    expect(await avisosAgora()).toEqual([]);
   }, 120_000);
 });

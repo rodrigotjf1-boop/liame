@@ -27,7 +27,9 @@ const minutosDaHora = (hora: string): number => Number(hora.slice(0, 2)) * 60 + 
 /**
  * O que a janela pede no instante dado (o dia e a hora no fuso da loja). Dentro da janela de um dia da semana: ligada,
  * o "ligar" daquele dia. Fora: pausada, o "pausar" da última janela que acabou (ou o da véspera da semana, antes da
- * primeira). Nulo antes da semana e depois que a última janela dela acabou: aí o horário não vale.
+ * primeira). Nulo antes da semana e depois que a última janela dela acabou: aí o horário não vale. A janela da véspera
+ * da semana conta (o domingo da semana anterior): a que passa da meia-noite segue até o fim dela na segunda, em vez de o
+ * ritmo novo pausar à meia-noite e cortar a última hora de domingo.
  */
 export function momentoDoHorario(agora: { dia: string; hora: string }, semana: { de: string; ate: string }, janela: JanelaDoRitmo): MomentoDoHorario | null {
   const t = minutosDoDia(agora.dia) + minutosDaHora(agora.hora);
@@ -36,7 +38,7 @@ export function momentoDoHorario(agora: { dia: string; hora: string }, semana: {
   const de = minutosDaHora(janela.de);
   const duracao = (minutosDaHora(janela.ate) - de + MINUTOS_NO_DIA) % MINUTOS_NO_DIA;
   let ultimaQueAcabou: string | null = null;
-  for (let dia = semana.de; dia <= semana.ate; dia = diasDepois(dia, 1)) {
+  for (let dia = diasDepois(semana.de, -1); dia <= semana.ate; dia = diasDepois(dia, 1)) {
     const comeco = minutosDoDia(dia) + de;
     const fim = comeco + duracao;
     if (t >= comeco && t < fim) return { status: 'ativo', tipo: 'ligar', dia };

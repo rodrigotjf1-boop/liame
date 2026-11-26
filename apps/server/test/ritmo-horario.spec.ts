@@ -32,6 +32,10 @@ describe('o horário do ritmo da semana (R7, parte 2b)', () => {
   });
 
   it('a janela que passa da meia-noite termina no dia seguinte, e o passo é do dia em que ela começou', () => {
+    // A janela da véspera da semana (o domingo anterior) segue até o fim dela na segunda: o ritmo novo não a corta à
+    // meia-noite; acabada, vem o pausar da véspera.
+    expect(momentoDoHorario(em('2026-11-30', '00:30'), SEMANA, PASSA)).toEqual({ status: 'ativo', tipo: 'ligar', dia: '2026-11-29' });
+    expect(momentoDoHorario(em('2026-11-30', '01:00'), SEMANA, PASSA)).toEqual({ status: 'pausado', tipo: 'pausar', dia: '2026-11-29' });
     expect(momentoDoHorario(em('2026-11-30', '20:59'), SEMANA, PASSA)).toEqual({ status: 'pausado', tipo: 'pausar', dia: '2026-11-29' });
     expect(momentoDoHorario(em('2026-11-30', '23:30'), SEMANA, PASSA)).toEqual({ status: 'ativo', tipo: 'ligar', dia: '2026-11-30' });
     expect(momentoDoHorario(em('2026-12-01', '00:30'), SEMANA, PASSA)).toEqual({ status: 'ativo', tipo: 'ligar', dia: '2026-11-30' });
