@@ -27,6 +27,17 @@ import { APP_URL, hasDb, OWNER_URL } from './env.js';
 const RIO = '3304557';
 /** Hoje em Brasília, pelo relógio de verdade (a rota do retrato não recebe o relógio do teste). */
 const HOJE = diaEmBrasilia(new Date());
+/**
+ * O dia dos pedidos da noite (o dia forte da loja no teste da demanda e no ritmo): o sábado mais recente com pelo menos
+ * 3 dias, e nunca um dia que dependa do dia da semana de hoje (ERR-248). Com "3 dias atrás", numa quinta o dia forte
+ * caía numa segunda, o primeiro da semana do ritmo: a verba sobe no máximo 10% por dia a partir da de hoje, a segunda
+ * parava em 1,1, e a sobra da semana ia para o fim dela (o sábado ficava maior).
+ */
+const NOITE = (() => {
+  let dia = diasAntes(HOJE, 3);
+  while (diaDaSemana(dia) !== 6) dia = diasAntes(dia, 1);
+  return dia;
+})();
 // A rotina lê o município de TODAS as lojas no mapa do banco (o de teste é dividido com as outras suítes): a loja da
 // falha usa um código novo a cada rodada, para a leitura dele nunca estar em dia de uma rodada anterior.
 const SP = `35${String(Date.now() % 100_000).padStart(5, '0')}`;
@@ -425,10 +436,12 @@ describe.skipIf(!hasDb)('Sua região: a rotina das fontes públicas e o retrato 
                  $10::timestamptz, $10::timestamptz + interval '3 minutes', case when $6::text = 'cancelado' then $10::timestamptz + interval '10 minutes' end, 1, now())`,
         [tenantId, brandId, o.unidade === undefined ? tijuca : o.unidade, conta, `p-${randomUUID().slice(0, 12)}`, o.status ?? 'confirmado', (o.reais ?? 50) * 1_000_000, (o.estorno ?? 0) * 1_000_000, o.novo ?? null, `${dia}T${hora}:00-03:00`],
       );
-    const noite = diasAntes(HOJE, 3);
+    // A noite e o almoço no mesmo dia da semana (o sábado, uma semana antes), e o das 19h em outro (a quinta): 22 dos 23
+    // pedidos no dia forte, em qualquer dia em que o teste rodar (ERR-248).
+    const noite = NOITE;
     for (let i = 0; i < 12; i++) await pedido(noite, '20:15', { novo: i < 4 ? true : i < 10 ? false : null });
-    for (let i = 0; i < 10; i++) await pedido(diasAntes(HOJE, 10), '12:30', { reais: 40, novo: false });
-    await pedido(diasAntes(HOJE, 5), '19:00', { reais: 60, estorno: 10 });
+    for (let i = 0; i < 10; i++) await pedido(diasAntes(noite, 7), '12:30', { reais: 40, novo: false });
+    await pedido(diasAntes(noite, 2), '19:00', { reais: 60, estorno: 10 });
     // Não contam: o cancelado, o de hoje (a janela termina ontem) e o de outra loja.
     await pedido(noite, '20:20', { status: 'cancelado' });
     await pedido(HOJE, '11:00');
@@ -515,7 +528,7 @@ describe.skipIf(!hasDb)('Sua região: a rotina das fontes públicas e o retrato 
       expect(r.body.week_micros).toBe(dias.reduce((s, d) => s + d.total_micros, 0));
       expect(r.body.week_micros).toBeLessThanOrEqual(546_000_000);
       // O dia da semana com mais pedidos (22 dos 23, no teste da demanda) leva o maior peso; cada dia diz a parte dos pedidos.
-      const forte = diaDaSemana(diasAntes(HOJE, 3));
+      const forte = diaDaSemana(NOITE);
       const maior = dias.reduce((a, b) => (b.weight > a.weight ? b : a));
       expect(maior.weekday).toBe(forte);
       expect(maior.weight).toBeGreaterThan(1);
