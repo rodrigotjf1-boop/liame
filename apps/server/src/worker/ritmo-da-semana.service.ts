@@ -3,8 +3,20 @@ import { Inject, Injectable, Logger } from '@nestjs/common';
 import { sql } from 'drizzle-orm';
 import { ActionService } from '../actions/action.service.js';
 import { naTransacaoDaEmpresa } from '../ai/na-empresa.js';
-import { controleDoRitmo, decidirPasso, DIAS_DA_VOLTA, type PassoDecidido } from '../campanhas/ritmo-passos.js';
-import { CAMPANHAS_NO_RITMO, EstadoDoRitmo, FERRAMENTA_DA_VERBA_DO_DIA, FERRAMENTA_DO_RITMO, FLAG_DO_HORARIO, FLAG_DO_RITMO, FORA_DO_RITMO, recursoDoRitmo } from '../campanhas/ritmo-plano.js';
+import { momentoDoHorario } from '../campanhas/ritmo-horario.js';
+import { controleDoRitmo, decidirPasso, DIAS_DA_VOLTA, type PassoDecidido, pausadaPeloRitmo } from '../campanhas/ritmo-passos.js';
+import {
+  CAMPANHAS_NO_RITMO,
+  EstadoDoRitmo,
+  FERRAMENTA_DA_SITUACAO_DO_RITMO,
+  FERRAMENTA_DA_VERBA_DO_DIA,
+  FERRAMENTA_DO_RITMO,
+  FLAG_DO_HORARIO,
+  FLAG_DO_RITMO,
+  FORA_DO_RITMO,
+  type PassoDoRitmo,
+  recursoDoRitmo,
+} from '../campanhas/ritmo-plano.js';
 import { contaConectada } from '../connections/conectada.js';
 import { currentTx } from '../context/request-context.js';
 import { DATABASE } from '../database/database.module.js';
@@ -61,9 +73,34 @@ export type ResultadoDoPasso = {
   motivo: string | null;
 };
 
-type RitmoDoDia = { id: string; tenant_id: string; brand_id: string; conta: string; status: 'aprovado' | 'parado'; week_end: string; plan: unknown; action_id: string | null; hoje: string };
-type PassoGuardado = { resource_id: string; dia: string; kind: 'ritmo' | 'volta'; status: string };
-type PassoAGuardar = { dia: string; recurso: string; tipo: 'ritmo' | 'volta'; valor: number; esperado: number };
+type RitmoDoDia = {
+  id: string;
+  tenant_id: string;
+  brand_id: string;
+  conta: string;
+  status: 'aprovado' | 'parado';
+  week_start: string;
+  week_end: string;
+  plan: unknown;
+  action_id: string | null;
+  hoje: string;
+  /** A hora de agora no fuso da loja ("HH:MM"), para o horário (R7, parte 2b). */
+  hora: string;
+};
+/** Um passo guardado do ritmo; `atualizado`: quando ele mudou pela última vez (a nova tentativa do ligar conta dele). */
+type PassoGuardado = { resource_id: string; dia: string; kind: PassoDoRitmo['tipo']; status: string; atualizado: string };
+/**
+ * Depois de quanto tempo o ligar que ficou bloqueado (o da janela ou o soltar) é tentado de novo (R7, parte 2b): a
+ * campanha pausada pelo Liame não pode ficar sem anúncios a janela inteira por uma falha passageira. Pausar não tem
+ * nova tentativa: se não saiu, a campanha só fica ligada a mais.
+ */
+export const NOVA_TENTATIVA_DO_LIGAR_MIN = 15;
+/**
+ * O passo a guardar: a verba do dia ou a volta (`valor` é a verba que ele deixa) ou um passo de situação do horário
+ * (`valor` é a verba que o Liame deixou, que não muda; `situacao` é a que ele deixa). `situacaoDeixada`: a situação em
+ * que o Liame deixou o objeto (pausado fora da janela), que o passo da verba espera encontrar.
+ */
+type PassoAGuardar = { dia: string; recurso: string; tipo: PassoDoRitmo['tipo']; valor: number; esperado: number; situacao?: 'ativo' | 'pausado'; situacaoDeixada?: 'ativo' | 'pausado' };
 
 @Injectable()
 export class RitmoDaSemanaService {
@@ -118,7 +155,8 @@ export class RitmoDaSemanaService {
                ${depoisDe ? sql`and b.id > ${depoisDe}::uuid` : sql``}
                and extract(dow from ${referencia} at time zone l.fuso) = ${DIA_DA_PROPOSTA}
                and extract(hour from ${referencia} at time zone l.fuso) >= ${HORA_DA_PROPOSTA}
-               and exists (select 1 from liame.campaign c where c.connected_account_id = m.conta and c.tenant_id = b.tenant_id and c.status = 'ativa')
+               and exists (select 1 from liame.campaign c where c.connected_account_id = m.conta and c.tenant_id = b.tenant_id
+                              and (c.status = 'ativa' or ${pausadaPeloRitmo(sql`c.tenant_id`, sql`'campanha:' || c.external_id`)}))
                and not exists (select 1 from liame.budget_rhythm r
                                 where r.brand_id = b.id and r.week_start = (${referencia} at time zone l.fuso)::date + 1)
              order by b.id
@@ -237,22 +275,31 @@ export class RitmoDaSemanaService {
       const depoisDe = this.depoisDoRitmo;
       // Os ritmos com passo a dar hoje: aprovados ou parados, da semana em curso ou recém-acabada, em que alguma campanha
       // ainda não tem o passo de hoje (as que saíram do ritmo e as que já voltaram à verba de antes não contam). Com o
-      // ritmo rodando, qualquer passo de hoje conta; com ele parado ou com a semana acabada, só o de volta (o ritmo
-      // parado no mesmo dia em que a verba subiu ainda deve o passo de volta de hoje).
+      // ritmo rodando, qualquer passo de verba de hoje conta; com ele parado ou com a semana acabada, só o de volta (o
+      // ritmo parado no mesmo dia em que a verba subiu ainda deve o passo de volta de hoje). Com o horário (R7, parte 2b),
+      // os passos de situação têm hora, e não dia: o ritmo com a janela, e o de uma marca que usou o horário nos últimos
+      // dias (alguma campanha pode ter ficado pausada pelo Liame), entram em toda volta, e a conta de cada campanha decide.
       const pagina = await withSystem(database.db, async (tx) =>
         (
           await tx.execute<RitmoDoDia>(sql`
-            select r.id, r.tenant_id, r.brand_id, r.ad_account_id as conta, r.status, r.week_end::text as week_end, r.plan, r.action_id, h.hoje::text as hoje
+            select r.id, r.tenant_id, r.brand_id, r.ad_account_id as conta, r.status, r.week_start::text as week_start, r.week_end::text as week_end,
+                   r.plan, r.action_id, h.hoje::text as hoje, h.hora
               from liame.budget_rhythm r
               join liame.unit u on u.id = r.unit_id and u.tenant_id = r.tenant_id
-              join lateral (select (${referencia} at time zone coalesce(u.timezone, 'America/Sao_Paulo'))::date as hoje) h on true
+              join lateral (select (${referencia} at time zone coalesce(u.timezone, 'America/Sao_Paulo'))::date as hoje,
+                                   to_char(${referencia} at time zone coalesce(u.timezone, 'America/Sao_Paulo'), 'HH24:MI') as hora) h on true
              where r.status in ('aprovado', 'parado') ${tenantFilter(scope, sql`r.tenant_id`)}
                ${depoisDe ? sql`and r.id > ${depoisDe}::uuid` : sql``}
                and r.week_start <= h.hoje and r.week_end >= h.hoje - ${DIAS_DA_VOLTA}::int
-               and (select count(distinct s.resource_id) from liame.budget_rhythm_step s
-                     where s.rhythm_id = r.id and s.tenant_id = r.tenant_id
-                       and (s.status = 'fora' or (s.kind = 'volta' and s.status = 'igual')
-                            or (s.day = h.hoje and (s.kind = 'volta' or (r.status = 'aprovado' and h.hoje <= r.week_end))))) < jsonb_array_length(r.plan -> 'campanhas')
+               and ((select count(distinct s.resource_id) from liame.budget_rhythm_step s
+                      where s.rhythm_id = r.id and s.tenant_id = r.tenant_id
+                        and (s.status = 'fora' or (s.kind = 'volta' and s.status = 'igual')
+                             or (s.day = h.hoje and (s.kind = 'volta' or (s.kind = 'ritmo' and r.status = 'aprovado' and h.hoje <= r.week_end))))) < jsonb_array_length(r.plan -> 'campanhas')
+                    or r.plan ? 'horario'
+                    or exists (select 1 from liame.budget_rhythm_step p
+                                 join liame.budget_rhythm o on o.id = p.rhythm_id and o.tenant_id = p.tenant_id
+                                where o.tenant_id = r.tenant_id and o.brand_id = r.brand_id and p.kind in ('ligar', 'pausar', 'soltar')
+                                  and p.day >= h.hoje - ${DIAS_DA_VOLTA}::int))
              order by r.id
              limit ${PAGINA}`)
         ).rows,
@@ -286,7 +333,8 @@ export class RitmoDaSemanaService {
       const tx = currentTx();
       const passos = (
         await tx.execute<PassoGuardado>(sql`
-          select resource_id, day::text as dia, kind, status from liame.budget_rhythm_step where tenant_id = ${r.tenant_id} and rhythm_id = ${r.id}`)
+          select resource_id, day::text as dia, kind, status, to_char(updated_at at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') as atualizado
+            from liame.budget_rhythm_step where tenant_id = ${r.tenant_id} and rhythm_id = ${r.id}`)
       ).rows;
       const controle = await controleDoRitmo(tx, { tenantId: r.tenant_id, brandId: r.brand_id, hoje: r.hoje });
       const { policies } = await carregarPoliticas(tx, r.tenant_id, r.brand_id);
@@ -304,35 +352,64 @@ export class RitmoDaSemanaService {
     if (!emNomeDe) return [];
     const base = { tenantId: r.tenant_id, ritmo: r.id };
     const resultados: ResultadoDoPasso[] = [];
+    // O horário vale agora (R7, parte 2b): o ritmo aprovado, com a janela no plano e as três funções ligadas. Sem ele
+    // (o ritmo parado, a semana acabada, uma função desligada), a campanha pausada pelo Liame volta a ficar ligada.
+    const contexto = this.flags.context({ tenantId: r.tenant_id, brandId: r.brand_id });
+    const horarioLigado =
+      r.status === 'aprovado' &&
+      plano.data.horario !== undefined &&
+      (await this.flags.isEnabled(FLAG_DA_REGIAO, contexto)) &&
+      (await this.flags.isEnabled(FLAG_DO_RITMO, contexto)) &&
+      (await this.flags.isEnabled(FLAG_DO_HORARIO, contexto));
     let voltaram = 0;
     for (const c of plano.data.campanhas) {
       const meus = lido.passos.filter((p) => p.resource_id === c.recurso);
-      // Fora do ritmo (mexida por fora) ou já de volta à verba de antes: nada mais a fazer nela.
-      if (meus.some((p) => p.status === 'fora' || (p.kind === 'volta' && p.status === 'igual'))) {
-        voltaram++;
-        continue;
-      }
       const conduzida = lido.controle.objetos.get(c.recurso);
       // Outro ritmo, mais novo, já conduz o objeto (a semana seguinte começou): este não mexe mais nele.
       const deOutro = conduzida !== undefined && conduzida.ritmo !== r.id;
+      // A situação em que o Liame deixou o objeto pelo horário; sem horário, ligado.
+      const situacao = conduzida?.situacao ?? 'ativo';
+      const voltouAVerba = meus.some((p) => p.kind === 'volta' && p.status === 'igual');
+      // Fora do ritmo (mexida por fora), ou já de volta à verba de antes e ligada (a que o outro ritmo conduz é dele):
+      // nada mais a fazer nela.
+      if (meus.some((p) => p.status === 'fora') || (voltouAVerba && (situacao === 'ativo' || deOutro))) {
+        voltaram++;
+        continue;
+      }
+      // Um pedido de cada vez em cada objeto: com dois na fila, o segundo encontraria a campanha mudada pelo primeiro, e
+      // ela sairia do ritmo como se alguém tivesse mexido por fora.
+      if (meus.some((p) => p.status === 'pedido')) continue;
       const deixada = conduzida && !deOutro ? conduzida.deixadaMicros : c.base_micros;
       // A campanha que já está voltando (os limites da empresa não deixaram a verba subir) segue na volta, mesmo com o
       // ritmo rodando: o sinal é ela já ter um passo de volta.
-      const emVolta = meus.some((p) => p.kind === 'volta');
-      const decidir = (situacao: 'aprovado' | 'parado') => decidirPasso({ situacao, hoje: r.hoje, dias, campanha: c, deixadaMicros: deixada, tetoMicros: lido.teto });
-      const passo = deOutro ? { tipo: 'volta' as const, alvoMicros: deixada, valorMicros: deixada } : decidir(emVolta ? 'parado' : r.status);
-      // Uma tentativa por campanha e por dia.
-      if (!passo || meus.some((p) => p.dia === r.hoje && p.kind === passo.tipo)) continue;
-      const dado = await this.darPasso(database, r, c.recurso, passo, deixada, emNomeDe, agora, deOutro ? 'segue no ritmo da semana seguinte' : null);
-      resultados.push({ ...base, ...dado.resultado });
-      if (dado.voltou) voltaram++;
-      if (!dado.saiu) continue;
-      // Os limites da empresa não deixaram a verba subir: a campanha sai do ritmo e começa a voltar hoje.
-      const volta = decidir('parado');
-      if (!volta) continue;
-      const daVolta = await this.darPasso(database, r, c.recurso, volta, deixada, emNomeDe, agora, 'saiu do ritmo: a verba já é a de antes');
-      resultados.push({ ...base, ...daVolta.resultado });
-      if (daVolta.voltou) voltaram++;
+      let emVolta = meus.some((p) => p.kind === 'volta');
+      let pediu = false;
+      if (!voltouAVerba) {
+        const decidir = (s: 'aprovado' | 'parado') => decidirPasso({ situacao: s, hoje: r.hoje, dias, campanha: c, deixadaMicros: deixada, tetoMicros: lido.teto });
+        const passo = deOutro ? { tipo: 'volta' as const, alvoMicros: deixada, valorMicros: deixada } : decidir(emVolta ? 'parado' : r.status);
+        // Uma tentativa por campanha e por dia.
+        if (passo && !meus.some((p) => p.dia === r.hoje && p.kind === passo.tipo)) {
+          const dado = await this.darPasso(database, r, c.recurso, passo, deixada, emNomeDe, agora, deOutro ? 'segue no ritmo da semana seguinte' : null, situacao);
+          resultados.push({ ...base, ...dado.resultado });
+          pediu = dado.resultado.situacao === 'pedido';
+          if (dado.voltou && (situacao === 'ativo' || deOutro)) voltaram++;
+          if (dado.saiu) {
+            // Os limites da empresa não deixaram a verba subir: a campanha sai do ritmo e começa a voltar hoje.
+            emVolta = true;
+            const volta = decidir('parado');
+            if (volta) {
+              const daVolta = await this.darPasso(database, r, c.recurso, volta, deixada, emNomeDe, agora, 'saiu do ritmo: a verba já é a de antes', situacao);
+              resultados.push({ ...base, ...daVolta.resultado });
+              pediu = pediu || daVolta.resultado.situacao === 'pedido';
+              if (daVolta.voltou && situacao === 'ativo') voltaram++;
+            }
+          }
+        }
+      }
+      // O horário (R7, parte 2b): o passo de situação deste momento, depois que o da verba saiu da fila.
+      if (pediu || deOutro) continue;
+      const doHorario = await this.passoDaSituacao(database, r, c.recurso, meus, { janela: horarioLigado && !emVolta ? (plano.data.horario ?? null) : null, situacao, deixada, emNomeDe, agora });
+      if (doHorario) resultados.push({ ...base, ...doHorario });
     }
     // A semana acabou e todas as campanhas voltaram à verba de antes (ou saíram do ritmo): o ritmo se encerra.
     if (r.status === 'aprovado' && r.hoje > r.week_end && voltaram === plano.data.campanhas.length) {
@@ -350,7 +427,8 @@ export class RitmoDaSemanaService {
    * O passo de hoje de uma campanha. Sem o que mudar, só registra: "igual" quando a verba já é a do dia (ou já voltou à
    * de antes), "bloqueado" quando o teto por campanha não deixa subir. Senão, pede a mudança pelo trilho de ações.
    * `voltou`: a campanha terminou a volta. `saiu`: os limites da empresa não deixaram a verba do dia SUBIR, e a
-   * campanha sai do ritmo (quem chama dá o passo de volta de hoje).
+   * campanha sai do ritmo (quem chama dá o passo de volta de hoje). `situacaoDeixada`: a situação em que o Liame deixou a
+   * campanha pelo horário (fora da janela, pausada por ele), que o passo espera encontrar.
    */
   private async darPasso(
     database: Database,
@@ -361,8 +439,9 @@ export class RitmoDaSemanaService {
     emNomeDe: string,
     agora: Date,
     motivoDoIgual: string | null,
+    situacaoDeixada: 'ativo' | 'pausado',
   ): Promise<{ resultado: Omit<ResultadoDoPasso, 'tenantId' | 'ritmo'>; voltou: boolean; saiu: boolean }> {
-    const linha: PassoAGuardar = { dia: r.hoje, recurso, tipo: passo.tipo, valor: passo.valorMicros, esperado: deixada };
+    const linha: PassoAGuardar = { dia: r.hoje, recurso, tipo: passo.tipo, valor: passo.valorMicros, esperado: deixada, situacaoDeixada };
     if (passo.valorMicros !== deixada) return this.pedirPasso(database, r, linha, emNomeDe, agora);
     const igual = passo.alvoMicros === deixada;
     const motivo = igual ? motivoDoIgual : passo.tipo === 'ritmo' ? 'o teto por campanha não deixa a verba subir' : 'o teto por campanha não deixa a verba voltar à de antes';
@@ -370,13 +449,56 @@ export class RitmoDaSemanaService {
     return { resultado: { recurso, situacao: igual ? 'igual' : 'bloqueado', motivo }, voltou: igual && passo.tipo === 'volta', saiu: !igual && passo.tipo === 'ritmo' };
   }
 
-  /** O passo que não vira pedido (a verba já é a do dia, o teto não deixa subir, a campanha saiu do ritmo), guardado com o porquê. */
-  private async guardarPasso(database: Database, r: RitmoDoDia, linha: PassoAGuardar, status: 'igual' | 'bloqueado' | 'fora', motivo: string | null): Promise<void> {
+  /**
+   * O passo de situação deste momento numa campanha (R7, parte 2b; D-RG-104). Com a janela valendo, o que ela pede agora
+   * (ligada dentro, pausada fora: `momentoDoHorario`); sem ela, a campanha que o Liame deixou pausada volta a ficar
+   * ligada o dia todo ("soltar"). Uma tentativa por momento (o ligar e o pausar de cada janela, o soltar de cada dia).
+   * Já na situação pedida, só registra ("igual"); senão, pede pelo trilho de ações. Nulo: nada a fazer agora.
+   */
+  private async passoDaSituacao(
+    database: Database,
+    r: RitmoDoDia,
+    recurso: string,
+    meus: readonly PassoGuardado[],
+    e: { janela: EstadoDoRitmo['horario'] | null; situacao: 'ativo' | 'pausado'; deixada: number; emNomeDe: string; agora: Date },
+  ): Promise<Omit<ResultadoDoPasso, 'tenantId' | 'ritmo'> | null> {
+    const momento = e.janela ? momentoDoHorario({ dia: r.hoje, hora: r.hora }, { de: r.week_start, ate: r.week_end }, e.janela) : null;
+    const alvo = momento
+      ? { tipo: momento.tipo, dia: momento.dia, status: momento.status }
+      : e.situacao === 'pausado'
+        ? { tipo: 'soltar' as const, dia: r.hoje, status: 'ativo' as const }
+        : null;
+    if (!alvo) return null;
+    // Uma tentativa por momento; o ligar que ficou bloqueado (o da janela ou o soltar) é tentado de novo depois de
+    // `NOVA_TENTATIVA_DO_LIGAR_MIN`, no mesmo passo: a campanha pausada pelo Liame não fica sem anúncios a janela inteira
+    // por uma falha passageira (o aviso `ritmo_pausada` mostra enquanto isso).
+    const existente = meus.find((p) => p.kind === alvo.tipo && p.dia === alvo.dia);
+    const deNovo =
+      existente !== undefined && alvo.status === 'ativo' && existente.status === 'bloqueado' && Date.parse(existente.atualizado) <= e.agora.getTime() - NOVA_TENTATIVA_DO_LIGAR_MIN * 60_000;
+    if (existente && !deNovo) return null;
+    const linha: PassoAGuardar = { dia: alvo.dia, recurso, tipo: alvo.tipo, valor: e.deixada, esperado: e.deixada, situacao: alvo.status };
+    if (e.situacao === alvo.status) {
+      await this.guardarPasso(database, r, linha, 'igual', null, deNovo);
+      return { recurso, situacao: 'igual', motivo: null };
+    }
+    return (await this.pedirPasso(database, r, linha, e.emNomeDe, e.agora, deNovo)).resultado;
+  }
+
+  /**
+   * O passo que não vira pedido (a verba já é a do dia, o teto não deixa subir, a campanha saiu do ritmo), guardado com o
+   * porquê. `sobreOBloqueado`: a nova tentativa do ligar (R7, parte 2b) reescreve o passo bloqueado do mesmo momento (a
+   * situação, o porquê e a hora, que conta a espera da tentativa seguinte); fora disso, o passo que já existe fica.
+   */
+  private async guardarPasso(database: Database, r: RitmoDoDia, linha: PassoAGuardar, status: 'igual' | 'bloqueado' | 'fora', motivo: string | null, sobreOBloqueado = false): Promise<void> {
     await naTransacaoDaEmpresa(database, { tenantId: r.tenant_id, userId: null }, async () => {
       await currentTx().execute(sql`
         insert into liame.budget_rhythm_step (id, tenant_id, rhythm_id, day, resource_id, kind, target_micros, expected_micros, status, reason)
         values (${uuidv7()}, ${r.tenant_id}, ${r.id}, ${linha.dia}::date, ${linha.recurso}, ${linha.tipo}, ${linha.valor}, ${linha.esperado}, ${status}, ${motivo})
-        on conflict (rhythm_id, day, resource_id, kind) do nothing`);
+        on conflict (rhythm_id, day, resource_id, kind) ${
+          sobreOBloqueado
+            ? sql`do update set status = excluded.status, reason = excluded.reason, updated_at = now() where liame.budget_rhythm_step.status = 'bloqueado'`
+            : sql`do nothing`
+        }`);
     });
   }
 
@@ -390,6 +512,7 @@ export class RitmoDaSemanaService {
    *   - o resto (o portão, a trava, a política pedindo outro modo): o passo de hoje fica bloqueado.
    * Não guardam nada, e a volta seguinte tenta de novo: a falha passageira (a Meta fora do ar) e o pedido de ontem que
    * ainda está na fila para o mesmo objeto (o executor o encerra pelo dia, e aí o de hoje entra).
+   * `deNovo` (R7, parte 2b): a nova tentativa do ligar bloqueado reabre o mesmo passo, em vez de guardar outro.
    */
   private async pedirPasso(
     database: Database,
@@ -397,28 +520,40 @@ export class RitmoDaSemanaService {
     linha: PassoAGuardar,
     emNomeDe: string,
     agora: Date,
+    deNovo = false,
   ): Promise<{ resultado: Omit<ResultadoDoPasso, 'tenantId' | 'ritmo'>; voltou: boolean; saiu: boolean }> {
     const base = { recurso: linha.recurso, voltou: false, saiu: false };
     try {
       return await naTransacaoDaEmpresa(database, { tenantId: r.tenant_id, userId: null }, async () => {
         const tx = currentTx();
-        const id = uuidv7();
-        const guardado = await tx.execute(sql`
-          insert into liame.budget_rhythm_step (id, tenant_id, rhythm_id, day, resource_id, kind, target_micros, expected_micros, status)
-          values (${id}, ${r.tenant_id}, ${r.id}, ${linha.dia}::date, ${linha.recurso}, ${linha.tipo}, ${linha.valor}, ${linha.esperado}, 'pedido')
-          on conflict (rhythm_id, day, resource_id, kind) do nothing
-          returning id`);
+        const guardado = deNovo
+          ? await tx.execute<{ id: string }>(sql`
+              update liame.budget_rhythm_step set status = 'pedido', reason = null, action_id = null, updated_at = now()
+               where tenant_id = ${r.tenant_id} and rhythm_id = ${r.id} and day = ${linha.dia}::date and resource_id = ${linha.recurso} and kind = ${linha.tipo}
+                 and status = 'bloqueado'
+              returning id`)
+          : await tx.execute<{ id: string }>(sql`
+              insert into liame.budget_rhythm_step (id, tenant_id, rhythm_id, day, resource_id, kind, target_micros, expected_micros, status)
+              values (${uuidv7()}, ${r.tenant_id}, ${r.id}, ${linha.dia}::date, ${linha.recurso}, ${linha.tipo}, ${linha.valor}, ${linha.esperado}, 'pedido')
+              on conflict (rhythm_id, day, resource_id, kind) do nothing
+              returning id`);
+        const id = guardado.rows[0]?.id;
         // Outra volta chegou antes: esta não pede de novo.
-        if (!guardado.rows[0]) return { ...base, resultado: { recurso: linha.recurso, situacao: 'nao_pediu' as const, motivo: 'ja_tem_passo' } };
+        if (!id) return { ...base, resultado: { recurso: linha.recurso, situacao: 'nao_pediu' as const, motivo: 'ja_tem_passo' } };
+        // O passo de situação do horário (R7, parte 2b) tem a ferramenta própria; o da verba diz a situação em que o Liame
+        // deixou a campanha só quando ela está pausada por ele (sem horário, o pedido fica igual ao de antes).
+        const deSituacao = linha.tipo === 'ligar' || linha.tipo === 'pausar' || linha.tipo === 'soltar';
         const pedido = await this.actions.ajustarPeloRitmo(
           { tenantId: r.tenant_id, agentKey: GESTOR_DE_TRAFEGO, agentLabel: ROTULO_DO_GESTOR, emNomeDe },
           {
-            tool: FERRAMENTA_DA_VERBA_DO_DIA,
+            tool: deSituacao ? FERRAMENTA_DA_SITUACAO_DO_RITMO : FERRAMENTA_DA_VERBA_DO_DIA,
             brand_id: r.brand_id,
             provider: 'meta_ads',
             account_id: r.conta,
             resource_id: linha.recurso,
-            params: { daily_budget_micros: linha.valor, expected_micros: linha.esperado },
+            params: deSituacao
+              ? { status: linha.situacao ?? 'ativo', expected_micros: linha.esperado }
+              : { daily_budget_micros: linha.valor, expected_micros: linha.esperado, ...(linha.situacaoDeixada === 'pausado' ? { expected_status: 'pausado' } : {}) },
           },
           { ritmo: r.id, dia: linha.dia, tipo: linha.tipo },
           agora,
@@ -435,7 +570,7 @@ export class RitmoDaSemanaService {
       }
       const fora = err.code === 'plano-recusado';
       const motivo = (fora ? (err.detail === FORA_DO_RITMO ? 'a campanha não está como o Liame deixou' : err.detail) : `${err.code}: ${err.detail}`).slice(0, 500);
-      await this.guardarPasso(database, r, linha, fora ? 'fora' : 'bloqueado', motivo);
+      await this.guardarPasso(database, r, linha, fora ? 'fora' : 'bloqueado', motivo, deNovo);
       // O limite da empresa não deixou a verba do dia subir (D-RG-72).
       const saiu = !fora && linha.tipo === 'ritmo' && linha.valor > linha.esperado && err.getStatus() === 422;
       return { ...base, saiu, resultado: { recurso: linha.recurso, situacao: fora ? 'fora' : 'bloqueado', motivo } };

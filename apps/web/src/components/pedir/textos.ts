@@ -569,6 +569,9 @@ export function tituloDoPedido(action: string, alvo: Pick<AdObject, 'kind' | 'na
   // O passo de um dia do ritmo da semana (plano da região, R7): a mesma mudança de verba, pelo ritmo aprovado.
   if (action === 'orcamento.ritmo_aumentar') return `Aumentar a verba ${a.do}, pelo ritmo da semana`;
   if (action === 'orcamento.ritmo_reduzir') return `Reduzir a verba ${a.do}, pelo ritmo da semana`;
+  // O horário do ritmo (R7, parte 2b): ligar no começo da janela dos pedidos, pausar no fim (antes do `.pausar` comum).
+  if (action === 'horario.ligar') return `Ligar ${a.o}, pelo horário do ritmo da semana`;
+  if (action === 'horario.pausar') return `Pausar ${a.o}, pelo horário do ritmo da semana`;
   if (action.endsWith('.pausar')) return `Pausar ${a.o}`;
   if (action.endsWith('.retomar')) return `Retomar ${a.o}`;
   return `Mudança ${a.do}`;

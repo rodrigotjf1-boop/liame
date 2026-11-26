@@ -623,8 +623,11 @@ export const BudgetMonthRhythmCheck = z.strictObject({
    * rotina tenta de novo depois de uma hora.
    */
   complete: z.boolean(),
-  /** Os avisos dela na Atenção, um por campanha ou conjunto, pelo tipo do aviso. */
-  warnings: z.array(z.enum(['ritmo_gasto_acima', 'ritmo_sem_volta', 'ritmo_campanha_saiu'])),
+  /**
+   * Os avisos dela na Atenção, um por campanha ou conjunto, pelo tipo do aviso; `ritmo_pausada` (R7, parte 2b): pausada
+   * pelo horário, e o Liame não conseguiu ligar de novo.
+   */
+  warnings: z.array(z.enum(['ritmo_pausada', 'ritmo_gasto_acima', 'ritmo_sem_volta', 'ritmo_campanha_saiu'])),
 });
 export type BudgetMonthRhythmCheck = z.infer<typeof BudgetMonthRhythmCheck>;
 

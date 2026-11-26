@@ -1,7 +1,8 @@
 import type { Tx } from '@liame/database';
-import { sql } from 'drizzle-orm';
+import { type SQL, sql } from 'drizzle-orm';
 import { passoDoDia } from '../regiao/ritmo-da-semana.js';
 import { diasDepois } from '../regiao/semana.js';
+import { situacaoDeixada } from './ritmo-horario.js';
 import { EstadoDoRitmo } from './ritmo-plano.js';
 
 // Os passos do ritmo da semana (plano da região, R7, parte 1b-2; D-RG-62 e D-RG-63): o que o Liame deixou em cada
@@ -54,6 +55,11 @@ export interface ControleDoObjeto {
   deixadaMicros: number;
   /** A verba do último dia do ritmo no plano (o domingo). */
   ultimoDiaMicros: number;
+  /**
+   * A situação em que o Liame deixou o objeto pelo horário do ritmo (R7, parte 2b): pausado depois de um "pausar" feito;
+   * ligado sem passo de situação, ou depois de um "ligar" ou "soltar".
+   */
+  situacao: 'ativo' | 'pausado';
 }
 
 export interface ControleDoRitmo {
@@ -71,6 +77,20 @@ export interface ControleDoRitmo {
  * o limite do mês segura (a verba ficou abaixo da de antes e subir não cabe) é tentada todo dia, até o mês virar.
  */
 export const DIAS_DA_VOLTA = 35;
+
+/**
+ * O objeto pausado pelo próprio Liame no horário do ritmo (R7, parte 2b), em SQL: o último passo de situação feito nele
+ * (ou o último que o tirou do ritmo) é um "pausar". Fora da janela, a campanha está pausada por ele e continua no ritmo:
+ * conta como ativa no pedido da semana seguinte (D-RG-64 fala das pausadas por uma pessoa). `tenant` e `recurso` são as
+ * expressões da consulta de quem chama (o recurso é `campanha:<id>` ou `conjunto:<id>`).
+ */
+export const pausadaPeloRitmo = (tenant: SQL, recurso: SQL): SQL => sql`coalesce((
+  select s.kind = 'pausar' and s.status = 'feito'
+    from liame.budget_rhythm_step s
+   where s.tenant_id = ${tenant} and s.resource_id = ${recurso}
+     and ((s.kind in ('ligar', 'pausar', 'soltar') and s.status = 'feito') or s.status = 'fora')
+   order by s.day desc, s.created_at desc
+   limit 1), false)`;
 
 /**
  * O que o Liame conduz numa marca em `hoje`: os objetos dos ritmos aprovados ou parados recentes que ainda não saíram do
@@ -92,8 +112,8 @@ export async function controleDoRitmo(tx: Tx, alvo: { tenantId: string; brandId:
     sql`, `,
   );
   const passos = (
-    await tx.execute<{ rhythm_id: string; resource_id: string; status: string; target_micros: string }>(sql`
-      select rhythm_id, resource_id, status, target_micros::text as target_micros
+    await tx.execute<{ rhythm_id: string; resource_id: string; kind: string; status: string; target_micros: string }>(sql`
+      select rhythm_id, resource_id, kind, status, target_micros::text as target_micros
         from liame.budget_rhythm_step
        where tenant_id = ${alvo.tenantId} and rhythm_id in (${ids}) and status in ('feito', 'fora')
        order by day, created_at`)
@@ -114,13 +134,18 @@ export async function controleDoRitmo(tx: Tx, alvo: { tenantId: string; brandId:
       const feito = meus.filter((p) => p.status === 'feito').at(-1);
       // Sem passo feito neste ritmo, vale o que o ritmo anterior deixou (a semana que continua de outra), ou a verba de antes.
       const deixadaMicros = feito ? Number(feito.target_micros) : (controle.objetos.get(c.recurso)?.deixadaMicros ?? c.base_micros);
+      // A situação pelo horário (R7, parte 2b): os passos de situação feitos neste objeto, de todos os ritmos, depois da
+      // última vez que ele saiu de um ritmo (dali em diante, o que vale é o que a pessoa deixou).
+      const doObjeto = passos.filter((p) => p.resource_id === c.recurso);
+      const depoisDoFora = doObjeto.slice(doObjeto.map((p) => p.status).lastIndexOf('fora') + 1);
+      const situacao = situacaoDeixada(depoisDoFora.filter((p) => p.status === 'feito'));
       const naSemana = r.status === 'aprovado' && alvo.hoje <= r.week_end;
-      if (!naSemana && deixadaMicros === c.base_micros) {
-        // Já voltou à verba de antes: o que a pessoa fizer daqui em diante é dela.
+      if (!naSemana && deixadaMicros === c.base_micros && situacao === 'ativo') {
+        // Já voltou à verba de antes e está ligado: o que a pessoa fizer daqui em diante é dela.
         controle.objetos.delete(c.recurso);
         continue;
       }
-      controle.objetos.set(c.recurso, { ritmo: r.id, baseMicros: c.base_micros, deixadaMicros, ultimoDiaMicros: c.dias_micros[6]! });
+      controle.objetos.set(c.recurso, { ritmo: r.id, baseMicros: c.base_micros, deixadaMicros, ultimoDiaMicros: c.dias_micros[6]!, situacao });
     }
     if (r.status === 'aprovado' && vespera !== null && r.week_end === vespera) {
       controle.anterior = { ritmo: r.id, peso: plano.data.dias[6]!.peso, ate: r.week_end };

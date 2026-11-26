@@ -116,7 +116,7 @@ describe('o passo do ritmo da semana (R7, parte 1b-2)', () => {
     expect([t.risk, t.providers, t.decisaoJaTomada, t.flag, t.alwaysApproval ?? false, t.compensation]).toEqual(['R2', ['meta_ads'], 'ritmo_da_semana', 'ritmo_da_semana', false, 'restaurar_orcamento_anterior_se_inalterado']);
     // As que saem sem outra aprovação porque uma pessoa já decidiu: as duas do atendimento automático, o passo do ritmo e
     // o cupom do teste de criativo (plano da região, R8).
-    expect(Object.values(TOOLS).filter(saiPorDecisaoJaTomada).map((x) => x.name)).toEqual(['orcamento_do_ritmo', 'cupom_do_teste', 'comentario_responder_auto', 'direct_responder_auto']);
+    expect(Object.values(TOOLS).filter(saiPorDecisaoJaTomada).map((x) => x.name)).toEqual(['orcamento_do_ritmo', 'situacao_do_ritmo', 'cupom_do_teste', 'comentario_responder_auto', 'direct_responder_auto']);
     expect(saiPorDecisaoJaTomada(TOOLS.orcamento_ajustar)).toBe(false);
     expect(saiPorDecisaoJaTomada(TOOLS.ritmo_da_semana)).toBe(false);
     expect(saiPorDecisaoJaTomada(undefined)).toBe(false);
@@ -142,6 +142,40 @@ describe('o passo do ritmo da semana (R7, parte 1b-2)', () => {
     // O pedido de verba comum segue com as ações de sempre.
     expect(TOOLS.orcamento_ajustar!.plan(campanha as never, { daily_budget_micros: 66 * REAL })).toMatchObject({ action: 'orcamento.aumentar', reserveMicros: 6 * REAL });
     expect(TOOLS.orcamento_ajustar!.plan(campanha as never, { daily_budget_micros: 54 * REAL })).toMatchObject({ action: 'orcamento.reduzir' });
+    // Com o horário (R7, parte 2b), fora da janela a campanha está pausada pelo próprio Liame: o passo da verba diz isso
+    // e muda a verba assim mesmo; sem dizer, a pausada continua sendo "mexida por fora".
+    const pausada = { ...campanha, status: 'pausado' };
+    expect(t.plan(pausada as never, { daily_budget_micros: 66 * REAL, expected_micros: 60 * REAL, expected_status: 'pausado' })).toMatchObject({ action: 'orcamento.ritmo_aumentar', desiredState: { status: 'pausado', daily_budget_micros: 66 * REAL } });
+    expect(() => t.plan(campanha as never, { daily_budget_micros: 66 * REAL, expected_micros: 60 * REAL, expected_status: 'pausado' })).toThrow(FORA_DO_RITMO);
+  });
+
+  it('a ferramenta do horário (R7, parte 2b): ligar e pausar sem mudar a verba, só com a campanha como o Liame deixou', () => {
+    const t = TOOLS.situacao_do_ritmo!;
+    // Sem a função da ferramenta: deixar ligada não pode depender de uma função (o portão confere as do ligar e do pausar).
+    expect([t.risk, t.providers, t.decisaoJaTomada, t.flag, t.alwaysApproval ?? false]).toEqual(['R2', ['meta_ads'], 'ritmo_da_semana', undefined, false]);
+    const campanha = { tipo: 'campanha', id: '120210000000001', status: 'ativo', daily_budget_micros: 60 * REAL, lifetime_budget_micros: null, moeda: 'BRL' };
+    const pausada = { ...campanha, status: 'pausado' };
+    expect(t.plan(campanha as never, { status: 'pausado', expected_micros: 60 * REAL })).toEqual({
+      action: 'horario.pausar',
+      budgetImpact: 'none',
+      valueMicros: null,
+      currentValueMicros: null,
+      reserveMicros: 0,
+      desiredState: { ...campanha, status: 'pausado' },
+    });
+    expect(t.plan(pausada as never, { status: 'ativo', expected_micros: 60 * REAL })).toMatchObject({ action: 'horario.ligar', reserveMicros: 0, desiredState: { status: 'ativo', daily_budget_micros: 60 * REAL } });
+    // Já na situação pedida, ou com outra verba: alguém mexeu por fora, e a campanha sai do ritmo.
+    expect(() => t.plan(pausada as never, { status: 'pausado', expected_micros: 60 * REAL })).toThrow(FORA_DO_RITMO);
+    expect(() => t.plan(campanha as never, { status: 'ativo', expected_micros: 60 * REAL })).toThrow(FORA_DO_RITMO);
+    expect(() => t.plan(campanha as never, { status: 'pausado', expected_micros: 55 * REAL })).toThrow(FORA_DO_RITMO);
+    // O conjunto também; o anúncio e o objeto arquivado, não.
+    expect(t.plan({ ...campanha, tipo: 'conjunto' } as never, { status: 'pausado', expected_micros: 60 * REAL })).toMatchObject({ action: 'horario.pausar' });
+    expect(() => t.plan({ ...campanha, tipo: 'anuncio' } as never, { status: 'pausado', expected_micros: 60 * REAL })).toThrow();
+    expect(() => t.plan({ ...campanha, status: 'arquivado' } as never, { status: 'ativo', expected_micros: 60 * REAL })).toThrow();
+    expect(t.params.safeParse({ status: 'ligado', expected_micros: 60 * REAL }).success).toBe(false);
+    // A volta de um passo, pedida por uma pessoa, devolve a situação de antes, com as ferramentas comuns.
+    expect(t.undo!(campanha as never)).toEqual({ tool: 'campanha_retomar', params: {} });
+    expect(t.undo!({ ...pausada, tipo: 'conjunto' } as never)).toEqual({ tool: 'conjunto_pausar', params: {} });
   });
 
   it('a política da distribuição: o automático só para o passo do ritmo, na Meta, pedido pelo funcionário de IA', () => {
@@ -164,5 +198,18 @@ describe('o passo do ritmo da semana (R7, parte 1b-2)', () => {
     expect(modo('orcamento.ritmo_aumentar', 'agent', 'google_ads')).not.toBe('AUTO');
     // O que a regra NÃO liga (D-A7-11): o pedido de verba comum do funcionário de IA segue fora do automático.
     for (const acao of ['orcamento.aumentar', 'orcamento.reduzir']) expect(['AUTO', 'LIMITED_AUTO']).not.toContain(modo(acao, 'agent'));
+  });
+
+  it('a política da distribuição (v18): o horário do ritmo no automático só para o funcionário de IA, na Meta, e com limite por hora', () => {
+    const proposta = (action: string, actor: 'human' | 'agent', provider = 'meta_ads') =>
+      ActionProposal.parse({ tool: 'situacao_do_ritmo', action, provider, account_id: 'a', risk_level: 'R2', budget_impact: 'none', value_micros: null, current_value_micros: null, actor });
+    const modo = (action: string, actor: 'human' | 'agent', provider?: string) => chooseMode([PLATFORM_POLICY], proposta(action, actor, provider)).mode;
+    expect(PLATFORM_POLICY.version).toBe(18);
+    expect([modo('horario.ligar', 'agent'), modo('horario.pausar', 'agent')]).toEqual(['AUTO', 'AUTO']);
+    expect([modo('horario.ligar', 'human'), modo('horario.pausar', 'human')]).toEqual(['APPROVAL', 'APPROVAL']);
+    expect(modo('horario.ligar', 'agent', 'google_ads')).not.toBe('AUTO');
+    // O que a regra NÃO liga: pausar e retomar comuns do funcionário de IA seguem fora do automático.
+    for (const acao of ['campanha.pausar', 'campanha.retomar', 'conjunto.pausar', 'conjunto.retomar']) expect(['AUTO', 'LIMITED_AUTO']).not.toContain(modo(acao, 'agent'));
+    expect(PLATFORM_POLICY.document.rules).toContainEqual({ type: 'rate_limit', action: 'horario.*', provider: 'meta_ads', per: 'resource', max: 3, window_minutes: 60 });
   });
 });

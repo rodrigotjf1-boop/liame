@@ -187,15 +187,15 @@ describe('as ferramentas, a política e o conector da conta', () => {
         current_value_micros: null,
         actor,
       });
-    expect(PLATFORM_POLICY.version).toBe(17);
+    expect(PLATFORM_POLICY.version).toBe(18);
     for (const acao of [ACAO_DE_RESPONDER, ACAO_DE_OCULTAR, ACAO_DE_MOSTRAR]) {
-      for (const actor of ['human', 'agent'] as const) expect(chooseMode([PLATFORM_POLICY], proposta(acao, actor)), `${acao} ${actor}`).toEqual({ mode: 'APPROVAL', source: 'platform', version: 17 });
+      for (const actor of ['human', 'agent'] as const) expect(chooseMode([PLATFORM_POLICY], proposta(acao, actor)), `${acao} ${actor}`).toEqual({ mode: 'APPROVAL', source: 'platform', version: 18 });
     }
-    expect(chooseMode([PLATFORM_POLICY], proposta(ACAO_DE_APAGAR_A_RESPOSTA))).toEqual({ mode: 'AUTO', source: 'platform', version: 17 });
-    expect(chooseMode([PLATFORM_POLICY], proposta(ACAO_DE_APAGAR_A_RESPOSTA, 'agent'))).toEqual({ mode: 'APPROVAL', source: 'platform', version: 17 });
+    expect(chooseMode([PLATFORM_POLICY], proposta(ACAO_DE_APAGAR_A_RESPOSTA))).toEqual({ mode: 'AUTO', source: 'platform', version: 18 });
+    expect(chooseMode([PLATFORM_POLICY], proposta(ACAO_DE_APAGAR_A_RESPOSTA, 'agent'))).toEqual({ mode: 'APPROVAL', source: 'platform', version: 18 });
     // v12 (parte 2e-1): a resposta automática sai sozinha só para o funcionário de IA; uma pessoa cai na Aprovação.
-    expect(chooseMode([PLATFORM_POLICY], proposta(ACAO_DE_RESPONDER_SOZINHO, 'agent'))).toEqual({ mode: 'AUTO', source: 'platform', version: 17 });
-    expect(chooseMode([PLATFORM_POLICY], proposta(ACAO_DE_RESPONDER_SOZINHO, 'human'))).toEqual({ mode: 'APPROVAL', source: 'platform', version: 17 });
+    expect(chooseMode([PLATFORM_POLICY], proposta(ACAO_DE_RESPONDER_SOZINHO, 'agent'))).toEqual({ mode: 'AUTO', source: 'platform', version: 18 });
+    expect(chooseMode([PLATFORM_POLICY], proposta(ACAO_DE_RESPONDER_SOZINHO, 'human'))).toEqual({ mode: 'APPROVAL', source: 'platform', version: 18 });
   });
 
   it('o recurso do comentário, e o conector da conta escolhe pelo recurso, com a flag e a trava do conector do post', () => {

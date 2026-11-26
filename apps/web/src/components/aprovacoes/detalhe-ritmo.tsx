@@ -334,7 +334,7 @@ export function DetalheRitmo({ acao, grupo, agora, podeDecidir, podeOperar, temA
               {r.today < r.week.from
                 ? `O ritmo começa em ${diaMes(r.week.from)}: o Liame muda a verba no começo de cada dia.`
                 : naSemana
-                  ? 'O ritmo está rodando: o Liame muda a verba no começo de cada dia.'
+                  ? `O ritmo está rodando: o Liame muda a verba no começo de cada dia${janela ? ` e ${janela.frase}` : ''}.`
                   : 'A semana acabou: a verba está voltando à de antes, em até 10% por dia.'}
             </span>
           </div>

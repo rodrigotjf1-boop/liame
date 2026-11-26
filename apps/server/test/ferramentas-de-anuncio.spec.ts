@@ -56,6 +56,8 @@ describe('ferramentas de anúncio (A4 · X2)', () => {
       ritmo_da_semana: ['R2', 'meta_ads', 'parar_o_ritmo'],
       // O passo de um dia do ritmo aprovado (R7, parte 1b-2): a mesma mudança de verba, dentro do que a pessoa aprovou.
       orcamento_do_ritmo: ['R2', 'meta_ads', 'restaurar_orcamento_anterior_se_inalterado'],
+      // O horário do ritmo aprovado (R7, parte 2b): ligar e pausar na janela dos pedidos, sem mudar a verba.
+      situacao_do_ritmo: ['R2', 'meta_ads', 'devolver_situacao_anterior_se_inalterado'],
       // O teste de criativo (plano da região, R8): a campanha de teste nasce pausada; ativar é verba nova, e a volta é
       // encerrar o teste pela tela dele; encerrar pausa a campanha, e para rodar de novo é outro pedido de ativar.
       teste_de_criativo_criar: ['R2', 'meta_ads', 'fica_pausada_na_meta'],

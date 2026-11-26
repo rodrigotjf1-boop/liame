@@ -280,9 +280,22 @@ const CupomDoTesteParams = z
 
 const BudgetParams = z.strictObject({ daily_budget_micros: z.int().min(1_000_000).max(Number.MAX_SAFE_INTEGER) });
 const NoParams = z.strictObject({});
-/** O passo do ritmo: a verba que ele deixa e a que ele espera encontrar (a que o Liame deixou no passo anterior). */
+/**
+ * O passo do ritmo: a verba que ele deixa e a que ele espera encontrar (a que o Liame deixou no passo anterior). Com o
+ * horário (R7, parte 2b), a situação em que o Liame deixou o objeto: fora da janela, ele está pausado pelo próprio
+ * Liame, e isso não é "mexido por fora". Ausente: ligado, como antes do horário.
+ */
 const PassoDoRitmoParams = z.strictObject({
   daily_budget_micros: z.int().min(1_000_000).max(Number.MAX_SAFE_INTEGER),
+  expected_micros: z.int().min(1_000_000).max(Number.MAX_SAFE_INTEGER),
+  expected_status: z.enum(['ativo', 'pausado']).optional(),
+});
+/**
+ * O passo de situação do ritmo (R7, parte 2b): a situação que ele deixa (ligado no começo da janela e no fim do ritmo,
+ * pausado no fim da janela) e a verba que ele espera encontrar (a que o Liame deixou).
+ */
+const SituacaoDoRitmoParams = z.strictObject({
+  status: z.enum(['ativo', 'pausado']),
   expected_micros: z.int().min(1_000_000).max(Number.MAX_SAFE_INTEGER),
 });
 
@@ -574,7 +587,8 @@ export const TOOLS: Record<string, ToolDefinition> = {
   // campanha). O plano só existe se a campanha está como o Liame deixou: mexida por fora, ela sai do ritmo.
   orcamento_do_ritmo: {
     name: 'orcamento_do_ritmo',
-    version: 1,
+    // v2 (R7, parte 2b): a situação em que o Liame deixou a campanha (`expected_status`), pausada fora da janela.
+    version: 2,
     owner: 'midia',
     description:
       'Muda a verba diária de uma campanha ou de um conjunto da Meta para a do dia no ritmo da semana que uma pessoa aprovou, ou de volta à verba de antes (no fim da semana ou quando alguém para o ritmo). Só sai se a campanha estiver como o Liame deixou.',
@@ -586,14 +600,51 @@ export const TOOLS: Record<string, ToolDefinition> = {
     flag: 'ritmo_da_semana',
     params: PassoDoRitmoParams,
     plan(before, params) {
-      const { daily_budget_micros: value, expected_micros: esperado } = PassoDoRitmoParams.parse(params);
+      const { daily_budget_micros: value, expected_micros: esperado, expected_status: situacao } = PassoDoRitmoParams.parse(params);
       if (!exigirTipo(before, ['campanha', 'conjunto'])) throw new PlanoRecusado('O passo do ritmo vale para uma campanha ou um conjunto da Meta.');
-      // A campanha como o Liame deixou (D-RG-63): com a verba de outra, ou pausada por alguém, ela sai do ritmo.
-      if (before.status !== 'ativo' || verbaDiaria(before) !== esperado) throw new PlanoRecusado(FORA_DO_RITMO);
+      // A campanha como o Liame deixou (D-RG-63): com a verba de outra, ou pausada por alguém, ela sai do ritmo. Fora da
+      // janela do horário (R7, parte 2b), ela está pausada pelo próprio Liame, e a verba do dia muda assim mesmo.
+      if (before.status !== (situacao ?? 'ativo') || verbaDiaria(before) !== esperado) throw new PlanoRecusado(FORA_DO_RITMO);
       return planoDaVerba(before, value, ACOES_DO_RITMO);
     },
     // A volta de um passo, pedida por uma pessoa, devolve a verba de antes dele (e a campanha sai do ritmo no passo seguinte).
     undo: (before) => ({ tool: 'orcamento_ajustar', params: { daily_budget_micros: budgetOf(before) } }),
+  },
+  // O passo de situação do ritmo da semana (R7, parte 2b; D-RG-61 e D-RG-104): com a janela aprovada, o Liame liga a
+  // campanha ou o conjunto da Meta no começo da janela e pausa no fim; no fim da semana, quando alguém para o ritmo ou
+  // quando a função do horário é desligada, deixa ligado ("soltar"). Só a rotina do ritmo pede, pelo ritmo que a pessoa
+  // aprovou (`decisaoJaTomada`); a política tem a regra própria (`horario.*`, v18). Sem a função da ferramenta: o portão
+  // do ritmo confere as funções para ligar e pausar na janela, e deixar ligado não depende delas (a campanha pausada pelo
+  // Liame não pode ficar pausada porque alguém desligou uma função). O plano só existe se a campanha está como o Liame
+  // deixou (a situação de antes do passo e a verba): mexida por fora, ela sai do ritmo.
+  situacao_do_ritmo: {
+    name: 'situacao_do_ritmo',
+    version: 1,
+    owner: 'midia',
+    description:
+      'Liga ou pausa uma campanha ou um conjunto da Meta no horário do ritmo da semana que uma pessoa aprovou: ligado só na janela dos pedidos da loja, pausado fora dela, e ligado o dia todo no fim da semana ou quando alguém para o ritmo. Só sai se a campanha estiver como o Liame deixou.',
+    // Dentro do que a pessoa aprovou: a verba não muda, só as horas em que os anúncios rodam.
+    risk: 'R2',
+    providers: ['meta_ads'],
+    compensation: 'devolver_situacao_anterior_se_inalterado',
+    decisaoJaTomada: 'ritmo_da_semana',
+    params: SituacaoDoRitmoParams,
+    plan(before, params) {
+      const { status, expected_micros: esperado } = SituacaoDoRitmoParams.parse(params);
+      const tipo = exigirTipo(before, ['campanha', 'conjunto']);
+      if (!tipo) throw new PlanoRecusado('O passo do horário vale para uma campanha ou um conjunto da Meta.');
+      exigirVivo(before, tipo);
+      // A campanha como o Liame deixou: na situação de antes do passo e com a verba que ele deixou.
+      const antes = status === 'ativo' ? 'pausado' : 'ativo';
+      if (before.status !== antes || verbaDiaria(before) !== esperado) throw new PlanoRecusado(FORA_DO_RITMO);
+      // A verba não muda: nada a reservar (a semana com o ritmo não gasta mais do que sem ele).
+      return { action: status === 'ativo' ? 'horario.ligar' : 'horario.pausar', budgetImpact: 'none', valueMicros: null, currentValueMicros: null, reserveMicros: 0, desiredState: { ...before, status } };
+    },
+    // A volta de um passo, pedida por uma pessoa, devolve a situação de antes dele (e a campanha sai do ritmo no passo seguinte).
+    undo: (before) => {
+      const tipo = tipoDe(before) === 'conjunto' ? 'conjunto' : 'campanha';
+      return { tool: before.status === 'pausado' ? `${tipo}_pausar` : `${tipo}_retomar`, params: {} };
+    },
   },
   // O teste de criativo (plano da região, R8; protótipo dos testes aprovado em 13/11/2026; D-RG-76 a D-RG-80): duas peças
   // aprovadas lado a lado numa campanha de teste da Meta, com dois conjuntos iguais, um anúncio em cada um e o cupom de

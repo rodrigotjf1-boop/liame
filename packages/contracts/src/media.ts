@@ -121,8 +121,10 @@ export const AttentionItem = z.strictObject({
    * `gasto_da_campanha_fora_do_normal` e `custo_por_pedido_fora_do_normal`. A conferência do gasto de uma mudança do
    * Liame (A4, X4): `gasto_acima_da_verba`. O ritmo da semana (plano da região, R7), por campanha ou conjunto da Meta:
    * `ritmo_gasto_acima` (os 7 dias até ontem gastaram mais do que a soma da verba de cada dia, com a folga),
-   * `ritmo_sem_volta` (o ritmo acabou ou foi parado e a verba ainda não voltou à de antes) e `ritmo_campanha_saiu`
-   * (alguém mexeu por fora e o Liame não muda mais a verba dela na semana). O teste de criativo (plano da região, R8),
+   * `ritmo_sem_volta` (o ritmo acabou ou foi parado e a verba ainda não voltou à de antes), `ritmo_campanha_saiu`
+   * (alguém mexeu por fora e o Liame não muda mais a verba dela na semana) e, com o horário (R7, parte 2b),
+   * `ritmo_pausada` (o Liame a pausou fora da janela dos pedidos e não conseguiu ligar de novo: ela está sem anúncios).
+   * O teste de criativo (plano da região, R8),
    * um aviso por teste: `teste_com_vencedor` (um criativo venceu, e o outro continua gastando até alguém pedir a pausa
    * dele ou encerrar o teste), `teste_sem_vencedor` (o teste acabou no último dia, e os dois ficam como estão até
    * alguém encerrar o teste) e `teste_interrompido` (mexeram nele por fora, ou os cupons não saíram, e o Liame parou
