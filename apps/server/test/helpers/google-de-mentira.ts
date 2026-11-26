@@ -42,6 +42,8 @@ export type GrupoNoGoogle = {
   campanha: string;
   finalUrls: string[];
   recursos: { papel: string; texto?: string; largura?: number; altura?: number }[];
+  /** Os temas de busca do grupo (R9), na ordem da requisição. */
+  temas?: string[];
 };
 /** O que a campanha criada leva além do que a lista de campanhas guarda: a marca, os critérios, a automação, o fim. */
 export type CriacaoNoGoogle = { campanha: string; corpoDaCampanha: Record<string, unknown>; criterios: Record<string, unknown>[]; daCampanha: { papel: string; texto?: string; largura?: number; altura?: number }[] };
@@ -61,6 +63,8 @@ export class GoogleDeMentira {
   readonly criacoes = new Map<string, CriacaoNoGoogle>();
   /** As contas em que a próxima criação de verdade acontece e a resposta se perde (o Google responde 503 depois de criar). */
   readonly perderResposta = new Set<string>();
+  /** Os temas de busca que o Google de mentira recusa pela política dele (R9: a criação inteira não acontece). */
+  readonly temasRecusados = new Set<string>();
   renovacoes = 0;
   private servidor: Server | null = null;
 
@@ -207,6 +211,7 @@ export class GoogleDeMentira {
     const criterios: Record<string, unknown>[] = [];
     const daCampanha: { papel: string; asset: string }[] = [];
     const doGrupo: { papel: string; asset: string }[] = [];
+    const temas: string[] = [];
     const respostas: Record<string, { resourceName: string }>[] = [];
 
     for (const op of ops) {
@@ -269,6 +274,15 @@ export class GoogleDeMentira {
         if (!existe(c.assetGroup, 'assetGroups') || !existe(c.asset, 'assets')) return naoAchou();
         doGrupo.push({ papel: String(c.fieldType), asset: String(c.asset) });
         respostas.push({ assetGroupAssetResult: { resourceName: `customers/${cliente}/assetGroupAssets/${numero()}` } });
+      } else if (chave === 'assetGroupSignalOperation') {
+        // O tema de busca do grupo (R9): até 25 por grupo, de até 80 caracteres; o recusado pela política derruba tudo.
+        if (!existe(c.assetGroup, 'assetGroups')) return naoAchou();
+        const tema = (c.searchTheme as { text?: unknown } | undefined)?.text;
+        if (typeof tema !== 'string' || !tema || [...tema].length > 80) return this.recusa({ stringLengthError: 'TOO_LONG' }, 'The search theme text is too long or empty.');
+        if (this.temasRecusados.has(tema)) return this.recusa({ assetGroupSignalError: 'SEARCH_THEME_POLICY_VIOLATION' }, 'The search theme violates the policy.');
+        if (temas.length >= 25) return this.recusa({ resourceCountLimitExceededError: 'RESOURCE_LIMIT' }, 'Too many search themes in the asset group.');
+        temas.push(tema);
+        respostas.push({ assetGroupSignalResult: { resourceName: `customers/${cliente}/assetGroupSignals/${numero()}` } });
       } else {
         return this.recusa({ requestError: 'UNKNOWN_OPERATION' }, `Unsupported operation ${chave}.`);
       }
@@ -325,6 +339,7 @@ export class GoogleDeMentira {
       campanha: nova.id,
       finalUrls: grupo.finalUrls as string[],
       recursos: doGrupo.map((d) => ({ papel: d.papel, texto: texto(d.asset), largura: recurso(d.asset).largura, altura: recurso(d.asset).altura })),
+      temas,
     };
     this.grupos.set(g.id, g);
     this.criacoes.set(nova.id, {

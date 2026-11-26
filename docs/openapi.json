@@ -144827,7 +144827,7 @@
     },
     "/v1/google-campaigns": {
       "post": {
-        "description": "A peça aprovada em Criativos, com os textos nos tamanhos do Google (de 3 a 15 títulos de até 30 caracteres, de 1 a 5 títulos longos de até 90, de 2 a 5 descrições de até 90 e o nome da loja com até 25) e uma foto pronta de Fotos (o Liame recorta nas proporções 1,91:1 e 1:1; a foto pequena é recusada), vira um pedido em Aprovações (a ferramenta `campanha_google_criar`): depois da aprovação com o código do app, o Liame cria no Google uma campanha Performance Max pausada, numa requisição só (o orçamento, a campanha com o raio em volta da loja, o nome e a logo da loja, e o grupo de recursos com os textos, os recortes e o cardápio da loja como destino). Ativar é outro pedido. Precisa da função `campanha_google` (409 `funcao-desligada`); a escrita no Google (`google_write`) vale na execução. Conflitos (409): `sem-conta-do-google`, `varias-contas-do-google`, `sem-logo` (a logo de Minha marca, quadrada, de pelo menos 128 × 128), `ja-pedida` (a peça já tem um pedido em aberto). Recusas (422): `peca-nao-encontrada`, `peca-nao-aprovada`, `textos-do-google` (no campo `headlines`, `long_headlines` ou `descriptions`), `nome-da-loja-longo`, `midia-fora-das-fotos`, `nao-e-foto`, `foto-pequena`, `verba-invalida`, `loja-nao-encontrada`, `loja-sem-endereco`, `sem-cardapio`, `acima-do-teto` e `fim-no-passado`. O trilho também pode recusar (a política, a trava).",
+        "description": "A peça aprovada em Criativos, com os textos nos tamanhos do Google (de 3 a 15 títulos de até 30 caracteres, de 1 a 5 títulos longos de até 90, de 2 a 5 descrições de até 90 e o nome da loja com até 25) e uma foto pronta de Fotos (o Liame recorta nas proporções 1,91:1 e 1:1; a foto pequena é recusada), vira um pedido em Aprovações (a ferramenta `campanha_google_criar`): depois da aprovação com o código do app, o Liame cria no Google uma campanha Performance Max pausada, numa requisição só (o orçamento, a campanha com o raio em volta da loja, o nome e a logo da loja, e o grupo de recursos com os textos, os recortes, o cardápio da loja como destino e os temas de busca, quando pedidos: até 25, de até 80 caracteres, R9). Ativar é outro pedido. Precisa da função `campanha_google` (409 `funcao-desligada`); a escrita no Google (`google_write`) vale na execução. Conflitos (409): `sem-conta-do-google`, `varias-contas-do-google`, `sem-logo` (a logo de Minha marca, quadrada, de pelo menos 128 × 128), `ja-pedida` (a peça já tem um pedido em aberto). Recusas (422): `peca-nao-encontrada`, `peca-nao-aprovada`, `textos-do-google` (no campo `headlines`, `long_headlines` ou `descriptions`), `nome-da-loja-longo`, `midia-fora-das-fotos`, `nao-e-foto`, `foto-pequena`, `verba-invalida`, `loja-nao-encontrada`, `loja-sem-endereco`, `sem-cardapio`, `acima-do-teto`, `fim-no-passado` e `tema-de-busca` (no campo `search_themes[i]`: o tema vazio, longo, repetido, além do limite ou barrado pela conferência dos textos). O trilho também pode recusar (a política, a trava).",
         "operationId": "CampanhasGoogleController_criar",
         "parameters": [],
         "requestBody": {
@@ -144908,6 +144908,14 @@
                     "type": "string",
                     "format": "date",
                     "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+                  },
+                  "search_themes": {
+                    "maxItems": 50,
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "maxLength": 200
+                    }
                   }
                 },
                 "required": [
@@ -145005,6 +145013,12 @@
                       ],
                       "format": "date",
                       "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+                    },
+                    "search_themes": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
                     },
                     "link": {
                       "type": "string"
@@ -145109,6 +145123,7 @@
                     "radius_km",
                     "daily_budget_micros",
                     "end_date",
+                    "search_themes",
                     "link",
                     "status",
                     "action_id",
@@ -145550,6 +145565,12 @@
                       "format": "date",
                       "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
                     },
+                    "search_themes": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
                     "link": {
                       "type": "string"
                     },
@@ -145653,6 +145674,7 @@
                     "radius_km",
                     "daily_budget_micros",
                     "end_date",
+                    "search_themes",
                     "link",
                     "status",
                     "action_id",
@@ -146481,7 +146503,7 @@
     },
     "/v1/google-campaigns/options": {
       "get": {
-        "description": "Para a gaveta \"Campanha nova no Google, pausada\" (P45): se a função `campanha_google` está ligada para a marca; o que impede pedir agora (`blocks`, com o mesmo `code` e as mesmas palavras da recusa do pedido: `funcao-desligada`, `sem-conta-do-google`, `varias-contas-do-google` e `sem-logo`); a conta do Google Ads; o nome da marca como sugestão do nome da loja (cortado em 25 caracteres) e a logo; as lojas (o endereço, o raio de entrega e se o cardápio vale para cada uma); o teto por campanha do Google; e a campanha nova do Google de cada peça. Só leitura.",
+        "description": "Para a gaveta \"Campanha nova no Google, pausada\" (P45): se a função `campanha_google` está ligada para a marca; o que impede pedir agora (`blocks`, com o mesmo `code` e as mesmas palavras da recusa do pedido: `funcao-desligada`, `sem-conta-do-google`, `varias-contas-do-google` e `sem-logo`); a conta do Google Ads; o nome da marca como sugestão do nome da loja (cortado em 25 caracteres) e a logo; as lojas (o endereço, o raio de entrega e se o cardápio vale para cada uma); o teto por campanha do Google; a campanha nova do Google de cada peça; e os temas de busca sugeridos (`search_themes`: os termos de Minha marca e, por loja, a lista montada por regra com as áreas de entrega dela e a frase de onde ela parou). Só leitura.",
         "operationId": "CampanhasGoogleController_opcoes",
         "parameters": [
           {
@@ -146681,6 +146703,50 @@
                         ],
                         "additionalProperties": false
                       }
+                    },
+                    "search_themes": {
+                      "type": "object",
+                      "properties": {
+                        "terms": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
+                        "by_unit": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "unit_id": {
+                                "type": "string",
+                                "format": "uuid",
+                                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                              },
+                              "themes": {
+                                "type": "array",
+                                "items": {
+                                  "type": "string"
+                                }
+                              },
+                              "cut": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "unit_id",
+                              "themes",
+                              "cut"
+                            ],
+                            "additionalProperties": false
+                          }
+                        }
+                      },
+                      "required": [
+                        "terms",
+                        "by_unit"
+                      ],
+                      "additionalProperties": false
                     }
                   },
                   "required": [
@@ -146691,7 +146757,8 @@
                     "logo",
                     "units",
                     "campaign_cap_micros",
-                    "by_piece"
+                    "by_piece",
+                    "search_themes"
                   ],
                   "additionalProperties": false
                 }
@@ -146996,6 +147063,12 @@
                       "format": "date",
                       "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
                     },
+                    "search_themes": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
                     "link": {
                       "type": "string"
                     },
@@ -147099,6 +147172,7 @@
                     "radius_km",
                     "daily_budget_micros",
                     "end_date",
+                    "search_themes",
                     "link",
                     "status",
                     "action_id",

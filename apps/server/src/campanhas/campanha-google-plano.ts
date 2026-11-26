@@ -1,5 +1,7 @@
+import { SEARCH_THEME_MAX_LENGTH, SEARCH_THEMES_MAX } from '@liame/contracts';
 import { z } from 'zod';
 import { REGRAS } from '../links/construtor.js';
+import { nomeComparavel } from '../regiao/coordenada.js';
 
 // A campanha nova no Google, criada pausada (A5, Y9, parte 2; P45 pré-aprovado em 12/11/2026; D-A5-21 a D-A5-26). A peça
 // aprovada em Criativos, com os textos nos tamanhos do Google e uma foto de Fotos, vira um pedido de criar uma campanha
@@ -113,8 +115,25 @@ export const EstadoDaCampanhaNovaNoGoogle = z.object({
   link: z.string().url(),
   situacao: SituacaoDaCampanhaGoogle,
   ativa: z.boolean(),
+  /**
+   * Os temas de busca do grupo de recursos (R9; D-RG-85), conferidos pela rota; os limites são as constantes do contrato
+   * (as mesmas da rota e do `check` do banco). O estado gravado antes deles (sem o campo) vale como lista vazia.
+   */
+  temas_de_busca: z.array(z.string().min(1).max(SEARCH_THEME_MAX_LENGTH)).max(SEARCH_THEMES_MAX).default([]),
 });
 export type EstadoDaCampanhaNovaNoGoogle = z.infer<typeof EstadoDaCampanhaNovaNoGoogle>;
+
+/** O primeiro tema que repete outro (sem diferença de acento, maiúscula e espaço), com o número do primeiro; nulo sem. */
+export function temaRepetido(temas: readonly string[]): { tema: string; repete: number } | null {
+  const vistos = new Map<string, number>();
+  for (const [i, tema] of temas.entries()) {
+    const chave = nomeComparavel(tema);
+    const antes = vistos.get(chave);
+    if (antes !== undefined) return { tema, repete: antes + 1 };
+    vistos.set(chave, i);
+  }
+  return null;
+}
 
 export type PlanoDaCampanhaGoogle = { ok: true; desejado: EstadoDaCampanhaNovaNoGoogle } | { ok: false; motivo: string };
 
@@ -134,6 +153,8 @@ export function planoDaCampanhaGoogle(before: unknown): PlanoDaCampanhaGoogle {
   if (textos) return { ok: false, motivo: textos.motivo };
   const foto = motivoDaFotoPequena(e.foto.largura, e.foto.altura);
   if (foto) return { ok: false, motivo: foto };
+  const repetido = temaRepetido(e.temas_de_busca);
+  if (repetido) return { ok: false, motivo: `O tema de busca "${repetido.tema}" repete o tema ${repetido.repete}.` };
   return { ok: true, desejado: { ...e, situacao: 'criada' } };
 }
 
@@ -236,6 +257,12 @@ export function rastreioDaPerformanceMax(): string {
 export type OperacaoDoGoogle = Record<string, { create: Record<string, unknown> }>;
 
 /**
+ * Um tema de busca no grupo de recursos (R9): um sinal do grupo (`assetGroupSignalOperation`) com o `searchTheme`. É a
+ * operação que a prova da D-RG-89 validou na conta real (25/11/2026), no fim da requisição, depois dos recursos do grupo.
+ */
+export const sinalDoTema = (grupo: string, text: string): OperacaoDoGoogle => ({ assetGroupSignalOperation: { create: { assetGroup: grupo, searchTheme: { text } } } });
+
+/**
  * Quem vê o anúncio pelo local (D-A5-34): só quem está ou costuma estar no raio (`PRESENCE`). O padrão do Google é
  * `PRESENCE_OR_INTEREST`, que soma quem só mostrou interesse pelo lugar (pesquisou, visitou, leu sobre ele); para uma loja
  * que entrega num raio, e para a frase da tela ("quem está num raio de X km em volta da loja"), vale só a presença.
@@ -262,7 +289,8 @@ export function operacaoDeAtivarOuPausar(recurso: string, ativar: boolean): { up
  * recursos dele, e as regras da marca pedem o nome da loja e a logo, na mesma requisição): o orçamento diário só desta
  * campanha; a campanha PAUSADA (Maximizar conversões, regras da marca, a automação desligada, o rastreio, o fim); o raio em volta da
  * loja e o idioma; os textos e as imagens; o nome e a logo da loja na campanha; o grupo de recursos com o link e os
- * recursos dele. Os ids negativos são os provisórios da requisição, e o Google cria tudo ou nada. Função pura.
+ * recursos dele; e os temas de busca do grupo (R9). Os ids negativos são os provisórios da requisição, e o Google cria
+ * tudo ou nada: um tema recusado pelo Google deixa a campanha inteira "não criada", com o motivo dele. Função pura.
  */
 export function operacoesDaCriacao(e: EstadoDaCampanhaNovaNoGoogle, imagens: ImagensDoGoogle): OperacaoDoGoogle[] {
   const cliente = `customers/${e.conta.id}`;
@@ -336,6 +364,8 @@ export function operacoesDaCriacao(e: EstadoDaCampanhaNovaNoGoogle, imagens: Ima
   ops.push({ campaignAssetOperation: { create: { campaign: campanha, asset: logo, fieldType: 'LOGO' } } });
   ops.push({ assetGroupOperation: { create: { resourceName: grupo, name: e.nome, campaign: campanha, finalUrls: [e.link], status: 'ENABLED' } } });
   for (const d of doGrupo) ops.push({ assetGroupAssetOperation: { create: { assetGroup: grupo, asset: d.asset, fieldType: d.fieldType } } });
+  // Os temas de busca (R9) no fim, na ordem que a prova validou na conta real; sem temas, a requisição é a de antes.
+  for (const t of e.temas_de_busca) ops.push(sinalDoTema(grupo, t));
   return ops;
 }
 

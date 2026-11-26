@@ -1,4 +1,4 @@
-import { searchThemesStart } from '@liame/contracts';
+import { SEARCH_THEME_MAX_LENGTH, SEARCH_THEMES_MAX, searchThemesStart } from '@liame/contracts';
 import type { BaseDaPeca } from '../ai/criativo/peca.js';
 import { conferirPeca } from '../ai/criativo/peca.js';
 import { mensagemDoAchado } from '../criativo/base.js';
@@ -15,10 +15,11 @@ import { nomeComparavel } from '../regiao/coordenada.js';
 /**
  * Os limites de partida dos temas: até 25 por grupo de recursos e até 80 caracteres cada. Ficam "a conferir" (D-RG-89):
  * a referência da API fala em 25, a Central de Ajuda do Google Ads diz que o limite subiu para 50, e o tamanho de 80
- * vem da ajuda do Search Ads 360. Vale o menor até um teste que só valida (`validate_only`) na conta real.
+ * vem da ajuda do Search Ads 360. Vale o menor até um teste que só valida (`validate_only`) na conta real. São as
+ * constantes do contrato, as mesmas da rota, do estado da ferramenta e do `check` do banco (R9).
  */
-export const LIMITE_DE_TEMAS = 25;
-export const TAMANHO_DO_TEMA = 80;
+export const LIMITE_DE_TEMAS = SEARCH_THEMES_MAX;
+export const TAMANHO_DO_TEMA = SEARCH_THEME_MAX_LENGTH;
 /** Até 3 termos escritos por uma pessoa em Minha marca (D-RG-85), além da categoria do perfil. */
 export const TERMOS_DA_LOJA_MAXIMOS = 3;
 

@@ -276,6 +276,7 @@ const ESTADO: EstadoDaCampanhaNovaNoGoogle = {
   link: 'https://cardapio.exemplo.com.br/mister-centro',
   situacao: 'pedida',
   ativa: false,
+  temas_de_busca: [],
 };
 const IMAGENS: ImagensDoGoogle = { recortes: [{ id: 'deitada', tipo: 'MARKETING_IMAGE', base64: 'ZGVpdGFkYQ==' }], logo: 'bG9nbw==' };
 const CENTRO: LugarNoGoogle = { recurso: 'geoTargetConstants/9000001', nome: 'Centro', nomeCanonico: 'Centro,Rio de Janeiro,Brazil', tipo: 'Neighborhood', pais: 'BR', pai: 'geoTargetConstants/1001773', cadeia: [], situacao: 'ENABLED', buscado: 'Centro' };

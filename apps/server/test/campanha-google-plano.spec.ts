@@ -1,3 +1,4 @@
+import { SEARCH_THEME_MAX_LENGTH, SEARCH_THEMES_MAX } from '@liame/contracts';
 import sharp from 'sharp';
 import { describe, expect, it } from 'vitest';
 import {
@@ -5,7 +6,7 @@ import {
   areasDosRecortes,
   campanhaGoogleDoRecurso,
   consultaDaCampanhaCriada,
-  type EstadoDaCampanhaNovaNoGoogle,
+  EstadoDaCampanhaNovaNoGoogle,
   type ImagensDoGoogle,
   idsDaCriacao,
   idsDaProcura,
@@ -21,6 +22,8 @@ import {
   planoDePausarNoGoogle,
   recortesDaFoto,
   recursoDaCampanhaGoogle,
+  sinalDoTema,
+  temaRepetido,
 } from '../src/campanhas/campanha-google-plano.js';
 import { FotoNaoServe, imagensDoGoogle } from '../src/campanhas/imagens-do-google.js';
 
@@ -52,6 +55,7 @@ const estado = (o: Partial<EstadoDaCampanhaNovaNoGoogle> = {}): EstadoDaCampanha
   link: 'https://cardapio.exemplo.com.br/mister-centro',
   situacao: 'pedida',
   ativa: false,
+  temas_de_busca: [],
   ...o,
 });
 
@@ -228,6 +232,36 @@ describe('a criação no Google, sem rede (A5 · Y9, parte 3; D-A5-27, D-A5-28)'
     // Cada id provisório é criado uma vez só.
     const nomes = ops.map((o) => corpo(o).resourceName).filter(Boolean);
     expect(new Set(nomes).size).toBe(nomes.length);
+  });
+
+  it('os temas de busca (R9): um sinal por tema no fim, no grupo da requisição; sem temas, a requisição de antes', () => {
+    const sem = operacoesDaCriacao(estado(), imagens);
+    expect(sem.some((o) => tipo(o) === 'assetGroupSignalOperation')).toBe(false);
+    const temas = ['hamburgueria perto de mim', 'delivery de hamburgueria', 'hamburgueria Penha'];
+    const com = operacoesDaCriacao(estado({ temas_de_busca: temas }), imagens);
+    // Tudo o que vinha antes fica igual, na mesma ordem; os temas entram depois, um por operação.
+    expect(com.slice(0, sem.length)).toEqual(sem);
+    const sinais = com.slice(sem.length);
+    expect(sinais.map(tipo)).toEqual(temas.map(() => 'assetGroupSignalOperation'));
+    const grupo = sem.filter((o) => tipo(o) === 'assetGroupOperation').map(corpo)[0]!.resourceName;
+    expect(sinais.map(corpo)).toEqual(temas.map((text) => ({ assetGroup: grupo, searchTheme: { text } })));
+    expect(sinais[0]).toEqual(sinalDoTema(String(grupo), temas[0]!));
+  });
+
+  it('os temas no estado e no plano (R9): o estado antigo vale sem temas; o repetido, o longo e o 26º não passam', () => {
+    const { temas_de_busca: _, ...antigo } = estado();
+    expect(EstadoDaCampanhaNovaNoGoogle.parse(antigo).temas_de_busca).toEqual([]);
+    expect(planoDaCampanhaGoogle(antigo)).toMatchObject({ ok: true, desejado: { temas_de_busca: [] } });
+    expect(planoDaCampanhaGoogle(estado({ temas_de_busca: ['hamburgueria Penha'] }))).toMatchObject({ ok: true, desejado: { temas_de_busca: ['hamburgueria Penha'] } });
+    expect(planoDaCampanhaGoogle(estado({ temas_de_busca: ['Hamburgueria Penha', 'hamburgueria  penha'] }))).toEqual({
+      ok: false,
+      motivo: 'O tema de busca "hamburgueria  penha" repete o tema 1.',
+    });
+    expect(temaRepetido(['açaí', 'Acai'])).toEqual({ tema: 'Acai', repete: 1 });
+    expect(temaRepetido(['açaí', 'pizza'])).toBeNull();
+    expect(planoDaCampanhaGoogle(estado({ temas_de_busca: ['x'.repeat(SEARCH_THEME_MAX_LENGTH + 1)] }))).toMatchObject({ ok: false });
+    expect(planoDaCampanhaGoogle(estado({ temas_de_busca: Array.from({ length: SEARCH_THEMES_MAX }, (_, i) => `tema ${i}`) }))).toMatchObject({ ok: true });
+    expect(planoDaCampanhaGoogle(estado({ temas_de_busca: Array.from({ length: SEARCH_THEMES_MAX + 1 }, (_, i) => `tema ${i}`) }))).toMatchObject({ ok: false });
   });
 
   it('o mesmo texto em dois papéis usa um recurso só (o nome da loja igual a um título)', () => {
