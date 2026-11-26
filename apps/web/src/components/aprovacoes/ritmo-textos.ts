@@ -85,6 +85,17 @@ export function situacaoDoRitmo(r: Pick<Ritmo, 'status' | 'today' | 'week'>): Si
 const lista = (itens: readonly string[]): string => (itens.length <= 1 ? (itens[0] ?? '') : `${itens.slice(0, -1).join(', ')} e ${itens.at(-1)}`);
 
 /**
+ * A janela em que os anúncios ficam ligados (R7, parte 2; D-RG-61 e D-RG-104), em palavras: a célula da tabela dos dias
+ * e o pedaço da frase do pedido. Nula: o ritmo não tem janela, e os anúncios ficam ligados o dia todo.
+ */
+export function janelaDosAnuncios(adsOn: Ritmo['ads_on']): { celula: string; frase: string } | null {
+  if (!adsOn) return null;
+  // A janela que passa da meia-noite termina no dia seguinte (o bloco dos pedidos pode passar dela).
+  const celula = `${adsOn.from} às ${adsOn.to}${adsOn.to < adsOn.from ? ' do dia seguinte' : ''}`;
+  return { celula, frase: `deixa os anúncios ligados só das ${celula}, e pausados fora disso` };
+}
+
+/**
  * A frase do pedido: onde a verba desce e onde sobe, e o total da semana. Os dias com menos de 3% de diferença ficam
  * como "igual a hoje" e não entram na frase.
  */

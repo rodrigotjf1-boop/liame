@@ -27,6 +27,17 @@ import { APP_URL, hasDb, OWNER_URL } from './env.js';
 const RIO = '3304557';
 /** Hoje em Brasília, pelo relógio de verdade (a rota do retrato não recebe o relógio do teste). */
 const HOJE = diaEmBrasilia(new Date());
+/**
+ * O dia dos pedidos da noite (o dia forte da loja no teste da demanda e no ritmo): o sábado mais recente com pelo menos
+ * 3 dias, e nunca um dia que dependa do dia da semana de hoje (ERR-248). Com "3 dias atrás", numa quinta o dia forte
+ * caía numa segunda, o primeiro da semana do ritmo: a verba sobe no máximo 10% por dia a partir da de hoje, a segunda
+ * parava em 1,1, e a sobra da semana ia para o fim dela (o sábado ficava maior).
+ */
+const NOITE = (() => {
+  let dia = diasAntes(HOJE, 3);
+  while (diaDaSemana(dia) !== 6) dia = diasAntes(dia, 1);
+  return dia;
+})();
 // A rotina lê o município de TODAS as lojas no mapa do banco (o de teste é dividido com as outras suítes): a loja da
 // falha usa um código novo a cada rodada, para a leitura dele nunca estar em dia de uma rodada anterior.
 const SP = `35${String(Date.now() % 100_000).padStart(5, '0')}`;
@@ -425,10 +436,12 @@ describe.skipIf(!hasDb)('Sua região: a rotina das fontes públicas e o retrato 
                  $10::timestamptz, $10::timestamptz + interval '3 minutes', case when $6::text = 'cancelado' then $10::timestamptz + interval '10 minutes' end, 1, now())`,
         [tenantId, brandId, o.unidade === undefined ? tijuca : o.unidade, conta, `p-${randomUUID().slice(0, 12)}`, o.status ?? 'confirmado', (o.reais ?? 50) * 1_000_000, (o.estorno ?? 0) * 1_000_000, o.novo ?? null, `${dia}T${hora}:00-03:00`],
       );
-    const noite = diasAntes(HOJE, 3);
+    // A noite e o almoço no mesmo dia da semana (o sábado, uma semana antes), e o das 19h em outro (a quinta): 22 dos 23
+    // pedidos no dia forte, em qualquer dia em que o teste rodar (ERR-248).
+    const noite = NOITE;
     for (let i = 0; i < 12; i++) await pedido(noite, '20:15', { novo: i < 4 ? true : i < 10 ? false : null });
-    for (let i = 0; i < 10; i++) await pedido(diasAntes(HOJE, 10), '12:30', { reais: 40, novo: false });
-    await pedido(diasAntes(HOJE, 5), '19:00', { reais: 60, estorno: 10 });
+    for (let i = 0; i < 10; i++) await pedido(diasAntes(noite, 7), '12:30', { reais: 40, novo: false });
+    await pedido(diasAntes(noite, 2), '19:00', { reais: 60, estorno: 10 });
     // Não contam: o cancelado, o de hoje (a janela termina ontem) e o de outra loja.
     await pedido(noite, '20:20', { status: 'cancelado' });
     await pedido(HOJE, '11:00');
@@ -515,13 +528,21 @@ describe.skipIf(!hasDb)('Sua região: a rotina das fontes públicas e o retrato 
       expect(r.body.week_micros).toBe(dias.reduce((s, d) => s + d.total_micros, 0));
       expect(r.body.week_micros).toBeLessThanOrEqual(546_000_000);
       // O dia da semana com mais pedidos (22 dos 23, no teste da demanda) leva o maior peso; cada dia diz a parte dos pedidos.
-      const forte = diaDaSemana(diasAntes(HOJE, 3));
+      const forte = diaDaSemana(NOITE);
       const maior = dias.reduce((a, b) => (b.weight > a.weight ? b : a));
       expect(maior.weekday).toBe(forte);
       expect(maior.weight).toBeGreaterThan(1);
       expect(maior.reasons[0]).toMatchObject({ kind: 'pedidos', share_pct: 96 });
       expect(dias.every((d) => d.reasons[0]!.kind === 'pedidos' && d.reasons.every((x) => ['pedidos', 'chuva', 'data'].includes(x.kind)))).toBe(true);
       expect(r.body.hours).toMatchObject({ source: 'loja' });
+      // A janela dos anúncios (R7, parte 2; D-RG-104): sem as funções do ritmo e do horário, nenhuma (ligados o dia
+      // todo); com as duas, de 1 hora antes do bloco dos pedidos da loja até o fim dele. Só o horário não basta.
+      expect(r.body.ads_on ?? null).toBeNull();
+      await ligarFlagDaEmpresa(api, 'ritmo_horario', tenantId, true);
+      expect((await ritmo(tijuca)).body.ads_on ?? null).toBeNull();
+      await ligarFlagDaEmpresa(api, 'ritmo_da_semana', tenantId, true);
+      const comHorario = await ritmo(tijuca);
+      expect(comHorario.body.ads_on).toEqual({ from: comHorario.body.hours.ads_from, to: comHorario.body.hours.to });
 
       // Outra loja da marca, num município de mentira (o código começa com 9), sem pedidos: a referência do setor, e a
       // chuva prevista entra no dia dela.
@@ -540,6 +561,8 @@ describe.skipIf(!hasDb)('Sua região: a rotina das fontes públicas e o retrato 
       await ownerQuery(`delete from liame.region_weather where geo_code = $1`, [cidade]);
       expect(doSetor.status, JSON.stringify(doSetor.body)).toBe(200);
       expect(doSetor.body).toMatchObject({ status: 'pronto', source: 'setor', hours: { source: 'setor' } });
+      // Pela referência do setor, os anúncios ficam ligados o dia todo, mesmo com o horário ligado (D-RG-104).
+      expect(doSetor.body.ads_on).toBeNull();
       const s = doSetor.body.days as Dia[];
       expect(s.every((d) => d.reasons[0]!.kind === 'setor')).toBe(true);
       expect(s[3]!.reasons).toContainEqual({ kind: 'chuva', share_pct: null, text: 'Pancadas de Chuva', min: 19, max: 24, eve: null });
@@ -553,8 +576,11 @@ describe.skipIf(!hasDb)('Sua região: a rotina das fontes públicas e o retrato 
       expect((await ritmo(randomUUID())).status).toBe(404);
       await ownerQuery(`delete from liame.unit where id = $1`, [outra]);
     } finally {
-      // A conta de anúncios sai (leva as campanhas): os testes seguintes contam com a marca sem a Meta.
+      // A conta de anúncios sai (leva as campanhas): os testes seguintes contam com a marca sem a Meta. As funções do
+      // ritmo e do horário voltam a ficar desligadas.
       await ownerQuery(`delete from liame.connected_account where id = $1`, [meta]);
+      await ligarFlagDaEmpresa(api, 'ritmo_horario', tenantId, false);
+      await ligarFlagDaEmpresa(api, 'ritmo_da_semana', tenantId, false);
     }
   });
 

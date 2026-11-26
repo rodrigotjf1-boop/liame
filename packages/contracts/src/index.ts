@@ -320,6 +320,7 @@ export {
   RegionNumber,
   RegionOverviewQuery,
   RegionRhythmQuery,
+  RegionRhythmAdsWindow,
   RegionRhythmReason,
   RegionRhythmDetailResponse,
   RegionRhythmRef,

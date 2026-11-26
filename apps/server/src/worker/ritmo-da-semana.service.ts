@@ -4,7 +4,7 @@ import { sql } from 'drizzle-orm';
 import { ActionService } from '../actions/action.service.js';
 import { naTransacaoDaEmpresa } from '../ai/na-empresa.js';
 import { controleDoRitmo, decidirPasso, DIAS_DA_VOLTA, type PassoDecidido } from '../campanhas/ritmo-passos.js';
-import { CAMPANHAS_NO_RITMO, EstadoDoRitmo, FERRAMENTA_DA_VERBA_DO_DIA, FERRAMENTA_DO_RITMO, FLAG_DO_RITMO, FORA_DO_RITMO, recursoDoRitmo } from '../campanhas/ritmo-plano.js';
+import { CAMPANHAS_NO_RITMO, EstadoDoRitmo, FERRAMENTA_DA_VERBA_DO_DIA, FERRAMENTA_DO_RITMO, FLAG_DO_HORARIO, FLAG_DO_RITMO, FORA_DO_RITMO, recursoDoRitmo } from '../campanhas/ritmo-plano.js';
 import { contaConectada } from '../connections/conectada.js';
 import { currentTx } from '../context/request-context.js';
 import { DATABASE } from '../database/database.module.js';
@@ -155,11 +155,13 @@ export class RitmoDaSemanaService {
     if (!(await this.flags.isEnabled(FLAG_DA_REGIAO, contexto)) || !(await this.flags.isEnabled(FLAG_DO_RITMO, contexto))) {
       return { ...base, situacao: 'sem_ritmo', motivo: 'funcao_desligada' };
     }
+    // A janela dos anúncios (R7, parte 2; D-RG-104) entra no pedido só com a função do horário ligada.
+    const comHorario = await this.flags.isEnabled(FLAG_DO_HORARIO, contexto);
     return naTransacaoDaEmpresa(database, { tenantId: c.tenant_id, userId: null }, async () => {
       const tx = currentTx();
       const dono = (await tx.execute<{ user_id: string }>(sql`select user_id from liame.membership where tenant_id = ${c.tenant_id} and role_key = 'dono' and revoked_at is null limit 1`)).rows[0];
       if (!dono) return { ...base, situacao: 'sem_ritmo' as const, motivo: 'sem_dono' };
-      const montado = await this.regiao.montarRitmo(c.tenant_id, c.brand_id, c.unit_id, agora, true);
+      const montado = await this.regiao.montarRitmo(c.tenant_id, c.brand_id, c.unit_id, agora, true, comHorario);
       const r = montado.resposta;
       // Só as campanhas da conta de anúncios do pedido (a marca tem uma só conectada; a conferência fica para a leitura).
       const campanhas = r.campaigns.filter((x) => montado.recursos[x.id]?.conta === c.conta).slice(0, CAMPANHAS_NO_RITMO);
@@ -181,6 +183,8 @@ export class RitmoDaSemanaService {
         }),
         fora: r.out.map((o) => ({ nome: o.name, motivo: o.reason })),
         teto_micros: montado.teto,
+        // Sem a janela, a chave não entra: o plano fica igual ao de antes da função (anúncios ligados o dia todo).
+        ...(r.ads_on ? { horario: { de: r.ads_on.from, ate: r.ads_on.to } } : {}),
         moeda: 'BRL',
         situacao: 'pedido',
       };

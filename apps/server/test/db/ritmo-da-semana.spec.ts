@@ -115,10 +115,13 @@ describe.skipIf(!hasDb)('o ritmo da semana: o pedido do Gestor de tráfego (R7, 
     expect(await voltar(e, DOMINGO_CEDO)).toEqual([]);
     expect(await ritmos(e)).toHaveLength(0);
 
-    // Na hora: o ritmo da semana que vem, pedido em Aprovações.
+    // Na hora: o ritmo da semana que vem, pedido em Aprovações. O horário ligado (R7, parte 2; D-RG-104) não põe janela
+    // no pedido de uma loja sem pedidos que bastem: pela referência do setor, os anúncios ficam ligados o dia todo.
+    await ligarFlagDaEmpresa(api, 'ritmo_horario', e.tenantId, true);
     expect(await voltar(e, DOMINGO_NA_HORA)).toEqual([{ tenantId: e.tenantId, brandId: e.brandId, situacao: 'pedido', motivo: null }]);
     const [r] = await ritmos(e);
     expect(r).toMatchObject({ status: 'pedido', source: 'setor', week_start: SEMANA.de, week_end: SEMANA.ate, version: 1, approved_at: null });
+    expect(r!.plan).not.toHaveProperty('horario');
     type Plano = { semana: unknown; loja: { nome: string }; dias: unknown[]; campanhas: Array<{ recurso: string; nome: string; base_micros: number; dias_micros: number[] }>; fora: unknown[]; situacao?: string };
     const plano = r!.plan as unknown as Plano;
     expect(plano).toMatchObject({ semana: SEMANA, loja: { nome: 'Loja do Ritmo' }, fora: [{ nome: 'Campanha pequena', motivo: 'verba_pequena' }] });
@@ -146,6 +149,7 @@ describe.skipIf(!hasDb)('o ritmo da semana: o pedido do Gestor de tráfego (R7, 
     const detalhe = RegionRhythmDetailResponse.parse(lido.body);
     expect(detalhe).toMatchObject({ id: r!.id, status: 'pedido', source: 'setor', week: { from: SEMANA.de, to: SEMANA.ate }, action_id: r!.action_id, approved_at: null, approved_by: null, base_micros: 100_000_000, base_week_micros: 700_000_000 });
     expect(detalhe.week_micros).toBeLessThanOrEqual(700_000_000);
+    expect(detalhe.ads_on).toBeNull();
     expect(detalhe.days.map((d) => d.day)).toEqual(['2026-11-16', '2026-11-17', '2026-11-18', '2026-11-19', '2026-11-20', '2026-11-21', '2026-11-22']);
     expect(detalhe.campaigns.map((c) => [c.name, c.state, c.left_micros, c.steps])).toEqual([
       ['Combo sexta', 'proposta', 60_000_000, []],

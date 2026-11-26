@@ -39,7 +39,7 @@ import { FONTE_CENSO_BAIRRO } from './censo.js';
 import { bairroDaArea, type Coordenada, nomeComparavel, procuraDeCoordenada } from './coordenada.js';
 import { MUNICIPIOS_DO_IPCA, RMS_DO_IPCA } from './ibge.js';
 import { controleDoRitmo } from '../campanhas/ritmo-passos.js';
-import { EstadoDoRitmo } from '../campanhas/ritmo-plano.js';
+import { EstadoDoRitmo, FLAG_DO_HORARIO, FLAG_DO_RITMO, janelaDoRitmo, janelaNaResposta } from '../campanhas/ritmo-plano.js';
 import { carregarPoliticas } from '../policy/policy.service.js';
 import { tetoDaVerba } from '../policy/teto-da-verba.js';
 import { diaNoFuso } from '../results/fora-do-normal.js';
@@ -656,7 +656,9 @@ export class RegiaoService {
   async ritmoDaSemana(auth: AuthContext, brandId: string, unitId: string, agora = new Date()): Promise<RegionRhythmResponse> {
     await this.marca(brandId);
     if (!(await this.ligada(auth, brandId))) return { status: 'desligado', ...ritmoVazio(agora) };
-    return (await this.montarRitmo(this.quem(auth).tenantId, brandId, unitId, agora, auth.permissions.has('vendas.ver'))).resposta;
+    // A janela dos anúncios (R7, parte 2) só com o ritmo e o horário ligados, como no pedido da semana.
+    const comHorario = (await this.ligada(auth, brandId, FLAG_DO_RITMO)) && (await this.ligada(auth, brandId, FLAG_DO_HORARIO));
+    return (await this.montarRitmo(this.quem(auth).tenantId, brandId, unitId, agora, auth.permissions.has('vendas.ver'), comHorario)).resposta;
   }
 
   /**
@@ -795,6 +797,7 @@ export class RegiaoService {
       base_week_micros: base * 7,
       week_micros: campaigns.reduce((s, c) => s + c.week_micros, 0),
       ceiling_micros: p.teto_micros,
+      ads_on: janelaNaResposta(p.horario ?? null),
       generated_at: agora.toISOString(),
     };
   }
@@ -840,8 +843,9 @@ export class RegiaoService {
    * as campanhas ativas da Meta com verba diária própria (na campanha, ou no conjunto quando a campanha não tem), fora
    * as de alcance e de seguidores criadas pelo Liame (o teto de 25% já cuida delas). Junto da resposta vão o que só o
    * pedido usa: o recurso de cada campanha no trilho de ações, a conta de anúncios, a loja e o teto por campanha.
+   * `comHorario` (a função do horário ligada, R7 parte 2): a resposta traz a janela em que os anúncios ficam ligados.
    */
-  async montarRitmo(tenantId: string, brandId: string, unitId: string, agora: Date, podeVerVendas: boolean): Promise<RitmoMontado> {
+  async montarRitmo(tenantId: string, brandId: string, unitId: string, agora: Date, podeVerVendas: boolean, comHorario = false): Promise<RitmoMontado> {
     const tx = currentTx();
     const so = (status: string): RitmoMontado => ({ resposta: { status, ...ritmoVazio(agora) }, recursos: {}, loja: null, teto: null });
     const loja = (
@@ -965,6 +969,7 @@ export class RegiaoService {
       base_week_micros: base * 7,
       week_micros: campaigns.reduce((s, c) => s + c.week_micros, 0),
       hours: { source: horarios.source, from: horarios.from, to: horarios.to, ads_from: horarios.ads_from },
+      ads_on: janelaNaResposta(comHorario ? janelaDoRitmo(horarios) : null),
       ...guardados,
       generated_at: agora.toISOString(),
     };

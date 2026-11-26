@@ -389,6 +389,8 @@ export async function ligarFlagDaEmpresa(
     | 'video_montado'
     | 'video_momentos'
     | 'regiao'
+    | 'ritmo_da_semana'
+    | 'ritmo_horario'
     | 'ia',
   tenantId: string,
   valor: boolean,

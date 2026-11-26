@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { TOOLS } from '../src/actions/tools.js';
-import { type EstadoDoRitmo, planoDoRitmo, recursoDoRitmo, ritmoDoRecurso, somasDoRitmo } from '../src/campanhas/ritmo-plano.js';
+import { EstadoDoRitmo, janelaDoRitmo, janelaNaResposta, planoDoRitmo, recursoDoRitmo, ritmoDoRecurso, somasDoRitmo } from '../src/campanhas/ritmo-plano.js';
 import { PLATFORM_POLICY } from '../src/policy/engine.js';
 
 // R7, parte 1b (D-RG-58, D-RG-60 e D-RG-62), sem rede e sem banco: o recurso do pedido semanal, o plano da ferramenta
@@ -49,6 +49,25 @@ describe('o ritmo da semana como pedido (R7, parte 1b)', () => {
     expect(planoDoRitmo(estado({ situacao: 'encerrado' })).ok).toBe(false);
     expect(planoDoRitmo(estado({ situacao: 'cancelado' })).ok).toBe(false);
     expect(planoDoRitmo({ qualquer: 'coisa' })).toEqual({ ok: false, motivo: 'Esta ferramenta é para um ritmo da semana do Liame.' });
+  });
+
+  it('a janela dos anúncios (R7, parte 2; D-RG-104): só pelos pedidos da loja; vai no pedido e volta na resposta', () => {
+    // Pelos pedidos da loja: de 1 hora antes do bloco até o fim dele, inclusive passando da meia-noite.
+    expect(janelaDoRitmo({ source: 'loja', ads_from: '17:00', to: '22:00' })).toEqual({ de: '17:00', ate: '22:00' });
+    expect(janelaDoRitmo({ source: 'loja', ads_from: '21:00', to: '01:00' })).toEqual({ de: '21:00', ate: '01:00' });
+    // Pela referência do setor, ou sem os horários: ligados o dia todo. Uma hora fora da forma não vira janela.
+    expect(janelaDoRitmo({ source: 'setor', ads_from: '17:00', to: '22:00' })).toBeNull();
+    expect(janelaDoRitmo(null)).toBeNull();
+    expect(janelaDoRitmo({ source: 'loja', ads_from: '24:00', to: '02:00' })).toBeNull();
+    expect(janelaDoRitmo({ source: 'loja', ads_from: '18:00', to: '18:00' })).toBeNull();
+    expect(janelaNaResposta({ de: '17:00', ate: '22:00' })).toEqual({ from: '17:00', to: '22:00' });
+    expect(janelaNaResposta(null)).toBeNull();
+    // O pedido com a janela vira aprovado com ela; o de antes dela (sem a chave) continua valendo; a janela adulterada não passa.
+    const p = planoDoRitmo(estado({ horario: { de: '17:00', ate: '22:00' } }));
+    expect(p.ok && p.desejado.horario).toEqual({ de: '17:00', ate: '22:00' });
+    expect(EstadoDoRitmo.safeParse(estado()).success).toBe(true);
+    expect(planoDoRitmo({ ...estado(), horario: { de: '7h', ate: '22:00' } }).ok).toBe(false);
+    expect(planoDoRitmo({ ...estado(), horario: { de: '22:00', ate: '22:00' } }).ok).toBe(false);
   });
 
   it('a tabela fora dos limites do dinheiro não vira plano: mais de 10% num dia, acima do teto, a semana gastando mais', () => {
