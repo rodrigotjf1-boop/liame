@@ -536,13 +536,16 @@ describe.skipIf(!hasDb)('Sua região: a rotina das fontes públicas e o retrato 
       expect(dias.every((d) => d.reasons[0]!.kind === 'pedidos' && d.reasons.every((x) => ['pedidos', 'chuva', 'data'].includes(x.kind)))).toBe(true);
       expect(r.body.hours).toMatchObject({ source: 'loja' });
       // A janela dos anúncios (R7, parte 2; D-RG-104): sem as funções do ritmo e do horário, nenhuma (ligados o dia
-      // todo); com as duas, de 1 hora antes do bloco dos pedidos da loja até o fim dele. Só o horário não basta.
+      // todo); com as duas, as horas em que a loja vende (D-RG-107): o almoço das 12h e o jantar das 19h e 20h, de 1 hora
+      // antes até o fim da última hora; o bloco de 4 horas do plano de mídia (19h às 21h) pausaria o almoço. Só o
+      // horário não basta.
       expect(r.body.ads_on ?? null).toBeNull();
       await ligarFlagDaEmpresa(api, 'ritmo_horario', tenantId, true);
       expect((await ritmo(tijuca)).body.ads_on ?? null).toBeNull();
       await ligarFlagDaEmpresa(api, 'ritmo_da_semana', tenantId, true);
       const comHorario = await ritmo(tijuca);
-      expect(comHorario.body.ads_on).toEqual({ from: comHorario.body.hours.ads_from, to: comHorario.body.hours.to });
+      expect(comHorario.body.ads_on).toEqual({ from: '11:00', to: '21:00' });
+      expect(comHorario.body.hours).toMatchObject({ from: '19:00', to: '21:00', ads_from: '18:00' });
 
       // Outra loja da marca, num município de mentira (o código começa com 9), sem pedidos: a referência do setor, e a
       // chuva prevista entra no dia dela.

@@ -35,20 +35,48 @@ export const FLAG_DO_HORARIO = 'ritmo_horario';
 const HORA = /^([01]\d|2[0-3]):[0-5]\d$/;
 
 /**
- * A janela dos anúncios no ritmo (D-RG-61 e D-RG-104): de 1 hora antes do bloco dos pedidos da loja (D-RG-29) até o fim
- * dele, a mesma em todos os dias da semana, no fuso da loja; `ate` menor que `de` passa da meia-noite. Fora dela, os
- * anúncios ficam pausados.
+ * A janela dos anúncios no ritmo (D-RG-61, D-RG-104 e D-RG-107): de 1 hora antes da primeira hora em que a loja vende até
+ * o fim da última, a mesma em todos os dias da semana, no fuso da loja; `ate` menor que `de` passa da meia-noite. Fora
+ * dela, os anúncios ficam pausados.
  */
 export const JanelaDoRitmo = z.object({ de: z.string().regex(HORA), ate: z.string().regex(HORA) }).refine((j) => j.de !== j.ate, 'a janela não pode começar e acabar na mesma hora');
 export type JanelaDoRitmo = z.infer<typeof JanelaDoRitmo>;
 
+/** A hora com menos de 1% dos pedidos da loja não é hora de venda: um pedido solto não segura os anúncios ligados. */
+export const PARTE_MINIMA_DA_HORA_PCT = 1;
+/** Pausar por menos de 4 horas não vale: ligar e pausar todo dia para quase nada (D-RG-107). */
+export const PAUSA_MINIMA_HORAS = 4;
+
+/** Os pedidos da loja por hora, como a demanda da loja os traz (R3; só com `pronto` as horas vêm). */
+export type PedidosDaLojaPorHora = { status: string; orders: number; by_hour: ReadonlyArray<{ hour: number; orders: number }> };
+
+const horaCheia = (h: number): string => `${String(((h % 24) + 24) % 24).padStart(2, '0')}:00`;
+
 /**
- * A janela do ritmo pelos horários da loja (D-RG-104): só com os pedidos da própria loja. Pela referência do setor (a
- * loja sem pedidos que bastem), os anúncios ficam ligados o dia todo: pausar a loja pelo horário de outras seria chute.
+ * A janela do ritmo pelos pedidos da loja (D-RG-107, que revê o item 1 da D-RG-104): a maior sequência de horas sem
+ * venda (dando a volta na meia-noite) é onde os anúncios ficam pausados; o resto, com 1 hora antes da primeira hora de
+ * venda, fica ligado. Assim a janela cobre o almoço e o jantar, e a madrugada da loja que vende depois da meia-noite, e
+ * não só o bloco de 4 horas do plano de mídia (D-RG-29). Só com os pedidos da própria loja: sem pedidos que bastem
+ * (a referência do setor), sem hora parada que passe de 4 horas, ou com venda em toda hora, ligados o dia todo.
  */
-export function janelaDoRitmo(horarios: { source: string; ads_from: string; to: string } | null): JanelaDoRitmo | null {
-  if (!horarios || horarios.source !== 'loja') return null;
-  const janela = JanelaDoRitmo.safeParse({ de: horarios.ads_from, ate: horarios.to });
+export function janelaDoRitmo(demanda: PedidosDaLojaPorHora | null): JanelaDoRitmo | null {
+  if (!demanda || demanda.status !== 'pronto' || demanda.orders <= 0 || demanda.by_hour.length !== 24) return null;
+  const vende = (h: number): boolean => demanda.by_hour[((h % 24) + 24) % 24]!.orders * 100 >= demanda.orders * PARTE_MINIMA_DA_HORA_PCT;
+  let inicio = -1;
+  let tamanho = 0;
+  for (let s = 0; s < 24; s++) {
+    // Cada sequência começa logo depois de uma hora de venda; a primeira das mais longas fica.
+    if (vende(s) || !vende(s - 1)) continue;
+    let k = 0;
+    while (k < 24 && !vende(s + k)) k++;
+    if (k > tamanho) {
+      inicio = s;
+      tamanho = k;
+    }
+  }
+  // A hora antes da primeira venda fica ligada (os anúncios começam antes dos pedidos): a pausa é o resto da sequência.
+  if (inicio < 0 || tamanho - 1 < PAUSA_MINIMA_HORAS) return null;
+  const janela = JanelaDoRitmo.safeParse({ de: horaCheia(inicio + tamanho - 1), ate: horaCheia(inicio) });
   return janela.success ? janela.data : null;
 }
 
