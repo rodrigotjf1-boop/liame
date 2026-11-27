@@ -51,15 +51,32 @@ describe('o ritmo da semana como pedido (R7, parte 1b)', () => {
     expect(planoDoRitmo({ qualquer: 'coisa' })).toEqual({ ok: false, motivo: 'Esta ferramenta é para um ritmo da semana do Liame.' });
   });
 
-  it('a janela dos anúncios (R7, parte 2; D-RG-104): só pelos pedidos da loja; vai no pedido e volta na resposta', () => {
-    // Pelos pedidos da loja: de 1 hora antes do bloco até o fim dele, inclusive passando da meia-noite.
-    expect(janelaDoRitmo({ source: 'loja', ads_from: '17:00', to: '22:00' })).toEqual({ de: '17:00', ate: '22:00' });
-    expect(janelaDoRitmo({ source: 'loja', ads_from: '21:00', to: '01:00' })).toEqual({ de: '21:00', ate: '01:00' });
-    // Pela referência do setor, ou sem os horários: ligados o dia todo. Uma hora fora da forma não vira janela.
-    expect(janelaDoRitmo({ source: 'setor', ads_from: '17:00', to: '22:00' })).toBeNull();
+  it('a janela dos anúncios (R7, parte 2; D-RG-104 e D-RG-107): as horas em que a loja vende; vai no pedido e volta na resposta', () => {
+    const porHora = (pedidos: Record<number, number>, status = 'pronto') => {
+      const by_hour = Array.from({ length: 24 }, (_, hour) => ({ hour, orders: pedidos[hour] ?? 0 }));
+      return { status, orders: by_hour.reduce((s, h) => s + h.orders, 0), by_hour };
+    };
+    // A loja do jantar que vende até as 2h (a forma da primeira loja, 4 semanas até 26/11/2026): a janela cobre das 19h às
+    // 2h59, com 1 hora antes; o bloco de 4 horas do plano de mídia (20h às 23h59) cortaria 14% dos pedidos, os da
+    // madrugada. Os 3 pedidos soltos da tarde (menos de 1% cada hora) não seguram os anúncios ligados.
+    const jantar = { 0: 440, 1: 148, 2: 57, 15: 1, 16: 2, 19: 497, 20: 754, 21: 1027, 22: 995, 23: 821 };
+    expect(janelaDoRitmo(porHora(jantar))).toEqual({ de: '18:00', ate: '03:00' });
+    // O almoço e o jantar: a pausa é a madrugada (a parada da tarde é menor), e a janela pega os dois.
+    expect(janelaDoRitmo(porHora({ 11: 30, 12: 80, 13: 60, 14: 20, 18: 40, 19: 90, 20: 100, 21: 60, 22: 20 }))).toEqual({ de: '10:00', ate: '23:00' });
+    // Só o jantar, sem passar da meia-noite.
+    expect(janelaDoRitmo(porHora({ 18: 10, 19: 30, 20: 40, 21: 20 }))).toEqual({ de: '17:00', ate: '22:00' });
+    // A hora com 1% dos pedidos é de venda; com menos, não.
+    expect(janelaDoRitmo(porHora({ 3: 1, 20: 99 }))).toEqual({ de: '19:00', ate: '04:00' });
+    expect(janelaDoRitmo(porHora({ 3: 1, 20: 199 }))).toEqual({ de: '19:00', ate: '21:00' });
+    // A pausa mínima de 4 horas: 5 horas paradas dão 4 de pausa (a primeira hora antes da venda fica ligada); 4 não bastam.
+    const todaHora = (paradas: number[]) => porHora(Object.fromEntries(Array.from({ length: 24 }, (_, h) => [h, paradas.includes(h) ? 0 : 10])));
+    expect(janelaDoRitmo(todaHora([3, 4, 5, 6, 7]))).toEqual({ de: '07:00', ate: '03:00' });
+    expect(janelaDoRitmo(todaHora([3, 4, 5, 6]))).toBeNull();
+    expect(janelaDoRitmo(todaHora([]))).toBeNull();
+    // Sem os pedidos da loja (poucos pedidos, a referência do setor) ou sem as horas: ligados o dia todo.
+    expect(janelaDoRitmo(porHora(jantar, 'poucos_pedidos'))).toBeNull();
+    expect(janelaDoRitmo({ status: 'pronto', orders: 30, by_hour: [] })).toBeNull();
     expect(janelaDoRitmo(null)).toBeNull();
-    expect(janelaDoRitmo({ source: 'loja', ads_from: '24:00', to: '02:00' })).toBeNull();
-    expect(janelaDoRitmo({ source: 'loja', ads_from: '18:00', to: '18:00' })).toBeNull();
     expect(janelaNaResposta({ de: '17:00', ate: '22:00' })).toEqual({ from: '17:00', to: '22:00' });
     expect(janelaNaResposta(null)).toBeNull();
     // O pedido com a janela vira aprovado com ela; o de antes dela (sem a chave) continua valendo; a janela adulterada não passa.

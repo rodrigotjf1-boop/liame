@@ -90,7 +90,7 @@ const lista = (itens: readonly string[]): string => (itens.length <= 1 ? (itens[
  */
 export function janelaDosAnuncios(adsOn: Ritmo['ads_on']): { celula: string; frase: string } | null {
   if (!adsOn) return null;
-  // A janela que passa da meia-noite termina no dia seguinte (o bloco dos pedidos pode passar dela).
+  // A janela que passa da meia-noite termina no dia seguinte (as horas em que a loja vende podem passar dela).
   const celula = `${adsOn.from} às ${adsOn.to}${adsOn.to < adsOn.from ? ' do dia seguinte' : ''}`;
   return { celula, frase: `deixa os anúncios ligados só das ${celula}, e pausados fora disso` };
 }

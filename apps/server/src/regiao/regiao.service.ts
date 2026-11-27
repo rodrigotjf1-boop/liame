@@ -973,7 +973,8 @@ export class RegiaoService {
       base_week_micros: base * 7,
       week_micros: campaigns.reduce((s, c) => s + c.week_micros, 0),
       hours: { source: horarios.source, from: horarios.from, to: horarios.to, ads_from: horarios.ads_from },
-      ads_on: janelaNaResposta(comHorario ? janelaDoRitmo(horarios) : null),
+      // A janela do horário sai das horas em que a loja vende (D-RG-107), não do bloco de 4 horas do plano de mídia acima.
+      ads_on: janelaNaResposta(comHorario ? janelaDoRitmo(demanda) : null),
       ...guardados,
       generated_at: agora.toISOString(),
     };
