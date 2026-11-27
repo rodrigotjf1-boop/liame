@@ -77,7 +77,7 @@
 
 ### 1.4 Riscos observados
 
-- O Google pode gastar **2× o orçamento diário** num dia (limite de 30,4× no mês) [O].
+- O Google pode gastar **2× o orçamento diário** num dia (limite de 30,4× no mês) [O]. No dia em que a verba muda, o dobro é da maior verba do dia; no mês em que muda, o que já foi gasto a mais não volta (§19.8).
 - A Meta permite até **5% da verba** em posicionamentos excluídos [S].
 - Teste de incrementalidade achou só **17%** das conversões que o Advantage+ se atribuía como reais [S].
 - Onda de suspensões automáticas na Meta em 2025–26 [S].
@@ -1966,3 +1966,19 @@ Lido na documentação oficial em 12/11/2026. [O] = conferido na página oficial
 - a hora dos anúncios vem das duas plataformas, no fuso de cada conta;
 - os números da conta do Instagram e da Página entram só depois das permissões aprovadas para clientes de fora; até lá, só nas contas com papel no app.
 - na referência do Instagram (conferida de novo em 12/11/2026, para a R4, parte 3) [O]: `follows_and_unfollows` e `profile_links_taps` só aceitam `metric_type=total_value` com `period=day`, e a janela vem por `since` e `until` (sem eles, as últimas 24 horas), e a quebra é uma por pedido; `follower_demographics` é `period=lifetime` com `timeframe` obrigatório, e desde a v20.0 só `this_week` e `this_month` valem (o `timeframe` passa por cima de `since` e `until`); `follows_and_unfollows` e `follower_demographics` não vêm com menos de 100 seguidores; os números podem atrasar até 48 horas.
+
+### 19.8 A verba diária no Google e o ritmo (conferida em 27/11/2026, para a D-RG-88)
+
+Lido na ajuda do Google Ads e na documentação da API em 27/11/2026: são os dois pontos que a D-RG-88 mandava conferir antes do código do ritmo com a Performance Max (o gasto do dia longe da verba e o aprendizado da campanha). [O] = conferido na página oficial.
+
+- **A verba diária é uma média.** Na maioria das campanhas, o Google gasta até 2 vezes a verba num dia de mais tráfego e menos em outros; no mês, não cobra mais do que 30,4 vezes a verba (365 dias ÷ 12), e o que passar disso volta como crédito automático (ajuda do Google Ads, `answer/6385083` e `answer/2375423`) [O].
+- **No dia em que a verba muda** (uma vez ou mais), o limite do dia é 2 vezes a **maior** verba escolhida naquele dia, e a mudança vale na hora. O exemplo da página: de 10 para 50 e depois para 5 no mesmo dia dá limite de 100 no dia (`answer/10487143` e `answer/10486637`) [O].
+- **No mês em que a verba muda**, o limite passa a ser o gasto até ali mais a verba nova vezes os dias corridos que faltam no mês; vale só a verba mais recente (`answer/10487143`) [O]. A consequência: o que o Google gastou a mais antes da mudança não é compensado nos dias seguintes. Com a verba constante, ele compensa dentro do mês; mudando todo dia, a compensação recomeça todo dia.
+- **A Performance Max com meta de pagar por lead** (e o tipo "Pagar por conversões") não tem limite do dia, só o do mês (`answer/10486637`) [O].
+- **O aprendizado.** A página do Smart Bidding diz que a mudança de verba vale no próximo leilão e não põe a estratégia em "Aprendendo" (`answer/13020501`; esse status dura no máximo 7 dias, `answer/6263057`) [O]. A página de dicas da Performance Max pede para evitar mudanças frequentes de verba, de estratégia e de status, porque podem reiniciar o aprendizado e causar oscilações; campanha nova, pelo menos 6 semanas antes de julgar; depois de uma mudança grande, 1 a 2 semanas ou um ciclo de conversão inteiro (`answer/11385582`) [O]. As duas páginas falam de coisas diferentes (o status na tela × o desempenho); na Performance Max vale a mais cautelosa.
+- **Os limites da API para mudar a verba.** A visão geral dos orçamentos e a página de restrições e erros não trazem limite de mudanças por hora nem de percentual por mudança [O]. O mínimo de verba que aparece é só o da Demand Gen (5 dólares por dia, erro `BUDGET_BELOW_PER_DAY_MINIMUM`); o orçamento com `explicitly_shared` verdadeiro não volta a falso; a campanha com experimento precisa de orçamento só dela [O]. A frase "até 10% por mudança, 3 mudanças por hora" da D-RG-88 não está em nenhuma dessas páginas: o limite de 10% é da política do Liame (D-A4-6), não do Google.
+
+**Regras que viram código:**
+- o ritmo da semana não muda a verba da campanha do Google (D-RG-108);
+- quem mudar a verba do Google mais de uma vez no mesmo dia conta com o limite do dia pela maior verba, não pela última;
+- quem mudar a verba do Google no meio do mês conta que o gasto a mais de antes da mudança não volta.
