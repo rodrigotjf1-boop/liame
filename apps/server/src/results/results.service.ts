@@ -18,6 +18,7 @@ import { currentTx } from '../context/request-context.js';
 import { AppProblem } from '../errors/problems.js';
 import { frescor } from '../media/frescor.js';
 import { PEDIDO_USOU_O_CUPOM_DA_MENSAGEM } from '../mensageria/cupom-no-pedido.js';
+import { custoConhecido } from '../orders/custo.js';
 import { postDoPedido } from './post-do-pedido.js';
 import { montarSerie, periodoAntes } from './serie-diaria.js';
 
@@ -180,7 +181,7 @@ export class ResultsService {
            and (coalesce(o.billed_at, o.confirmed_at) at time zone ${fuso})::date between ${q.from}::date and ${q.to}::date
       ),
       custos as (
-        select i.order_id, sum(i.cost_micros) as custo, bool_and(i.cost_known) as conhecido, count(*) as n
+        select i.order_id, sum(i.cost_micros) as custo, bool_and(${custoConhecido('i')}) as conhecido, count(*) as n
           from liame.order_item_fact i join pedidos p on p.id = i.order_id
          where i.removed_at is null
          group by 1
@@ -449,7 +450,7 @@ export class ResultsService {
       )
       select p.id, p.external_id, p.channel, p.channel_group, p.status, p.confirmed_at,
              (p.revenue_micros - p.refunded_micros)::text as liquido,
-             (select case when bool_and(i.cost_known) and count(*) > 0 then (p.revenue_micros - p.refunded_micros - sum(i.cost_micros))::text end
+             (select case when bool_and(${custoConhecido('i')}) and count(*) > 0 then (p.revenue_micros - p.refunded_micros - sum(i.cost_micros))::text end
                 from liame.order_item_fact i where i.order_id = p.id and i.removed_at is null) as margem,
              r.status as a_status, r.evidence, r.confidence, r.provider, r.campaign_id, c.name as campaign_name,
              r.ad_id, a.name as ad_name, r.touch_at, r.window_days, r.counted, r.reason,

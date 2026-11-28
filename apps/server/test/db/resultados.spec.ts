@@ -269,6 +269,19 @@ describe.skipIf(!hasDb)('resultados do ciclo fechado (A2.5 · F8)', () => {
     expect(r.body.totals.confirmed).toMatchObject({ margin_known_micros: M(70), margin_coverage_pct: '100.0', revenue_with_margin_micros: M(100), verdict: 'prejuizo' });
   });
 
+  it('o custo zero do Regem conta como desconhecido: a margem não sai igual à receita (até 26/11/2026 o Regem mandava zero sem custo cadastrado)', async () => {
+    await ownerQuery(`update liame.order_item_fact set cost_micros = 0 where order_id = $1`, [ids.o2]);
+    try {
+      const r = await consultar({ brand_id: brandId, from: '2026-09-26', to: '2026-09-27' });
+      // Volta ao o1 só (40 em 60% da receita): o o2, com custo zero, não entra com margem de 100%.
+      expect(r.body.totals.confirmed).toMatchObject({ margin_known_micros: M(40), margin_coverage_pct: '60.0', revenue_with_margin_micros: M(60) });
+      const pedidos = await api.call('GET', `/v1/results/orders?${new URLSearchParams({ brand_id: brandId, from: '2026-09-26', to: '2026-09-27' })}`, { cookie });
+      expect(pedidos.body.items.find((i: { external_id: string }) => i.external_id === 'o2').margin_micros).toBeNull();
+    } finally {
+      await ownerQuery(`update liame.order_item_fact set cost_micros = $1 where order_id = $2`, [M(10), ids.o2]);
+    }
+  });
+
   it('origem de cada pedido: evidência, horas antes, janela e motivo; sem dado pessoal', async () => {
     const r = await api.call('GET', `/v1/results/orders?${new URLSearchParams({ brand_id: brandId, from: '2026-09-26', to: '2026-09-27' })}`, { cookie });
     expect(r.status).toBe(200);

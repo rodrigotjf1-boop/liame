@@ -17,6 +17,7 @@ import { AppProblem } from '../errors/problems.js';
 import { FlagService } from '../flags/flag.service.js';
 import { KillSwitchService } from '../kill-switch/kill-switch.service.js';
 import { LinksService } from '../links/links.service.js';
+import { custoConhecido } from '../orders/custo.js';
 import type { LoadedPolicy } from '../policy/engine.js';
 import { carregarPoliticas } from '../policy/policy.service.js';
 import { modoDaAcao, mostraNaAtencao } from '../sombra/autonomia.js';
@@ -213,7 +214,7 @@ export class AtencaoCicloService {
                >= (${instante}::timestamptz at time zone coalesce(a.timezone, ${FUSO_PADRAO}))::date - ${LIMIARES.dias}::int
       ),
       custos as (
-        select i.order_id, bool_and(i.cost_known) as conhecido, count(*) as n
+        select i.order_id, bool_and(${custoConhecido('i')}) as conhecido, count(*) as n
           from liame.order_item_fact i join pedidos p on p.id = i.order_id
          where i.removed_at is null
          group by 1
