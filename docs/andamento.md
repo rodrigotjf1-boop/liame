@@ -1352,6 +1352,21 @@ A W3, parte 4 (o fim da assinatura), foi aprovada pelo dono em 03/11/2026, como 
 
 **R1, parte 1: a loja no mapa, no servidor (11/11/2026; migration `0132_loja_no_mapa.sql`; a função `regiao` desligada; D-RG-2).** A loja passa a guardar onde fica: o endereço (CEP, rua, número, bairro, município e UF), o código IBGE do município (a chave das fontes públicas, base §19), a coordenada com a precisão (`endereco`, `bairro` ou `cidade`), de onde veio o endereço (`perfil_google` ou `cep`), o raio (1 a 15 km, de meio em meio) e as áreas de entrega (até 20), com quem salvou e quando; as regras `unit_coordenada_inteira` e `unit_endereco_inteiro` no banco. Quatro rotas (`apps/server/src/regiao/`): a lista das lojas no mapa com os Perfis do Google da marca (`GET /v1/region/stores`); conferir pelo CEP (`POST /v1/region/address-lookup`: o ViaCEP completa o endereço e o OpenStreetMap acha a coordenada, do endereço para o bairro e a cidade, só valendo a que cai no município do CEP; uma consulta por segundo, com cache; não grava nada); usar o endereço do Perfil do Google (`POST /v1/region/google-profile-address`: o endereço e as áreas lidos agora pelo `locations.get`, conferidos no ViaCEP; não grava nada); e salvar (`PUT /v1/units/:id/location`, o Dono e o Administrador, com a auditoria `loja.localizacao`). As duas conferências rodam sem transação aberta e sem auditoria (as listas fechadas do `access.spec` e do `audit.spec`). O endereço nunca vai para o modelo (D-A3-4). Achado na documentação oficial (base §19.1): o Perfil quase nunca dá a coordenada. Política de Privacidade (seções 4, 8 e 8.1) com o texto "quando a função for ligada". Testes: `test/regiao.spec.ts` (11, sem banco) e `test/db/regiao.spec.ts` (contra Postgres, com o ViaCEP e o OpenStreetMap de mentira). Falta: a tela (Minha marca › Região, protótipo P40) e a loja da marca sem Regem (decisão do P40).
 
+## Plano de conteúdo (`plano-conteudo.md`, aprovado em 28/11/2026)
+
+**O plano aprovado (28/11/2026; só documentos).** O dono aprovou o plano do planejamento de conteúdo e as decisões D-PC-1 a D-PC-18, todas como recomendadas. São três peças:
+- o calendário de posts, carrosséis, Reels e Stories de uma semana a um mês, montado a partir do raio-x do Instagram, da biblioteca, das datas e tendências e do cardápio;
+- as campanhas que nascem dele;
+- o resumo para o Mister do Regem.
+
+No mesmo PR, uma correção no §3: dizia que a publicação automática só aceita áudio original, o que contradizia o §4.1 e a D-PC-16. A API de áudio da Meta põe música no Reels desde 01/06/2026.
+
+Próximos passos:
+- os protótipos P47 (Planejar conteúdo), P48 (raio-x e biblioteca) e P49 (o Mister no Regem);
+- a PC4 (produtos e datas), que não tem tela nova e começa já.
+
+A proposta tinha entrado em 28/11/2026 (#603), com a base §20.
+
 ## Hub DMS · F2 (o Liame na credencial nova)
 
 O plano da F2 do Hub DMS (decisões F2-1 a F2-8 do dono, 15/10/2026) tem uma etapa no Liame, a **A3**: consertar o achado A2 e comparar as duas credenciais do RegemCast (a de hoje, `rct_it_`, e a do DMS ID com a ligação) nas 10 ferramentas de leitura, até 14 dias seguidos sem diferença, cada uma comparada 50 vezes ou mais (F2-7). A porta do RegemCast já aceita a credencial nova, desligada (RegemCast #118, 16/10/2026).
