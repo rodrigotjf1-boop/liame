@@ -29,7 +29,7 @@ export class ConteudoController {
   @ApiOperation({
     summary: 'Os produtos do cardápio para o conteúdo',
     description:
-      'O ranking dos produtos do cardápio do Regem nas 4 semanas completas até ontem (no fuso da loja), contra as 4 semanas antes, agrupado pelo código do produto do Regem (cada canal escreve o mesmo produto de um jeito; o item sem código entra pelo nome quando o nome só aparece com um código): os pedidos, a quantidade, a receita dos itens, a tendência, a margem (só com o custo do Regem em todas as linhas), onde a marca já mostrou o produto (as legendas do Instagram e Fotos) e os destaques (`vende_bem_nunca_apareceu`, `margem_boa_pouca_venda`, `subindo`). Só leitura. Com a função `plano_conteudo` desligada, sem o Regem ou sem `vendas.ver`, `availability.status` diz o motivo e `ranking` vem nulo.',
+      'O ranking dos produtos do cardápio do Regem nas 4 semanas completas até ontem (no fuso da loja), contra as 4 semanas antes, agrupado pelo código do produto do Regem (cada canal escreve o mesmo produto de um jeito; o item sem código fica fora, só na contagem de `without_code`): os pedidos, a quantidade, a receita dos itens, a tendência, a margem (só com o custo do Regem, maior que zero, em todas as linhas), onde a marca já mostrou o produto (as legendas do Instagram; as fotos de Fotos só como informação) e os destaques (`vende_bem_nunca_apareceu`, `margem_boa_pouca_venda`, `subindo`). Só leitura. Com a função `plano_conteudo` desligada, sem o Regem ou sem `vendas.ver`, `availability.status` diz o motivo e `ranking` vem nulo.',
   })
   @ApiOkResponse({ standardSchema: ContentProductsResponse })
   @ApiBadRequestResponse({ standardSchema: ProblemDetails })

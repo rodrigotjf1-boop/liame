@@ -125,24 +125,19 @@ export class ConteudoService {
     const j = janelasDoRanking(hoje);
     const daLoja = unitId ? sql`and o.unit_id = ${unitId}` : sql``;
     // O índice (tenant_id, brand_id, confirmed_at) recorta pela confirmação, com folga; o dia exato é o do pedido do
-    // cliente no fuso da loja (V34). O item sem código ganha o código pelo nome quando o nome só aparece com um código
-    // na janela inteira (as duas janelas). O custo zero conta como desconhecido: o Regem manda zero quando o produto não
-    // tem custo cadastrado (na Mister Burgers, 6.684 dos 6.855 itens com custo em 28/11/2026), e a margem sairia 100%.
+    // cliente no fuso da loja (V34). Só o código do produto do Regem agrupa (D-PC-35): o item que chega sem ele fica fora
+    // do ranking, só na contagem de "sem código", mesmo que o nome se pareça com o de um produto. O custo zero conta como
+    // desconhecido: o Regem manda zero quando o produto não tem custo cadastrado (na Mister Burgers, 6.684 dos 6.855 itens
+    // com custo em 28/11/2026), e a margem sairia 100% (ERR-250).
     const itens: SQL = sql`
-      with itens as (
+      with efetivo as (
         select case when (coalesce(o.placed_at, o.confirmed_at) at time zone ${fuso})::date >= ${j.de}::date then 'atual' else 'anterior' end as janela,
-               o.id as pedido, o.channel_group, i.product_external_id as codigo, i.name, i.quantity, i.revenue_micros, i.cost_micros
+               o.id as pedido, o.channel_group, i.product_external_id as cod, i.name, i.quantity, i.revenue_micros, i.cost_micros
           from liame.order_item_fact i join liame.order_fact o on o.id = i.order_id
          where o.brand_id = ${brandId} ${daLoja} and o.status = 'confirmado' and i.removed_at is null
            and o.confirmed_at >= (${j.deAnterior}::date - 2)::timestamp at time zone ${fuso}
            and o.confirmed_at < (${j.ate}::date + 3)::timestamp at time zone ${fuso}
            and (coalesce(o.placed_at, o.confirmed_at) at time zone ${fuso})::date between ${j.deAnterior}::date and ${j.ate}::date
-      ),
-      mapa as (
-        select name, min(codigo) as codigo from itens where codigo is not null group by name having count(distinct codigo) = 1
-      ),
-      efetivo as (
-        select it.*, coalesce(it.codigo, m.codigo) as cod from itens it left join mapa m on it.codigo is null and m.name = it.name
       )`;
     const linhas = (
       await tx.execute<LinhaDoProduto>(sql`${itens}
@@ -181,6 +176,8 @@ export class ConteudoService {
            where m.brand_id = ${brandId} and m.caption <> ''
            order by m.published_at desc limit ${LEGENDAS_LIDAS}`)
       ).rows,
+      // As fotos de Fotos com o produto escrito: só informação (`seen.photos`), sem contar como aparição (D-PC-35: a foto
+      // conta quando estiver etiquetada e tiver saído em post, o que vem com a biblioteca inteligente, PC3).
       fotos: (
         await tx.execute<{ texto: string }>(sql`
           select concat_ws(' ', p.product, p.description) as texto

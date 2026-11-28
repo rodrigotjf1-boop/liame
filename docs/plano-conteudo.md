@@ -235,7 +235,7 @@ O ranking que o plano e as campanhas usam, sempre pelo produto do Regem (o códi
 - **Vendas:** quantidade e receita dos últimos 28 dias.
 - **Margem:** quando o Regem tem o custo (escopo `custos.ler`).
 - **Tendência:** subindo ou caindo contra os 28 dias anteriores.
-- **"Vende bem e nunca apareceu":** produto que está entre os mais vendidos e não aparece em nenhum post ou foto da biblioteca.
+- **"Vende bem e nunca apareceu":** produto que está entre os mais vendidos e não foi citado na legenda de nenhum post nem etiquetado numa foto que saiu em post (D-PC-35; até a biblioteca ter as etiquetas, conta só a legenda). A foto que só está em Fotos é material, não aparição.
 - **"Margem boa, pouca venda":** candidato a destaque ou promoção.
 
 ### 6.3 Datas e tendências
@@ -385,7 +385,43 @@ O presidente da loja não precisa abrir o Liame para saber como vai o marketing.
 | **D-PC-50** | De onde vêm as datas de nicho, os feriados do estado e da cidade e as tendências? | **Do Pulso.** Ele já lê as fontes públicas brasileiras, confere os dias de comida em mais de um calendário do setor e tem a curadoria de uma pessoa da DMS. O "Em alta" dele só traz assunto com manchete de portal brasileiro. A tabela do Liame fica com os feriados nacionais e as datas do varejo (D-PC-18 segue: o estadual e o municipal chegam do Pulso, cada um com a fonte). Sai a leitura própria do RSS do Google: o termo cru do Google é sinal interno no Pulso e nunca sai (ERR-002 do Pulso). Uma fonte só para os produtos da DMS, sem duas listas para conferir |
 | **D-PC-51** | O que o Liame manda ao Pulso? | **Só a lista somada dos municípios** (o código IBGE das lojas no mapa) das empresas com a função `plano_conteudo` ligada, e o ramo. Nada de loja, marca, empresa ou pessoa; sem temas por ora. A rotina manda na subida e a cada 6 horas (o `PUT` substitui a lista). A leitura das datas é na hora, com a memória de uma hora por município e período |
 
-## 11. Protótipos (antes do código de tela)
+**Decisões dos protótipos (aprovadas pelo dono em 28/11/2026, "aprovados", todas como recomendadas).** O texto inteiro de cada uma fica no painel do pé de cada protótipo.
+
+| Decisão | Pergunta | Recomendação aprovada |
+| --- | --- | --- |
+| **D-PC-19** | Quem pede e quem aprova? | As permissões de hoje (criar post e aprovar post), sem permissão nova |
+| **D-PC-20** | Quantos planos por marca? | Um por vez; o próximo começa depois do fim do atual |
+| **D-PC-21** | O mix e o teto por dia? | O mix sai do objetivo e do raio-x, e a pessoa muda com − e +. O teto é de 1 post no feed e 3 Stories por dia, com 3 horas entre posts do feed. Sem o raio-x pronto, o pedido espera; a conta com menos de 10 posts usa o padrão do mercado, marcado como teste |
+| **D-PC-22** | Como se aprova (a leitura da D-PC-3)? | O calendário com um clique, porque não publica nada nem gasta verba; o lote da semana com a chave de acesso ou o código do app |
+| **D-PC-23** | Trocar e tirar um item? | Trocar traz 3 alternativas, até 20 trocas por plano; tirar não tem limite e dá para desfazer até aprovar |
+| **D-PC-24** | O prazo da "Foto a produzir"? | Até a véspera do lote (5 dias antes da semana); na 1ª semana, até a véspera do item às 14h. Sem a foto, outra da biblioteca; sem nenhuma que sirva, o item sai |
+| **D-PC-25** | O lote da semana? | Chega até 5 dias antes (a 1ª semana, em até 24 horas); aprova tudo ou tira peças; a peça que espera foto entra depois, sozinha; sem aprovação, não sai |
+| **D-PC-26** | A prévia do feed? | Mostra o publicado e o planejado; o Reels de teste e o Story não entram |
+| **D-PC-27** | Como se mede cada item? | Em 48 horas e em 7 dias, contra a conta no mesmo formato; "acima" ou "abaixo" com diferença de 20% ou mais; o Story é lido antes de 24 horas |
+| **D-PC-28** | O ajuste da semana e o fim do plano? | Chega toda segunda às 9h e só mexe nas semanas cujo lote ainda não foi aprovado; sem resposta, o plano segue; o aviso do fim sai 5 dias antes |
+| **D-PC-29** | O custo de IA? | A estimativa no pedido e o gasto real no plano; a função nasce desligada para as outras marcas |
+| **D-PC-30** | Onde o raio-x mora? | Uma página em Minha marca › Raio-x do Instagram, aberta por um cartão, com Lite e Pro |
+| **D-PC-31** | A identidade visual no dossiê? | Uma parte nova do dossiê, "Identidade visual", com versões; só o Dono e o Administrador confirmam, sem o código do app |
+| **D-PC-32** | O contraste das cores da marca? | O código confere o contraste (4,5:1); a cor que não alcança usa a tinta legível e avisa, sem barrar a confirmação |
+| **D-PC-33** | Quando a IA lê as miniaturas? | Ao ligar e a cada 30 dias; "Ler de novo" uma vez por semana, com o custo anotado |
+| **D-PC-34** | Custo zero vindo do Regem? | Conta como "sem custo" (ERR-250; no ar desde o #605 e o #607) |
+| **D-PC-35** | O ranking e o "nunca apareceu"? | O ranking fica no fim do raio-x, sempre pelo produto do Regem. "Apareceu" é a legenda de um post ou a foto etiquetada que saiu em post; até as etiquetas, só a legenda. O item sem o produto do Regem fica fora do ranking, com a contagem |
+| **D-PC-36** | As etiquetas da biblioteca? | Por lista fixa, "a conferir" na dúvida, e a correção da pessoa vence |
+| **D-PC-37** | Duplicados e qualidade? | Avisar, nunca apagar sozinho; as fotos quase iguais descansam juntas os 21 dias (R4) |
+| **D-PC-38** | Trazer do Instagram? | Um por um ou "todos os que dá"; o carrossel entra item por item; o Reels sem arquivo fica de fora, com o motivo |
+| **D-PC-39** | Onde mora "Foto a produzir"? | Na aba "A produzir" de Fotos, alimentada pelo plano e pela busca |
+| **D-PC-40** | A permissão nova no Regem? | Opcional e desligada: "Resumo do marketing para o Mister · Mandar ao Regem o resumo do marketing: os números do plano de conteúdo, das postagens e das campanhas, as sugestões e os avisos. Sem dado de cliente." A versão do texto da autorização sobe |
+| **D-PC-41** | Onde ela aparece na autorização? | Num grupo próprio, "O que o Liame envia ao seu Regem" (a única que grava no Regem); "O que o Liame não pode" ganha "Falar pelo Mister" |
+| **D-PC-42** | O resumo é por loja ou da empresa? | Por loja ligada; o presidente vê as lojas somadas, o gerente só a dele |
+| **D-PC-43** | Onde o presidente libera ao gerente? | Um ajuste da empresa em Mister › Avisos e relatórios, desligado; os blocos C e D cortados no servidor |
+| **D-PC-44** | Para onde vão os avisos? | O grupo "Marketing (Liame)" com cinco avisos para o WhatsApp do presidente: quatro do Liame e "o Liame parou de mandar o resumo", que vai também ao suporte da DMS |
+| **D-PC-45** | O marketing entra no resumo do Mister? | Num bloco no fim do resumo da semana, com ajuste para tirar; o resumo do dia não leva |
+| **D-PC-46** | Quando o número é velho? | O Mister sempre diz a data; "velho" com a atualização do dia acima de 36 horas ou o resumo da semana acima de 8 dias; com 8 dias sem nada, abre o aviso |
+| **D-PC-47** | O link para mudar o plano? | Vem pronto do Liame; o Regem só aceita link do endereço do Liame |
+| **D-PC-48** | Desligar só o resumo? | "Parar de receber o resumo" em Aplicativos conectados tira só essa permissão |
+| **D-PC-49** | Por quanto tempo o Regem guarda? | 13 meses; sem a permissão ou com a ligação revogada, os resumos daquela ligação saem em 30 dias |
+
+## 11. Protótipos (antes do código de tela; os três aprovados em 28/11/2026)
 
 - **P47 · Planejar conteúdo**, na Agenda: o pedido (intervalo, objetivo, destaque, mix sugerido); o calendário em semana e em mês, com cada item e o porquê dele; o "Foto a produzir"; a aprovação do calendário e do lote da semana; o resultado de cada item e o ajuste proposto.
 - **P48 · Raio-x do Instagram e biblioteca:** o cartão do raio-x em Minha marca; a identidade visual proposta para confirmar; a biblioteca com etiquetas, busca, duplicados, qualidade, uso e os trechos de vídeo.
@@ -494,7 +530,7 @@ O plano funciona desde a PC5, mesmo sem as imagens analisadas. A biblioteca inte
 ## 16. O que depende de você
 
 1. ~~Aprovar o plano e as decisões D-PC-1 a D-PC-18~~: **feito em 28/11/2026**, todas como recomendadas.
-2. Aprovar os protótipos P47, P48 e P49, quando ficarem prontos.
+2. ~~Aprovar os protótipos P47, P48 e P49~~: **feito em 28/11/2026**, com as decisões D-PC-19 a D-PC-49 como recomendadas.
 3. Ligar as funções na Mister Burgers quando cada entrega estiver pronta (eu preparo a linha).
 4. Ligar a análise com IA (D-PC-7) depois de ver o preço medido.
 
@@ -503,6 +539,6 @@ O plano funciona desde a PC5, mesmo sem as imagens analisadas. A biblioteca inte
 | Entrega | Situação |
 | --- | --- |
 | Plano | Proposto em 27/11/2026 e aprovado pelo dono em 28/11/2026, com as decisões D-PC-1 a D-PC-18 como recomendadas |
-| Protótipos P47, P48 e P49 | Prontos em 28/11/2026, conferidos em 1440 e 375 px e nos dois temas, sem rolagem lateral nem erro de script; esperam o "aprovado" do dono, com as decisões D-PC-19 a D-PC-49 |
-| PC4 · Produtos e datas | **Parte 1 (28/11/2026; migration 0171):** o ranking dos produtos pelo código do Regem, em `GET /v1/content/products`, com a função `plano_conteudo` desligada. **Parte 2 (28/11/2026; sem migration):** as datas e as tendências pelo Pulso, em `GET /v1/content/dates` (D-PC-50 e D-PC-51). O Pulso fica desligado até a ligação do Liame ser criada no console do Pulso |
-| PC1 a PC3, PC5 a PC11 | Esperam os protótipos (PC1, PC3, PC5, PC11) ou a entrega anterior (seção 13) |
+| Protótipos P47, P48 e P49 | **Aprovados pelo dono em 28/11/2026**, com as decisões D-PC-19 a D-PC-49 como recomendadas. O P47 e o P48 estão em `mockups/prototipo-plano-conteudo.html` e `mockups/prototipo-raio-x-biblioteca.html`; o P49, no Regem (`mockups/regem-mister-marketing.html`, com o plano da PC11 em `docs/plano-mister-marketing.md`) |
+| PC4 · Produtos e datas | **Parte 1 (28/11/2026; migration 0171):** o ranking dos produtos pelo código do Regem, em `GET /v1/content/products`, com a função `plano_conteudo` desligada. **Parte 2 (28/11/2026; sem migration):** as datas e as tendências pelo Pulso, em `GET /v1/content/dates` (D-PC-50 e D-PC-51). O Pulso fica desligado até a ligação do Liame ser criada no console do Pulso. **Ajuste pela D-PC-35 (28/11/2026):** o item sem o código do Regem fica fora do ranking, e "apareceu" é só a legenda do post |
+| PC1 a PC3, PC5 a PC11 | Protótipos aprovados; seguem a ordem da seção 13, a começar pela PC1 e pela PC5 |

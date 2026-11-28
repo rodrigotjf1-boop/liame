@@ -72,7 +72,7 @@ describe('o ranking dos produtos pelo código do Regem (PC4, parte 1)', () => {
     });
   });
 
-  it('"vende bem e nunca apareceu": entre os mais vendidos, sem legenda nem foto; a legenda "Trio 8" conta para o TRIO 08', () => {
+  it('"vende bem e nunca apareceu": entre os mais vendidos, sem legenda de post (D-PC-35: a foto só em Fotos não conta); a legenda "Trio 8" conta para o TRIO 08', () => {
     const linhas = [atual('a', 100), atual('b', 90), atual('c', 80), atual('d', 70), atual('e', 60), atual('f', 50), atual('g', 1)];
     const nomes = [nome('a', 'TRIO 08', 10), nome('b', 'Batata Frita - Grande', 10), nome('c', 'TRIO 09', 10), nome('d', 'TRIO 16', 10), nome('e', 'Numero 07', 10), nome('f', 'TRIO 10', 10), nome('g', 'Coca zero', 1)];
     const r = rankingDeProdutos(
@@ -95,9 +95,10 @@ describe('o ranking dos produtos pelo código do Regem (PC4, parte 1)', () => {
     const por = (c: string) => r.products.find((p) => p.code === c)!;
     expect(por('a').seen).toEqual({ instagram_posts: 2, last_post_at: '2026-11-25', photos: 0 });
     expect(por('a').highlights).toEqual([]);
+    // A batata tem foto em Fotos (a informação fica em `seen.photos`), mas nunca saiu em post: o destaque vale (D-PC-35).
     expect(por('b').seen.photos).toBe(1);
-    expect(por('b').highlights).toEqual([]);
-    // Os 5 primeiros (mínimo) sem aparição: c, d, e. O f é o 6º (fora dos 20%, que dão 2, e do mínimo de 5).
+    expect(por('b').highlights).toEqual(['vende_bem_nunca_apareceu']);
+    // Os 5 primeiros (mínimo) sem legenda: b, c, d, e. O f é o 6º (fora dos 20%, que dão 2, e do mínimo de 5).
     expect(por('c').highlights).toEqual(['vende_bem_nunca_apareceu']);
     expect(por('e').highlights).toEqual(['vende_bem_nunca_apareceu']);
     expect(por('f').highlights).toEqual([]);
