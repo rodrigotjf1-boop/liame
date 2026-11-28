@@ -27,6 +27,7 @@
 17. [Acesso, ciclo de vida, versões de API e modelos de mídia](#17-acesso-ciclo-de-vida-versões-de-api-e-modelos-de-mídia)
 18. [Cobrança do Liame: meios de pagamento, Pix Automático e nota de serviço](#18-cobrança-do-liame-meios-de-pagamento-pix-automático-e-nota-de-serviço)
 19. [Dados da região: fontes públicas e o padrão de pesquisa pelo endereço](#19-dados-da-região-fontes-públicas-e-o-padrão-de-pesquisa-pelo-endereço)
+20. [Planejamento de conteúdo: mercado, API do Instagram, algoritmo e bibliotecas abertas](#20-planejamento-de-conteúdo-mercado-api-do-instagram-algoritmo-e-bibliotecas-abertas)
 
 ---
 
@@ -927,6 +928,7 @@ Destino único para **conversões offline**, **Customer Match** e **enhanced con
 
 | Data | Atualização |
 | --- | --- |
+| 27/11/2026 | §20 (nova): **planejamento de conteúdo**, para o `plano-conteudo.md` (pedido do dono do mesmo dia). §20.1: como 23 ferramentas planejam e programam conteúdo (Later, Planoly, Buffer, Hootsuite, Sprout, Metricool, Predis.ai, Ocoya, FeedHive, SocialBee, Vista Social, Publer, Canva, Meta Business Suite, Adobe Express, mLabs, Etus, Postgrain, Reportei, Owner.com, Popmenu, Toast, BentoBox). §20.2: a API do Instagram na v27.0 (o limite de publicações escrito como 100 e como 50; a API de áudio, só para Reels, desde 01/06/2026; Trial Reels e colaboração pela API; figurinhas do Story fora da API; as métricas de hoje e as que saíram; os limites de chamadas; o post como anúncio). §20.3: o ranking pela própria Meta, a regra da originalidade estendida à foto e ao carrossel em 30/04/2026, o limite de 5 hashtags e os estudos de 2025–2026. §20.4: datas e tendências (BrasilAPI, RSS do Google Trends testado, a API em alfa, sem API para as tendências do Instagram e do TikTok). §20.5: as bibliotecas e os modelos abertos, com a licença e a data de cada um |
 | 21/11/2026 | §9: **Next.js 16.4.5.** A 16.4.1 ficou com sete avisos médios, publicados de 16 a 19/11/2026 (GHSA-7qx7-33qx-rqx2, GHSA-f3mh-rxg3-f5g2, GHSA-mfr8-8qww-v76h, GHSA-pc58-hwjq-p385, GHSA-rhh4-g77r-r9qj, GHSA-vc7v-qv4w-wrv8 e GHSA-vvgp-ww4w-46vf), corrigidos na 16.4.5 (publicada em 03/11/2026): o osv-scanner ficou vermelho no primeiro PR depois deles. A OSV não tem aviso para a 16.4.5 (consultada em 21/11/2026). |
 | 13/11/2026 | §3.1: **o projeto passou ao nível Básico da API do Google Ads** (lido no console; 15.000 operações por dia; o planejamento deixa de estar bloqueado). O que o Explorer bloqueava fica como registro do período anterior |
 | 12/11/2026 | §19.6 (nova): **a semana que vem, para a R2, parte 5** do plano da região: a previsão do CPTEC pela BrasilAPI conferida por chamada real (a cidade pelo nome, com a UF; a previsão de 6 dias com o código e o texto da condição), as datas do calendário do Liame (`commercial_date`, §16.5) e o prazo do salário (CLT, art. 459, §1º [O]; o sábado conta como dia útil pela fiscalização do trabalho [S]). |
@@ -1982,3 +1984,219 @@ Lido na ajuda do Google Ads e na documentação da API em 27/11/2026: são os do
 - o ritmo da semana não muda a verba da campanha do Google (D-RG-108);
 - quem mudar a verba do Google mais de uma vez no mesmo dia conta com o limite do dia pela maior verba, não pela última;
 - quem mudar a verba do Google no meio do mês conta que o gasto a mais de antes da mudança não volta.
+
+## 20. Planejamento de conteúdo: mercado, API do Instagram, algoritmo e bibliotecas abertas
+
+*Pesquisado em 27/11/2026 para o `plano-conteudo.md` (pedido do dono do mesmo dia). [O] = página oficial do produto ou da plataforma; [S] = fonte secundária (imprensa, resenha, estudo de terceiro); [NC] = não confirmado. Todas as páginas foram acessadas em 27/11/2026; a maior parte das afirmações sobre as ferramentas vem das páginas das próprias empresas (marketing).*
+
+### 20.1 Como as ferramentas de mercado planejam e programam conteúdo
+
+- **Mudanças de nome e de situação:**
+  - **Hootsuite:** lançou o agente "Wisdom" em 24/06/2026; a página de planos fala em "Wisdom AI content and ideas generator" e não cita mais o OwlyWriter (`hootsuite.com/newsroom/press-releases/hootsuite-rebuilds-for-ai-era-introducing-wisdom`, `hootsuite.com/plans`) [O]. Que o Wisdom substitui o OwlyWriter, só terceiros dizem [S].
+  - **Adobe Express:** o Content Scheduler é o antigo ContentCal, encerrado (`helpx.adobe.com/express/kb/contentcal-end-of-life.html`) [O].
+  - **Etus:** o domínio etus.com.br é hoje de uma holding de mídia; o produto roda em app.etus.com.br e é vendido pela Locaweb (`locaweb.com.br/etus/`) [O].
+  - **Owner.com:** não tem produto de redes sociais (e-mail, SMS, avaliações e listagens; `owner.com/automatic-marketing`) [O].
+- **Plano gerado de uma vez:**
+  - **Predis.ai:** a semana inteira; a pessoa define dias, horários e frequência, e ele publica sozinho (`predis.ai/resources/building-a-content-calendar/`) [O]; o brand kit sai do site e dos posts antigos (`predis.ai/ai-social-media-post-generator/`) [O]; de 19 a 212 dólares por mês (`predis.ai/pricing/`) [O].
+  - **SocialBee Copilot:** de categorias para a grade de postagem e da grade para os posts (`help.socialbee.com/hc/en-us/articles/29979132682391`) [O].
+  - **Popmenu:** um mês de posts sobre os pratos, os eventos e as avaliações, a partir dos pratos populares; o dono aprova ou edita e agenda; 269 dólares (6 posts) e 449 dólares (18 ou mais) por mês (`get.popmenu.com/pricing-and-packages`) [O; a página recusou a leitura direta, conteúdo pelo trecho da busca].
+  - **Toast:** o assistente monta um plano com e-mail, SMS, Facebook e Instagram a partir dos dados de venda e do cardápio (`pos.toasttab.com/blog/on-the-line/toast-iq-grow-ai-restaurant-marketing`) [O].
+- **Melhor horário:**
+  - **Later:** pela própria conta, com 6 meses de dados, marcado no calendário (`later.com/blog/best-time-to-post-feature/`) [O].
+  - **mLabs:** cruza o perfil, o pico do segmento e a frequência dos concorrentes (`mlabs.com.br/blog/tag/melhores-horarios/`) [O].
+  - **Metricool:** mapa de calor pela atividade dos seguidores; quando falta dado, usa estudos gerais (`help.metricool.com/en/article/best-time-to-post-on-social-media-in-metricool-hj3rgj/`) [O].
+  - **Sprout:** o ViralPost (`sproutsocial.com/pricing/`) [O].
+- **Aprovação:**
+  - **mLabs:** por e-mail e WhatsApp, com histórico; o que a IA agenda entra no calendário como o post manual e passa pela mesma trava (`mlabs.com.br/funcionalidades/agendamento-de-posts`, `mlabs.com.br/funcionalidades/ia-mcp/`) [O].
+  - **Reportei Flux:** por link, com situação (`reportei.com/flux`) [O].
+  - **Sprout:** o post que não foi aprovado até a hora marcada é rejeitado (`support.sproutsocial.com/hc/en-us/articles/20105027830669`) [O].
+- **Post vira anúncio:**
+  - **Hootsuite Boost:** impulsiona um post ou por regra automática, acima da média de engajamento, com orçamento e teto (`hootsuite.com/whats-new/more-options-for-auto-boosting-your-facebook-posts`) [O].
+  - **Vista Social:** impulsiona pelo agendador, com o Ask Vista Ads desde 16/11/2026 (`vistasocial.com/insights/introducing-ask-vista-ads-manager/`) [O].
+  - **Meta Business Suite:** posts, Stories, Reels e anúncios no mesmo Planner (`facebook.com/business/help/1170295510042639`) [O].
+- **Reciclar e prever:**
+  - **Publer:** recicla posts e mostra no calendário onde as repetições caem (`publer.com/help/en/article/how-to-recycle-posts-21oc1h`) [O].
+  - **FeedHive:** prevê desempenho e aponta posts "subestimados" (`docs.feedhive.com/planning-and-scheduling/recycling-content`) [O].
+- **Relatório com recomendação:** Reportei AI escreve a análise do Instagram com IA (`reportei.com/analises-para-o-instagram-com-reportei-ai/`) [O].
+- **Créditos de IA à mostra:** Later; gerar os pilares de novo não custa (`help.later.com/hc/articles/14711113026327`) [O].
+- **O que nenhuma faz:** planejar a partir de um objetivo; o mais perto é o Hootsuite, que calcula o horário "pelas suas metas" (`hootsuite.com/fr/platform/best-time-to-post-on-social-media`) [O]. Nenhuma junta a análise da conta, a mídia real, o objetivo e o pedido confirmado no caixa [S, conclusão da pesquisa].
+- **Imagem gerada por IA** aparece em Predis, Ocoya, Reportei Flux e Publer [O]: não serve ao Liame (D-A6-82).
+- **Canva:** não agenda Stories nem Reels (`canva.com/help/scheduling-posts-on-instagram/`) [O; pelo trecho da busca].
+
+### 20.2 A API do Instagram para publicar e ler (Graph API v27.0, lançada em 04/11/2026)
+
+*Páginas: `developers.facebook.com/docs/instagram-platform/content-publishing`, `…/instagram-graph-api/reference/ig-user/media`, `…/reference/ig-user/content_publishing_limit`, `…/content-publishing/audio-api/`, `developers.facebook.com/documentation/instagram-platform/changelog`, `…/reference/instagram-media/insights`, `…/api-reference/instagram-user/insights`, `…/instagram-api-with-facebook-login/hashtag-search` e `developers.facebook.com/docs/graph-api/overview/rate-limiting`.*
+
+- **Formatos:**
+  - imagem só JPEG, até 8 MB, proporção de 4:5 a 1,91:1;
+  - carrossel de até 20 itens (fotos e vídeos), todos cortados na proporção do primeiro;
+  - Reels de 3 s a 15 min, MP4 ou MOV, até 300 MB, 9:16 recomendado;
+  - Story com foto ou vídeo de 3 a 60 s [O].
+- **Quantos por 24 horas:** o guia diz 100 publicações (o carrossel conta como 1); a seção do carrossel e a referência do recurso dizem 50 [O, as duas páginas]. Ler `quota_total` em `GET /{ig-id}/content_publishing_limit` antes de montar o calendário. Se o Story conta no limite: [NC]. Outros limites: 400 contêineres por 24 horas; o contêiner vence em 24 horas [O].
+- **Agendamento pela API:** não existe. O sistema guarda e chama `media_publish` na hora [O].
+- **Reels:**
+  - capa por `cover_url` (tem prioridade) ou por `thumb_offset` em milissegundos;
+  - `share_to_feed` decide se vai também ao Feed;
+  - o `audio_name` só se renomeia uma vez [O].
+- **API de áudio** (desde 01/06/2026, só pelo login do Facebook):
+  - `GET /ig_audio` busca música ou som original e, sem termo, devolve as faixas em alta;
+  - `audio_configuration` (`audio_id` e os volumes) vai no contêiner, documentado só para Reels;
+  - não tem prévia, e a seleção "pode variar do app" [O].
+  - [NC] quais músicas uma conta comercial pode usar e o que acontece quando a faixa sai do catálogo.
+- **Marcações:**
+  - `user_tags` em imagem, vídeo e Story;
+  - `product_tags` (até 5) aparece na referência, mas o guia diz que marcação de compras não é suportada [NC];
+  - no Story, as figurinhas (link, enquete, local) não podem ser publicadas [O].
+- **Colaboração:** `collaborators` com até 3 nomes de usuário, em imagem, Reels e carrossel, não em Story; os convites desde 03/12/2025 e a Collaborative Media API desde 22/04/2026 [O].
+- **Trial Reels:** `trial_params.graduation_strategy` = `MANUAL` ou `SS_PERFORMANCE` (passa a valer para todos se for bem), desde 03/12/2025 [O].
+- **Outros campos:**
+  - `alt_text` de até 1.000 caracteres, em imagem e item de carrossel, desde 24/03/2025;
+  - legenda de até 2.200 caracteres, 30 hashtags e 20 menções pela API;
+  - `is_ai_generated` desde 22/06/2026;
+  - rótulo de parceria paga desde 22/04/2026 [O].
+- **Métricas de mídia hoje:**
+  - de todo post: `views`, `reach`, `likes`, `comments`, `saved`, `shares`, `total_interactions` e `reposts`;
+  - só no Feed e no Story: `follows`, `profile_visits` e `profile_activity`;
+  - no Reels: `ig_reels_avg_watch_time`, `ig_reels_video_view_total_time`, `reels_skip_rate` (desde 03/12/2025), `crossposted_views` e `facebook_views`;
+  - no Story: `navigation`, `replies` e `link_clicks` (desde 22/06/2026) [O].
+  - `views`, `total_interactions` e `reels_skip_rate` aparecem como "em desenvolvimento" [O]. `total_likes`, `total_comments` e `total_views` somam também os anúncios (desde 22/04/2026) [O].
+- **Regras da leitura:**
+  - os números atrasam até 48 horas e ficam guardados por 2 anos;
+  - o Story só se lê nas 24 horas em que fica no ar (o aviso `story_insights` pega antes de sumir), e o Story com menos de 5 pessoas dá erro;
+  - os itens do carrossel não têm números;
+  - `likes`, `comments`, `views` e `total_interactions` contam só o orgânico [O].
+- **Descontinuadas:**
+  - `video_views` em todas as versões em 08/01/2025;
+  - `plays`, `clips_replays_count`, `ig_reels_aggregated_all_plays_count` e `impressions` na v22 (21/01/2025) e em todas as versões em 21/04/2025 (`impressions` segue só para mídia criada antes de 02/07/2024);
+  - na conta, `profile_views`, `website_clicks` e os cliques de contato e de rota em 08/01/2025 [O].
+- **Métricas da conta:**
+  - `reach`, `views`, `accounts_engaged`, `total_interactions`, `likes`, `comments`, `saves`, `shares`, `replies`, `reposts`, `profile_links_taps` e `follows_and_unfollows`;
+  - `follower_demographics` e `engaged_audience_demographics` por idade, cidade, país e gênero (com 100 seguidores ou 100 engajamentos, os 45 primeiros, só `this_week` e `this_month`) [O].
+  - `follower_count` e `online_followers` aparecem só nas limitações (100 seguidores; `online_followers` só os últimos 30 dias): se seguem na tabela de hoje, [NC].
+- **Busca por hashtag:**
+  - 30 hashtags diferentes por conta a cada 7 dias;
+  - `recent_media` só as últimas 24 horas, 50 por página;
+  - `top_media` limitado a 200 resultados a partir de 16/02/2027;
+  - pede o recurso "Instagram Public Content Access" [O].
+- **O que não existe:** o Explorar, as tendências e as hashtags em alta. O áudio em alta, só pela lista padrão da API de áudio [O].
+- **Limites de chamadas:**
+  - `GET /{ig-user-id}/media` devolve até as 10 mil mais novas, paginadas por data; os Stories ficam em `/stories`;
+  - o limite por app e usuário é 4.800 vezes as impressões da conta em 24 horas;
+  - o cabeçalho `X-Business-Use-Case-Usage` acompanha o uso; o erro do limite é o 80002, e insistir prolonga o bloqueio [O].
+- **Post como anúncio:** a Meta cria o anúncio a partir do post com `source_instagram_media_id` e diz se o post pode ser impulsionado em `boost_eligibility_info` (`developers.facebook.com/docs/instagram/ads-api/guides/use-posts-as-ads/`) [O]; a X5, parte 6, já usa o caminho do Reels.
+
+### 20.3 O algoritmo e os números de mercado
+
+- **O ranking por lugar do app** (`about.instagram.com/blog/announcements/instagram-ranking-explained`, 31/05/2023) [O]:
+  - **Feed:** a atividade da pessoa, a popularidade e a rapidez do post, a relação com o autor;
+  - **Story:** o histórico e a proximidade (tocar, responder, pular);
+  - **Explorar:** a popularidade pesa "muito mais";
+  - **Reels:** o áudio, a imagem, a popularidade, reenviar, ver até o fim, ir à página do áudio, e as pesquisas de "valeu o tempo?".
+  - A ficha oficial do Feed, atualizada em 29/06/2026, prevê também passar o carrossel inteiro, enviar por mensagem, o tempo no post e no perfil, pular e ligar o som (`transparency.meta.com/features/explaining-ranking/ig-feed`) [O].
+- **Os três sinais principais**, segundo Adam Mosseri em janeiro de 2025: tempo assistido, curtidas e envios. As curtidas pesam um pouco mais para quem segue, e os envios para quem não segue; medir envios e curtidas por alcance (`socialmediatoday.com/news/instagram-shares-algorithm-insights-2025/738034/`) [S]. Os "3 a 5 vezes para envio" que circulam não têm fonte primária [NC].
+- **Originalidade:**
+  - o Reels com marca d'água, baixa resolução, sem som, com bordas, só texto ou repostado perde distribuição [O, ranking explained];
+  - desde 30/04/2026, a regra vale para foto e carrossel; marca d'água ou mudar a velocidade não contam como transformação (`techcrunch.com/2026/04/30/instagram-restricts-reach-of-content-aggregators-in-new-crackdown/`) [S].
+- **Reels:**
+  - até 3 minutos pode ser recomendado a quem não segue; pôr áudio em foto ou carrossel os torna elegíveis à aba Reels (`creators.instagram.com/blog/the-latest-with-instagram`, 21/01/2025) [O];
+  - a duração ideal oficial: [NC].
+- **Trial Reels** (10/12/2024): primeiro só para quem não segue e fora da grade (`about.fb.com/news/2024/12/trial-reels-try-content-non-followers/`) [O].
+- **Hashtags:** limite de 5 por post ou Reels, liberado aos poucos desde dezembro de 2025 (`businesstoday.in`, 19/12/2025) [S]; a API ainda documenta 30 [O]; o que acontece com mais de 5 pela API: [NC].
+- **"Seu algoritmo"**: desde 10/12/2025, a pessoa vê e ajusta os temas dos Reels; em 2026, também no Feed e no Explorar (`about.instagram.com/blog/announcements/reels-algorithm-control`) [O].
+- **Frequência:** a Meta pede constância, sem número oficial [O].
+- **Números de mercado** (cada estudo mede de um jeito; não se comparam entre si) [S]:
+  - **Socialinsider** (20/02/2026; 67,5 milhões de posts de 579 mil marcas; dados de 2025):
+    - engajamento sobre seguidores: carrossel 0,55%, Reels 0,52%, imagem 0,37%; no 3º trimestre de 2026, 0,50%, 0,48% e 0,35%;
+    - as marcas publicam cerca de 8 Reels, 5 carrosséis e 7 imagens por mês (`socialinsider.io/social-media-benchmarks/instagram`).
+  - **Buffer** (19/03/2026): engajamento mediano sobre alcance de 6,9% no carrossel, 5,1% no Story, 4,4% na imagem e 3,3% no Reels; o Reels alcança 1,36 vez o carrossel e 2,25 vezes a imagem (dados de 2022 a outubro de 2024; `buffer.com/resources/data-best-content-format-social-media/`).
+  - **Metricool** (16/06/2026; 24,4 milhões de posts): o carrossel tem 9 vezes os salvos da imagem, e o tempo assistido dos Reels dobrou em um ano (`metricool.com/instagram-research-study-new/`).
+  - **Quid/Rival IQ** (05/03/2026): engajamento mediano de 0,30% (era 0,36%), mediana de 3,7 posts por semana.
+  - **Buffer** (13/08/2025; 2,1 milhões de posts): contra 1 a 2 posts por semana, o alcance por post sobe 12% com 3 a 5, 18% com 6 a 9 e 24% com 10 ou mais; o equilíbrio fica em 3 a 5 (`buffer.com/library/how-often-to-post-on-instagram/`).
+  - **Horários:**
+    - Buffer (23/09/2026): quinta 9h, quarta 12h e 18h;
+    - Sprout (31/03/2026): comida e bebida 11h–13h nos dias úteis;
+    - Hootsuite (14/07/2026): restaurantes, quarta 11h–15h;
+    - Later (21/04/2026): 5h no fuso do público;
+    - os estudos não concordam: o horário certo é o da conta.
+  - **Comida e bebida:** Dash Social (1º semestre de 2026; 3.313 empresas) mostra 3,2% de engajamento sobre visualizações, contra 2,6% no geral, e cerca de 5 posts por semana (`dashsocial.com/social-media-benchmarks/food-beverage-industry`).
+  - **Brasil:**
+    - Comscore (18/07/2025): pico no Instagram das 18h às 22h todos os dias, e o engajamento em Reels cresceu 49% de 2023 para 2024 (`meioemensagem.com.br/midia/os-melhores-horarios-para-postar-nas-midias-sociais`);
+    - HypeAuditor e Metricool (03/09/2026; 83 milhões de posts): o carrossel pode passar o Reels em alcance e curtidas (`propmark.com.br/digital/reels-ou-carrossel-qual-gera-mais-engajamento-no-instagram-em-2026/`);
+    - Metricool Brasil (2026): 90% das contas de criadores brasileiros publicam uma vez por semana ou menos.
+
+### 20.4 Datas e tendências
+
+- **Calendários de datas:**
+  - o mLabs oferece o calendário de marketing por segmento, baixado em .ics (`mlabs.com.br/calendario-marketing`) [O];
+  - o Etus tem as datas sazonais no app [O];
+  - a E-goi publica um calendário com 360 datas, como material de divulgação [S].
+- **Feriados em dado aberto:** a BrasilAPI devolve os feriados nacionais em JSON (`brasilapi.com.br/api/feriados/v1/2026`: 14 em 2026) [O]. As **datas comerciais e de nicho** (Dia dos Namorados, Dia do Hambúrguer) não têm API oficial: tabela própria, cada data com a fonte (a regra do §16.5).
+- **Google Trends:**
+  - "Em alta" tem RSS público, e exportar em RSS é opção oficial da página (`support.google.com/trends/answer/3076011`) [O]; `https://trends.google.com/trending/rss?geo=BR` foi testado em 27/11/2026 e respondeu, com o tráfego aproximado e as notícias ligadas [O];
+  - a API do Google Trends está em alfa desde 24/07/2025, só para testadores aprovados, com janela de 5 anos e recorte por região (`developers.google.com/search/blog/2025/07/trends-api`) [O].
+- **Áudio em alta do Instagram:** pela API de áudio (§20.2) [O]; o Reels Trends do app não tem API, e terceiros dizem que só existe nos EUA [S].
+- **TikTok Creative Center:** consulta na web por país e setor, em português desde 2023; as músicas são só as comerciais; sem API pública oficial, só raspadores não oficiais (`ads.tiktok.com/business/creativecenter/trends/home`) [O, a página; S, a falta de API]. O Liame não raspa.
+- **O Pulso do Hub DMS** (produto da DMS, ao lado do DMS Graph): eventos de fontes públicas e notícias do ramo, por API REST e MCP. A leitura pelo Liame entra na PC4 do `plano-conteudo.md` [O, ecossistema DMS].
+
+### 20.5 Bibliotecas e modelos abertos para a análise de imagem, vídeo e calendário
+
+*Lido nas APIs do GitHub, do npm e do Hugging Face em 27/11/2026; a licença vem do arquivo LICENSE ou do model card [O]. Os tempos de CPU são estimativas da pesquisa, não medidas: medir na VPS antes de decidir.*
+
+| Necessidade | Biblioteca ou modelo | Licença | Versão (data) | Situação |
+| --- | --- | --- | --- | --- |
+| Paleta | node-vibrant (`github.com/Vibrant-Colors/node-vibrant`) | MIT (pelo npm; o repo não tem LICENSE na raiz) | 4.0.4 (27/01/2026) | ✅ |
+| Paleta | color-thief (`github.com/lokesh/color-thief`) | MIT | 3.5.0 (02/08/2026) | ✅ |
+| Paleta com o peso de cada cor | extract-colors (`github.com/Namide/extract-colors`) | MIT | 4.2.1 (04/08/2025) | ✅ |
+| Embedding de imagem, multilíngue | SigLIP2 base (`huggingface.co/google/siglip2-base-patch16-224`; ONNX em `onnx-community/siglip2-base-patch16-224-ONNX`) | Apache-2.0 (o card do ONNX não tem o campo; herda) | modelo de 21/02/2025 | ✅ recomendado |
+| Embedding de imagem | open_clip (`github.com/mlfoundations/open_clip`); pesos `laion/CLIP-ViT-B-32-laion2B-s34B-b79K` | MIT | 4.2.2 (10/11/2026) | ✅ alternativa (o CLIP original só entende inglês) |
+| Embedding de imagem | MobileCLIP / MobileCLIP2 (Apple) | código MIT; **pesos só para pesquisa** | — | ⛔ licença |
+| Duplicado | imghash (`github.com/pwlmc/imghash`) | MIT | 1.1.5 (14/10/2026) | ✅ |
+| Duplicado | sharp-phash | MIT | 2.2.0 (31/10/2024) | ⚠️ parado, mas pequeno: dá para escrever o pHash sobre o sharp |
+| Duplicado | imagehash (Python) | BSD-2-Clause | 4.1.0 (2021); commits até 25/11/2026 | referência |
+| Estética | LAION aesthetic v2 | Apache-2.0 | commit de 12/10/2023 | ⚠️ parado; pede o CLIP ViT-L/14 (~1 s por imagem em CPU) |
+| Estética | aesthetic-predictor-v2-5 | **AGPL-3.0** | — | ⛔ |
+| Qualidade | pyiqa / IQA-PyTorch | **PolyForm Noncommercial 1.0.0** | 0.1.16 (08/07/2026) | ⛔ (só teste interno) |
+| Qualidade | CLIP-IQA | **S-Lab 1.0 (não comercial)** | 2023 | ⛔ o código; o método (pares de frases) se refaz sobre o SigLIP2 |
+| Qualidade | NIMA (idealo) | Apache-2.0, arquivado | 07/2024 | ⛔ abandonado |
+| OCR | PaddleOCR (`github.com/PaddlePaddle/PaddleOCR`); em Node, `@gutenye/ocr-node` (onnxruntime-node) | Apache-2.0; MIT | 3.7.0 (11/06/2026); 1.4.9 (19/09/2026) | ✅ |
+| OCR | tesseract.js | Apache-2.0 | 7.0.0 (15/12/2025) | ✅ reserva (fraco em fonte estilizada) |
+| OCR | docTR / EasyOCR / RapidOCR | Apache-2.0 | 1.2.0 (24/11/2026) / 1.7.2 / 3.10.0 | Python, alternativas |
+| OCR e legenda curta | Florence-2-base (`huggingface.co/microsoft/Florence-2-base`; ONNX em `onnx-community/Florence-2-base-ft`) | MIT | 04/08/2025 | ✅ opcional (1 a 3 s por imagem) |
+| Troca de cena | ffmpeg `scdet` / `select=gt(scene,x)`, `ebur128`, `silencedetect` | a do ffmpeg instalado (chamado pela linha de comando) | — | ✅ |
+| Troca de cena | PySceneDetect | BSD-3-Clause | 0.7.3 (08/11/2026) | ✅ se precisar de mais precisão |
+| Troca de cena | TransNetV2 | MIT | 07/2021 | ⛔ abandonado |
+| Fala → legenda | whisper.cpp (`github.com/ggml-org/whisper.cpp`), com `@remotion/install-whisper-cpp` + `@remotion/captions` | MIT (pesos do Whisper também) | 1.9.6 (23/11/2026); 4.0.547 (24/11/2026) | ✅ |
+| Fala → legenda | faster-whisper | MIT | 1.2.1 (31/10/2025) | Python, alternativa |
+| Recorte de fundo | BiRefNet lite (`onnx-community/BiRefNet_lite-ONNX`) | MIT | commit de 25/10/2026 | ✅ opcional |
+| Recorte de fundo | rembg (com o u2net) | MIT (os modelos "bria" não) | 2.0.88 (24/11/2026) | Python |
+| Recorte de fundo | RMBG-1.4 / 2.0 (Bria) | acordo com a Bria / **CC BY-NC 4.0** | — | ⛔ |
+| Recorte de fundo | @imgly/background-removal-node | **AGPL-3.0** | — | ⛔ |
+| Ampliar | Real-ESRGAN, UpscalerJS | BSD-3 / MIT | — | ⛔ inventam detalhe (D-A6-82); ampliar com o sharp |
+| Feriados | date-holidays | código ISC + **dados CC BY-SA 4.0** | 3.39.2 (14/11/2026) | ⚠️ atribuição e mesma licença ao redistribuir os dados (D-PC-18) |
+| Feriados | python-holidays | MIT | 0.109 (17/11/2026) | conferência |
+| Feriados | BrasilAPI (`brasilapi.com.br/api/feriados/v1/{ano}`) | MIT | respondeu 200 em 27/11/2026 | ✅ só nacionais |
+| Tendências | pytrends | Apache-2.0, **arquivado** | 4.9.1 (04/2023) | ⛔ |
+| Tendências | Pageviews da Wikimedia (`wikimedia.org/api/rest_v1/metrics/pageviews`) | dados [NC] | respondeu 200; exige User-Agent | opcional (User-Agent genérico do Liame, sem dado da empresa) |
+| Recorrência | rrule.js | BSD-3-Clause | npm 2.8.1 (10/11/2023) | ⚠️ sem versão nova |
+| Recorrência | rrule-temporal | MIT | 2.3.0 (18/11/2026) | ✅ |
+| Exportar .ics | ical-generator / ics | MIT / ISC | 11.1.4 (18/11/2026) / 3.12.1 | ✅ |
+| Previsão | statsforecast (Nixtla) | Apache-2.0 | 2.1.1 (16/07/2026) | Python, depois |
+| Previsão | Prophet | MIT | 1.5.0 (05/10/2026) | Python, mais pesado |
+| Estatística em JS | simple-statistics | ISC | 8.0.0 (28/10/2026) | ✅ |
+| Vídeo por código | Remotion | Remotion License (grátis até 3 pessoas; empresa: US$ 0,01 por vídeo, mínimo de US$ 100 por mês; muda no 5.0) | 4.0.547 (24/11/2026) | ✅ em uso (Z15) |
+| Vídeo por código | Revideo / Motion Canvas / editly / Diffusion Studio | MIT / MIT / MIT / MPL-2.0 | — | parados ou feitos para o navegador |
+| Agendador aberto | Postiz | **AGPL-3.0** | 2.26.0 (13/11/2026) | só estudar a arquitetura |
+| Agendador aberto | Mixpost Lite | MIT | 2.6.0 (16/03/2026) | estudo |
+| Agente → aprovação → agenda | social-media-agent (LangChain) | MIT | commit de 27/11/2026 | estudo |
+| Rodar modelos em Node | transformers.js (`@huggingface/transformers`) | Apache-2.0 | 4.3.2 (27/10/2026) | ✅ |
+| Rodar modelos em Node | onnxruntime-node | MIT | 1.31.1 (26/10/2026) | ✅ |
+| Imagem em Node | sharp | Apache-2.0 (libvips LGPL-3.0, ligada de forma dinâmica) | 0.35.5 (27/09/2026) | ✅ em uso |
+
+- **`pgvector`:** a extensão `vector` 0.8.2 está disponível no Supabase do Liame e não está instalada (lido em 27/11/2026) [O]. A revisão do plano mestre só a admite no próprio Postgres e quando a busca semântica provar valor.
+- **Licenças que travam (skill `imagem-python`, conferidas no PyPI em 13/10/2026):** `ultralytics` (o YOLO), `albumentationsx` e `boxmot` são AGPL-3.0 [O]. Não entram no Liame.
+
+**Regras que viram código:**
+- nenhuma biblioteca ou modelo com licença AGPL, GPL ligada ao código, "não comercial" ou "só pesquisa";
+- nenhum ampliador por IA (inventa detalhe);
+- antes de pôr um modelo no worker, medir na VPS o tempo por imagem e a memória, e o tamanho que ele soma à imagem do contêiner;
+- os vetores vão para o `pgvector` só quando a busca livre provar valor; antes disso, etiquetas em texto.
