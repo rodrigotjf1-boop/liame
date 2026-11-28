@@ -122,6 +122,8 @@ describe('A1-4: toda rota declara o acesso e nega sem sessão', () => {
     // `POST /v1/direct/conversations/:id/suggestion` (A6 · Z12, parte 4b-2): o mesmo caminho, para a sugestão do Social
     // media numa conversa do Direct (a conversa lida numa transação curta, a IA sem transação aberta).
     // As do DMS Graph (F4): chamam o Graph, que leva até 1 minuto na edição da foto; o banco em transações curtas, antes e depois.
+    // `GET /v1/content/dates` (plano de conteúdo, PC4, parte 2): a marca, a função, a loja, o calendário e os nomes do
+    // cardápio numa transação curta; o Pulso depois, sem transação aberta (até 8 segundos por tentativa); não grava nada.
     expect(semTransacao).toEqual([
       'DELETE /v1/brand-photos/edits/:id',
       'GET /v1/actions/options',
@@ -129,6 +131,7 @@ describe('A1-4: toda rota declara o acesso e nega sem sessão', () => {
       'GET /v1/agency/clients/:id/reports/:reportId',
       'GET /v1/agency/reports',
       'GET /v1/billing/invoices/:id/pix',
+      'GET /v1/content/dates',
       'GET /v1/conversions/google/actions',
       'GET /v1/dms-graph',
       'GET /v1/messaging',

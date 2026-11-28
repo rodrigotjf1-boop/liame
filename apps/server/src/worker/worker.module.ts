@@ -88,6 +88,7 @@ import { RegiaoService } from '../regiao/regiao.service.js';
 import { RegiaoCnpjService } from './regiao-cnpj.service.js';
 import { RegiaoFontesService } from './regiao-fontes.service.js';
 import { RegiaoMidiaLoop } from './regiao-midia.service.js';
+import { PulsoInteressesLoop } from './pulso-interesses.js';
 import { RegiaoPublicoLoop } from './regiao-publico.service.js';
 import { RitmoDaSemanaService } from './ritmo-da-semana.service.js';
 import { TestesDeCriativoRotina } from './testes-de-criativo.service.js';
@@ -177,6 +178,7 @@ import { WebhookDeliverer } from './webhook-deliverer.js';
     RegiaoMidiaLoop,
     // O público nas redes (R4, parte 3): os números da conta do Instagram e da Página.
     RegiaoPublicoLoop,
+    PulsoInteressesLoop,
     RitmoDaSemanaService,
     // Os testes de criativo (plano da região, R8): os cupons do teste aprovado e a ligação deles à campanha de teste.
     TestesDeCriativoRotina,

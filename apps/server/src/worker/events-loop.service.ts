@@ -41,6 +41,7 @@ import { SearchConsoleLoop } from './search-console-loop.js';
 import { RegiaoCnpjService } from './regiao-cnpj.service.js';
 import { RegiaoFontesService } from './regiao-fontes.service.js';
 import { RegiaoMidiaLoop } from './regiao-midia.service.js';
+import { INTERVALO_DOS_INTERESSES_MS, PulsoInteressesLoop } from './pulso-interesses.js';
 import { RegiaoPublicoLoop } from './regiao-publico.service.js';
 import { RitmoDaSemanaService } from './ritmo-da-semana.service.js';
 import { TestesDeCriativoRotina } from './testes-de-criativo.service.js';
@@ -103,6 +104,7 @@ export class EventsLoopService implements OnApplicationBootstrap, OnApplicationS
     private readonly regiaoCnpj: RegiaoCnpjService,
     private readonly regiaoMidia: RegiaoMidiaLoop,
     private readonly regiaoPublico: RegiaoPublicoLoop,
+    private readonly pulsoInteresses: PulsoInteressesLoop,
     private readonly ritmoDaSemana: RitmoDaSemanaService,
     private readonly testesDeCriativo: TestesDeCriativoRotina,
     private readonly testesDeRegiao: TestesDeRegiaoRotina,
@@ -201,6 +203,12 @@ export class EventsLoopService implements OnApplicationBootstrap, OnApplicationS
       // O público nas redes (R4, parte 3): os seguidores, os toques no perfil e as visitas do Instagram e da Página, uma vez
       // por dia, e a cidade dos seguidores, uma vez por semana, só com a função `regiao` ligada; a fila é olhada de 5 em 5 minutos.
       this.loop('regiao-publico', 3, 300_000, async (n) => (await this.regiaoPublico.executarLote(n)).length),
+      // Os interesses do Liame no Pulso (plano de conteúdo, PC4, parte 2): a lista somada dos municípios das lojas no mapa das
+      // empresas com a função `plano_conteudo` ligada, na subida e a cada 6 horas; sem a ligação do Pulso, não faz nada.
+      this.loop('pulso-interesses', 1, INTERVALO_DOS_INTERESSES_MS, async () => {
+        await this.pulsoInteresses.executar();
+        return 0;
+      }),
       // O ritmo da semana (R7, parte 1b): no domingo, a partir das 16h na loja, o Gestor de tráfego monta o ritmo da semana
       // que vem e pede em Aprovações, só com as funções `regiao` e `ritmo_da_semana` ligadas; a fila é olhada de 10 em 10 minutos.
       // Só os pedidos feitos contam: com o lote cheio a volta seguinte continua na hora; senão, espera os 10 minutos.

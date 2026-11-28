@@ -244,9 +244,9 @@ O ranking que o plano e as campanhas usam, sempre pelo produto do Regem (o códi
 | --- | --- | --- | --- |
 | Calendário comercial do Liame | Feriados nacionais e datas do varejo | Nenhum | Sim (§16.5) |
 | Dossiê, "Datas e sazonalidade" | As datas da própria marca (aniversário da loja, festas do bairro) | Nenhum | Sim |
-| **Pulso** (Hub DMS) | Os eventos da cidade, de fontes públicas, e as notícias e tendências do ramo | Nenhum para o Liame (o Pulso já roda) | No Hub; falta o Liame ler |
-| Datas de nicho do food service | Dia do Hambúrguer, Dia da Pizza e afins, com a fonte de cada uma | Nenhum | Não: entra na tabela do calendário comercial |
-| Tendências de busca | O que está em alta nas buscas do Brasil e da região | Nenhum (§20.4) | Não |
+| **Pulso** (Hub DMS) | Os eventos da cidade, de fontes públicas: os feriados e os pontos facultativos do estado e da cidade, os jogos, as estreias e o dinheiro no bolso, com as notícias e tendências do ramo | Nenhum para o Liame (o Pulso já roda) | **Sim, desde a PC4, parte 2** (D-PC-50); falta ligar |
+| Datas de nicho do food service | Dia do Hambúrguer, Dia da Pizza e afins, com a fonte de cada uma | Nenhum | **Pelo Pulso** (D-PC-50): as 11 datas que aparecem em mais de um calendário do setor, com a curadoria da DMS (base §20.4) |
+| Tendências de busca | O que está em alta no Brasil e no estado | Nenhum (§20.4) | **Pelo "Em alta" do Pulso** (D-PC-50): só assunto com manchete de portal brasileiro; o termo do Google nunca sai cru |
 | Áudio em alta do Instagram | As faixas em alta da API de áudio (só para Reels, pelo login do Facebook; seção 4.1) | Nenhum | Não |
 | Tendências do Explorar, do Instagram e do TikTok | — | — | **Não há API** (§20.2): o Liame não promete e não raspa |
 
@@ -378,6 +378,13 @@ O presidente da loja não precisa abrir o Liame para saber como vai o marketing.
 | **D-PC-17** | Trial Reels e colaboração entram? | **Sim, como itens possíveis do plano:** o Trial Reels para testar ideias com quem não segue (objetivo de seguidores) e a colaboração com até 3 contas (fornecedor, parceiro, evento), sempre com aprovação |
 | **D-PC-18** | As datas de feriado estadual e municipal: a biblioteca date-holidays (dados CC BY-SA 4.0, que pedem atribuição) ou uma tabela própria? | **Tabela própria**, com a fonte de cada data (a regra do §16.5), e a BrasilAPI para conferir os nacionais. A date-holidays só depois de conferir com o advogado o que a CC BY-SA pede de quem mostra os dados a clientes |
 
+**Decisões do código (PC4, parte 2; 28/11/2026).** Seguidas como recomendadas: o dono mandou seguir as recomendações.
+
+| Decisão | Pergunta | Recomendação |
+| --- | --- | --- |
+| **D-PC-50** | De onde vêm as datas de nicho, os feriados do estado e da cidade e as tendências? | **Do Pulso.** Ele já lê as fontes públicas brasileiras, confere os dias de comida em mais de um calendário do setor e tem a curadoria de uma pessoa da DMS. O "Em alta" dele só traz assunto com manchete de portal brasileiro. A tabela do Liame fica com os feriados nacionais e as datas do varejo (D-PC-18 segue: o estadual e o municipal chegam do Pulso, cada um com a fonte). Sai a leitura própria do RSS do Google: o termo cru do Google é sinal interno no Pulso e nunca sai (ERR-002 do Pulso). Uma fonte só para os produtos da DMS, sem duas listas para conferir |
+| **D-PC-51** | O que o Liame manda ao Pulso? | **Só a lista somada dos municípios** (o código IBGE das lojas no mapa) das empresas com a função `plano_conteudo` ligada, e o ramo. Nada de loja, marca, empresa ou pessoa; sem temas por ora. A rotina manda na subida e a cada 6 horas (o `PUT` substitui a lista). A leitura das datas é na hora, com a memória de uma hora por município e período |
+
 ## 11. Protótipos (antes do código de tela)
 
 - **P47 · Planejar conteúdo**, na Agenda: o pedido (intervalo, objetivo, destaque, mix sugerido); o calendário em semana e em mês, com cada item e o porquê dele; o "Foto a produzir"; a aprovação do calendário e do lote da semana; o resultado de cada item e o ajuste proposto.
@@ -409,7 +416,7 @@ O presidente da loja não precisa abrir o Liame para saber como vai o marketing.
 | 7 | Troca de cena e energia do som, para achar os melhores trechos do vídeo | **ffmpeg** (`scdet`, `ebur128`, `silencedetect`), chamado pela linha de comando; o **PySceneDetect** (BSD-3) só se precisar de mais precisão | Licença do ffmpeg instalado, sem ligar código | Linha de comando |
 | 8 | Legenda do Reels pela fala ("legendas sempre", base §7.3) | **whisper.cpp** pelo `@remotion/install-whisper-cpp` + `@remotion/captions` | MIT (os pesos do Whisper também) | Node + binário |
 | 9 | Datas | Tabela própria (o calendário comercial, ampliado com as datas de nicho), com a **BrasilAPI** (MIT) para conferir os feriados nacionais; a **date-holidays** só com atribuição, porque os dados dela são CC BY-SA 4.0 (D-PC-18) | MIT / ISC + CC BY-SA | Node |
-| 10 | Tendências | **RSS do Google Trends** ("Em alta", Brasil) e o pedido de acesso à API oficial em alfa; **nada de pytrends** (arquivado) | Termos do Google | Node |
+| 10 | Tendências | **O "Em alta" do Pulso** (D-PC-50), que já lê o RSS do Google Trends e só entrega o assunto com manchete de portal brasileiro; **nada de pytrends** (arquivado) | Os termos de cada fonte, conferidos no Pulso | Node (a porta do Pulso) |
 | 11 | Recorrência e exportar o calendário (.ics) | **rrule-temporal** + **ical-generator** | MIT | Node |
 | 12 | Melhor horário e previsão | Primeiro, SQL com a média por dia e hora puxada para a média geral quando há poucos posts, mais o **simple-statistics** (ISC); o **statsforecast** (Apache-2.0, Python) só depois de uns 3 meses de dados | ISC / Apache-2.0 | Node; Python depois |
 
@@ -496,6 +503,6 @@ O plano funciona desde a PC5, mesmo sem as imagens analisadas. A biblioteca inte
 | Entrega | Situação |
 | --- | --- |
 | Plano | Proposto em 27/11/2026 e aprovado pelo dono em 28/11/2026, com as decisões D-PC-1 a D-PC-18 como recomendadas |
-| Protótipos P47, P48 e P49 | Em montagem (28/11/2026) |
-| PC4 · Produtos e datas | **Parte 1 (28/11/2026; migration 0171):** o ranking dos produtos pelo código do Regem, em `GET /v1/content/products`, com a função `plano_conteudo` desligada. **A seguir:** as datas, os eventos e as tendências |
+| Protótipos P47, P48 e P49 | Prontos em 28/11/2026, conferidos em 1440 e 375 px e nos dois temas, sem rolagem lateral nem erro de script; esperam o "aprovado" do dono, com as decisões D-PC-19 a D-PC-49 |
+| PC4 · Produtos e datas | **Parte 1 (28/11/2026; migration 0171):** o ranking dos produtos pelo código do Regem, em `GET /v1/content/products`, com a função `plano_conteudo` desligada. **Parte 2 (28/11/2026; sem migration):** as datas e as tendências pelo Pulso, em `GET /v1/content/dates` (D-PC-50 e D-PC-51). O Pulso fica desligado até a ligação do Liame ser criada no console do Pulso |
 | PC1 a PC3, PC5 a PC11 | Esperam os protótipos (PC1, PC3, PC5, PC11) ou a entrega anterior (seção 13) |
