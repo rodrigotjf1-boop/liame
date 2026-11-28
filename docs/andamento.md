@@ -1354,6 +1354,15 @@ A W3, parte 4 (o fim da assinatura), foi aprovada pelo dono em 03/11/2026, como 
 
 ## Plano de conteúdo (`plano-conteudo.md`, aprovado em 28/11/2026)
 
+**A margem de Resultados com o custo zero do Regem (28/11/2026; sem migration; ERR-250, V196).** O achado veio da PC4.
+- **O problema:** o Regem mandava o custo zero quando o produto não tinha custo cadastrado. Na Mister Burgers, 6.684 dos 6.855 itens com custo das 4 semanas até 27/11 vinham com zero; desde a correção do custo manual no Regem (#1393), o Regem manda nulo.
+- **O efeito:** Resultados e a Atenção liam "conhecido" como "não é nulo". Com isso, a margem dos períodos até 26/11 saía igual à receita.
+- **A correção:** a regra única `custoConhecido` (`orders/custo.ts`): o custo só é conhecido quando é maior que zero.
+- **Onde vale:** nas três leituras (a margem do período e a de cada pedido em Resultados, o "sem margem" da Atenção), como o ranking da PC4 já fazia.
+- **Os dados:** não mudam. A regra vale na leitura, para os zeros antigos e para o que vier.
+
+Teste: `test/db/resultados.spec.ts`.
+
 **PC4, parte 2: as datas e as tendências pelo Pulso (28/11/2026; sem migration; a função `plano_conteudo` segue desligada; D-PC-50 e D-PC-51).** A rota nova `GET /v1/content/dates` (só leitura, `dossie.ver`, sem transação aberta: o banco numa transação curta, o Pulso depois) devolve as datas do período, até 62 dias (sem `from`, hoje; sem `to`, 30 dias depois).
 - **As datas do Liame:** o calendário comercial (feriados nacionais e datas do varejo, com a lei ou a regra).
 - **As datas do Pulso:** os eventos do município da loja no mapa, ou seja, os feriados e pontos facultativos do estado e da cidade, os dias de comida, os jogos, as estreias e o dinheiro no bolso. O Pulso confere os dias de comida em mais de um calendário do setor e uma pessoa da DMS aprova cada um.
