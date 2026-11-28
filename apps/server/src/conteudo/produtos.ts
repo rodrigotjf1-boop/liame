@@ -2,8 +2,7 @@
 // D-PC-2). Contas puras, sem banco: o serviço traz as linhas já agrupadas pelo CÓDIGO do produto do Regem
 // (`order_item_fact.product_external_id`), nunca pelo nome escrito no pedido. Cada canal escreve o mesmo produto de um
 // jeito ("TRIO 08", "Trio 08 - Burguer + Batata + Refri" e "Burger 08 Trio..." são um produto só na Mister Burgers).
-// O item sem código entra pelo nome quando esse nome só aparece com um código na janela (a consulta faz isso); o resto
-// fica à parte, em "sem código", com os nomes. As regras de pedido são as de Resultados: conta o pedido confirmado, no
+// O item sem o código fica fora do ranking, à parte, em "sem código", com os nomes (D-PC-35). As regras de pedido são as de Resultados: conta o pedido confirmado, no
 // dia do pedido do cliente no fuso da loja, nas 4 semanas completas até ontem (V57). Nada de pessoa: só somas da loja.
 
 import { nomeComparavel } from '../regiao/coordenada.js';
@@ -221,7 +220,9 @@ export function rankingDeProdutos(
       margin_percent: margem === null ? null : Math.round(Number((margem * 1000n) / receita)) / 10,
       seen: { instagram_posts: posts.length, last_post_at: ultimo, photos: nasFotos },
       highlights: [
-        ...(i < corte && posts.length === 0 && nasFotos === 0 ? (['vende_bem_nunca_apareceu'] as const) : []),
+        // D-PC-35: "apareceu" é a legenda de um post (a foto etiquetada que saiu em post entra com a PC3). A foto que só
+        // está em Fotos não conta: ela é o material para o post que ainda não saiu.
+        ...(i < corte && posts.length === 0 ? (['vende_bem_nunca_apareceu'] as const) : []),
         ...(t.trend === 'subindo' ? (['subindo'] as const) : []),
       ],
     };

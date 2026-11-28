@@ -43,11 +43,12 @@ export const ContentProduct = z.strictObject({
   margin_percent: z.number().nullable(),
   /**
    * Onde a marca já mostrou o produto, pelo nome: as legendas das publicações lidas do Instagram (as mais novas, até
-   * onde a leitura vai) e o produto e a descrição das fotos de Fotos.
+   * onde a leitura vai). `photos` é só informação: as fotos de Fotos com o produto escrito (o material que existe); a
+   * foto só conta como aparição quando estiver etiquetada e tiver saído em post (D-PC-35, com a PC3).
    */
   seen: z.strictObject({ instagram_posts: z.number().int().min(0), last_post_at: z.string().nullable(), photos: z.number().int().min(0) }),
   /**
-   * Os destaques, em ordem: `vende_bem_nunca_apareceu` (entre os 20% que mais vendem e sem post nem foto),
+   * Os destaques, em ordem: `vende_bem_nunca_apareceu` (entre os 20% que mais vendem e sem legenda de post; D-PC-35),
    * `margem_boa_pouca_venda` (a margem acima da mediana e os pedidos abaixo, com 5 ou mais produtos com custo) e
    * `subindo`.
    */
@@ -83,8 +84,8 @@ export const ContentProductsResponse = z.strictObject({
       /** Quantos produtos venderam na janela. */
       products_total: z.number().int().min(0),
       /**
-       * As linhas sem o código do produto que também não casam pelo nome com um código só (comuns na 99): os pedidos, a
-       * receita e os nomes mais vendidos (até 10).
+       * As linhas sem o código do produto do Regem, fora do ranking (D-PC-35; comuns na 99): os pedidos, a receita e os
+       * nomes mais vendidos (até 10).
        */
       without_code: z.strictObject({ orders: z.number().int().min(0), revenue_micros: Micros, names: z.array(z.string().max(300)).max(10) }),
     })

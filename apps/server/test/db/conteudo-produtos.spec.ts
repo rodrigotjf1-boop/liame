@@ -86,8 +86,9 @@ describe.skipIf(!hasDb)('Plano de conteúdo: o ranking dos produtos pelo código
     expect((await ranking(randomUUID())).status).toBe(404);
   });
 
-  it('agrupa pelo código, junta o item sem código pelo nome, compara as janelas e acha o produto no Instagram e em Fotos', async () => {
-    // O TRIO 08 em três nomes: o do cardápio, o do iFood e um item sem código com o nome que só aparece com o código dele.
+  it('agrupa pelo código (o item sem código fica fora, D-PC-35), compara as janelas e acha o produto nas legendas do Instagram', async () => {
+    // O TRIO 08 em dois nomes com o código (o do cardápio e o do iFood) e um item sem código com o mesmo nome do iFood: este
+    // fica fora do ranking, em "sem código" (D-PC-35: só o código do Regem agrupa).
     for (let i = 0; i < 12; i++) await pedido(DIA, [['trio-08', 'TRIO 08', 1, 35, 20]]);
     for (let i = 0; i < 8; i++) await pedido(DIA, [['trio-08', 'Trio 08 - Burguer + Batata + Refri', 1, 38, 21]], { canal: 'marketplace' });
     for (let i = 0; i < 3; i++) await pedido(DIA, [[null, 'Trio 08 - Burguer + Batata + Refri', 1, 38, null]], { canal: 'marketplace' });
@@ -125,22 +126,29 @@ describe.skipIf(!hasDb)('Plano de conteúdo: o ranking dos produtos pelo código
     expect(r.status, JSON.stringify(r.body)).toBe(200);
     const k = r.body.ranking;
     // 12 + 8 + 3 + 5 + 1 + 2 (a Coca) + 2 = 33 pedidos confirmados da loja na janela.
-    expect(k).toMatchObject({ status: 'pronto', orders: 33, products_total: 3, without_code: { orders: 2, revenue_micros: '60000000', names: ['Numero 07'] } });
+    // Sem código: os 3 do Trio 08 sem o código (3 × 38) e os 2 do "Numero 07" (2 × 30), por pedidos.
+    expect(k).toMatchObject({
+      status: 'pronto',
+      orders: 33,
+      products_total: 3,
+      without_code: { orders: 5, revenue_micros: '174000000', names: ['Trio 08 - Burguer + Batata + Refri', 'Numero 07'] },
+    });
     expect(k.products.find((p: { code: string }) => p.code === 'coca-zero')).toMatchObject({ rank: 3, orders: 2, margin_micros: null, margin_percent: null });
     const trio = k.products.find((p: { code: string }) => p.code === 'trio-08');
     expect(trio).toMatchObject({
       rank: 1,
       name: 'TRIO 08',
       other_names: ['Trio 08 - Burguer + Batata + Refri'],
-      // 12 + 8 + 3 (pelo nome) + 1 (no pedido com a batata) = 24; antes, 10: +140%.
-      orders: 24,
-      quantity: '24',
-      revenue_micros: String((12 * 35 + 8 * 38 + 3 * 38 + 35) * 1_000_000),
+      // 12 + 8 + 1 (no pedido com a batata) = 21; antes, 10: +110%.
+      orders: 21,
+      quantity: '21',
+      revenue_micros: String((12 * 35 + 8 * 38 + 35) * 1_000_000),
       previous: { orders: 10, quantity: '10', revenue_micros: '350000000' },
       trend: 'subindo',
-      trend_percent: 140,
-      // Os 3 itens sem código não têm custo: sem a margem.
-      margin_micros: null,
+      trend_percent: 110,
+      // 759 − (12 × 20 + 8 × 21 + 20 = 428) = 331 reais de margem: 43,6%.
+      margin_micros: '331000000',
+      margin_percent: 43.6,
       seen: { instagram_posts: 1, last_post_at: diasAntes(HOJE, 5), photos: 0 },
       highlights: ['subindo'],
     });
@@ -154,8 +162,9 @@ describe.skipIf(!hasDb)('Plano de conteúdo: o ranking dos produtos pelo código
       margin_micros: '77000000',
       margin_percent: 73.3,
       trend: 'novo',
+      // A foto de Fotos fica como informação; sem legenda de post, a batata "vende bem e nunca apareceu" (D-PC-35).
       seen: { instagram_posts: 0, last_post_at: null, photos: 1 },
-      highlights: [],
+      highlights: ['vende_bem_nunca_apareceu'],
     });
 
     // A marca inteira soma a outra loja.

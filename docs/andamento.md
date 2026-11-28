@@ -1354,6 +1354,12 @@ A W3, parte 4 (o fim da assinatura), foi aprovada pelo dono em 03/11/2026, como 
 
 ## Plano de conteúdo (`plano-conteudo.md`, aprovado em 28/11/2026)
 
+**Os protótipos P47, P48 e P49 aprovados, e o ranking ajustado pela D-PC-35 (28/11/2026; sem migration).** O dono aprovou os três protótipos ("aprovados"), com as decisões D-PC-19 a D-PC-49 como recomendadas, registradas no §10 do plano.
+- **Onde ficam:** `mockups/prototipo-plano-conteudo.html` (P47, Planejar conteúdo na Agenda, 29 estados) e `mockups/prototipo-raio-x-biblioteca.html` (P48, o raio-x do Instagram e a biblioteca, 27 estados). O P49 (o Mister com o marketing) vai ao Regem, com o plano da PC11.
+- **O ajuste da D-PC-35:** "apareceu" passa a ser só a legenda de um post; a foto etiquetada que saiu em post entra com a PC3. A foto que só está em Fotos fica como informação (`seen.photos`), sem tirar o destaque "vende bem e nunca apareceu".
+- **O item sem o código do produto do Regem** fica fora do ranking, só na contagem de `without_code`. Ele não entra mais pelo nome parecido.
+- **Testes:** `test/conteudo-produtos.spec.ts` (a batata só com foto ganha o destaque) e `test/db/conteudo-produtos.spec.ts` (os 3 do Trio 08 sem código vão para "sem código"; a margem do Trio 08 aparece, porque todas as linhas dele com código têm custo).
+
 **A margem de Resultados com o custo zero do Regem (28/11/2026; sem migration; ERR-250, V196).** O achado veio da PC4.
 - **O problema:** o Regem mandava o custo zero quando o produto não tinha custo cadastrado. Na Mister Burgers, 6.684 dos 6.855 itens com custo das 4 semanas até 27/11 vinham com zero; desde a correção do custo manual no Regem (#1393), o Regem manda nulo.
 - **O efeito:** Resultados e a Atenção liam "conhecido" como "não é nulo". Com isso, a margem dos períodos até 26/11 saía igual à receita.
