@@ -497,5 +497,5 @@ O plano funciona desde a PC5, mesmo sem as imagens analisadas. A biblioteca inte
 | --- | --- |
 | Plano | Proposto em 27/11/2026 e aprovado pelo dono em 28/11/2026, com as decisões D-PC-1 a D-PC-18 como recomendadas |
 | Protótipos P47, P48 e P49 | Em montagem (28/11/2026) |
-| PC4 · Produtos e datas | Começa em 28/11/2026 (não tem tela nova) |
+| PC4 · Produtos e datas | **Parte 1 (28/11/2026; migration 0171):** o ranking dos produtos pelo código do Regem, em `GET /v1/content/products`, com a função `plano_conteudo` desligada. **A seguir:** as datas, os eventos e as tendências |
 | PC1 a PC3, PC5 a PC11 | Esperam os protótipos (PC1, PC3, PC5, PC11) ou a entrega anterior (seção 13) |

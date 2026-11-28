@@ -338,6 +338,7 @@ export {
   StoreLocationsResponse,
   STORES_PER_BRAND_MAX,
 } from './regiao.js';
+export { ContentProduct, ContentProductsQuery, ContentProductsResponse } from './conteudo.js';
 export {
   CONVERSATION_MESSAGE_MAX,
   CONVERSATION_RETENTION_DAYS,
