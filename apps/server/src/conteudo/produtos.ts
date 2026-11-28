@@ -35,7 +35,7 @@ export type LinhaDoProduto = {
   receita: string | number;
   /** A soma do custo das linhas que têm custo; só vale com `custo_conhecido`. */
   custo: string | number | null;
-  /** Toda linha do produto na janela tem o custo do Regem. */
+  /** Toda linha do produto na janela tem o custo do Regem, maior que zero (o zero é "sem custo cadastrado"). */
   custo_conhecido: boolean;
 };
 

@@ -35,7 +35,10 @@ export const ContentProduct = z.strictObject({
   trend: Slug,
   /** A variação dos pedidos contra as 4 semanas antes, em pontos percentuais; nula sem venda antes. */
   trend_percent: z.number().int().nullable(),
-  /** Receita menos custo, só com o custo do Regem em todas as linhas da janela; nula sem ele. */
+  /**
+   * Receita menos custo, só com o custo do Regem em todas as linhas da janela; nula sem ele. O custo zero conta como
+   * desconhecido (o Regem manda zero quando o produto não tem custo cadastrado).
+   */
   margin_micros: Micros.nullable(),
   margin_percent: z.number().nullable(),
   /**

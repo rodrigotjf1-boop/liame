@@ -76,7 +76,8 @@ export class ConteudoService {
     const daLoja = unitId ? sql`and o.unit_id = ${unitId}` : sql``;
     // O índice (tenant_id, brand_id, confirmed_at) recorta pela confirmação, com folga; o dia exato é o do pedido do
     // cliente no fuso da loja (V34). O item sem código ganha o código pelo nome quando o nome só aparece com um código
-    // na janela inteira (as duas janelas).
+    // na janela inteira (as duas janelas). O custo zero conta como desconhecido: o Regem manda zero quando o produto não
+    // tem custo cadastrado (na Mister Burgers, 6.684 dos 6.855 itens com custo em 28/11/2026), e a margem sairia 100%.
     const itens: SQL = sql`
       with itens as (
         select case when (coalesce(o.placed_at, o.confirmed_at) at time zone ${fuso})::date >= ${j.de}::date then 'atual' else 'anterior' end as janela,
@@ -96,7 +97,7 @@ export class ConteudoService {
     const linhas = (
       await tx.execute<LinhaDoProduto>(sql`${itens}
         select janela, cod as codigo, count(distinct pedido)::int as pedidos, sum(quantity)::text as quantidade,
-               sum(revenue_micros)::text as receita, sum(cost_micros)::text as custo, bool_and(cost_micros is not null) as custo_conhecido
+               sum(revenue_micros)::text as receita, sum(cost_micros)::text as custo, bool_and(coalesce(cost_micros, 0) > 0) as custo_conhecido
           from efetivo where cod is not null group by 1, 2`)
     ).rows;
     const nomes = (

@@ -94,6 +94,8 @@ describe.skipIf(!hasDb)('Plano de conteúdo: o ranking dos produtos pelo código
     // A batata, com custo em todas as linhas; e um pedido com dois itens (a batata conta um pedido, duas unidades).
     for (let i = 0; i < 5; i++) await pedido(DIA, [['batata-g', 'Batata Frita - Grande', 1, 15, 4]]);
     await pedido(DIA, [['batata-g', 'Batata Frita - Grande', 2, 30, 8], ['trio-08', 'TRIO 08', 1, 35, 20]]);
+    // A Coca com custo zero em todas as linhas: o Regem manda zero sem custo cadastrado, e a margem não pode sair 100%.
+    for (let i = 0; i < 2; i++) await pedido(DIA, [['coca-zero', 'Coca zero', 1, 7, 0]]);
     // O "Numero 07" sem código nenhum: fica em "sem código".
     for (let i = 0; i < 2; i++) await pedido(DIA, [[null, 'Numero 07', 1, 30, null]], { canal: 'marketplace' });
     // Não contam: o cancelado, o de hoje e o item tirado do pedido.
@@ -122,8 +124,9 @@ describe.skipIf(!hasDb)('Plano de conteúdo: o ranking dos produtos pelo código
     const r = await ranking(loja);
     expect(r.status, JSON.stringify(r.body)).toBe(200);
     const k = r.body.ranking;
-    // 12 + 8 + 3 + 5 + 1 + 2 = 31 pedidos confirmados da loja na janela.
-    expect(k).toMatchObject({ status: 'pronto', orders: 31, products_total: 2, without_code: { orders: 2, revenue_micros: '60000000', names: ['Numero 07'] } });
+    // 12 + 8 + 3 + 5 + 1 + 2 (a Coca) + 2 = 33 pedidos confirmados da loja na janela.
+    expect(k).toMatchObject({ status: 'pronto', orders: 33, products_total: 3, without_code: { orders: 2, revenue_micros: '60000000', names: ['Numero 07'] } });
+    expect(k.products.find((p: { code: string }) => p.code === 'coca-zero')).toMatchObject({ rank: 3, orders: 2, margin_micros: null, margin_percent: null });
     const trio = k.products.find((p: { code: string }) => p.code === 'trio-08');
     expect(trio).toMatchObject({
       rank: 1,
@@ -157,7 +160,7 @@ describe.skipIf(!hasDb)('Plano de conteúdo: o ranking dos produtos pelo código
 
     // A marca inteira soma a outra loja.
     const marca = await ranking();
-    expect(marca.body.ranking.orders).toBe(32);
+    expect(marca.body.ranking.orders).toBe(34);
     expect(marca.body.ranking.products.find((p: { code: string }) => p.code === 'batata-g').orders).toBe(7);
   });
 });
