@@ -92,3 +92,77 @@ export const ContentProductsResponse = z.strictObject({
   generated_at: z.string(),
 });
 export type ContentProductsResponse = z.infer<typeof ContentProductsResponse>;
+
+// PC4, parte 2: as datas e as tendências do período (seção 6.3; D-PC-10 e D-PC-18). O calendário comercial do Liame e os
+// eventos do Pulso, o produto da DMS que lê as fontes públicas (os feriados do estado e da cidade, os dias de comida, os
+// jogos, as estreias), e o "Em alta" do Pulso (só assunto com manchete de portal brasileiro). Só leitura.
+
+export const ContentDatesQuery = z.strictObject({
+  brand_id: z.uuid(),
+  /** Uma loja da marca (o município dela); sem ela, a primeira loja da marca com o município. */
+  unit_id: z.uuid().optional(),
+  /** O primeiro dia; sem ele, hoje (no fuso da loja). */
+  from: Dia.optional(),
+  /** O último dia; sem ele, 30 dias depois do primeiro. Até 62 dias no período. */
+  to: Dia.optional(),
+});
+export type ContentDatesQuery = z.infer<typeof ContentDatesQuery>;
+
+export const ContentDate = z.strictObject({
+  day: Dia,
+  end_day: Dia,
+  /** A hora (HH:MM, no fuso do evento) do evento com hora, como o jogo; nula no evento do dia inteiro. */
+  time: z.string().regex(/^[0-9]{2}:[0-9]{2}$/).nullable(),
+  name: z.string().max(300),
+  /**
+   * `feriado_nacional` e `varejo` (o calendário do Liame, com a lei ou a regra); `feriado`, `ponto_facultativo`, `comida`
+   * (o dia de comida), `comemorativa`, `dinheiro`, `jogo`, `estreia` e `tv` (o Pulso).
+   */
+  kind: Slug,
+  /** `nacional`, `uf` ou `municipio`. */
+  scope: Slug,
+  source: z.strictObject({ name: z.string().max(300), url: z.string().max(2000).nullable() }),
+  /** `liame` (o calendário comercial) ou `pulso`. */
+  origin: Slug,
+  /** O tema do dia de comida (`hamburguer`, `pizza`...); nulo nos outros. */
+  food_theme: Slug.nullable(),
+  /** O dia de comida combina com o cardápio da marca (o tema aparece nos nomes dos produtos ou em Minha marca). */
+  menu_match: z.boolean(),
+});
+export type ContentDate = z.infer<typeof ContentDate>;
+
+export const ContentTrend = z.strictObject({
+  title: z.string().max(500),
+  /** A nota do Pulso, de 0 a 100. */
+  score: z.number().min(0).max(100),
+  /** A faixa da nota no Pulso. */
+  band: Slug,
+  /** `do_tema` (um tema que a DMS vigia) ou `em_alta` (o que o Brasil ou o estado está lendo). */
+  pile: Slug,
+  /** `nacional`, `uf` ou `municipio`. */
+  scope: Slug,
+  /** Até 3 manchetes de portal brasileiro: só o título, o endereço e a fonte. */
+  headlines: z.array(z.strictObject({ title: z.string().max(500), url: z.string().max(2000), source: z.string().max(200).nullable() })).max(3),
+});
+export type ContentTrend = z.infer<typeof ContentTrend>;
+
+export const ContentDatesResponse = z.strictObject({
+  brand_id: z.uuid(),
+  unit_id: z.uuid().nullable(),
+  /** `disponivel` ou `desligado_pela_liame` (a função `plano_conteudo` desta empresa). */
+  availability: z.strictObject({ status: Slug }),
+  from: Dia,
+  to: Dia,
+  /** O município da loja (o código IBGE, da loja no mapa); nulo sem loja no mapa. */
+  municipality: z.strictObject({ ibge_code: z.string().regex(/^[0-9]{7}$/), name: z.string().max(200).nullable(), state: z.string().max(2).nullable() }).nullable(),
+  /**
+   * A situação do Pulso nesta resposta: `em_dia`, `desligado` (o Liame ainda não está ligado ao Pulso), `sem_municipio`
+   * (a loja não está no mapa: só as datas nacionais do Liame) ou `falhou` (o Pulso não respondeu agora: só as do Liame).
+   */
+  pulse_status: Slug,
+  dates: z.array(ContentDate).max(500),
+  /** Os assuntos em alta no Brasil e no estado da loja, até 10; vazio fora de `em_dia`. */
+  trends: z.array(ContentTrend).max(10),
+  generated_at: z.string(),
+});
+export type ContentDatesResponse = z.infer<typeof ContentDatesResponse>;

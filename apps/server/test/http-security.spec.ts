@@ -3,6 +3,7 @@ import { Test } from '@nestjs/testing';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { AppModule } from '../src/app.module.js';
 import { loadConfig } from '../src/config.js';
+import { gerarChave } from '../src/connectors/dms/integracao-dms.js';
 import { configureApp } from '../src/setup.js';
 
 /** Uma chave do Sandbox do Asaas de mentira e o token do aviso, em nomes neutros (V101, V123). */
@@ -204,6 +205,21 @@ describe('fail-fast da configuração em produção', () => {
     expect(() => loadConfig({ ...prod, ...dmsId, DMS_ID_EMISSOR: 'http://127.0.0.1:4000/oidc' })).toThrow('emissor oficial');
     // Fora de produção, o emissor de mentira dos testes serve.
     expect(loadConfig({ NODE_ENV: 'test', ...dmsId, DMS_ID_EMISSOR: 'http://127.0.0.1:4000/oidc' } as NodeJS.ProcessEnv).dmsId?.emissor).toBe('http://127.0.0.1:4000/oidc');
+  });
+
+  it('o Pulso (plano de conteúdo, PC4, parte 2): só com a ligação do Pulso e o aplicativo do Liame no DMS ID; em produção, só o oficial', () => {
+    const dmsId = { DMS_ID_EMISSOR: 'https://id.dmstecnologias.com/oidc', DMS_ID_APLICATIVO: 'aplicativo-do-liame', DMS_ID_SEGREDO: 'valor-do-aplicativo-no-dms-id-0123' };
+    const ligacao = gerarChave('lg', 'pulso').chave;
+    expect(loadConfig({ ...prod, ...dmsId }).pulso).toBeNull();
+    expect(loadConfig({ ...prod, ...dmsId, PULSO_LIGACAO: ligacao }).pulso).toEqual({ base: 'https://pulso.dmstecnologias.com/v1', ligacao });
+    // A ligação de outro produto, ou colada pela metade, não liga nada: a subida recusa com o motivo.
+    expect(() => loadConfig({ ...prod, ...dmsId, PULSO_LIGACAO: gerarChave('lg', 'graph').chave })).toThrow('PULSO_LIGACAO');
+    expect(() => loadConfig({ ...prod, ...dmsId, PULSO_LIGACAO: ligacao.slice(0, -3) })).toThrow('PULSO_LIGACAO');
+    // Sem o aplicativo do DMS ID neste serviço, o Pulso só fica desligado nele: a ligação a mais não derruba a API.
+    expect(loadConfig({ ...prod, PULSO_LIGACAO: ligacao }).pulso).toBeNull();
+    expect(() => loadConfig({ ...prod, ...dmsId, PULSO_LIGACAO: ligacao, PULSO_URL: 'https://pulso.outro.site/v1' })).toThrow('Pulso oficial');
+    // Fora de produção, o Pulso de mentira dos testes serve.
+    expect(loadConfig({ NODE_ENV: 'test', ...dmsId, PULSO_LIGACAO: ligacao, PULSO_URL: 'http://127.0.0.1:4000/v1/' } as NodeJS.ProcessEnv).pulso?.base).toBe('http://127.0.0.1:4000/v1');
   });
 
   it('autorização por clique do Regem (Hub DMS, F3, parte C): existe com o aplicativo do Liame no DMS ID (a página e a API oficiais do Regem, o iss = a origem da API)', () => {

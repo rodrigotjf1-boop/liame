@@ -1354,6 +1354,30 @@ A W3, parte 4 (o fim da assinatura), foi aprovada pelo dono em 03/11/2026, como 
 
 ## Plano de conteúdo (`plano-conteudo.md`, aprovado em 28/11/2026)
 
+**PC4, parte 2: as datas e as tendências pelo Pulso (28/11/2026; sem migration; a função `plano_conteudo` segue desligada; D-PC-50 e D-PC-51).** A rota nova `GET /v1/content/dates` (só leitura, `dossie.ver`, sem transação aberta: o banco numa transação curta, o Pulso depois) devolve as datas do período, até 62 dias (sem `from`, hoje; sem `to`, 30 dias depois).
+- **As datas do Liame:** o calendário comercial (feriados nacionais e datas do varejo, com a lei ou a regra).
+- **As datas do Pulso:** os eventos do município da loja no mapa, ou seja, os feriados e pontos facultativos do estado e da cidade, os dias de comida, os jogos, as estreias e o dinheiro no bolso. O Pulso confere os dias de comida em mais de um calendário do setor e uma pessoa da DMS aprova cada um.
+- **Sem repetir:** a mesma data com o nome sem acento, ou o feriado nacional no mesmo dia, fica com a lei do Liame.
+- **O dia de comida "combina com o cardápio"** quando o tema aparece nos nomes vendidos nos últimos 60 dias ou em Minha marca ("Burger" para o Dia do Hambúrguer). O Dia do Garçom nunca combina.
+- **O "Em alta" do Brasil e do estado:** só assunto com manchete de portal brasileiro (título, endereço e fonte), até 10.
+- **O cliente do Pulso** (`connectors/dms/pulso.ts`) usa o token do aplicativo do Liame no DMS ID e a ligação. Lê as respostas sem confiar: o item torto fica de fora. Duas tentativas de 8 segundos.
+- **A memória:** o que o Pulso respondeu fica uma hora na memória do processo (dado público). A falha não fica guardada.
+- **`pulse_status`:** `em_dia`, `desligado`, `sem_municipio` ou `falhou`. Sem o Pulso, as datas do Liame valem do mesmo jeito.
+- **A rotina `pulso-interesses`** (no worker, na subida e a cada 6 horas) manda ao Pulso só a lista somada dos municípios das lojas no mapa das empresas com a função ligada, e o ramo.
+- **Configuração:** `PULSO_URL` (o oficial como padrão) e `PULSO_LIGACAO`. A ligação torta recusa a subida; sem o DMS ID no serviço, o Pulso só fica desligado nele.
+
+Muda o plano (D-PC-50): as datas de nicho e as tendências saem do Pulso, e não de tabela nem de RSS próprios. A base §20.4 ganhou o Pulso lido no código. Política 8: o Pulso recebe só o código do município (README jurídico, 28/11/2026).
+
+Testes:
+- `test/conteudo-datas.spec.ts`, sem banco;
+- `test/db/conteudo-datas.spec.ts`, contra Postgres, com o DMS ID e o Pulso de mentira;
+- `test/http-security.spec.ts`, a configuração.
+
+Falta ligar, com o dono:
+- a permissão `eventos.ler` do Pulso para o aplicativo do Liame no DMS ID;
+- a ligação do Liame no console do Pulso;
+- `PULSO_LIGACAO` no `liame-api` e no `liame-worker`.
+
 **PC4, parte 1: o ranking dos produtos pelo código do Regem (28/11/2026; migration `0171_plano_de_conteudo.sql`; a função `plano_conteudo` desligada).** A rota nova `GET /v1/content/products` (só leitura, `dossie.ver`; os números só com `vendas.ver`) lê os itens dos pedidos do Regem das 4 semanas completas até ontem, no fuso da loja, contra as 4 semanas antes, e devolve até 100 produtos. É a base do plano e das campanhas (seção 6.2).
 - **Pelo código, não pelo nome:** o agrupamento é pelo código do produto do Regem (`product_external_id`). Na Mister Burgers, 95% das linhas de 28 dias têm o código, e o mesmo produto aparece com até cinco nomes ("TRIO 08", "Trio 08 - Burguer + Batata + Refri"...). O item sem código entra pelo nome quando esse nome só aparece com um código; o resto fica em "sem código", com os nomes.
 - **O que cada produto traz:** o nome do cadastro (o mais usado nos canais do próprio Regem) e os nomes dos outros canais; os pedidos, a quantidade e a receita dos itens; a tendência ("subindo" e "caindo" com 20% e 5 pedidos de diferença; "novo" sem venda antes); a margem, só com o custo do Regem em todas as linhas. O custo zero conta como desconhecido: o Regem manda zero quando o produto não tem custo cadastrado (na Mister Burgers, 6.684 dos 6.855 itens com custo em 28/11/2026), e a margem sairia 100%.

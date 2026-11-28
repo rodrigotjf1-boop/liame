@@ -1,6 +1,7 @@
 import type { KeyObject } from 'node:crypto';
 import { z } from 'zod';
 import { chavePublicaDaDms } from './auth/recuperacao/lacre.js';
+import { lerChave } from './connectors/dms/integracao-dms.js';
 
 // Configuração lida do ambiente e validada na subida: valor errado derruba o boot, não a requisição.
 const Env = z.object({
@@ -107,6 +108,13 @@ const Env = z.object({
   HUB_LIGADO: z.enum(['true', 'false']).default('false'),
   HUB_URL: z.url().optional(),
   HUB_RECURSO: z.url().optional(),
+  /**
+   * O Pulso (plano de conteúdo, PC4, parte 2): os eventos de fontes públicas, os dias de comida e o "Em alta", com o token
+   * do aplicativo do Liame no DMS ID (as três de cima) e a ligação do Liame criada no console do Pulso
+   * (`dms_lg_pulso_…`). Sem a ligação, nada chama o Pulso. Em produção, só o endereço oficial.
+   */
+  PULSO_URL: z.url().default('https://pulso.dmstecnologias.com/v1'),
+  PULSO_LIGACAO: z.string().trim().max(120).optional(),
   /** Chave de API da Anthropic (da distribuição). Sem ela, os funcionários de IA ficam indisponíveis e o resto segue. */
   ANTHROPIC_API_KEY: z.string().trim().min(20).optional(),
   /** Onde o modelo roda: `us` fixa nos Estados Unidos (10% a mais); `global` é o padrão do fornecedor (D-A3-13). */
@@ -189,6 +197,8 @@ export type AppConfig = {
   dmsId: { emissor: string; aplicativo: string; segredo: string } | null;
   /** O hub da DMS (Hub DMS, F2, A4, etapa 3); nulo = desligado (`HUB_LIGADO`): nada vai ao hub. */
   hub: { url: string; recurso: string } | null;
+  /** O Pulso (plano de conteúdo, PC4, parte 2); nulo = desligado (sem `PULSO_LIGACAO`): nada chama o Pulso. */
+  pulso: { base: string; ligacao: string } | null;
   /** Origem pública da API (volta do OAuth). */
   apiUrl: string;
   /** Apps OAuth da distribuição; nulo = a plataforma ainda não pode ser conectada. */
@@ -326,6 +336,19 @@ export function loadConfig(source: NodeJS.ProcessEnv = process.env): AppConfig {
       throw new Error(`config: em produção, HUB_URL e HUB_RECURSO são os do hub oficial (${HUB_OFICIAL} e ${HUB_OFICIAL}/api/v1)`);
     }
   }
+  // O Pulso recebe o token do aplicativo do Liame e a ligação: só com os dois e, em produção, só o oficial (V33). A
+  // ligação torta recusa a subida (o erro de colar aparece no deploy); sem o aplicativo do DMS ID neste serviço, o Pulso
+  // só fica desligado nele (o DMS ID mora de propósito em poucos serviços, e a ligação a mais não pode derrubar a API).
+  let pulso: AppConfig['pulso'] = null;
+  const ligacaoDoPulso = env.PULSO_LIGACAO?.trim() || '';
+  if (ligacaoDoPulso) {
+    const lida = lerChave(ligacaoDoPulso);
+    if (!lida || lida.tipo !== 'lg' || lida.produto !== 'pulso') throw new Error('config: PULSO_LIGACAO não é uma ligação do Pulso (dms_lg_pulso_…, criada no console do Pulso)');
+    const base = env.PULSO_URL.replace(/\/+$/, '');
+    if (!base.endsWith('/v1')) throw new Error('config: PULSO_URL termina em /v1 (o recurso do Pulso no DMS ID)');
+    if (env.NODE_ENV === 'production' && base !== PULSO_OFICIAL) throw new Error(`config: em produção, PULSO_URL é o do Pulso oficial (${PULSO_OFICIAL})`);
+    if (dmsId) pulso = { base, ligacao: ligacaoDoPulso };
+  }
   const regemcastApiUrl = env.REGEMCAST_API_URL?.replace(/\/$/, '') ?? null;
   const regemcast = env.REGEMCAST_AUTH_URL && regemcastApiUrl && dmsId
     ? { authUrl: env.REGEMCAST_AUTH_URL.replace(/\/+$/, ''), apiUrl: regemcastApiUrl, emissor: new URL(regemcastApiUrl).origin }
@@ -411,6 +434,7 @@ export function loadConfig(source: NodeJS.ProcessEnv = process.env): AppConfig {
     produtos: { regemApiUrl, regemcastApiUrl, regemPelaLigacao: env.REGEM_PELA_LIGACAO === 'true', dmsGraphUrl: env.DMS_GRAPH_URL },
     dmsId,
     hub,
+    pulso,
     apiUrl,
     oauth: { meta, google, regem, regemcast, regemClique },
     ai: {
@@ -485,5 +509,8 @@ export const DMS_ID_OFICIAL = 'https://id.dmstecnologias.com/oidc';
 
 /** O hub oficial da DMS (o serviço do Hub DMS; o recurso dele no DMS ID é `<hub>/api/v1`). */
 export const HUB_OFICIAL = 'https://hub.dmstecnologias.com';
+
+/** O Pulso oficial da DMS (a porta REST; é também o recurso dele no DMS ID). */
+export const PULSO_OFICIAL = 'https://pulso.dmstecnologias.com/v1';
 
 export const APP_CONFIG = Symbol('APP_CONFIG');
