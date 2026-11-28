@@ -1,6 +1,6 @@
 # Liame — Plano: o planejamento de conteúdo e as campanhas que nascem dele
 
-> **Proposta de 27/11/2026, para aprovação do dono.** Nada aqui vira código antes do "aprovado" e, nas telas novas, dos protótipos aprovados (seção 11). As decisões estão na seção 10 (D-PC-1 a D-PC-18), cada uma com a recomendação.
+> **Proposta de 27/11/2026, aprovada pelo dono em 28/11/2026**, com as decisões D-PC-1 a D-PC-18 como recomendadas (seção 10). Tela nova só depois do protótipo aprovado (seção 11); o que não tem tela nova (a PC4) começa já.
 >
 > **Pedido do dono (27/11/2026):**
 > - um planejamento de posts, ou de posts, Stories e Reels misturados, para uma semana ou um mês, já deixado programado;
@@ -113,7 +113,7 @@ Foram olhadas 23 ferramentas:
 - **Imagem gerada por IA** (Predis, Ocoya, Reportei Flux, Publer): bate com a D-A6-82, e prato "inventado" engana o cliente.
 - **Horário de estudo de mercado no lugar do dado da conta** (o Metricool usa quando falta dado): no delivery, pesa a hora do pedido.
 - **Piloto automático sem aprovação** (Predis publica sozinho; Popmenu "manda sem o dono escrever ou agendar").
-- **Reels planejado com áudio em alta do catálogo:** a publicação automática só aceita áudio original (seção 4).
+- **Música de fora no vídeo montado:** a música só entra no Reels pela API de áudio da Meta, depois de conferir o que uma conta comercial pode usar (seção 4.1 e D-PC-16).
 
 **Onde o Liame é diferente:** nenhuma das ferramentas olhadas junta, no mesmo plano, a análise da conta, o objetivo, a mídia real da loja e o pedido confirmado no caixa. Toast e Popmenu chegam perto nas vendas, mas sem a análise da conta e sem o resultado de cada post no caixa.
 
@@ -355,7 +355,7 @@ O presidente da loja não precisa abrir o Liame para saber como vai o marketing.
 - **Quem vê:** o presidente. O gerente, só se o presidente liberar, e sem os blocos de dinheiro (C e D), seguindo a matriz do Regem (D-PC-13).
 - **Agir:** o Mister não aprova nada no Liame, porque a aprovação do Liame pede o código do app do Liame. Ele manda o link da tela certa. Numa segunda fase, a decisão do presidente na conversa ("troca 2 fotos por Reels") vira um pedido no Liame, que segue para Aprovações (D-PC-14).
 
-## 10. Decisões do dono
+## 10. Decisões do dono (aprovadas em 28/11/2026, todas como recomendadas)
 
 | Decisão | Pergunta | Recomendação |
 | --- | --- | --- |
@@ -466,7 +466,7 @@ O plano funciona desde a PC5, mesmo sem as imagens analisadas. A biblioteca inte
 - **Música:** só no Reels, pela API de áudio da Meta, e só depois de conferir o que a conta comercial pode usar (D-PC-16). Música de outro lugar nunca entra no vídeo montado.
 - **Comida e bebida:** o texto segue o §6.2 e a D-A4-34 (bebida alcoólica).
 - **Custo:** a análise com IA e as tendências pagas nascem desligadas, com o preço ao lado. O custo de cada plano (IA) é medido na primeira rodada na Mister Burgers e mostrado antes de ligar para os outros.
-- **Freshness:** o raio-x e o resumo do Mister mostram a data da leitura; número velho aparece como velho.
+- **Data dos números:** o raio-x e o resumo do Mister mostram a data da leitura; número velho aparece como velho.
 - **Permissões:** a leitura dos números da conta e dos posts usa as permissões que o piloto já tem; para clientes de fora, entram na análise da Meta do fim do roteiro (base §19.7).
 - **Conferir antes do código** (o que a §20 marcou como não confirmado):
   - se `online_followers` segue na tabela de hoje (PC1);
@@ -486,7 +486,7 @@ O plano funciona desde a PC5, mesmo sem as imagens analisadas. A biblioteca inte
 
 ## 16. O que depende de você
 
-1. Aprovar o plano e as decisões D-PC-1 a D-PC-18 (ou trocar as que quiser).
+1. ~~Aprovar o plano e as decisões D-PC-1 a D-PC-18~~: **feito em 28/11/2026**, todas como recomendadas.
 2. Aprovar os protótipos P47, P48 e P49, quando ficarem prontos.
 3. Ligar as funções na Mister Burgers quando cada entrega estiver pronta (eu preparo a linha).
 4. Ligar a análise com IA (D-PC-7) depois de ver o preço medido.
@@ -495,4 +495,7 @@ O plano funciona desde a PC5, mesmo sem as imagens analisadas. A biblioteca inte
 
 | Entrega | Situação |
 | --- | --- |
-| Plano | Proposto em 27/11/2026 |
+| Plano | Proposto em 27/11/2026 e aprovado pelo dono em 28/11/2026, com as decisões D-PC-1 a D-PC-18 como recomendadas |
+| Protótipos P47, P48 e P49 | Em montagem (28/11/2026) |
+| PC4 · Produtos e datas | Começa em 28/11/2026 (não tem tela nova) |
+| PC1 a PC3, PC5 a PC11 | Esperam os protótipos (PC1, PC3, PC5, PC11) ou a entrega anterior (seção 13) |
