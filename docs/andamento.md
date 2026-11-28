@@ -1354,6 +1354,16 @@ A W3, parte 4 (o fim da assinatura), foi aprovada pelo dono em 03/11/2026, como 
 
 ## Plano de conteúdo (`plano-conteudo.md`, aprovado em 28/11/2026)
 
+**PC4, parte 1: o ranking dos produtos pelo código do Regem (28/11/2026; migration `0171_plano_de_conteudo.sql`; a função `plano_conteudo` desligada).** A rota nova `GET /v1/content/products` (só leitura, `dossie.ver`; os números só com `vendas.ver`) lê os itens dos pedidos do Regem das 4 semanas completas até ontem, no fuso da loja, contra as 4 semanas antes, e devolve até 100 produtos. É a base do plano e das campanhas (seção 6.2).
+- **Pelo código, não pelo nome:** o agrupamento é pelo código do produto do Regem (`product_external_id`). Na Mister Burgers, 95% das linhas de 28 dias têm o código, e o mesmo produto aparece com até cinco nomes ("TRIO 08", "Trio 08 - Burguer + Batata + Refri"...). O item sem código entra pelo nome quando esse nome só aparece com um código; o resto fica em "sem código", com os nomes.
+- **O que cada produto traz:** o nome do cadastro (o mais usado nos canais do próprio Regem) e os nomes dos outros canais; os pedidos, a quantidade e a receita dos itens; a tendência ("subindo" e "caindo" com 20% e 5 pedidos de diferença; "novo" sem venda antes); a margem, só com o custo do Regem em todas as linhas. O custo zero conta como desconhecido: o Regem manda zero quando o produto não tem custo cadastrado (na Mister Burgers, 6.684 dos 6.855 itens com custo em 28/11/2026), e a margem sairia 100%.
+- **Onde a marca já mostrou:** a legenda do Instagram e o produto escrito em Fotos, pelo nome inteiro ou pelo começo dele. O texto é comparado sem acento e sem o zero à esquerda, com palavra inteira: "Trio 8" casa com "TRIO 08"; "trio 80" não casa.
+- **Os destaques:** "vende bem e nunca apareceu" (entre os 20% que mais vendem, pelo menos os 5 primeiros), "margem boa, pouca venda" (pelas medianas, com 5 produtos ou mais com custo) e "subindo".
+
+Sem a função, sem o Regem ou sem a permissão, a resposta diz o motivo e o ranking vem nulo. O produto pausado no Regem (regra R7) fica para a PC5: o Liame ainda não lê o cardápio do Regem.
+
+Testes: `test/conteudo-produtos.spec.ts` (sem banco) e `test/db/conteudo-produtos.spec.ts` (contra Postgres). Política sem mudança: são os pedidos que o Liame já lê.
+
 **O plano aprovado (28/11/2026; só documentos).** O dono aprovou o plano do planejamento de conteúdo e as decisões D-PC-1 a D-PC-18, todas como recomendadas. São três peças:
 - o calendário de posts, carrosséis, Reels e Stories de uma semana a um mês, montado a partir do raio-x do Instagram, da biblioteca, das datas e tendências e do cardápio;
 - as campanhas que nascem dele;

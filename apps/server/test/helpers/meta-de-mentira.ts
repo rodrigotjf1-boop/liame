@@ -391,6 +391,7 @@ export async function ligarFlagDaEmpresa(
     | 'regiao'
     | 'ritmo_da_semana'
     | 'ritmo_horario'
+    | 'plano_conteudo'
     | 'ia',
   tenantId: string,
   valor: boolean,
